@@ -188,6 +188,13 @@
     </div>
 
     <script>
+        const doctorName = localStorage.getItem('doctor_name');
+        const titleElement = document.querySelector('h1');
+
+        if (titleElement) {
+            titleElement.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادتي الرقمية';
+        }
+
         let selectedTooth = null;
         const API_BASE_URL = 'http://127.0.0.1:8080';
 

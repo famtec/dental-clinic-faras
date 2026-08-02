@@ -105,6 +105,13 @@
   </div>
 
   <script>
+    const doctorName = localStorage.getItem('doctor_name');
+    const titleElement = document.querySelector('h1') || document.getElementById('clinicTitle');
+
+    if (titleElement) {
+      titleElement.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادتي الرقمية';
+    }
+
     // Configuration
     const API_URL = "/api/patients";
 

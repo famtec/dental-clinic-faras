@@ -101,6 +101,13 @@
     </div>
 
     <script>
+        const doctorName = localStorage.getItem('doctor_name');
+        const titleElement = document.querySelector('h1');
+
+        if (titleElement) {
+            titleElement.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادتي الرقمية';
+        }
+
         const API_URL = '/api/appointments';
         const tableBody = document.getElementById('appointmentsTableBody');
         const modal = document.getElementById('appointmentModal');
