@@ -185,7 +185,7 @@
             <button
               type="button"
               class="px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm"
-              onclick="window.location.href = `patient_record.html?id=${encodeURIComponent(p.id)}`"
+              onclick="window.location.href = 'patient_record.html?id=' + encodeURIComponent('${String(p.id ?? '')}')"
             >
               🦷 فتح الملف الطبي
             </button>
