@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>مخطط الأسنان الرقمي</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
+    <style>
+        body { font-family: 'Tajawal', sans-serif; }
+        .tooth { fill: #ffffff; stroke: #4f46e5; stroke-width: 2; cursor: pointer; transition: all 0.2s ease; }
+        .tooth:hover { fill: #eef2ff; transform: translateY(-1px); }
+        .tooth.active { fill: #c7d2fe; }
+        .tooth[data-status="infected"] { fill: #fca5a5; }
+        .tooth[data-status="treated"] { fill: #86efac; }
+        .tooth[data-status="crown"] { fill: #fde68a; }
+        .tooth[data-status="extraction"] { fill: #fdba74; }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-800">
+    <div class="flex min-h-screen flex-col lg:flex-row">
+        <aside class="w-full lg:w-64 bg-indigo-900 text-white p-6 shadow-lg min-h-screen">
+            <div class="mb-8 flex items-center justify-center gap-3 border-b border-indigo-700 pb-4">
+                <img src="logo.png" alt="شعار العيادة" class="h-16 w-16 rounded-xl object-contain bg-white/10 p-2" />
+                <h1 class="text-xl font-bold">عيادتي الرقمية</h1>
+            </div>
+            <nav class="space-y-3">
+                <a href="index.html" class="block rounded-lg px-4 py-3 text-sm font-medium transition hover:bg-indigo-800">👥 لوحة مرضى</a>
+                <a href="appointments.html" class="block rounded-lg px-4 py-3 text-sm font-medium transition hover:bg-indigo-800">📅 المواعيد اليومية</a>
+                <a href="chart.html" class="block rounded-lg bg-indigo-700 px-4 py-3 text-sm font-bold">🦷 مخطط الأسنان</a>
+            </nav>
+        </aside>
+
+        <main class="flex-1 p-4 sm:p-8 lg:p-10">
+            <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                    <h2 class="text-3xl font-extrabold text-slate-800">مخطط الأسنان البالغين</h2>
+                    <p class="text-sm text-slate-500">انقر على أي سن لفتح نموذج العلاج وتحديث حالته فورًا.</p>
+                </div>
+                <div class="rounded-full border border-indigo-200 bg-white px-4 py-2 text-sm text-indigo-700 shadow-sm">
+                    ترميز FDI • 18-11 • 21-28 • 31-38 • 41-48
+                </div>
+            </div>
+
+            <section class="rounded-3xl border border-slate-200 bg-white p-4 shadow-xl sm:p-6">
+                <div class="mb-4 flex items-center justify-between">
+                    <h3 class="text-xl font-bold text-indigo-900">مخطط الأسنان</h3>
+                    <div class="text-sm text-slate-500">الأسنان المميزة بالألوان تعكس الحالة الحالية</div>
+                </div>
+
+                <div class="overflow-x-auto rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                    <svg viewBox="0 0 740 520" class="mx-auto w-full max-w-4xl">
+                            <g id="upper-right" transform="translate(70,70)">
+                                <path d="M120 40 C145 10, 175 10, 205 40 L205 70 C205 95, 185 115, 160 120 L150 120 C125 115, 105 95, 105 70 Z" fill="#f8fafc" stroke="#cbd5e1" />
+                                <path id="tooth-18" class="tooth" data-number="18" d="M120 40 C135 25, 160 25, 175 40 L175 85 C160 95, 140 95, 125 85 Z" onclick="openModal(18)" />
+                                <path id="tooth-17" class="tooth" data-number="17" d="M90 70 C95 50, 120 38, 140 42 L140 85 C120 95, 95 92, 80 80 Z" onclick="openModal(17)" />
+                                <path id="tooth-16" class="tooth" data-number="16" d="M65 92 C74 68, 90 58, 105 62 L105 95 C89 105, 72 105, 58 100 Z" onclick="openModal(16)" />
+                                <path id="tooth-15" class="tooth" data-number="15" d="M42 115 C57 93, 76 84, 90 92 L90 116 C74 128, 54 128, 40 120 Z" onclick="openModal(15)" />
+                                <path id="tooth-14" class="tooth" data-number="14" d="M22 140 C35 118, 50 110, 62 115 L62 140 C48 150, 30 149, 20 145 Z" onclick="openModal(14)" />
+                                <path id="tooth-13" class="tooth" data-number="13" d="M8 166 C16 146, 28 138, 40 140 L40 164 C28 174, 16 176, 8 172 Z" onclick="openModal(13)" />
+                                <path id="tooth-12" class="tooth" data-number="12" d="M0 192 C8 174, 18 168, 28 166 L28 191 C18 200, 8 205, 0 204 Z" onclick="openModal(12)" />
+                                <path id="tooth-11" class="tooth" data-number="11" d="M0 216 C8 207, 16 203, 24 192 L24 219 C15 227, 8 230, 0 228 Z" onclick="openModal(11)" />
+                            </g>
+
+                            <g id="upper-left" transform="translate(330,70)">
+                                <path d="M0 40 C25 10, 55 10, 85 40 L85 70 C85 95, 65 115, 40 120 L30 120 C5 115, -15 95, -15 70 Z" fill="#f8fafc" stroke="#cbd5e1" />
+                                <path id="tooth-21" class="tooth" data-number="21" d="M0 216 C8 207, 16 203, 24 192 L24 219 C15 227, 8 230, 0 228 Z" onclick="openModal(21)" />
+                                <path id="tooth-22" class="tooth" data-number="22" d="M20 192 C28 174, 38 168, 48 166 L48 191 C38 200, 28 205, 20 204 Z" onclick="openModal(22)" />
+                                <path id="tooth-23" class="tooth" data-number="23" d="M44 166 C52 146, 64 138, 76 140 L76 164 C64 174, 52 176, 44 172 Z" onclick="openModal(23)" />
+                                <path id="tooth-24" class="tooth" data-number="24" d="M60 140 C72 118, 88 110, 100 115 L100 140 C86 150, 68 149, 58 145 Z" onclick="openModal(24)" />
+                                <path id="tooth-25" class="tooth" data-number="25" d="M80 115 C95 93, 114 84, 128 92 L128 116 C112 128, 92 128, 78 120 Z" onclick="openModal(25)" />
+                                <path id="tooth-26" class="tooth" data-number="26" d="M104 92 C113 68, 129 58, 144 62 L144 95 C128 105, 111 105, 97 100 Z" onclick="openModal(26)" />
+                                <path id="tooth-27" class="tooth" data-number="27" d="M130 70 C135 50, 160 38, 180 42 L180 85 C160 95, 135 92, 120 80 Z" onclick="openModal(27)" />
+                                <path id="tooth-28" class="tooth" data-number="28" d="M160 40 C175 25, 200 25, 215 40 L215 85 C200 95, 175 95, 160 85 Z" onclick="openModal(28)" />
+                            </g>
+
+                            <g id="lower-left" transform="translate(70,220)">
+                                <path d="M120 40 C145 10, 175 10, 205 40 L205 70 C205 95, 185 115, 160 120 L150 120 C125 115, 105 95, 105 70 Z" fill="#f8fafc" stroke="#cbd5e1" />
+                                <path id="tooth-31" class="tooth" data-number="31" d="M120 40 C135 25, 160 25, 175 40 L175 85 C160 95, 140 95, 125 85 Z" onclick="openModal(31)" />
+                                <path id="tooth-32" class="tooth" data-number="32" d="M90 70 C95 50, 120 38, 140 42 L140 85 C120 95, 95 92, 80 80 Z" onclick="openModal(32)" />
+                                <path id="tooth-33" class="tooth" data-number="33" d="M65 92 C74 68, 90 58, 105 62 L105 95 C89 105, 72 105, 58 100 Z" onclick="openModal(33)" />
+                                <path id="tooth-34" class="tooth" data-number="34" d="M42 115 C57 93, 76 84, 90 92 L90 116 C74 128, 54 128, 40 120 Z" onclick="openModal(34)" />
+                                <path id="tooth-35" class="tooth" data-number="35" d="M22 140 C35 118, 50 110, 62 115 L62 140 C48 150, 30 149, 20 145 Z" onclick="openModal(35)" />
+                                <path id="tooth-36" class="tooth" data-number="36" d="M8 166 C16 146, 28 138, 40 140 L40 164 C28 174, 16 176, 8 172 Z" onclick="openModal(36)" />
+                                <path id="tooth-37" class="tooth" data-number="37" d="M0 192 C8 174, 18 168, 28 166 L28 191 C18 200, 8 205, 0 204 Z" onclick="openModal(37)" />
+                                <path id="tooth-38" class="tooth" data-number="38" d="M0 216 C8 207, 16 203, 24 192 L24 219 C15 227, 8 230, 0 228 Z" onclick="openModal(38)" />
+                            </g>
+
+                            <g id="lower-right" transform="translate(330,220)">
+                                <path d="M0 40 C25 10, 55 10, 85 40 L85 70 C85 95, 65 115, 40 120 L30 120 C5 115, -15 95, -15 70 Z" fill="#f8fafc" stroke="#cbd5e1" />
+                                <path id="tooth-48" class="tooth" data-number="48" d="M0 216 C8 207, 16 203, 24 192 L24 219 C15 227, 8 230, 0 228 Z" onclick="openModal(48)" />
+                                <path id="tooth-47" class="tooth" data-number="47" d="M20 192 C28 174, 38 168, 48 166 L48 191 C38 200, 28 205, 20 204 Z" onclick="openModal(47)" />
+                                <path id="tooth-46" class="tooth" data-number="46" d="M44 166 C52 146, 64 138, 76 140 L76 164 C64 174, 52 176, 44 172 Z" onclick="openModal(46)" />
+                                <path id="tooth-45" class="tooth" data-number="45" d="M60 140 C72 118, 88 110, 100 115 L100 140 C86 150, 68 149, 58 145 Z" onclick="openModal(45)" />
+                                <path id="tooth-44" class="tooth" data-number="44" d="M80 115 C95 93, 114 84, 128 92 L128 116 C112 128, 92 128, 78 120 Z" onclick="openModal(44)" />
+                                <path id="tooth-43" class="tooth" data-number="43" d="M104 92 C113 68, 129 58, 144 62 L144 95 C128 105, 111 105, 97 100 Z" onclick="openModal(43)" />
+                                <path id="tooth-42" class="tooth" data-number="42" d="M130 70 C135 50, 160 38, 180 42 L180 85 C160 95, 135 92, 120 80 Z" onclick="openModal(42)" />
+                                <path id="tooth-41" class="tooth" data-number="41" d="M160 40 C175 25, 200 25, 215 40 L215 85 C200 95, 175 95, 160 85 Z" onclick="openModal(41)" />
+                            </g>
+
+                            <!-- Upper static label row -->
+                            <text x="70" y="40" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">11</text>
+                            <text x="100" y="40" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">12</text>
+                            <text x="130" y="40" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">13</text>
+                            <text x="160" y="40" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">14</text>
+                            <text x="190" y="40" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">15</text>
+                            <text x="220" y="40" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">16</text>
+                            <text x="250" y="40" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">17</text>
+                            <text x="280" y="40" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">18</text>
+
+                            <text x="340" y="40" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">21</text>
+                            <text x="370" y="40" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">22</text>
+                            <text x="400" y="40" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">23</text>
+                            <text x="430" y="40" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">24</text>
+                            <text x="460" y="40" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">25</text>
+                            <text x="490" y="40" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">26</text>
+                            <text x="520" y="40" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">27</text>
+                            <text x="550" y="40" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">28</text>
+
+                            <!-- Lower static label row -->
+                            <text x="70" y="480" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">38</text>
+                            <text x="100" y="480" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">37</text>
+                            <text x="130" y="480" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">36</text>
+                            <text x="160" y="480" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">35</text>
+                            <text x="190" y="480" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">34</text>
+                            <text x="220" y="480" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">33</text>
+                            <text x="250" y="480" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">32</text>
+                            <text x="280" y="480" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">31</text>
+
+                            <text x="340" y="480" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">48</text>
+                            <text x="370" y="480" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">47</text>
+                            <text x="400" y="480" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">46</text>
+                            <text x="430" y="480" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">45</text>
+                            <text x="460" y="480" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">44</text>
+                            <text x="490" y="480" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">43</text>
+                            <text x="520" y="480" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">42</text>
+                            <text x="550" y="480" text-anchor="middle" dominant-baseline="middle" class="text-xs font-bold fill-indigo-950 text-center">41</text>
+                        </svg>
+                    </div>
+                </section>
+
+            </section>
+        </main>
+    </div>
+
+    <div id="treatmentModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+        <div class="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div class="mb-5 flex items-start justify-between">
+                <div>
+                    <p class="text-sm font-semibold text-indigo-600">تسجيل علاج سنّي</p>
+                    <h3 class="text-2xl font-bold text-slate-800">السن <span id="modalToothNumber">0</span></h3>
+                </div>
+                <button type="button" onclick="closeModal()" class="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600 transition hover:bg-slate-200">إغلاق</button>
+            </div>
+
+            <form id="treatmentForm" class="space-y-4">
+                <div>
+                    <label class="mb-1 block text-sm font-medium text-slate-600">معرّف المريض</label>
+                    <input id="patientId" type="number" required class="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500" />
+                </div>
+                <div>
+                    <label class="mb-1 block text-sm font-medium text-slate-600">نوع المعالجة</label>
+                    <select id="treatmentType" class="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500">
+                        <option value="Filling">حشوة</option>
+                        <option value="Root Canal">سحب عصب</option>
+                        <option value="Crown">تاج</option>
+                        <option value="Extraction">خلع</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="mb-1 block text-sm font-medium text-slate-600">ملاحظات</label>
+                    <textarea id="notes" rows="3" class="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500"></textarea>
+                </div>
+                <div>
+                    <label class="mb-1 block text-sm font-medium text-slate-600">لون الحالة</label>
+                    <input id="statusColor" type="color" value="#fca5a5" class="h-12 w-full cursor-pointer rounded-xl border border-slate-300 p-1" />
+                </div>
+                <div class="flex gap-3 pt-2">
+                    <button type="submit" class="flex-1 rounded-xl bg-indigo-600 px-4 py-3 font-bold text-white shadow-lg transition hover:bg-indigo-700">
+                        حفظ العلاج
+                    </button>
+                    <button type="button" onclick="closeModal()" class="rounded-xl border border-slate-300 px-4 py-3 font-semibold text-slate-600 transition hover:bg-slate-100">
+                        إلغاء
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let selectedTooth = null;
+        const API_BASE_URL = 'http://127.0.0.1:8080';
+
+        async function ensurePatientId() {
+            const patientInput = document.getElementById('patientId');
+            const currentValue = patientInput.value.trim();
+            if (currentValue) {
+                const parsed = parseInt(currentValue, 10);
+                if (!Number.isNaN(parsed)) {
+                    return parsed;
+                }
+            }
+
+            try {
+                const patientsResponse = await fetch(`${API_BASE_URL}/api/patients`);
+                if (!patientsResponse.ok) {
+                    throw new Error('تعذر قراءة بيانات المرضى');
+                }
+
+                const patients = await patientsResponse.json();
+                if (patients && patients.length > 0) {
+                    patientInput.value = patients[0].id;
+                    return patients[0].id;
+                }
+
+                const createResponse = await fetch(`${API_BASE_URL}/api/patients`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        full_name: 'مريض افتراضي',
+                        phone: '0000000000',
+                        birth_date: '2000-01-01',
+                        gender: 'Male',
+                        medical_history: 'تم إنشاؤه تلقائيًا'
+                    })
+                });
+
+                if (!createResponse.ok) {
+                    throw new Error('تعذر إنشاء مريض افتراضي');
+                }
+
+                const createdPatient = await createResponse.json();
+                patientInput.value = createdPatient.id;
+                return createdPatient.id;
+            } catch (error) {
+                console.error(error);
+                throw error;
+            }
+        }
+
+        function openModal(number) {
+            selectedTooth = number;
+            document.getElementById('modalToothNumber').textContent = number;
+            document.querySelectorAll('.tooth').forEach((el) => el.classList.remove('active'));
+            const tooth = document.getElementById(`tooth-${number}`);
+            if (tooth) tooth.classList.add('active');
+            document.getElementById('treatmentModal').classList.remove('hidden');
+            document.getElementById('treatmentModal').classList.add('flex');
+        }
+
+        function closeModal() {
+            document.getElementById('treatmentModal').classList.add('hidden');
+            document.getElementById('treatmentModal').classList.remove('flex');
+            document.getElementById('treatmentForm').reset();
+            document.querySelectorAll('.tooth').forEach((el) => el.classList.remove('active'));
+            selectedTooth = null;
+        }
+
+        document.getElementById('treatmentForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            if (!selectedTooth) {
+                alert('يرجى اختيار سن أولاً');
+                return;
+            }
+
+            try {
+                const patientId = await ensurePatientId();
+                const payload = {
+                    patient_id: patientId,
+                    tooth_number: parseInt(selectedTooth, 10),
+                    treatment_type: document.getElementById('treatmentType').value,
+                    notes: document.getElementById('notes').value,
+                    color: document.getElementById('statusColor').value
+                };
+
+                const response = await fetch(`${API_BASE_URL}/api/treatments`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText || 'فشل الحفظ');
+                }
+
+                const tooth = document.getElementById(`tooth-${selectedTooth}`);
+                if (tooth) {
+                    tooth.setAttribute('data-status', 'treated');
+                    tooth.style.fill = payload.color;
+                }
+
+                alert('تم حفظ العلاج بنجاح');
+                closeModal();
+            } catch (error) {
+                console.error(error);
+                alert(`فشل الاتصال بالخادم: ${error.message}`);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>لوحة المرضى — عيادتي الرقمية</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Tajawal', sans-serif; }
+  </style>
+  </head>
+<body class="min-h-screen bg-slate-50 text-slate-800">
+  <div class="flex min-h-screen flex-col lg:flex-row">
+    <aside class="w-full lg:w-64 bg-indigo-900 text-white p-6 shadow-lg min-h-screen">
+      <div class="mb-8 flex items-center justify-center gap-3 border-b border-indigo-700 pb-4">
+        <img src="logo.png" alt="شعار العيادة" class="h-16 w-16 rounded-xl object-contain bg-white/10 p-2" />
+        <h1 class="text-xl font-bold">عيادتي الرقمية</h1>
+      </div>
+      <nav class="space-y-3">
+        <a href="index.html" class="block rounded-lg bg-indigo-700 px-4 py-3 text-sm font-bold">👥 لوحة مرضى</a>
+        <a href="appointments.html" class="block rounded-lg px-4 py-3 text-sm font-medium transition hover:bg-indigo-800">📅 المواعيد اليومية</a>
+        <a href="chart.html" class="block rounded-lg px-4 py-3 text-sm font-medium transition hover:bg-indigo-800">🦷 مخطط الأسنان</a>
+      </nav>
+    </aside>
+
+    <main class="flex-1 p-6 lg:p-10">
+      <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 class="text-3xl font-extrabold text-slate-800">قائمة المرضى الإلكترونية</h2>
+          <p class="mt-1 text-sm text-slate-500">إدارة ملفات المرضى واستقبل بياناتهم بسهولة</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <button id="addPatientBtn" class="rounded-xl bg-indigo-600 px-5 py-3 font-bold text-white shadow-lg transition hover:bg-indigo-700">+ إضافة مريض جديد</button>
+          <div class="relative">
+            <input id="searchInput" type="search" placeholder="🔍 ابحث عن مريض..." class="pr-10 pl-4 py-2 rounded-xl border border-slate-300 bg-white text-sm w-72 outline-none focus:border-indigo-500" />
+          </div>
+        </div>
+      </div>
+
+      <section class="rounded-3xl border border-slate-200 bg-white p-4 shadow-xl sm:p-6">
+        <div class="mb-4 flex items-center justify-between">
+          <h3 class="text-xl font-bold text-indigo-900">المرضى</h3>
+          <span class="rounded-full bg-indigo-50 px-3 py-1 text-sm font-medium text-indigo-700">محدث تلقائيًا</span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="min-w-full border-collapse text-right">
+            <thead>
+              <tr class="border-b border-slate-200 bg-slate-50 text-sm text-slate-600">
+                <th class="px-4 py-3 font-semibold">الرقم ID</th>
+                <th class="px-4 py-3 font-semibold">الاسم الكامل</th>
+                <th class="px-4 py-3 font-semibold">رقم الهاتف</th>
+                <th class="px-4 py-3 font-semibold">التاريخ الطبي</th>
+                <th class="px-4 py-3 font-semibold">الإجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="patientsTableBody" class="divide-y divide-slate-100">
+            </tbody>
+          </table>
+        </div>
+
+        <div id="emptyFeedback" class="hidden text-center text-slate-500 py-12">
+          لا يوجد مرضى حتى الآن. استخدم "إضافة مريض جديد" لبدء القائمة.
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="addPatientModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+    <div class="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+      <div class="mb-5 flex items-start justify-between">
+        <div>
+          <p class="text-sm font-semibold text-indigo-600">إضافة مريض جديد</p>
+          <h3 class="text-2xl font-bold text-slate-800">ملف المريض</h3>
+        </div>
+        <button id="closeModalBtn" type="button" class="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600 transition hover:bg-slate-200">إغلاق</button>
+      </div>
+
+      <form id="patientForm" class="space-y-4">
+        <div class="grid sm:grid-cols-2 gap-4">
+          <label class="block">
+            <div class="text-xs text-slate-600 mb-1">الاسم الكامل</div>
+            <input name="full_name" required class="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500" />
+          </label>
+          <label class="block">
+            <div class="text-xs text-slate-600 mb-1">رقم الهاتف</div>
+            <input name="phone" required class="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500" />
+          </label>
+        </div>
+        <label>
+          <div class="text-xs text-slate-600 mb-1">التاريخ الطبي</div>
+          <textarea name="medical_history" rows="4" class="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500"></textarea>
+        </label>
+
+        <div class="flex items-center justify-between mt-2">
+          <div class="text-sm text-slate-500">ستُستخدم حقول افتراضية للبينات الإضافية.</div>
+          <div class="flex gap-2">
+            <button type="button" id="cancelBtn" class="px-4 py-2 rounded-xl border border-slate-300 text-sm">إلغاء</button>
+            <button type="submit" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm">حفظ المريض</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Configuration
+    const API_URL = "/api/patients";
+
+    // DOM Elements
+    const patientsTableBody = document.getElementById('patientsTableBody');
+    const emptyFeedback = document.getElementById('emptyFeedback');
+    const addPatientBtn = document.getElementById('addPatientBtn');
+    const addPatientModal = document.getElementById('addPatientModal');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const cancelBtn = document.getElementById('cancelBtn');
+    const patientForm = document.getElementById('patientForm');
+    const searchInput = document.getElementById('searchInput');
+
+    // Utility: show/hide modal
+    function openModal() { addPatientModal.classList.remove('hidden'); addPatientModal.classList.add('flex'); }
+    function closeModal() { addPatientModal.classList.add('hidden'); addPatientModal.classList.remove('flex'); }
+
+    let allPatients = [];
+
+    // Fetch and render patients
+    async function fetchPatients(){
+      try{
+        const res = await fetch(API_URL, { method: 'GET' });
+        if (!res.ok) throw new Error('Network response not ok');
+        const data = await res.json();
+        allPatients = Array.isArray(data) ? data : [];
+        renderPatients(allPatients, searchInput.value.trim());
+      }catch(err){
+        console.error('fetchPatients error', err);
+        patientsTableBody.innerHTML = '';
+        emptyFeedback.classList.remove('hidden');
+        emptyFeedback.textContent = 'حدث خطأ أثناء تحميل بيانات المرضى.';
+      }
+    }
+
+    function filterPatients(patients, query=""){
+      const normalizedQuery = (query || '').trim().toLowerCase();
+      if (!normalizedQuery) return patients;
+
+      return patients.filter((patient) => {
+        const fullName = (patient.full_name ?? '').toLowerCase();
+        const phone = (patient.phone ?? '').toLowerCase();
+        return fullName.includes(normalizedQuery) || phone.includes(normalizedQuery);
+      });
+    }
+
+    function renderPatients(patients, query=""){
+      const sourcePatients = Array.isArray(patients) ? patients : [];
+      const filteredPatients = filterPatients(sourcePatients, query);
+
+      patientsTableBody.innerHTML = '';
+      if(!filteredPatients || filteredPatients.length === 0){
+        emptyFeedback.classList.remove('hidden');
+        emptyFeedback.textContent = query
+          ? 'لا توجد نتائج تطابق البحث.'
+          : 'لا يوجد مرضى حتى الآن. استخدم "إضافة مريض جديد" لبدء القائمة.';
+        return;
+      }
+      emptyFeedback.classList.add('hidden');
+
+      filteredPatients.forEach(p => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50';
+
+        tr.innerHTML = `
+          <td class="px-4 py-3 text-sm text-slate-600">${escapeHtml(p.id ?? '')}</td>
+          <td class="px-4 py-3 text-sm font-semibold text-slate-700">${escapeHtml(p.full_name ?? '')}</td>
+          <td class="px-4 py-3 text-sm text-slate-600">${escapeHtml(p.phone ?? '')}</td>
+          <td class="px-4 py-3 text-sm text-slate-600 max-w-xs truncate">${escapeHtml(p.medical_history ?? '')}</td>
+          <td class="px-4 py-3 text-sm">
+            <button class="px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm">🦷 فتح الملف الطبي</button>
+          </td>
+        `;
+        patientsTableBody.appendChild(tr);
+      });
+    }
+
+    // Simple HTML escape
+    function escapeHtml(str){
+      if(typeof str !== 'string') return str;
+      return str.replace(/[&<>\"']/g, function(tag){
+        const chars = {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":"&#39;"};
+        return chars[tag] || tag;
+      });
+    }
+
+    // Submit handler for new patient form
+    patientForm.addEventListener('submit', async function(e){
+      e.preventDefault();
+      const formData = new FormData(patientForm);
+      const payload = {
+        full_name: formData.get('full_name') || '',
+        phone: formData.get('phone') || '',
+        medical_history: formData.get('medical_history') || '',
+        birth_date: '2000-01-01',
+        gender: 'Male'
+      };
+
+      try{
+        const res = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if(!res.ok) throw new Error('Failed to create');
+        // Success: close modal, reset form, refresh table
+        patientForm.reset();
+        closeModal();
+        fetchPatients();
+      }catch(err){
+        console.error('create patient error', err);
+        alert('حدث خطأ أثناء إضافة المريض. الرجاء المحاولة لاحقًا.');
+      }
+    });
+
+    // Event bindings
+    addPatientBtn.addEventListener('click', openModal);
+    closeModalBtn.addEventListener('click', closeModal);
+    cancelBtn.addEventListener('click', function(){ patientForm.reset(); closeModal(); });
+    searchInput.addEventListener('input', function(){
+      const query = this.value.trim();
+      renderPatients(allPatients, query);
+    });
+
+    // Initialize
+    const yearElement = document.getElementById('year');
+    if (yearElement) {
+      yearElement.textContent = new Date().getFullYear();
+    }
+    fetchPatients();
+  </script>
+</body>
+</html>

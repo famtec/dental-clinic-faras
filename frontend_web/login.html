@@ -1,0 +1,175 @@
+﻿<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>عيادتي الرقمية - تسجيل الدخول</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Tajawal', sans-serif; }
+  </style>
+</head>
+<body class="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.22),_transparent_30%),linear-gradient(135deg,_#f8fafc_0%,_#eef2ff_45%,_#e0e7ff_100%)] text-slate-800">
+  <div class="flex min-h-screen items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
+    <div class="w-full max-w-md">
+      <div class="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl shadow-slate-200/80">
+        <div class="bg-gradient-to-r from-indigo-900 via-indigo-800 to-violet-700 px-6 py-8 text-center text-white sm:px-8">
+          <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-4xl shadow-lg">
+            🦷
+          </div>
+          <h1 class="text-2xl font-extrabold">عيادتي الرقمية - تسجيل الدخول</h1>
+          <p class="mt-2 text-sm text-indigo-100">مرحبًا بك في لوحة الإدارة الطبية</p>
+        </div>
+
+        <div class="p-6 sm:p-8">
+          <div id="messageBox" class="mb-4 hidden rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 shadow-sm"></div>
+
+          <form id="loginForm" class="space-y-5">
+            <div>
+              <label for="email" class="mb-2 block text-sm font-semibold text-slate-700">البريد الإلكتروني</label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                autocomplete="email"
+                class="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-right text-sm text-slate-700 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                placeholder="doctor@clinic.com"
+              />
+            </div>
+
+            <div>
+              <label for="password" class="mb-2 block text-sm font-semibold text-slate-700">كلمة المرور</label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                required
+                autocomplete="current-password"
+                class="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-right text-sm text-slate-700 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                placeholder="••••••••"
+              />
+            </div>
+
+            <label class="flex items-center gap-3">
+              <input id="rememberMe" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+              <span class="text-sm text-slate-600">تذكرني</span>
+            </label>
+
+            <button
+              id="submitBtn"
+              type="submit"
+              class="w-full rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3 text-sm font-bold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              تسجيل الدخول الرقمي
+            </button>
+          </form>
+
+          <p class="mt-5 text-center text-sm text-slate-500">إذا انتهت صلاحية الاشتراك، ستظهر لك رسالة تحذير واضحة لتجديده.</p>
+
+          <div class="mt-6 flex justify-center">
+            <p class="text-center text-xs font-mono tracking-wide text-indigo-500/90">
+              تطوير وإدارة: المهندس فارس حلاوي © 2026
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const loginForm = document.getElementById('loginForm');
+    const messageBox = document.getElementById('messageBox');
+    const submitBtn = document.getElementById('submitBtn');
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    const rememberMeCheckbox = document.getElementById('rememberMe');
+
+    function showMessage(text, type = 'error') {
+      const baseClasses = 'rounded-2xl border px-4 py-3 text-sm font-medium shadow-sm';
+      if (type === 'success') {
+        messageBox.className = `${baseClasses} border-emerald-200 bg-emerald-50 text-emerald-700`;
+      } else {
+        messageBox.className = `${baseClasses} border-rose-200 bg-rose-50 text-rose-700`;
+      }
+      messageBox.innerHTML = text;
+      messageBox.classList.remove('hidden');
+    }
+
+    function hideMessage() {
+      messageBox.classList.add('hidden');
+      messageBox.innerHTML = '';
+    }
+
+    function setLoading(isLoading) {
+      submitBtn.disabled = isLoading;
+      submitBtn.textContent = isLoading ? 'جاري تسجيل الدخول...' : 'تسجيل الدخول الرقمي';
+    }
+
+    loginForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      hideMessage();
+
+      const email = emailInput.value.trim();
+      const password = passwordInput.value;
+
+      if (!email || !password) {
+        showMessage('يرجى إدخال البريد الإلكتروني وكلمة المرور قبل المتابعة.', 'error');
+        return;
+      }
+
+      setLoading(true);
+
+      try {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+
+        let data = null;
+        try {
+          data = await response.json();
+        } catch (error) {
+          data = null;
+        }
+
+        if (response.status === 403) {
+          showMessage('عذراً، انتهت مدة الاشتراك السنوية. يرجى التواصل مع المهندس فارس حلاوي للتجديد ودفع الاشتراك.', 'error');
+          return;
+        }
+
+        if (response.status === 401) {
+          showMessage('البريد الإلكتروني أو كلمة المرور غير صحيحة!', 'error');
+          return;
+        }
+
+        if (response.status === 200) {
+          const token = data?.token || data?.accessToken || data?.access_token || data?.authToken || data?.auth_token;
+
+          if (rememberMeCheckbox.checked) {
+            localStorage.setItem('rememberMe', 'true');
+          } else {
+            localStorage.removeItem('rememberMe');
+          }
+
+          if (token) {
+            localStorage.setItem('authToken', token);
+          }
+
+          window.location.href = 'index.html';
+          return;
+        }
+
+        const fallbackMessage = data?.message || data?.detail || data?.error || 'تعذر تسجيل الدخول';
+        showMessage(fallbackMessage, 'error');
+      } catch (error) {
+        showMessage('تعذر الاتصال بالخادم الآن. يرجى المحاولة لاحقًا.', 'error');
+      } finally {
+        setLoading(false);
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,104 @@
+/* إعادة ضبط التنسيقات العامة */
+* {
+    box-sizing: border-box;
+}
+
+body {
+    background-color: #f9fafb;
+    margin: 0;
+    padding: 0;
+}
+
+/* هندسة الأبعاد والتقسيم */
+.flex { display: flex !important; }
+.flex-col { flex-direction: column !important; }
+.flex-1 { flex: 1 1 0% !important; }
+.h-screen { height: 100vh !important; }
+.min-h-screen { min-height: 100vh !important; }
+.overflow-y-auto { overflow-y: auto !important; }
+.w-full { width: 100% !important; }
+.w-64 { width: 16rem !important; }
+
+/* القائمة الجانبية باللون الكحلي الفاخر */
+.bg-indigo-900 { 
+    background-color: #1e1b4b !important; 
+}
+.text-white { 
+    color: #ffffff !important; 
+}
+.p-6 { padding: 1.5rem !important; }
+.shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important; }
+
+/* تلوين وضبط أيقونة السن الخضراء */
+.text-emerald-400 { color: #34d399 !important; }
+.w-8 { width: 2rem !important; }
+.h-8 { height: 2rem !important; }
+
+/* المحاذاة والمسافات للشعار العربي */
+.items-center { align-items: center !important; }
+.justify-center { justify-content: center !important; }
+.justify-between { justify-content: space-between !important; }
+.mb-8 { margin-bottom: 2rem !important; }
+.border-b { border-bottom-width: 1px !important; }
+.border-indigo-700 { border-color: #4338ca !important; }
+.pb-4 { padding-bottom: 1rem !important; }
+
+.space-x-reverse > :not([hidden]) ~ :not([hidden]) {
+    margin-left: 0 !important;
+    margin-right: 0.75rem !important; /* مسافة واضحة بين السن والكلمة */
+}
+
+/* روابط القائمة الجانبية والتنقل */
+.block { display: block !important; }
+.space-y-4 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 1rem !important;
+}
+.py-2 { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+.px-4 { padding-left: 1rem !important; padding-right: 1rem !important; }
+.rounded { border-radius: 0.25rem !important; }
+.bg-indigo-700 { background-color: #4338ca !important; }
+.hover\:bg-indigo-800:hover { background-color: #3730a3 !important; }
+
+/* تنسيق المحتوى الرئيسي والجدول */
+.p-10 { padding: 2.5rem !important; }
+.text-3xl { font-size: 1.875rem !important; }
+.font-bold { font-weight: 700 !important; }
+.text-gray-700 { color: #374151 !important; }
+.bg-white { background-color: #ffffff !important; }
+.rounded-xl { border-radius: 0.75rem !important; }
+.overflow-hidden { overflow: hidden !important; }
+.text-right { text-align: right !important; }
+.border-collapse { border-collapse: collapse !important; }
+.bg-indigo-50 { background-color: #eef2ff !important; }
+.text-indigo-900 { color: #1e1b4b !important; }
+.border-gray-200 { border-color: #e5e7eb !important; }
+.border-gray-100 { border-color: #f3f4f6 !important; }
+.hover\:bg-gray-50:hover { background-color: #f9fafb !important; }
+.transition { transition-property: all !important; transition-duration: 150ms !important; }
+
+/* أزرار الإضافة والتفاعل */
+.bg-indigo-600 { background-color: #4f46e5 !important; }
+.hover\:bg-indigo-700:hover { background-color: #4338ca !important; }
+.bg-emerald-500 { background-color: #10b981 !important; }
+.hover\:bg-emerald-600:hover { background-color: #059669 !important; }
+.px-5 { padding-left: 1.25rem !important; padding-right: 1.25rem !important; }
+.py-2 { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+
+/* النافذة المنبثقة */
+.hidden { display: none !important; }
+.fixed { position: fixed !important; }
+.inset-0 { top: 0 !important; right: 0 !important; bottom: 0 !important; left: 0 !important; }
+.bg-black\/50 { background-color: rgba(0, 0, 0, 0.5) !important; }
+.z-50 { z-index: 50 !important; }
+.max-w-md { max-width: 28rem !important; }
+
+/* تنسيق ثابت ومتناغم للشعار */
+.logo-fixed {
+    width: 64px;
+    height: 64px;
+    min-width: 64px;
+    min-height: 64px;
+    object-fit: contain;
+    border-radius: 0.75rem;
+    display: block;
+}
