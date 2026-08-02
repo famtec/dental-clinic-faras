@@ -182,7 +182,13 @@
           <td class="px-4 py-3 text-sm text-slate-600">${escapeHtml(p.phone ?? '')}</td>
           <td class="px-4 py-3 text-sm text-slate-600 max-w-xs truncate">${escapeHtml(p.medical_history ?? '')}</td>
           <td class="px-4 py-3 text-sm">
-            <button class="px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm">🦷 فتح الملف الطبي</button>
+            <button
+              type="button"
+              class="px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm"
+              onclick="window.location.href = `patient_record.html?id=${encodeURIComponent(p.id)}`"
+            >
+              🦷 فتح الملف الطبي
+            </button>
           </td>
         `;
         patientsTableBody.appendChild(tr);
