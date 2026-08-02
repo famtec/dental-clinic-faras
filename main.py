@@ -354,9 +354,9 @@ def get_patient_treatments(patient_id: int, db: Session = Depends(database.get_d
     return db.query(models.Treatment).filter(models.Treatment.patient_id == patient_id).all()
 
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
 def redirect_to_login():
-    return RedirectResponse(url="/login.html")
+    return RedirectResponse(url="/login.html", status_code=302)
 
 app.mount("/", StaticFiles(directory="frontend_web", html=True), name="static")
 
