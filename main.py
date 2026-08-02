@@ -15,6 +15,30 @@ app = FastAPI(title="Dental Clinic API")
 # 1. تشغيل السيرفر وإنشاء الجداول تلقائياً عند الإقلاع
 database.init_db()
 
+
+def seed_default_activation_key() -> None:
+    db = database.SessionLocal()
+    try:
+        existing_key = db.query(models.ActivationKey).filter(
+            models.ActivationKey.key_code == "FARAS-30DAYS-2026"
+        ).first()
+        if existing_key is None:
+            new_key = models.ActivationKey(
+                key_code="FARAS-30DAYS-2026",
+                duration_days=30,
+                is_used=False,
+            )
+            db.add(new_key)
+            db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+seed_default_activation_key()
+
 # 2. تفعيل نظام CORS للسماح لموقع الويب وتطبيق الأندرويد بالاتصال بالـ API دون قيود أمنية ومتصفح
 app.add_middleware(
     CORSMiddleware,
