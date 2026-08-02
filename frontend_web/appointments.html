@@ -10,27 +10,28 @@
         body { font-family: 'Tajawal', sans-serif; }
     </style>
 </head>
-<body class="min-h-screen bg-slate-50 text-slate-800">
+<body class="min-h-screen overflow-x-hidden bg-slate-50 text-slate-800">
     <div class="flex min-h-screen flex-col lg:flex-row">
-        <aside class="w-full lg:w-64 bg-indigo-900 text-white p-6 shadow-lg min-h-screen">
-            <div class="mb-8 flex items-center justify-center gap-3 border-b border-indigo-700 pb-4">
-                <img src="logo.png" alt="شعار العيادة" class="h-16 w-16 rounded-xl object-contain bg-white/10 p-2" />
-                <h1 class="text-xl font-bold">عيادتي الرقمية</h1>
+        <aside class="w-full bg-indigo-900 p-4 text-white shadow-lg lg:min-h-screen lg:w-72 lg:p-6 xl:w-80">
+            <div class="mb-4 flex items-center justify-center gap-3 border-b border-indigo-700 pb-4 lg:mb-8">
+                <img src="logo.png" alt="شعار العيادة" class="h-14 w-14 rounded-xl object-contain bg-white/10 p-2 sm:h-16 sm:w-16" />
+                <h1 class="text-lg font-bold sm:text-xl">عيادتي الرقمية</h1>
             </div>
-            <nav class="space-y-3">
+            <button id="mobileMenuToggle" type="button" class="mb-3 flex w-full items-center justify-center rounded-lg border border-indigo-700/60 bg-indigo-800/70 px-3 py-2 text-sm font-semibold text-white lg:hidden">☰ القائمة</button>
+            <nav id="sidebarNav" class="hidden flex-col gap-2 lg:flex lg:gap-3">
                 <a href="index.html" class="block rounded-lg px-4 py-3 text-sm font-medium transition hover:bg-indigo-800">👥 لوحة مرضى</a>
                 <a href="appointments.html" class="block rounded-lg bg-indigo-700 px-4 py-3 text-sm font-bold">📅 المواعيد اليومية</a>
                 <a href="chart.html" class="block rounded-lg px-4 py-3 text-sm font-medium transition hover:bg-indigo-800">🦷 مخطط الأسنان</a>
             </nav>
         </aside>
 
-        <main class="flex-1 p-6 lg:p-10">
-            <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <main class="flex-1 p-4 sm:p-6 lg:p-8 xl:p-10">
+            <div class="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                    <h2 class="text-3xl font-extrabold text-slate-800">جدول المواعيد اليومية</h2>
+                    <h2 class="text-2xl font-extrabold text-slate-800 sm:text-3xl">جدول المواعيد اليومية</h2>
                     <p class="mt-1 text-sm text-slate-500">تابع جميع المواعيد واستقبل مواعيد جديدة بسهولة.</p>
                 </div>
-                <button id="openModalBtn" class="rounded-xl bg-indigo-600 px-5 py-3 font-bold text-white shadow-lg transition hover:bg-indigo-700">
+                <button id="openModalBtn" class="w-full rounded-xl bg-indigo-600 px-5 py-3 font-bold text-white shadow-lg transition hover:bg-indigo-700 sm:w-auto">
                     + إضافة موعد جديد
                 </button>
             </div>
@@ -60,8 +61,8 @@
         </main>
     </div>
 
-    <div id="appointmentModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-        <div class="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+    <div id="appointmentModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-4">
+        <div class="w-full max-w-[95vw] rounded-3xl border border-slate-200 bg-white p-4 shadow-2xl sm:max-w-md sm:p-6">
             <div class="mb-5 flex items-start justify-between">
                 <div>
                     <p class="text-sm font-semibold text-indigo-600">إضافة موعد جديد</p>
@@ -103,6 +104,28 @@
     <script>
         const doctorName = localStorage.getItem('doctor_name');
         const titleElement = document.querySelector('h1');
+        const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+        const sidebarNav = document.getElementById('sidebarNav');
+
+        function syncSidebarNav() {
+            if (!sidebarNav) return;
+            if (window.innerWidth >= 1024) {
+                sidebarNav.classList.remove('hidden');
+                sidebarNav.classList.add('flex');
+            } else {
+                sidebarNav.classList.add('hidden');
+                sidebarNav.classList.remove('flex');
+            }
+        }
+
+        if (mobileMenuToggle && sidebarNav) {
+            mobileMenuToggle.addEventListener('click', () => {
+                sidebarNav.classList.toggle('hidden');
+            });
+        }
+
+        window.addEventListener('resize', syncSidebarNav);
+        syncSidebarNav();
 
         if (titleElement) {
             titleElement.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادتي الرقمية';
@@ -143,12 +166,25 @@
                         : 'bg-amber-100 text-amber-700';
 
                 return `
-                    <tr class="hover:bg-slate-50">
-                        <td class="px-4 py-3 text-sm text-slate-600">${appointment.id ?? '-'}</td>
-                        <td class="px-4 py-3 text-sm font-semibold text-slate-700">${appointment.patient_name || '—'}</td>
-                        <td class="px-4 py-3 text-sm text-slate-600">${appointment.appointment_time || '—'}</td>
-                        <td class="px-4 py-3 text-sm text-slate-600">${appointment.procedure_type || '—'}</td>
-                        <td class="px-4 py-3 text-sm">
+                    <tr class="block rounded-2xl border border-slate-200 bg-white p-2 shadow-sm transition hover:bg-slate-50 sm:table-row sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0">
+                        <td class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-sm text-slate-600 last:border-b-0 sm:table-cell sm:border-b-0">
+                            <span class="text-xs font-semibold text-slate-400 sm:hidden">ID</span>
+                            <span>${appointment.id ?? '-'}</span>
+                        </td>
+                        <td class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 last:border-b-0 sm:table-cell sm:border-b-0">
+                            <span class="text-xs font-semibold text-slate-400 sm:hidden">اسم المريض</span>
+                            <span>${appointment.patient_name || '—'}</span>
+                        </td>
+                        <td class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-sm text-slate-600 last:border-b-0 sm:table-cell sm:border-b-0">
+                            <span class="text-xs font-semibold text-slate-400 sm:hidden">الوقت</span>
+                            <span>${appointment.appointment_time || '—'}</span>
+                        </td>
+                        <td class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-sm text-slate-600 last:border-b-0 sm:table-cell sm:border-b-0">
+                            <span class="text-xs font-semibold text-slate-400 sm:hidden">الإجراء</span>
+                            <span>${appointment.procedure_type || '—'}</span>
+                        </td>
+                        <td class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-sm last:border-b-0 sm:table-cell sm:border-b-0">
+                            <span class="text-xs font-semibold text-slate-400 sm:hidden">الحالة</span>
                             <span class="rounded-full px-3 py-1 ${badgeClass}">${status}</span>
                         </td>
                     </tr>

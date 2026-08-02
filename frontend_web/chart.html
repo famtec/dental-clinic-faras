@@ -17,24 +17,25 @@
         .tooth[data-status="extraction"] { fill: #fdba74; }
     </style>
 </head>
-<body class="min-h-screen bg-slate-50 text-slate-800">
+<body class="min-h-screen overflow-x-hidden bg-slate-50 text-slate-800">
     <div class="flex min-h-screen flex-col lg:flex-row">
-        <aside class="w-full lg:w-64 bg-indigo-900 text-white p-6 shadow-lg min-h-screen">
-            <div class="mb-8 flex items-center justify-center gap-3 border-b border-indigo-700 pb-4">
-                <img src="logo.png" alt="شعار العيادة" class="h-16 w-16 rounded-xl object-contain bg-white/10 p-2" />
-                <h1 class="text-xl font-bold">عيادتي الرقمية</h1>
+        <aside class="w-full bg-indigo-900 p-4 text-white shadow-lg lg:min-h-screen lg:w-72 lg:p-6 xl:w-80">
+            <div class="mb-4 flex items-center justify-center gap-3 border-b border-indigo-700 pb-4 lg:mb-8">
+                <img src="logo.png" alt="شعار العيادة" class="h-14 w-14 rounded-xl object-contain bg-white/10 p-2 sm:h-16 sm:w-16" />
+                <h1 class="text-lg font-bold sm:text-xl">عيادتي الرقمية</h1>
             </div>
-            <nav class="space-y-3">
+            <button id="mobileMenuToggle" type="button" class="mb-3 flex w-full items-center justify-center rounded-lg border border-indigo-700/60 bg-indigo-800/70 px-3 py-2 text-sm font-semibold text-white lg:hidden">☰ القائمة</button>
+            <nav id="sidebarNav" class="hidden flex-col gap-2 lg:flex lg:gap-3">
                 <a href="index.html" class="block rounded-lg px-4 py-3 text-sm font-medium transition hover:bg-indigo-800">👥 لوحة مرضى</a>
                 <a href="appointments.html" class="block rounded-lg px-4 py-3 text-sm font-medium transition hover:bg-indigo-800">📅 المواعيد اليومية</a>
                 <a href="chart.html" class="block rounded-lg bg-indigo-700 px-4 py-3 text-sm font-bold">🦷 مخطط الأسنان</a>
             </nav>
         </aside>
 
-        <main class="flex-1 p-4 sm:p-8 lg:p-10">
+        <main class="flex-1 p-4 sm:p-6 lg:p-8 xl:p-10">
             <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                    <h2 class="text-3xl font-extrabold text-slate-800">مخطط الأسنان البالغين</h2>
+                    <h2 class="text-2xl font-extrabold text-slate-800 sm:text-3xl">مخطط الأسنان البالغين</h2>
                     <p class="text-sm text-slate-500">انقر على أي سن لفتح نموذج العلاج وتحديث حالته فورًا.</p>
                 </div>
                 <div class="rounded-full border border-indigo-200 bg-white px-4 py-2 text-sm text-indigo-700 shadow-sm">
@@ -48,8 +49,8 @@
                     <div class="text-sm text-slate-500">الأسنان المميزة بالألوان تعكس الحالة الحالية</div>
                 </div>
 
-                <div class="overflow-x-auto rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                    <svg viewBox="0 0 740 520" class="mx-auto w-full max-w-4xl">
+                <div class="overflow-x-auto rounded-2xl border border-slate-100 bg-slate-50 p-2 sm:p-4">
+                    <svg viewBox="0 0 740 520" class="mx-auto w-full max-w-[640px] sm:max-w-4xl">
                             <g id="upper-right" transform="translate(70,70)">
                                 <path d="M120 40 C145 10, 175 10, 205 40 L205 70 C205 95, 185 115, 160 120 L150 120 C125 115, 105 95, 105 70 Z" fill="#f8fafc" stroke="#cbd5e1" />
                                 <path id="tooth-18" class="tooth" data-number="18" d="M120 40 C135 25, 160 25, 175 40 L175 85 C160 95, 140 95, 125 85 Z" onclick="openModal(18)" />
@@ -143,8 +144,8 @@
         </main>
     </div>
 
-    <div id="treatmentModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-        <div class="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+    <div id="treatmentModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-4">
+        <div class="w-full max-w-[95vw] rounded-3xl border border-slate-200 bg-white p-4 shadow-2xl sm:max-w-md sm:p-6">
             <div class="mb-5 flex items-start justify-between">
                 <div>
                     <p class="text-sm font-semibold text-indigo-600">تسجيل علاج سنّي</p>
@@ -190,6 +191,28 @@
     <script>
         const doctorName = localStorage.getItem('doctor_name');
         const titleElement = document.querySelector('h1');
+        const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+        const sidebarNav = document.getElementById('sidebarNav');
+
+        function syncSidebarNav() {
+            if (!sidebarNav) return;
+            if (window.innerWidth >= 1024) {
+                sidebarNav.classList.remove('hidden');
+                sidebarNav.classList.add('flex');
+            } else {
+                sidebarNav.classList.add('hidden');
+                sidebarNav.classList.remove('flex');
+            }
+        }
+
+        if (mobileMenuToggle && sidebarNav) {
+            mobileMenuToggle.addEventListener('click', () => {
+                sidebarNav.classList.toggle('hidden');
+            });
+        }
+
+        window.addEventListener('resize', syncSidebarNav);
+        syncSidebarNav();
 
         if (titleElement) {
             titleElement.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادتي الرقمية';
