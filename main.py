@@ -51,11 +51,19 @@ app.add_middleware(
 
 # 3. بناء مخطط (Schema) لاستقبال بيانات المريض عبر الـ API وتدقيقها (Pydantic)
 class PatientCreate(BaseModel):
+    doctor_name: Optional[str] = None
     full_name: str
     phone: str
     birth_date: date = None
     gender: str = None
-    medical_history: str = None
+    medical_history: Optional[str] = None
+
+
+class PatientUpdate(BaseModel):
+    doctor_name: Optional[str] = None
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    medical_history: Optional[str] = None
 
 
 class PatientResponse(PatientCreate):
@@ -231,6 +239,7 @@ def login_user(login_request: LoginRequest, db: Session = Depends(database.get_d
 @app.post("/api/patients", response_model=PatientResponse)
 def create_patient(patient: PatientCreate, db: Session = Depends(database.get_db)):
     db_patient = models.Patient(
+        doctor_name=patient.doctor_name,
         full_name=patient.full_name,
         phone=patient.phone,
         birth_date=patient.birth_date if patient.birth_date else None,
@@ -247,6 +256,49 @@ def create_patient(patient: PatientCreate, db: Session = Depends(database.get_db
 @app.get("/api/patients", response_model=List[PatientResponse])
 def get_all_patients(db: Session = Depends(database.get_db)):
     return db.query(models.Patient).all()
+
+
+@app.delete("/api/patients/{patient_id}")
+def delete_patient(patient_id: int, db: Session = Depends(database.get_db)):
+    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    try:
+        db.query(models.Visit).filter(models.Visit.patient_id == patient_id).delete(synchronize_session=False)
+        db.query(models.Treatment).filter(models.Treatment.patient_id == patient_id).delete(synchronize_session=False)
+        db.delete(patient)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    return {"message": "Patient deleted successfully"}
+
+
+@app.put("/api/patients/{patient_id}", response_model=PatientResponse)
+def update_patient(patient_id: int, patient_update: PatientUpdate, db: Session = Depends(database.get_db)):
+    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    try:
+        if patient_update.doctor_name is not None:
+            patient.doctor_name = patient_update.doctor_name
+        if patient_update.full_name is not None:
+            patient.full_name = patient_update.full_name
+        if patient_update.phone is not None:
+            patient.phone = patient_update.phone
+        if patient_update.medical_history is not None:
+            patient.medical_history = patient_update.medical_history
+
+        db.commit()
+        db.refresh(patient)
+    except Exception:
+        db.rollback()
+        raise
+
+    return patient
 
 
 # 6. مسار لحجز موعد جديد لمريض [POST]

@@ -28,6 +28,7 @@ class Patient(Base):
     __tablename__ = "patients"
 
     id = Column(Integer, primary_key=True, index=True)
+    doctor_name = Column(String, nullable=True)
     full_name = Column(String, index=True)
     phone = Column(String, nullable=False)
     birth_date = Column(Date, nullable=True)

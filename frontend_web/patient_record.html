@@ -39,16 +39,24 @@
 
       <section class="space-y-6">
         <div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/80">
-          <h2 class="mb-4 text-xl font-extrabold text-indigo-900">البروفايل الطبي</h2>
+          <div class="mb-4 flex items-center justify-between gap-3">
+            <h2 class="text-xl font-extrabold text-indigo-900">البروفايل الطبي</h2>
+            <div class="flex items-center gap-2">
+              <button id="editProfileBtn" type="button" class="rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700">✏️ تعديل</button>
+              <button id="saveProfileBtn" type="button" class="hidden rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700">💾 حفظ</button>
+            </div>
+          </div>
           <div id="profileCard" class="space-y-4">
             <div class="rounded-2xl bg-slate-50 p-4">
               <p class="text-sm text-slate-500">الاسم</p>
               <p id="patientName" class="mt-1 text-lg font-bold text-slate-800">—</p>
+              <input id="patientNameInput" type="text" class="mt-2 hidden w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500" />
             </div>
             <div class="grid gap-4 sm:grid-cols-2">
               <div class="rounded-2xl bg-slate-50 p-4">
                 <p class="text-sm text-slate-500">الهاتف</p>
                 <p id="patientPhone" class="mt-1 font-semibold text-slate-800">—</p>
+                <input id="patientPhoneInput" type="text" class="mt-2 hidden w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500" />
               </div>
               <div class="rounded-2xl bg-slate-50 p-4">
                 <p class="text-sm text-slate-500">العمر</p>
@@ -58,6 +66,7 @@
             <div class="rounded-2xl bg-slate-50 p-4">
               <p class="text-sm text-slate-500">ملاحظات التاريخ الطبي</p>
               <p id="patientHistory" class="mt-2 text-sm leading-7 text-slate-700">—</p>
+              <textarea id="patientHistoryInput" rows="4" class="mt-2 hidden w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500"></textarea>
             </div>
           </div>
         </div>
@@ -97,6 +106,9 @@
       clinicTitle.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادتي الرقمية';
     }
 
+    let currentPatient = null;
+    let isEditing = false;
+
     function getPatientIdFromUrl() {
       const params = new URLSearchParams(window.location.search);
       return params.get('id');
@@ -113,6 +125,91 @@
         age -= 1;
       }
       return `${age} سنة`;
+    }
+
+    function showToast(message) {
+      const existingToast = document.getElementById('profileToast');
+      if (existingToast) existingToast.remove();
+
+      const toast = document.createElement('div');
+      toast.id = 'profileToast';
+      toast.className = 'fixed left-1/2 top-5 z-50 -translate-x-1/2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-lg';
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      setTimeout(() => toast.remove(), 2200);
+    }
+
+    function toggleProfileEditMode(editing) {
+      isEditing = editing;
+      const editBtn = document.getElementById('editProfileBtn');
+      const saveBtn = document.getElementById('saveProfileBtn');
+      const patientName = document.getElementById('patientName');
+      const patientPhone = document.getElementById('patientPhone');
+      const patientHistory = document.getElementById('patientHistory');
+      const patientNameInput = document.getElementById('patientNameInput');
+      const patientPhoneInput = document.getElementById('patientPhoneInput');
+      const patientHistoryInput = document.getElementById('patientHistoryInput');
+
+      if (editBtn) editBtn.classList.toggle('hidden', editing);
+      if (saveBtn) saveBtn.classList.toggle('hidden', !editing);
+
+      if (patientName) patientName.classList.toggle('hidden', editing);
+      if (patientPhone) patientPhone.classList.toggle('hidden', editing);
+      if (patientHistory) patientHistory.classList.toggle('hidden', editing);
+      if (patientNameInput) patientNameInput.classList.toggle('hidden', !editing);
+      if (patientPhoneInput) patientPhoneInput.classList.toggle('hidden', !editing);
+      if (patientHistoryInput) patientHistoryInput.classList.toggle('hidden', !editing);
+
+      if (editing && currentPatient) {
+        if (patientNameInput) patientNameInput.value = currentPatient.full_name || '';
+        if (patientPhoneInput) patientPhoneInput.value = currentPatient.phone || '';
+        if (patientHistoryInput) patientHistoryInput.value = currentPatient.medical_history || '';
+      }
+    }
+
+    async function savePatientProfile() {
+      const patientId = getPatientIdFromUrl();
+      if (!patientId || !currentPatient) return;
+
+      const patientNameInput = document.getElementById('patientNameInput');
+      const patientPhoneInput = document.getElementById('patientPhoneInput');
+      const patientHistoryInput = document.getElementById('patientHistoryInput');
+
+      const payload = {
+        full_name: patientNameInput ? patientNameInput.value.trim() : currentPatient.full_name,
+        phone: patientPhoneInput ? patientPhoneInput.value.trim() : currentPatient.phone,
+        medical_history: patientHistoryInput ? patientHistoryInput.value.trim() : currentPatient.medical_history,
+      };
+
+      try {
+        const response = await fetch(`https://onrender.com/api/patients/${patientId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          throw new Error('تعذر حفظ تحديثات المريض');
+        }
+
+        const updatedPatient = await response.json();
+        currentPatient = updatedPatient;
+
+        const patientName = document.getElementById('patientName');
+        const patientPhone = document.getElementById('patientPhone');
+        const patientHistory = document.getElementById('patientHistory');
+
+        if (patientName) patientName.textContent = updatedPatient.full_name || '—';
+        if (patientPhone) patientPhone.textContent = updatedPatient.phone || '—';
+        if (patientHistory) patientHistory.textContent = updatedPatient.medical_history || 'لا توجد ملاحظات طبية متاحة.';
+
+        toggleProfileEditMode(false);
+        showToast('تم حفظ التحديثات بنجاح');
+      } catch (error) {
+        console.error(error);
+        alert('حدث خطأ أثناء حفظ التعديلات.');
+      }
     }
 
     async function loadPatientRecord() {
@@ -136,6 +233,7 @@
         }
 
         const patient = await response.json();
+        currentPatient = patient;
         patientName.textContent = patient.full_name || '—';
         patientPhone.textContent = patient.phone || '—';
         patientAge.textContent = calculateAge(patient.birth_date);
@@ -159,6 +257,8 @@
       }
     }
 
+    document.getElementById('editProfileBtn').addEventListener('click', () => toggleProfileEditMode(true));
+    document.getElementById('saveProfileBtn').addEventListener('click', savePatientProfile);
     window.addEventListener('DOMContentLoaded', loadPatientRecord);
   </script>
 </body>

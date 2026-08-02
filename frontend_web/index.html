@@ -181,6 +181,26 @@
       });
     }
 
+    async function deletePatient(patientId) {
+      const confirmed = confirm('هل أنت متأكد من حذف هذا المريض نهائياً؟');
+      if (!confirmed) return;
+
+      try {
+        const response = await fetch(`https://onrender.com/api/patients/${patientId}`, {
+          method: 'DELETE'
+        });
+
+        if (!response.ok) {
+          throw new Error('فشل حذف المريض');
+        }
+
+        await fetchPatients();
+      } catch (error) {
+        console.error('deletePatient error', error);
+        alert('تعذر حذف المريض. يرجى المحاولة لاحقًا.');
+      }
+    }
+
     function renderPatients(patients, query=""){
       const sourcePatients = Array.isArray(patients) ? patients : [];
       const filteredPatients = filterPatients(sourcePatients, query);
@@ -218,13 +238,22 @@
           </td>
           <td class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-sm last:border-b-0 sm:table-cell sm:border-b-0">
             <span class="text-xs font-semibold text-slate-400 sm:hidden">الإجراءات</span>
-            <button
-              type="button"
-              class="rounded-xl bg-emerald-500 px-3 py-2 text-sm text-white transition hover:bg-emerald-600"
-              onclick="window.location.href = 'patient_record.html?id=' + encodeURIComponent('${String(p.id ?? '')}')"
-            >
-              🦷 فتح الملف الطبي
-            </button>
+            <div class="flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                class="rounded-xl bg-emerald-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-600"
+                onclick="window.location.href = 'patient_record.html?id=' + encodeURIComponent('${String(p.id ?? '')}')"
+              >
+                🦷 فتح الملف الطبي
+              </button>
+              <button
+                type="button"
+                class="rounded-xl bg-rose-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700"
+                onclick="deletePatient(${Number(p.id ?? 0)})"
+              >
+                🗑️ حذف
+              </button>
+            </div>
           </td>
         `;
         patientsTableBody.appendChild(tr);
