@@ -1,23 +1,19 @@
 import sqlite3
-from datetime import datetime, timedelta
 
-# الاتصال بقاعدة البيانات المحلية للعيادة
+# 1. الاتصال بقاعدة البيانات
 conn = sqlite3.connect('dental.db')
 cursor = conn.cursor()
 
-# حساب تواريخ الاشتراكات حية بناءً على تاريخ اليوم (2026)
-today = datetime.utcnow()
-active_expiry = today + timedelta(days=30)   # اشتراك ساري لمدة شهر
-expired_expiry = today - timedelta(days=1)   # اشتراك منتهي منذ الأمس
+# 2. توليد كود التفعيل الفخم الخاص بك (30 يوماً)
+my_activation_code = "FARAS-30DAYS-2026"
 
-# ضخ البيانات التجريبية داخل جدول الحسابات
 cursor.execute("""
-INSERT OR IGNORE INTO users (doctor_name, email, hashed_password, subscription_expires_at, is_active)
-VALUES 
-('د. فارس حلاوي', 'active@dental.com', 'faras2026', ?, 1),
-('د. عيادة منتهية', 'expired@dental.com', '123456', ?, 1)
-""", (active_expiry.strftime('%Y-%m-%d %H:%M:%S'), expired_expiry.strftime('%Y-%m-%d %H:%M:%S')))
+INSERT OR IGNORE INTO activation_keys (key_code, duration_days, is_used, used_by_email)
+VALUES (?, 30, 0, NULL)
+""", (my_activation_code,))
 
 conn.commit()
 conn.close()
-print("🚀 تم ضخ الحساب النشط والحساب المحظور بنجاح داخل قاعدة البيانات!")
+
+print(f"💳 تم توليد بطاقة تفعيل العيادات الذكية بنجاح!")
+print(f"🔑 كود التفعيل المتاح للبيع: {my_activation_code}")

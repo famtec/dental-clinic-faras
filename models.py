@@ -14,6 +14,16 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False)
 
 
+class ActivationKey(Base):
+    __tablename__ = "activation_keys"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key_code = Column(String, unique=True, index=True, nullable=False)
+    duration_days = Column(Integer, default=30, nullable=False)
+    is_used = Column(Boolean, default=False, nullable=False)
+    used_by_email = Column(String, nullable=True)
+
+
 class Patient(Base):
     __tablename__ = "patients"
 
@@ -61,3 +71,4 @@ class Treatment(Base):
     color = Column(String, nullable=True)
 
     patient = relationship("Patient", back_populates="treatments")
+    

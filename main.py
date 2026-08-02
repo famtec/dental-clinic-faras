@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel, Field, ConfigDict
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 import models
 import database
@@ -109,6 +109,13 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RegisterRequest(BaseModel):
+    doctor_name: str
+    email: str
+    password: str
+    activation_code: str
+
+
 class LoginResponse(BaseModel):
     token: str
     doctor_name: Optional[str] = None
@@ -118,6 +125,53 @@ class LoginResponse(BaseModel):
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+
+@app.post("/api/auth/register")
+def register_user(register_request: RegisterRequest, db: Session = Depends(database.get_db)):
+    activation_key = (
+        db.query(models.ActivationKey)
+        .filter(models.ActivationKey.key_code == register_request.activation_code)
+        .first()
+    )
+
+    if not activation_key or activation_key.is_used:
+        raise HTTPException(
+            status_code=400,
+            detail="كود التفعيل خاطئ، منتهي، أو تم استخدامه مسبقاً! يرجى التواصل مع المهندس فارس حلاوي لشراء كود جديد.",
+        )
+
+    existing_user = db.query(models.User).filter(models.User.email == register_request.email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="هذا البريد الإلكتروني مُسجل مسبقًا.")
+
+    subscription_expires_at = datetime.utcnow() + timedelta(days=activation_key.duration_days)
+
+    try:
+        new_user = models.User(
+            doctor_name=register_request.doctor_name,
+            email=register_request.email,
+            hashed_password=register_request.password,
+            subscription_expires_at=subscription_expires_at,
+            is_active=True,
+        )
+
+        activation_key.is_used = True
+        activation_key.used_by_email = register_request.email
+
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+    except Exception:
+        db.rollback()
+        raise
+
+    return {
+        "message": "تم إنشاء الحساب بنجاح.",
+        "doctor_name": new_user.doctor_name,
+        "email": new_user.email,
+        "subscription_expires_at": subscription_expires_at.isoformat(),
+    }
 
 
 @app.post("/api/auth/login", response_model=LoginResponse)
