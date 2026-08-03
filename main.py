@@ -161,9 +161,15 @@ def health_check():
 
 @app.post("/api/auth/register")
 def register_user(register_request: RegisterRequest, db: Session = Depends(database.get_db)):
+    normalized_email = register_request.email.strip().lower()
+    activation_code = register_request.activation_code.strip()
+
+    if not normalized_email:
+        raise HTTPException(status_code=400, detail="البريد الإلكتروني مطلوب.")
+
     activation_key = (
         db.query(models.ActivationKey)
-        .filter(models.ActivationKey.key_code == register_request.activation_code)
+        .filter(models.ActivationKey.key_code == activation_code)
         .first()
     )
 
@@ -173,7 +179,7 @@ def register_user(register_request: RegisterRequest, db: Session = Depends(datab
             detail="كود التفعيل خاطئ، منتهي، أو تم استخدامه مسبقاً! يرجى التواصل مع المهندس فارس حلاوي لشراء كود جديد.",
         )
 
-    existing_user = db.query(models.User).filter(models.User.email == register_request.email).first()
+    existing_user = db.query(models.User).filter(models.User.email == normalized_email).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="هذا البريد الإلكتروني مُسجل مسبقًا.")
 
@@ -182,14 +188,14 @@ def register_user(register_request: RegisterRequest, db: Session = Depends(datab
     try:
         new_user = models.User(
             doctor_name=register_request.doctor_name,
-            email=register_request.email,
+            email=normalized_email,
             hashed_password=register_request.password,
             subscription_expires_at=subscription_expires_at,
             is_active=True,
         )
 
         activation_key.is_used = True
-        activation_key.used_by_email = register_request.email
+        activation_key.used_by_email = normalized_email
 
         db.add(new_user)
         db.commit()
@@ -208,7 +214,12 @@ def register_user(register_request: RegisterRequest, db: Session = Depends(datab
 
 @app.post("/api/auth/login", response_model=LoginResponse)
 def login_user(login_request: LoginRequest, db: Session = Depends(database.get_db)):
-    user = db.query(models.User).filter(models.User.email == login_request.email).first()
+    normalized_email = login_request.email.strip().lower()
+
+    if not normalized_email:
+        raise HTTPException(status_code=401, detail="البريد الإلكتروني أو كلمة المرور غير صحيحة!")
+
+    user = db.query(models.User).filter(models.User.email == normalized_email).first()
 
     if not user:
         raise HTTPException(status_code=401, detail="البريد الإلكتروني أو كلمة المرور غير صحيحة!")

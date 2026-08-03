@@ -188,6 +188,7 @@
         </div>
     </div>
 
+    <script src="api-config.js"></script>
     <script>
         const doctorName = localStorage.getItem('doctor_name');
         const titleElement = document.querySelector('h1');
@@ -219,7 +220,8 @@
         }
 
         let selectedTooth = null;
-        const API_BASE_URL = 'http://127.0.0.1:8080';
+        const PATIENTS_API_URL = apiUrl('/api/patients');
+        const TREATMENTS_API_URL = apiUrl('/api/treatments');
 
         async function ensurePatientId() {
             const patientInput = document.getElementById('patientId');
@@ -232,7 +234,7 @@
             }
 
             try {
-                const patientsResponse = await fetch(`${API_BASE_URL}/api/patients`);
+                const patientsResponse = await fetch(PATIENTS_API_URL);
                 if (!patientsResponse.ok) {
                     throw new Error('تعذر قراءة بيانات المرضى');
                 }
@@ -243,7 +245,7 @@
                     return patients[0].id;
                 }
 
-                const createResponse = await fetch(`${API_BASE_URL}/api/patients`, {
+                const createResponse = await fetch(PATIENTS_API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -303,7 +305,7 @@
                     color: document.getElementById('statusColor').value
                 };
 
-                const response = await fetch(`${API_BASE_URL}/api/treatments`, {
+                const response = await fetch(TREATMENTS_API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)

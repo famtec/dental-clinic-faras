@@ -8,15 +8,44 @@
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
   <style>
     body { font-family: 'Tajawal', sans-serif; }
+    .tooth-float {
+      animation: toothFloat 6s ease-in-out infinite;
+    }
+    .pulse-ring {
+      animation: pulseRing 2.4s ease-out infinite;
+    }
+    .field-focus {
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .field-focus:focus-within {
+      transform: translateY(-1px);
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+    }
+    @keyframes toothFloat {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-10px); }
+    }
+    @keyframes pulseRing {
+      0% { transform: scale(0.9); opacity: 0.7; }
+      70% { transform: scale(1.15); opacity: 0; }
+      100% { transform: scale(1.15); opacity: 0; }
+    }
   </style>
 </head>
 <body class="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.22),_transparent_30%),linear-gradient(135deg,_#f8fafc_0%,_#eef2ff_45%,_#e0e7ff_100%)] text-slate-800">
-  <div class="flex min-h-screen items-center justify-center px-3 py-6 sm:px-6 sm:py-10 lg:px-8">
+  <div class="pointer-events-none absolute inset-0 overflow-hidden">
+    <div class="absolute right-[8%] top-16 h-36 w-36 rounded-full bg-indigo-200/30 blur-3xl"></div>
+    <div class="absolute left-[7%] top-[20%] h-48 w-48 rounded-full bg-violet-300/20 blur-3xl"></div>
+    <div class="absolute bottom-0 right-[18%] h-52 w-52 rounded-full bg-indigo-300/20 blur-3xl"></div>
+  </div>
+
+  <div class="relative flex min-h-screen items-center justify-center px-3 py-6 sm:px-6 sm:py-10 lg:px-8">
     <div class="w-full max-w-[420px] sm:max-w-md">
       <div class="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-2xl shadow-slate-200/80 sm:rounded-[32px]">
         <div class="bg-gradient-to-r from-indigo-900 via-indigo-800 to-violet-700 px-5 py-6 text-center text-white sm:px-8 sm:py-8">
-          <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-3xl shadow-lg sm:h-16 sm:w-16 sm:text-4xl">
-            🦷
+          <div class="relative mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-4xl shadow-lg">
+            <span class="pulse-ring absolute inset-0 rounded-2xl border border-white/25"></span>
+            <span class="tooth-float relative">🦷</span>
           </div>
           <h1 class="text-xl font-extrabold sm:text-2xl">عيادتي الرقمية - تسجيل الدخول</h1>
           <p class="mt-2 text-sm text-indigo-100">مرحبًا بك في لوحة الإدارة الطبية</p>
@@ -25,8 +54,16 @@
         <div class="p-5 sm:p-8">
           <div id="messageBox" class="mb-4 hidden rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 shadow-sm"></div>
 
+          <div class="mb-5 rounded-2xl border border-indigo-100 bg-indigo-50/80 px-4 py-3 text-sm text-indigo-900">
+            <div class="flex items-center justify-between gap-3">
+              <span class="font-bold">حالة الجاهزية</span>
+              <span id="loginStatusBadge" class="rounded-full bg-white px-3 py-1 text-xs font-bold text-indigo-700 shadow-sm">بانتظار البيانات</span>
+            </div>
+            <p id="loginHint" class="mt-2 text-xs leading-6 text-indigo-800/80">ابدأ بكتابة البريد الإلكتروني وكلمة المرور لتفعيل زر الدخول بشكل تفاعلي.</p>
+          </div>
+
           <form id="loginForm" class="space-y-5">
-            <div>
+            <div class="field-focus rounded-[24px] border border-slate-200 bg-slate-50/70 p-3">
               <label for="email" class="mb-2 block text-sm font-semibold text-slate-700">البريد الإلكتروني</label>
               <input
                 id="email"
@@ -34,45 +71,55 @@
                 type="email"
                 required
                 autocomplete="email"
-                class="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-right text-sm text-slate-700 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-right text-sm text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
                 placeholder="doctor@clinic.com"
               />
+              <p id="emailPreview" class="mt-2 hidden text-xs font-medium text-slate-500"></p>
             </div>
 
-            <div>
-              <label for="password" class="mb-2 block text-sm font-semibold text-slate-700">كلمة المرور</label>
+            <div class="field-focus rounded-[24px] border border-slate-200 bg-slate-50/70 p-3">
+              <div class="mb-2 flex items-center justify-between gap-3">
+                <label for="password" class="block text-sm font-semibold text-slate-700">كلمة المرور</label>
+                <button id="togglePasswordBtn" type="button" class="text-xs font-bold text-indigo-700 transition hover:text-indigo-800">إظهار</button>
+              </div>
               <input
                 id="password"
                 name="password"
                 type="password"
                 required
                 autocomplete="current-password"
-                class="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-right text-sm text-slate-700 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-right text-sm text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
                 placeholder="••••••••"
               />
+              <div class="mt-3 flex items-center justify-between gap-3 text-xs">
+                <span class="text-slate-500">يُفضّل استخدام كلمة مرور العيادة المعتمدة.</span>
+                <span id="capsLockHint" class="hidden font-bold text-amber-600">Caps Lock مفعل</span>
+              </div>
             </div>
 
-            <label class="flex items-center gap-3">
-              <input id="rememberMe" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
-              <span class="text-sm text-slate-600">تذكرني</span>
-            </label>
+            <div class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+              <label class="flex items-center gap-3">
+                <input id="rememberMe" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                <span class="text-sm text-slate-700">تذكرني على هذا الجهاز</span>
+              </label>
+              <span class="text-xs font-medium text-slate-500">جلسة أسهل للطبيب</span>
+            </div>
 
             <button
               id="submitBtn"
               type="submit"
-              class="w-full rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3 text-sm font-bold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700 disabled:cursor-not-allowed disabled:opacity-70"
+              class="w-full rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3.5 text-sm font-bold text-white shadow-lg transition hover:-translate-y-0.5 hover:from-indigo-700 hover:to-violet-700 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-70"
             >
               تسجيل الدخول الرقمي
             </button>
           </form>
 
-          <div class="mt-4 text-center">
-            <a href="register.html" class="text-sm font-semibold text-indigo-600 transition hover:text-indigo-700">
-              طبيب جديد؟ اضغط هنا لتفعيل عيادتك الرقمية
-            </a>
+          <div class="mt-5 flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            <span>لا تملك حسابًا بعد؟</span>
+            <a href="register.html" class="font-bold text-indigo-700 transition hover:text-indigo-800">فعّل عيادتك الآن</a>
           </div>
 
-          <p class="mt-5 text-center text-sm text-slate-500">إذا انتهت صلاحية الاشتراك، ستظهر لك رسالة تحذير واضحة لتجديده.</p>
+          <p class="mt-5 text-center text-sm text-slate-500">إذا انتهت صلاحية الاشتراك، ستظهر لك رسالة واضحة لتجديد الوصول.</p>
 
           <div class="mt-6 flex justify-center">
             <p class="text-center text-xs font-mono tracking-wide text-indigo-500/90">
@@ -84,6 +131,7 @@
     </div>
   </div>
 
+  <script src="api-config.js"></script>
   <script>
     const loginForm = document.getElementById('loginForm');
     const messageBox = document.getElementById('messageBox');
@@ -91,6 +139,11 @@
     const emailInput = document.getElementById('email');
     const passwordInput = document.getElementById('password');
     const rememberMeCheckbox = document.getElementById('rememberMe');
+    const togglePasswordBtn = document.getElementById('togglePasswordBtn');
+    const loginStatusBadge = document.getElementById('loginStatusBadge');
+    const loginHint = document.getElementById('loginHint');
+    const emailPreview = document.getElementById('emailPreview');
+    const capsLockHint = document.getElementById('capsLockHint');
 
     function showMessage(text, type = 'error') {
       const baseClasses = 'rounded-2xl border px-4 py-3 text-sm font-medium shadow-sm';
@@ -113,11 +166,68 @@
       submitBtn.textContent = isLoading ? 'جاري تسجيل الدخول...' : 'تسجيل الدخول الرقمي';
     }
 
+    function updateLoginInsights() {
+      const email = emailInput.value.trim().toLowerCase();
+      const password = passwordInput.value;
+      const hasEmail = email.length > 0;
+      const hasPassword = password.length > 0;
+
+      if (!hasEmail && !hasPassword) {
+        loginStatusBadge.textContent = 'بانتظار البيانات';
+        loginStatusBadge.className = 'rounded-full bg-white px-3 py-1 text-xs font-bold text-cyan-700 shadow-sm';
+        loginHint.textContent = 'ابدأ بكتابة البريد الإلكتروني وكلمة المرور لتفعيل زر الدخول بشكل تفاعلي.';
+        emailPreview.classList.add('hidden');
+        emailPreview.textContent = '';
+        return;
+      }
+
+      if (hasEmail && !hasPassword) {
+        loginStatusBadge.textContent = 'أدخل كلمة المرور';
+        loginStatusBadge.className = 'rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700 shadow-sm';
+        loginHint.textContent = 'تم التعرف على البريد الإلكتروني. بقيت خطوة واحدة لإتمام الدخول.';
+      } else if (hasEmail && hasPassword) {
+        loginStatusBadge.textContent = 'جاهز للدخول';
+        loginStatusBadge.className = 'rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700 shadow-sm';
+        loginHint.textContent = rememberMeCheckbox.checked
+          ? 'سيتم تذكر الجلسة على هذا الجهاز بعد نجاح الدخول.'
+          : 'البيانات مكتملة. يمكنك المتابعة إلى لوحة العيادة.';
+      } else {
+        loginStatusBadge.textContent = 'أدخل البريد';
+        loginStatusBadge.className = 'rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700 shadow-sm';
+        loginHint.textContent = 'ابدأ بالبريد الإلكتروني الطبي الخاص بالحساب.';
+      }
+
+      if (hasEmail) {
+        emailPreview.classList.remove('hidden');
+        emailPreview.textContent = `سيتم تسجيل الدخول باستخدام: ${email}`;
+      } else {
+        emailPreview.classList.add('hidden');
+        emailPreview.textContent = '';
+      }
+    }
+
+    togglePasswordBtn.addEventListener('click', () => {
+      const isHidden = passwordInput.type === 'password';
+      passwordInput.type = isHidden ? 'text' : 'password';
+      togglePasswordBtn.textContent = isHidden ? 'إخفاء' : 'إظهار';
+    });
+
+    passwordInput.addEventListener('keyup', (event) => {
+      if (typeof event.getModifierState === 'function') {
+        capsLockHint.classList.toggle('hidden', !event.getModifierState('CapsLock'));
+      }
+    });
+
+    emailInput.addEventListener('input', updateLoginInsights);
+    passwordInput.addEventListener('input', updateLoginInsights);
+    rememberMeCheckbox.addEventListener('change', updateLoginInsights);
+    updateLoginInsights();
+
     loginForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       hideMessage();
 
-      const email = emailInput.value.trim();
+      const email = emailInput.value.trim().toLowerCase();
       const password = passwordInput.value;
 
       if (!email || !password) {
@@ -128,7 +238,7 @@
       setLoading(true);
 
       try {
-        const response = await fetch('https://dental-clinic-faras.onrender.com/api/auth/login', {
+        const response = await fetch(apiUrl('/api/auth/login'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password })

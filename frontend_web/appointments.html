@@ -101,6 +101,7 @@
         </div>
     </div>
 
+    <script src="api-config.js"></script>
     <script>
         const doctorName = localStorage.getItem('doctor_name');
         const titleElement = document.querySelector('h1');
@@ -131,7 +132,7 @@
             titleElement.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادتي الرقمية';
         }
 
-        const API_URL = '/api/appointments';
+        const API_URL = apiUrl('/api/appointments');
         const tableBody = document.getElementById('appointmentsTableBody');
         const modal = document.getElementById('appointmentModal');
         const form = document.getElementById('appointmentForm');
