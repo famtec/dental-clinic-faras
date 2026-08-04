@@ -28,6 +28,8 @@ database.init_db()
 
 UPLOADS_DIR = "uploads"
 os.makedirs(UPLOADS_DIR, exist_ok=True)
+ARCHIVE_UPLOADS_DIR = os.path.join(UPLOADS_DIR, "patient_xrays")
+os.makedirs(ARCHIVE_UPLOADS_DIR, exist_ok=True)
 
 
 def seed_default_activation_key() -> None:
@@ -250,6 +252,12 @@ class FinancialTransactionUpdate(BaseModel):
     description: str
 
 
+class PatientStatsResponse(BaseModel):
+    total_patients: int
+    active_appointments: int
+    pending_balances: float
+
+
 class PrescriptionCreate(BaseModel):
     patient_id: int
     medications: str
@@ -284,9 +292,12 @@ class InventoryItemResponse(BaseModel):
 class PatientXRayResponse(BaseModel):
     id: int
     patient_id: int
-    image_url: str
+    file_name: Optional[str] = None
+    file_url: str
     description: Optional[str] = None
+    file_type: Optional[str] = None
     uploaded_at: datetime
+    image_url: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -960,6 +971,69 @@ def get_finance_summary(db: Session = Depends(database.get_db)):
     }
 
 
+@app.get("/api/patients/stats", response_model=PatientStatsResponse)
+def get_patient_stats(
+    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    db: Session = Depends(database.get_db),
+):
+    user = get_current_doctor_user(db, doctor_email=doctor_email, authorization=authorization)
+    doctor_name = (user.doctor_name or "").strip()
+    if not doctor_name:
+        doctor_name = user.email
+
+    doctor_identifiers = {doctor_name, user.email}
+
+    patients = (
+        db.query(models.Patient)
+        .filter(models.Patient.doctor_name.in_(doctor_identifiers))
+        .all()
+    )
+    patient_ids = [patient.id for patient in patients]
+    patient_names = {
+        (patient.full_name or "").strip().lower(): patient.id
+        for patient in patients
+        if (patient.full_name or "").strip()
+    }
+
+    now = datetime.utcnow()
+    active_appointments = 0
+    if patient_names:
+        appointments = db.query(models.Appointment).all()
+        for appointment in appointments:
+            appointment_patient_name = (appointment.patient_name or "").strip().lower()
+            if appointment_patient_name not in patient_names:
+                continue
+
+            appointment_status = (appointment.status or "").strip().lower()
+            appointment_date = appointment.appointment_date
+            is_upcoming = appointment_date is not None and appointment_date >= now
+            is_pending = appointment_status in {"pending", "upcoming"}
+
+            if is_upcoming or is_pending:
+                active_appointments += 1
+
+    pending_balances = Decimal("0.00")
+    if patient_ids:
+        visits = (
+            db.query(models.Visit)
+            .filter(models.Visit.patient_id.in_(patient_ids))
+            .all()
+        )
+        for visit in visits:
+            total_cost = Decimal(str(visit.total_cost or 0))
+            amount_paid = Decimal(str(visit.amount_paid or 0))
+            remaining_balance = total_cost - amount_paid
+            if remaining_balance > 0:
+                pending_balances += remaining_balance
+
+    return {
+        "total_patients": len(patients),
+        "active_appointments": active_appointments,
+        "pending_balances": float(pending_balances),
+    }
+
+
 @app.get("/api/finance/patient/{patient_id}", response_model=List[FinancialTransactionResponse])
 def get_patient_financial_transactions(patient_id: int, db: Session = Depends(database.get_db)):
     return (
@@ -1255,8 +1329,54 @@ def get_patient_treatments(patient_id: int, db: Session = Depends(database.get_d
     return db.query(models.Treatment).filter(models.Treatment.patient_id == patient_id).all()
 
 
-@app.post("/api/patients/{patient_id}/xrays", response_model=PatientXRayResponse)
-async def upload_patient_xray(
+ARCHIVE_FILE_MAP = {
+    ".png": ("image", "image/png"),
+    ".jpg": ("image", "image/jpeg"),
+    ".jpeg": ("image", "image/jpeg"),
+    ".pdf": ("pdf", "application/pdf"),
+}
+
+
+def normalize_archive_record(record: models.PatientXRay) -> dict:
+    file_url = (record.file_url or record.image_url or "").strip()
+    file_name = (record.file_name or os.path.basename(file_url) or f"archive_{record.id}").strip()
+    file_type = (record.file_type or "").strip().lower()
+
+    if not file_type:
+      _, ext = os.path.splitext(file_name.lower())
+      file_type = ARCHIVE_FILE_MAP.get(ext, ("image" if ext in {".png", ".jpg", ".jpeg"} else ""))[0]
+
+    return {
+        "id": record.id,
+        "patient_id": record.patient_id,
+        "file_name": file_name,
+        "file_url": file_url,
+        "description": record.description,
+        "file_type": file_type or "image",
+        "uploaded_at": record.uploaded_at,
+        "image_url": record.image_url or file_url,
+    }
+
+
+def validate_archive_file(file: UploadFile) -> tuple[str, str]:
+    original_name = file.filename or "medical_archive"
+    _, ext = os.path.splitext(original_name)
+    ext = ext.lower()
+
+    if ext not in ARCHIVE_FILE_MAP:
+        raise HTTPException(status_code=400, detail="Only PNG, JPG, JPEG, and PDF files are allowed")
+
+    expected_type, expected_mime = ARCHIVE_FILE_MAP[ext]
+    actual_mime = (file.content_type or "").lower().strip()
+    if actual_mime and actual_mime not in {expected_mime, "application/octet-stream"}:
+        raise HTTPException(status_code=400, detail="Invalid file type. Please upload an image or PDF document.")
+
+    return original_name, expected_type
+
+
+@app.post("/api/patients/{patient_id}/archive", response_model=PatientXRayResponse, status_code=201)
+@app.post("/api/patients/{patient_id}/xrays", response_model=PatientXRayResponse, status_code=201)
+async def upload_patient_archive(
     patient_id: int,
     file: UploadFile = File(...),
     description: str = Form(""),
@@ -1266,13 +1386,12 @@ async def upload_patient_xray(
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
-    original_name = file.filename or "xray"
+    original_name, file_type = validate_archive_file(file)
     _, ext = os.path.splitext(original_name)
     ext = ext.lower()
-    allowed_ext = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tiff"}
-    safe_ext = ext if ext in allowed_ext else ".bin"
-    unique_filename = f"xray_{patient_id}_{uuid4().hex}{safe_ext}"
-    saved_path = os.path.join(UPLOADS_DIR, unique_filename)
+    unique_filename = f"archive_{patient_id}_{uuid4().hex}{ext}"
+    saved_path = os.path.join(ARCHIVE_UPLOADS_DIR, unique_filename)
+    file_url = f"/uploads/patient_xrays/{unique_filename}"
 
     try:
         content = await file.read()
@@ -1281,13 +1400,16 @@ async def upload_patient_xray(
 
         db_xray = models.PatientXRay(
             patient_id=patient_id,
-            image_url=f"/uploads/{unique_filename}",
+            image_url=file_url,
+            file_name=original_name,
+            file_url=file_url,
             description=description.strip() or None,
+            file_type=file_type,
         )
         db.add(db_xray)
         db.commit()
         db.refresh(db_xray)
-        return db_xray
+        return normalize_archive_record(db_xray)
     except Exception:
         db.rollback()
         if os.path.exists(saved_path):
@@ -1295,23 +1417,26 @@ async def upload_patient_xray(
                 os.remove(saved_path)
             except OSError:
                 pass
-        raise HTTPException(status_code=400, detail="تعذر رفع صورة الأشعة حالياً. حاول مرة أخرى.")
+        raise HTTPException(status_code=400, detail="تعذر رفع الملف الطبي حالياً. حاول مرة أخرى.")
     finally:
         await file.close()
 
 
+@app.get("/api/patients/{patient_id}/archive", response_model=List[PatientXRayResponse])
 @app.get("/api/patients/{patient_id}/xrays", response_model=List[PatientXRayResponse])
-def get_patient_xrays(patient_id: int, db: Session = Depends(database.get_db)):
+def get_patient_archive(patient_id: int, db: Session = Depends(database.get_db)):
     patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
-    return (
+    archive_records = (
         db.query(models.PatientXRay)
         .filter(models.PatientXRay.patient_id == patient_id)
         .order_by(models.PatientXRay.uploaded_at.desc())
         .all()
     )
+
+    return [normalize_archive_record(record) for record in archive_records]
 
 
 @app.get("/", include_in_schema=False)

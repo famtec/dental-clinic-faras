@@ -108,7 +108,10 @@ class PatientXRay(Base):
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"), index=True, nullable=False)
     image_url = Column(String, nullable=False)
+    file_name = Column(String, nullable=True)
+    file_url = Column(String, nullable=True)
     description = Column(String, nullable=True)
+    file_type = Column(String, nullable=True)
     uploaded_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 

@@ -111,34 +111,40 @@
           </div>
         </div>
 
-        <div class="mt-6 rounded-[24px] border border-violet-100 bg-violet-50/70 p-4 sm:p-5">
+        <div class="mt-6 rounded-[28px] border border-violet-100 bg-violet-50/70 p-4 sm:p-5">
           <div class="mb-3">
-            <h3 class="text-lg font-bold text-violet-800">رفع صورة أشعة جديدة</h3>
-            <p class="mt-1 text-xs text-violet-700/80">قم بإرفاق صورة الأشعة مع وصف مختصر لتوثيق حالة المريض.</p>
+            <h3 class="text-lg font-bold text-violet-800">أرشيف ملفات المريض</h3>
+            <p class="mt-1 text-xs text-violet-700/80">اسحب الملفات الطبية أو الصور أو مستندات PDF مباشرة إلى المنطقة أدناه أو اضغط للتصفح.</p>
           </div>
-          <form id="xrayUploadForm" class="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-            <label class="block">
-              <span class="mb-1 block text-xs font-semibold text-slate-600">ملف الأشعة</span>
-              <input id="xrayFileInput" type="file" accept="image/*" required class="w-full rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-violet-100 file:px-3 file:py-2 file:text-xs file:font-bold file:text-violet-700" />
+
+          <form id="xrayUploadForm" class="space-y-4">
+            <label id="archiveDropzone" class="group block cursor-pointer rounded-[26px] border-2 border-dashed border-violet-300/80 bg-[linear-gradient(145deg,_rgba(255,255,255,0.82),_rgba(245,243,255,0.88))] p-5 text-center shadow-inner shadow-violet-100/70 transition duration-200 hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-white hover:shadow-[0_0_32px_rgba(129,140,248,0.18)]">
+              <input id="xrayFileInput" type="file" accept="image/png,image/jpeg,image/jpg,application/pdf" multiple class="hidden" />
+              <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-3xl shadow-lg shadow-violet-300/40">📥</div>
+              <p class="mt-4 text-base font-bold text-slate-800 sm:text-lg">اسحب وأفلت ملفات المريض هنا أو اضغط للتصفح (صور وأشعة أو ملفات PDF)</p>
+              <p class="mt-2 text-xs font-semibold text-slate-500">PNG / JPG / JPEG / PDF</p>
             </label>
-            <label class="block">
-              <span class="mb-1 block text-xs font-semibold text-slate-600">وصف الأشعة</span>
-              <input id="xrayDescriptionInput" type="text" placeholder="مثال: أشعة بانوراما قبل العلاج" class="w-full rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm outline-none focus:border-violet-500 focus:ring-4 focus:ring-violet-100" />
-            </label>
-            <button id="xrayUploadBtn" type="submit" class="rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700">
-              رفع صورة الأشعة 📸
-            </button>
+
+            <div class="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+              <label class="block">
+                <span class="mb-1 block text-xs font-semibold text-slate-600">وصف الملف</span>
+                <input id="xrayDescriptionInput" type="text" placeholder="مثال: أشعة بانوراما قبل العلاج" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm outline-none focus:border-violet-500 focus:ring-4 focus:ring-violet-100" />
+              </label>
+              <button id="xrayUploadBtn" type="submit" class="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-sm font-extrabold text-white shadow-lg transition hover:-translate-y-0.5 hover:from-indigo-700 hover:to-violet-700">
+                رفع الملفات 📸
+              </button>
+            </div>
           </form>
         </div>
 
-        <div class="mt-5 rounded-[24px] border border-slate-100 bg-white/80 p-4 sm:p-5">
-          <div class="mb-3 flex items-center justify-between">
-            <h3 class="text-lg font-bold text-indigo-900">معرض صور الأشعة</h3>
-            <span id="xrayGalleryCount" class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">0 صورة</span>
+        <div class="mt-5 rounded-[28px] border border-slate-100 bg-white/80 p-4 sm:p-5">
+          <div class="mb-3 flex items-center justify-between gap-3">
+            <h3 class="text-lg font-bold text-indigo-900">أرشيف الملفات الطبية</h3>
+            <span id="xrayGalleryCount" class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">0 ملف</span>
           </div>
           <div id="xrayGallery" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <div id="xrayGalleryEmpty" class="col-span-full rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
-              لا توجد صور أشعة مرفوعة لهذا المريض حتى الآن.
+              لا توجد ملفات طبية مرفوعة لهذا المريض حتى الآن.
             </div>
           </div>
         </div>
@@ -486,6 +492,21 @@
   </div>
 
   <div id="toothPalmerTooltip" class="pointer-events-none fixed z-[80] hidden rounded-2xl border border-cyan-200/35 bg-slate-900/90 px-3 py-2 text-xs font-semibold text-cyan-100 shadow-2xl shadow-cyan-900/40 backdrop-blur"></div>
+
+  <div id="archiveImageModal" class="fixed inset-0 z-[90] hidden items-center justify-center bg-slate-950/90 p-4 opacity-0 backdrop-blur-md transition-opacity duration-200">
+    <div class="w-full max-w-5xl scale-95 overflow-hidden rounded-[28px] border border-white/15 bg-[linear-gradient(160deg,_rgba(15,23,42,0.98),_rgba(30,27,75,0.96),_rgba(49,46,129,0.94))] shadow-2xl shadow-indigo-950/70 transition-transform duration-200">
+      <div class="flex items-center justify-between gap-4 border-b border-white/10 px-5 py-4 text-white">
+        <div>
+          <p class="text-xs font-bold tracking-[0.22em] text-cyan-200">ARCHIVE PREVIEW</p>
+          <h3 id="archiveImageModalTitle" class="mt-1 text-lg font-extrabold">معاينة الصورة</h3>
+        </div>
+        <button id="closeArchiveImageModalBtn" type="button" class="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/20">إغلاق</button>
+      </div>
+      <div class="bg-black/20 p-4">
+        <img id="archiveImageModalImg" alt="معاينة الملف" class="mx-auto max-h-[78vh] w-full rounded-2xl object-contain shadow-2xl shadow-black/40" />
+      </div>
+    </div>
+  </div>
 
   <script src="api-config.js"></script>
   <script>
@@ -1127,8 +1148,12 @@
       setTimeout(() => toast.remove(), 2600);
     }
 
+    function getArchiveEndpoint(patientId) {
+      return `${XRAY_API_BASE_URL}/api/patients/${encodeURIComponent(String(patientId))}/archive`;
+    }
+
     function getXRayEndpoint(patientId) {
-      return `${XRAY_API_BASE_URL}/api/patients/${encodeURIComponent(String(patientId))}/xrays`;
+      return getArchiveEndpoint(patientId);
     }
 
     function resolveXRayImageUrl(imageUrl) {
@@ -1138,6 +1163,62 @@
         return raw;
       }
       return `${XRAY_API_BASE_URL}${raw.startsWith('/') ? raw : '/' + raw}`;
+    }
+
+    function getArchiveFileType(record) {
+      const normalized = String(record?.file_type || '').trim().toLowerCase();
+      if (normalized === 'pdf') return 'pdf';
+      if (normalized === 'image') return 'image';
+
+      const candidate = String(record?.file_name || record?.file_url || record?.image_url || '').toLowerCase();
+      if (candidate.endsWith('.pdf')) return 'pdf';
+      if (candidate.match(/\.(png|jpe?g|webp|gif|bmp|tiff)$/i)) return 'image';
+      return 'image';
+    }
+
+    function openArchiveImageModal(imageUrl, title) {
+      const modal = document.getElementById('archiveImageModal');
+      const modalImg = document.getElementById('archiveImageModalImg');
+      const modalTitle = document.getElementById('archiveImageModalTitle');
+      if (!modal || !modalImg) return;
+
+      modalImg.src = imageUrl;
+      if (modalTitle) modalTitle.textContent = title || 'معاينة الصورة';
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      requestAnimationFrame(() => {
+        modal.classList.remove('opacity-0');
+        const panel = modal.firstElementChild;
+        if (panel) panel.classList.remove('scale-95');
+      });
+    }
+
+    function closeArchiveImageModal() {
+      const modal = document.getElementById('archiveImageModal');
+      if (!modal) return;
+
+      modal.classList.add('opacity-0');
+      const panel = modal.firstElementChild;
+      if (panel) panel.classList.add('scale-95');
+
+      window.setTimeout(() => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }, 180);
+    }
+
+    function normalizeArchiveRecord(record) {
+      const fileUrl = resolveXRayImageUrl(record?.file_url || record?.image_url || '');
+      const fileName = String(record?.file_name || '').trim() || (fileUrl ? fileUrl.split('/').pop() : `archive_${record?.id || ''}`);
+      const fileType = getArchiveFileType(record);
+      return {
+        ...record,
+        file_url: fileUrl,
+        image_url: record?.image_url || fileUrl,
+        file_name: fileName,
+        file_type: fileType,
+      };
     }
 
     function formatArabicDate(value) {
@@ -2072,29 +2153,53 @@
     }
 
     function createXRayCard(record) {
+      const normalizedRecord = normalizeArchiveRecord(record);
       const card = document.createElement('article');
-      card.className = 'overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg';
+      card.className = 'overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-md transition hover:-translate-y-0.5 hover:shadow-xl';
 
-      const imageSrc = resolveXRayImageUrl(record?.image_url);
-      const description = (record?.description || 'بدون وصف').toString();
-      const uploadedAt = formatArabicDate(record?.uploaded_at);
+      const description = (normalizedRecord?.description || 'بدون وصف').toString();
+      const uploadedAt = formatArabicDate(normalizedRecord?.uploaded_at);
+      const fileType = getArchiveFileType(normalizedRecord);
+      const fileUrl = normalizedRecord?.file_url || '';
+      const fileName = normalizedRecord?.file_name || 'archive';
 
-      card.innerHTML = `
-        <div class="aspect-[4/3] w-full overflow-hidden bg-slate-100">
-          <img src="${imageSrc}" alt="صورة أشعة" class="h-full w-full object-cover" loading="lazy" />
-        </div>
-        <div class="p-3">
-          <p class="text-sm font-semibold text-slate-800">${description}</p>
-          <p class="mt-1 text-xs text-slate-500">${uploadedAt}</p>
-        </div>
-      `;
+      if (fileType === 'pdf') {
+        card.innerHTML = `
+          <div class="flex h-full flex-col justify-between gap-4 bg-[linear-gradient(160deg,_rgba(255,255,255,0.96),_rgba(239,246,255,0.95))] p-5">
+            <div class="flex items-start gap-4">
+              <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-500 to-orange-500 text-3xl text-white shadow-lg shadow-rose-300/40">📄</div>
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-extrabold text-slate-800">${escapeHtml(fileName)}</p>
+                <p class="mt-1 text-xs leading-6 text-slate-500">${escapeHtml(description)}</p>
+                <p class="mt-2 text-xs font-semibold text-slate-400">${escapeHtml(uploadedAt)}</p>
+              </div>
+            </div>
+            <a href="${escapeHtml(fileUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded-2xl border border-violet-200 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-3 text-sm font-extrabold text-white shadow-lg shadow-violet-300/35 transition hover:-translate-y-0.5 hover:from-violet-700 hover:to-indigo-700">فتح المستند 📄</a>
+          </div>
+        `;
+      } else {
+        const imageSrc = resolveXRayImageUrl(normalizedRecord?.image_url || fileUrl);
+        card.innerHTML = `
+          <button type="button" class="group block text-right" data-archive-image-card="1" data-archive-image-url="${escapeHtml(imageSrc)}" data-archive-image-title="${escapeHtml(fileName)}">
+            <div class="aspect-[4/3] w-full overflow-hidden bg-slate-100">
+              <img src="${imageSrc}" alt="${escapeHtml(fileName)}" class="h-full w-full object-cover transition duration-300 group-hover:scale-105" loading="lazy" />
+            </div>
+            <div class="p-3">
+              <p class="truncate text-sm font-semibold text-slate-800">${escapeHtml(fileName)}</p>
+              <p class="mt-1 line-clamp-2 text-xs text-slate-500">${escapeHtml(description)}</p>
+              <p class="mt-1 text-xs text-slate-400">${escapeHtml(uploadedAt)}</p>
+            </div>
+          </button>
+        `;
+      }
+
       return card;
     }
 
     function updateXRayGalleryCount(count) {
       const countBadge = document.getElementById('xrayGalleryCount');
       if (!countBadge) return;
-      countBadge.textContent = `${count} صورة`;
+      countBadge.textContent = `${count} ملف`;
     }
 
     function renderXRayGallery(records) {
@@ -2118,6 +2223,8 @@
         card.setAttribute('data-xray-card', '1');
         gallery.appendChild(card);
       });
+
+      attachArchiveCardListeners();
     }
 
     function appendXRayCard(record) {
@@ -2132,6 +2239,8 @@
 
       const totalCards = gallery.querySelectorAll('[data-xray-card="1"]').length;
       updateXRayGalleryCount(totalCards);
+
+      attachArchiveCardListeners();
     }
 
     function getFinanceLedgerEndpoint(patientId) {
@@ -2398,67 +2507,108 @@
       }
     }
 
+    function attachArchiveCardListeners() {
+      const gallery = document.getElementById('xrayGallery');
+      if (!gallery) return;
+
+      gallery.querySelectorAll('[data-archive-image-card="1"]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const imageUrl = button.getAttribute('data-archive-image-url');
+          const imageTitle = button.getAttribute('data-archive-image-title');
+          if (imageUrl) {
+            openArchiveImageModal(imageUrl, imageTitle || 'معاينة الصورة');
+          }
+        });
+      });
+    }
+
+    async function uploadSelectedArchiveFiles(selectedFiles, descriptionValue, uploadButton, fileInput, descriptionInput) {
+      const files = Array.from(selectedFiles || []);
+      if (files.length === 0) {
+        alert('يرجى اختيار ملف واحد على الأقل قبل الرفع.');
+        return;
+      }
+
+      if (uploadButton) {
+        uploadButton.disabled = true;
+        uploadButton.textContent = 'جاري الرفع...';
+      }
+
+      try {
+        for (const file of files) {
+          if (!/\.(png|jpe?g|pdf)$/i.test(file.name)) {
+            throw new Error('Only PNG, JPG, JPEG, and PDF files are allowed');
+          }
+          await uploadArchiveFile(file, descriptionValue);
+        }
+
+        showXRaySuccessAlert('تم رفع الملف الطبي بنجاح!');
+        if (fileInput) fileInput.value = '';
+        if (descriptionInput) descriptionInput.value = '';
+      } finally {
+        if (uploadButton) {
+          uploadButton.disabled = false;
+          uploadButton.textContent = 'رفع الملفات 📸';
+        }
+      }
+    }
+
     async function loadPatientXRayGallery() {
       const patientId = getPatientIdFromUrl();
       if (!patientId) return;
 
       try {
-        const response = await fetch(getXRayEndpoint(patientId));
+        const response = await fetch(getArchiveEndpoint(patientId));
         if (!response.ok) {
           throw new Error('Failed to load xray gallery');
         }
 
         const records = await response.json();
-        renderXRayGallery(records);
+        renderXRayGallery(Array.isArray(records) ? records.map(normalizeArchiveRecord) : []);
       } catch (error) {
         renderXRayGallery([]);
       }
     }
 
+    async function uploadArchiveFile(file, descriptionValue) {
+      const patientId = getPatientIdFromUrl();
+      if (!patientId || !file) return null;
+
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', file);
+      uploadFormData.append('description', descriptionValue || '');
+
+      const response = await fetch(getArchiveEndpoint(patientId), {
+        method: 'POST',
+        body: uploadFormData,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Failed to upload archive file');
+      }
+
+      const createdRecord = normalizeArchiveRecord(await response.json());
+      appendXRayCard(createdRecord);
+      return createdRecord;
+    }
+
     async function uploadPatientXRay(event) {
       event.preventDefault();
 
-      const patientId = getPatientIdFromUrl();
       const fileInput = document.getElementById('xrayFileInput');
       const descriptionInput = document.getElementById('xrayDescriptionInput');
       const uploadButton = document.getElementById('xrayUploadBtn');
-      if (!patientId || !fileInput || !uploadButton) return;
+      if (!fileInput || !uploadButton) return;
 
-      const selectedFile = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+      const selectedFiles = Array.from(fileInput.files || []);
       const descriptionValue = descriptionInput ? descriptionInput.value.trim() : '';
 
-      if (!selectedFile) {
-        alert('يرجى اختيار صورة أشعة قبل الرفع.');
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      formData.append('description', descriptionValue);
-
-      uploadButton.disabled = true;
-      uploadButton.textContent = 'جاري الرفع...';
-
       try {
-        const response = await fetch(getXRayEndpoint(patientId), {
-          method: 'POST',
-          body: formData
-        });
-
-        if (response.status !== 200) {
-          throw new Error('Failed to upload xray');
-        }
-
-        const createdRecord = await response.json();
-        appendXRayCard(createdRecord);
-        showXRaySuccessAlert('تم رفع صورة الأشعة بنجاح!');
-        fileInput.value = '';
-        if (descriptionInput) descriptionInput.value = '';
+        await uploadSelectedArchiveFiles(selectedFiles, descriptionValue, uploadButton, fileInput, descriptionInput);
       } catch (error) {
-        alert('تعذر رفع صورة الأشعة الآن. يرجى المحاولة لاحقاً.');
-      } finally {
-        uploadButton.disabled = false;
-        uploadButton.textContent = 'رفع صورة الأشعة 📸';
+        const message = error instanceof Error ? error.message : 'تعذر رفع الملف الطبي الآن. يرجى المحاولة لاحقاً.';
+        alert(message);
       }
     }
 
@@ -2502,6 +2652,51 @@
         }
       } catch (error) {
         alert('تعذر تسجيل الدفعة الآن. يرجى المحاولة لاحقاً.');
+      }
+    }
+
+    function bindArchiveDropzone() {
+      const dropzone = document.getElementById('archiveDropzone');
+      const fileInput = document.getElementById('xrayFileInput');
+      const descriptionInput = document.getElementById('xrayDescriptionInput');
+      const uploadButton = document.getElementById('xrayUploadBtn');
+      const closeImageModalBtn = document.getElementById('closeArchiveImageModalBtn');
+      const imageModal = document.getElementById('archiveImageModal');
+
+      if (dropzone && fileInput) {
+        dropzone.addEventListener('dragover', (event) => {
+          event.preventDefault();
+          dropzone.classList.add('border-cyan-400', 'bg-white', 'shadow-[0_0_38px_rgba(34,211,238,0.18)]');
+        });
+
+        dropzone.addEventListener('dragleave', () => {
+          dropzone.classList.remove('border-cyan-400', 'bg-white', 'shadow-[0_0_38px_rgba(34,211,238,0.18)]');
+        });
+
+        dropzone.addEventListener('drop', async (event) => {
+          event.preventDefault();
+          dropzone.classList.remove('border-cyan-400', 'bg-white', 'shadow-[0_0_38px_rgba(34,211,238,0.18)]');
+
+          const droppedFiles = Array.from(event.dataTransfer?.files || []);
+          if (droppedFiles.length === 0) return;
+
+          await uploadSelectedArchiveFiles(
+            droppedFiles,
+            descriptionInput ? descriptionInput.value.trim() : '',
+            uploadButton,
+            fileInput,
+            descriptionInput,
+          );
+        });
+      }
+
+      if (imageModal && closeImageModalBtn) {
+        closeImageModalBtn.addEventListener('click', closeArchiveImageModal);
+        imageModal.addEventListener('click', (event) => {
+          if (event.target && event.target.id === 'archiveImageModal') {
+            closeArchiveImageModal();
+          }
+        });
       }
     }
 
@@ -2744,8 +2939,44 @@
     if (backupBtn) {
       backupBtn.addEventListener('click', (event) => {
         event.preventDefault();
+        const doctorEmail = (localStorage.getItem('user_email') || '').trim();
+        if (!doctorEmail) {
+          alert('تعذر تحديد حساب الطبيب لتوليد النسخة الاحتياطية.');
+          return;
+        }
+
         showBackupToast('جاري توليد وتحميل النسخة الاحتياطية للعيادة بأمان تام!');
-        window.location.href = 'https://dental-clinic-faras.onrender.com';
+
+        fetch('https://dental-clinic-faras.onrender.com/api/finance/backup', {
+          method: 'GET',
+          headers: {
+            'X-Doctor-Email': doctorEmail,
+          },
+        })
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error('تعذر إنشاء النسخة الاحتياطية الآن.');
+            }
+
+            return response.blob().then((blob) => ({ blob, response }));
+          })
+          .then(({ blob, response }) => {
+            const contentDisposition = response.headers.get('Content-Disposition') || '';
+            const filenameMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+            const fileName = filenameMatch?.[1] || 'dental_backup_2026.csv';
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(downloadUrl);
+          })
+          .catch((error) => {
+            console.error(error);
+            alert('تعذر تنزيل النسخة الاحتياطية الآن. يرجى المحاولة لاحقاً.');
+          });
       });
     }
     if (logoutBtn) {
@@ -2760,6 +2991,7 @@
 
     window.addEventListener('DOMContentLoaded', () => {
       initDentalChart();
+      bindArchiveDropzone();
       loadPatientRecord();
       loadPatientXRayGallery();
       loadFinanceLedger();

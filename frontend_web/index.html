@@ -8,6 +8,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
   <style>
     body { font-family: 'Tajawal', sans-serif; }
+    @keyframes statPop {
+      0% { transform: translateY(8px) scale(0.96); opacity: 0; filter: blur(2px); }
+      100% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0); }
+    }
+    .stat-pop {
+      animation: statPop 420ms cubic-bezier(0.2, 0.9, 0.2, 1);
+    }
     .panel-soft {
       background: rgba(255, 255, 255, 0.92);
       backdrop-filter: blur(12px);
@@ -30,32 +37,26 @@
     <div class="absolute left-[6%] top-[22%] h-56 w-56 rounded-full bg-violet-200/20 blur-3xl"></div>
   </div>
 
-  <div class="relative flex min-h-screen flex-col lg:flex-row">
-    <aside class="panel-soft w-full border-b border-white/60 bg-indigo-900/95 p-4 text-white shadow-2xl shadow-indigo-950/15 lg:flex lg:min-h-screen lg:w-72 lg:flex-col lg:border-b-0 lg:border-l lg:border-white/10 lg:p-6 xl:w-80">
-      <div class="mb-4 flex items-center justify-center gap-3 border-b border-indigo-700 pb-4 lg:mb-8">
-        <img src="logo.png" alt="شعار العيادة" class="h-14 w-14 rounded-xl object-contain bg-white/10 p-2 sm:h-16 sm:w-16" />
-        <div class="flex flex-col items-start gap-2">
-          <h1 id="clinicTitle" class="text-lg font-bold sm:text-xl">عيادتي الرقمية</h1>
-          <span id="tierBadge" class="rounded-full px-3 py-1 text-xs font-extrabold tracking-wide">Standard</span>
+  <div id="patientRecordApp" class="relative w-full min-h-screen flex flex-col px-4 pt-28 pb-6 sm:px-6 sm:pt-32 lg:px-8 lg:pt-32 xl:px-10">
+    <header class="fixed inset-x-0 top-0 z-50 w-full border-b border-white/15 bg-[#1e1b4b]/85 shadow-2xl shadow-indigo-950/35 backdrop-blur-2xl">
+      <div class="mx-auto flex w-full max-w-none flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8 xl:px-10">
+        <div class="flex items-center gap-3 text-white">
+          <img src="logo.png" alt="شعار العيادة" class="h-12 w-12 rounded-xl border border-white/10 bg-white/10 object-contain p-2 shadow-lg shadow-indigo-950/25" />
+          <div class="flex items-center gap-3">
+            <p id="clinicTitle" class="text-lg font-extrabold tracking-tight text-white sm:text-xl">عيادتي الرقمية</p>
+            <span id="tierBadge" class="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Standard</span>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 lg:flex-1 lg:justify-center">
+          <a href="index.html" class="rounded-2xl border border-cyan-300/30 bg-cyan-500/15 px-4 py-2 text-sm font-extrabold text-cyan-50 shadow-[0_0_24px_rgba(34,211,238,0.14)] transition hover:-translate-y-0.5 hover:border-cyan-200/50 hover:bg-cyan-400/20 hover:shadow-[0_0_28px_rgba(34,211,238,0.26)]">👥 لوحة المرضى</a>
+          <a href="appointments.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]">📅 المواعيد اليومية</a>
+          <a href="finance.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]">📊 التقارير المالية</a>
+          <a href="inventory.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]">📦 مخزن المواد</a>
+          <button id="logoutBtn" type="button" class="rounded-2xl border border-rose-300/30 bg-rose-500/15 px-4 py-2 text-sm font-bold text-rose-100 transition hover:-translate-y-0.5 hover:border-rose-200/50 hover:bg-rose-500/25 hover:shadow-[0_0_24px_rgba(244,63,94,0.18)]">⎋ تسجيل الخروج</button>
         </div>
       </div>
-      <button id="mobileMenuToggle" type="button" class="mb-3 flex w-full items-center justify-center rounded-lg border border-indigo-700/60 bg-indigo-800/70 px-3 py-2 text-sm font-semibold text-white lg:hidden">☰ القائمة</button>
-      <nav id="sidebarNav" class="hidden flex-col gap-2 lg:flex lg:gap-3">
-        <a href="index.html" class="block rounded-lg bg-indigo-700 px-4 py-3 text-sm font-bold">👥 لوحة مرضى</a>
-        <a href="appointments.html" class="block rounded-lg px-4 py-3 text-sm font-medium transition hover:bg-indigo-800">📅 المواعيد اليومية</a>
-        <a href="finance.html" class="block rounded-lg px-4 py-3 text-sm font-medium transition hover:bg-indigo-800">📊 التقارير المالية</a>
-        <a href="inventory.html" class="block rounded-lg px-4 py-3 text-sm font-medium transition hover:bg-indigo-800">📦 مخزن المواد والمستلزمات</a>
-      </nav>
-      <div class="mt-3 lg:mt-auto lg:pt-6">
-        <button
-          id="logoutBtn"
-          type="button"
-          class="w-full rounded-xl border border-rose-300/45 bg-rose-500/15 px-4 py-3 text-sm font-bold text-rose-100 transition hover:bg-rose-500/25"
-        >
-          ⎋ تسجيل الخروج
-        </button>
-      </div>
-    </aside>
+    </header>
 
     <main class="flex-1 p-4 sm:p-6 lg:p-8 xl:p-10">
       <div class="panel-soft mb-6 rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/70 sm:p-6">
@@ -73,6 +74,62 @@
         </div>
       </div>
       </div>
+
+        <section class="mb-6 grid gap-4 md:grid-cols-3">
+          <article class="relative overflow-hidden rounded-[28px] border border-white/15 bg-[linear-gradient(160deg,_rgba(31,41,55,0.96),_rgba(49,46,129,0.95),_rgba(76,29,149,0.94))] p-5 text-white shadow-[0_18px_60px_rgba(67,56,202,0.24)] backdrop-blur-xl">
+            <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(34,211,238,0.22),_transparent_34%),radial-gradient(circle_at_bottom_left,_rgba(168,85,247,0.2),_transparent_28%)]"></div>
+            <div class="relative flex items-start justify-between gap-4">
+              <div>
+                <p class="text-xs font-bold tracking-[0.22em] text-cyan-200/80">SMART STAT</p>
+                <h3 class="mt-2 text-base font-extrabold text-white">إجمالي المرضى بالعيادة 👥</h3>
+              </div>
+              <div class="flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-300/25 bg-cyan-400/10 text-2xl shadow-[0_0_24px_rgba(34,211,238,0.18)]">👥</div>
+            </div>
+            <div class="relative mt-6 flex items-end justify-between gap-3">
+              <div>
+                <div id="statsTotalPatients" class="stats-value text-4xl font-black tracking-tight text-white">--</div>
+                <p class="mt-1 text-xs font-medium text-slate-300">يتم التحديث مباشرة من قاعدة البيانات</p>
+              </div>
+              <span class="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-bold text-cyan-100">Live</span>
+            </div>
+          </article>
+
+          <article class="relative overflow-hidden rounded-[28px] border border-white/15 bg-[linear-gradient(160deg,_rgba(17,24,39,0.96),_rgba(79,70,229,0.94),_rgba(88,28,135,0.96))] p-5 text-white shadow-[0_18px_60px_rgba(139,92,246,0.2)] backdrop-blur-xl">
+            <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.18),_transparent_32%),radial-gradient(circle_at_bottom_right,_rgba(34,197,94,0.12),_transparent_30%)]"></div>
+            <div class="relative flex items-start justify-between gap-4">
+              <div>
+                <p class="text-xs font-bold tracking-[0.22em] text-violet-200/80">SMART STAT</p>
+                <h3 class="mt-2 text-base font-extrabold text-white">المواعيد النشطة والمعلقة 📅</h3>
+              </div>
+              <div class="flex h-12 w-12 items-center justify-center rounded-2xl border border-violet-300/25 bg-violet-400/10 text-2xl shadow-[0_0_24px_rgba(168,85,247,0.16)]">📅</div>
+            </div>
+            <div class="relative mt-6 flex items-end justify-between gap-3">
+              <div>
+                <div id="statsActiveAppointments" class="stats-value text-4xl font-black tracking-tight text-white">--</div>
+                <p class="mt-1 text-xs font-medium text-slate-300">المواعيد القادمة أو ذات الحالة Pending</p>
+              </div>
+              <span class="rounded-full border border-violet-300/20 bg-violet-400/10 px-3 py-1 text-[11px] font-bold text-violet-100">Realtime</span>
+            </div>
+          </article>
+
+          <article class="relative overflow-hidden rounded-[28px] border border-white/15 bg-[linear-gradient(160deg,_rgba(15,23,42,0.96),_rgba(30,41,59,0.94),_rgba(88,28,135,0.94))] p-5 text-white shadow-[0_18px_60px_rgba(16,185,129,0.12)] backdrop-blur-xl">
+            <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(250,204,21,0.16),_transparent_30%),radial-gradient(circle_at_bottom_left,_rgba(16,185,129,0.18),_transparent_30%)]"></div>
+            <div class="relative flex items-start justify-between gap-4">
+              <div>
+                <p class="text-xs font-bold tracking-[0.22em] text-emerald-200/80">SMART STAT</p>
+                <h3 class="mt-2 text-base font-extrabold text-white">المستحقات المالية بالخارج 💸</h3>
+              </div>
+              <div class="flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-300/20 bg-emerald-400/10 text-2xl shadow-[0_0_24px_rgba(16,185,129,0.18)]">💸</div>
+            </div>
+            <div class="relative mt-6 flex items-end justify-between gap-3">
+              <div>
+                <div id="statsPendingBalances" class="stats-value text-4xl font-black tracking-tight text-emerald-200">--</div>
+                <p class="mt-1 text-xs font-medium text-slate-300">القيمة المتبقية غير المسددة من الزيارات</p>
+              </div>
+              <span class="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-bold text-emerald-100">Balance</span>
+            </div>
+          </article>
+        </section>
 
       <section class="panel-soft rounded-[28px] border border-white/70 bg-white/90 p-4 shadow-xl shadow-slate-200/70 sm:p-6">
         <div class="mb-4 flex items-center justify-between">
@@ -166,8 +223,6 @@
     const userTier = localStorage.getItem('user_tier');
     const titleElement = document.getElementById('clinicTitle');
     const tierBadge = document.getElementById('tierBadge');
-    const mobileMenuToggle = document.getElementById('mobileMenuToggle');
-    const sidebarNav = document.getElementById('sidebarNav');
     const logoutBtn = document.getElementById('logoutBtn');
 
     function renderTierBadge() {
@@ -190,29 +245,9 @@
       }, 180);
     }
 
-    function syncSidebarNav() {
-      if (!sidebarNav) return;
-      if (window.innerWidth >= 1024) {
-        sidebarNav.classList.remove('hidden');
-        sidebarNav.classList.add('flex');
-      } else {
-        sidebarNav.classList.add('hidden');
-        sidebarNav.classList.remove('flex');
-      }
-    }
-
-    if (mobileMenuToggle && sidebarNav) {
-      mobileMenuToggle.addEventListener('click', () => {
-        sidebarNav.classList.toggle('hidden');
-      });
-    }
-
     if (logoutBtn) {
       logoutBtn.addEventListener('click', handleLogout);
     }
-
-    window.addEventListener('resize', syncSidebarNav);
-    syncSidebarNav();
 
     if (titleElement) {
       titleElement.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادتي الرقمية';
@@ -231,6 +266,9 @@
     const cancelBtn = document.getElementById('cancelBtn');
     const patientForm = document.getElementById('patientForm');
     const searchInput = document.getElementById('searchInput');
+    const statsTotalPatients = document.getElementById('statsTotalPatients');
+    const statsActiveAppointments = document.getElementById('statsActiveAppointments');
+    const statsPendingBalances = document.getElementById('statsPendingBalances');
     const deletePatientModal = document.getElementById('deletePatientModal');
     const cancelDeletePatientBtn = document.getElementById('cancelDeletePatientBtn');
     const confirmDeletePatientBtn = document.getElementById('confirmDeletePatientBtn');
@@ -323,6 +361,65 @@
     }
 
     let allPatients = [];
+
+    function getDoctorStatsHeaders() {
+      const headers = { 'Content-Type': 'application/json' };
+      const email = String(localStorage.getItem('user_email') || '').trim();
+      if (email) {
+        headers['X-Doctor-Email'] = email;
+      }
+      return headers;
+    }
+
+    function setStatsLoadingState(isLoading) {
+      const cards = [statsTotalPatients, statsActiveAppointments, statsPendingBalances].filter(Boolean);
+      cards.forEach((card) => {
+        card.classList.toggle('opacity-60', isLoading);
+        card.classList.toggle('animate-pulse', isLoading);
+      });
+    }
+
+    function animateStatsValue(el, nextValue) {
+      if (!el) return;
+      el.classList.remove('stat-pop');
+      void el.offsetWidth;
+      el.classList.add('stat-pop');
+      el.textContent = nextValue;
+    }
+
+    function formatPendingBalance(value) {
+      const numericValue = Number(value || 0);
+      return new Intl.NumberFormat('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      }).format(numericValue);
+    }
+
+    async function loadPatientStats() {
+      setStatsLoadingState(true);
+
+      try {
+        const response = await fetch(apiUrl('/api/patients/stats'), {
+          method: 'GET',
+          headers: getDoctorStatsHeaders(),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to load patient stats');
+        }
+
+        const stats = await response.json();
+        animateStatsValue(statsTotalPatients, String(Number(stats?.total_patients ?? 0)));
+        animateStatsValue(statsActiveAppointments, String(Number(stats?.active_appointments ?? 0)));
+        animateStatsValue(statsPendingBalances, `${formatPendingBalance(stats?.pending_balances ?? 0)}`);
+      } catch (error) {
+        animateStatsValue(statsTotalPatients, '0');
+        animateStatsValue(statsActiveAppointments, '0');
+        animateStatsValue(statsPendingBalances, '0');
+      } finally {
+        setStatsLoadingState(false);
+      }
+    }
 
     // Fetch and render patients
     async function fetchPatients(){
@@ -558,6 +655,7 @@
       yearElement.textContent = new Date().getFullYear();
     }
     fetchPatients();
+    loadPatientStats();
   </script>
 </body>
 </html>

@@ -63,6 +63,18 @@ def init_db():
                 with engine.begin() as connection:
                     connection.execute(text("ALTER TABLE appointments ADD COLUMN notes VARCHAR"))
 
+        if "patient_xrays" in inspector.get_table_names():
+            archive_columns = {column["name"] for column in inspector.get_columns("patient_xrays")}
+            if "file_name" not in archive_columns:
+                with engine.begin() as connection:
+                    connection.execute(text("ALTER TABLE patient_xrays ADD COLUMN file_name VARCHAR"))
+            if "file_url" not in archive_columns:
+                with engine.begin() as connection:
+                    connection.execute(text("ALTER TABLE patient_xrays ADD COLUMN file_url VARCHAR"))
+            if "file_type" not in archive_columns:
+                with engine.begin() as connection:
+                    connection.execute(text("ALTER TABLE patient_xrays ADD COLUMN file_type VARCHAR"))
+
 
 def get_db():
     db = SessionLocal()
