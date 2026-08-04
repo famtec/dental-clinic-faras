@@ -1454,14 +1454,15 @@
 
     async function loadPatientRecord() {
       const urlParams = new URLSearchParams(window.location.search);
-      const patientId = urlParams.get('id');
+      const patientIdRaw = urlParams.get('id');
+      const patientId = Number.parseInt(patientIdRaw || '', 10);
       const patientName = document.getElementById('patientName');
       const patientPhone = document.getElementById('patientPhone');
       const patientAge = document.getElementById('patientAge');
       const patientHistory = document.getElementById('patientHistory');
       const chartSceneHint = document.getElementById('chartSceneHint');
 
-      if (!patientId) {
+      if (!Number.isInteger(patientId) || patientId <= 0) {
         if (chartSceneHint) {
           chartSceneHint.textContent = 'لم يتم العثور على معرف المريض في الرابط.';
         }
@@ -1470,11 +1471,22 @@
 
       try {
         const response = await fetch('/api/patients/' + patientId);
-        if (response.status === 404) {
-          throw new Error('Patient not found');
-        }
         if (!response.ok) {
-          throw new Error('تعذر جلب بيانات المريض');
+          const errorText = await response.text();
+          let errorDetail = '';
+
+          if (errorText) {
+            try {
+              const parsedError = JSON.parse(errorText);
+              errorDetail = Array.isArray(parsedError?.detail)
+                ? parsedError.detail.map((item) => item?.msg).filter(Boolean).join('، ')
+                : parsedError?.detail || parsedError?.message || errorText;
+            } catch {
+              errorDetail = errorText;
+            }
+          }
+
+          throw new Error(errorDetail || `HTTP ${response.status}`);
         }
 
         const patient = await response.json();
@@ -1491,7 +1503,8 @@
         await loadPatientAppointments();
       } catch (error) {
         console.error(error);
-        alert('تعذر تحميل بيانات المريض. يرجى التحقق من الرابط أو المحاولة لاحقًا.');
+        const serverMessage = error instanceof Error ? error.message : 'تعذر تحميل بيانات المريض.';
+        alert(`تعذر تحميل بيانات المريض: ${serverMessage}`);
         if (chartSceneHint) {
           chartSceneHint.textContent = 'حدث خطأ أثناء تحميل الملف الطبي.';
         }

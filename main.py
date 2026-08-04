@@ -517,6 +517,24 @@ def get_all_patients(db: Session = Depends(database.get_db)):
     return db.query(models.Patient).all()
 
 
+@app.get("/api/patients/{patient_id}", response_model=PatientResponse)
+def get_patient(patient_id: str, db: Session = Depends(database.get_db)):
+    try:
+        patient_id_int = int(patient_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=404, detail="المريض غير موجود")
+
+    try:
+        patient = db.query(models.Patient).filter(models.Patient.id == patient_id_int).first()
+    except Exception:
+        raise HTTPException(status_code=404, detail="المريض غير موجود")
+
+    if not patient:
+        raise HTTPException(status_code=404, detail="المريض غير موجود")
+
+    return patient
+
+
 @app.delete("/api/patients/{patient_id}")
 def delete_patient(patient_id: int, db: Session = Depends(database.get_db)):
     patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
