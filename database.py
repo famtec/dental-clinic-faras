@@ -33,6 +33,12 @@ def init_db():
                 with engine.begin() as connection:
                     connection.execute(text("ALTER TABLE users ADD COLUMN tier VARCHAR NOT NULL DEFAULT 'standard'"))
 
+        if "financial_transactions" in inspector.get_table_names():
+            finance_columns = {column["name"] for column in inspector.get_columns("financial_transactions")}
+            if "patient_id" not in finance_columns:
+                with engine.begin() as connection:
+                    connection.execute(text("ALTER TABLE financial_transactions ADD COLUMN patient_id INTEGER"))
+
 
 def get_db():
     db = SessionLocal()

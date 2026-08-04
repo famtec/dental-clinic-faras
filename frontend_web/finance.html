@@ -94,15 +94,15 @@
 				<section class="mb-6 grid gap-4 md:grid-cols-3">
 					<article class="panel-soft rounded-3xl border border-emerald-100 p-5 shadow-xl shadow-emerald-100/60">
 						<p class="text-xs font-bold text-emerald-700">إجمالي الإيرادات</p>
-						<p id="revenueValue" class="mt-3 text-3xl font-extrabold text-emerald-600">0 ر.س</p>
+						<p id="revenueValue" class="mt-3 text-3xl font-extrabold text-emerald-600">0 ل.س</p>
 					</article>
 					<article class="panel-soft rounded-3xl border border-rose-100 p-5 shadow-xl shadow-rose-100/60">
 						<p class="text-xs font-bold text-rose-700">تكلفة المواد والمستلزمات</p>
-						<p id="expenseValue" class="mt-3 text-3xl font-extrabold text-rose-600">0 ر.س</p>
+						<p id="expenseValue" class="mt-3 text-3xl font-extrabold text-rose-600">0 ل.س</p>
 					</article>
 					<article class="panel-soft rounded-3xl border border-violet-100 bg-gradient-to-br from-violet-50 to-indigo-50 p-5 shadow-xl shadow-violet-100/70">
 						<p class="text-xs font-bold text-violet-700">صافي أرباح العيادة</p>
-						<p id="profitValue" class="mt-3 text-3xl font-extrabold text-violet-700">0 ر.س</p>
+						<p id="profitValue" class="mt-3 text-3xl font-extrabold text-violet-700">0 ل.س</p>
 					</article>
 				</section>
 
@@ -185,17 +185,17 @@
 
 		function formatCurrency(value) {
 			const numericValue = Number(value || 0);
-			return `${numericValue.toLocaleString('ar-SA', { maximumFractionDigits: 2 })} ر.س`;
+			return `${numericValue.toLocaleString('ar-SA', { maximumFractionDigits: 2 })} ل.س`;
 		}
 
-		function setMetrics(revenue, expenses) {
-			const totalRevenue = Number(revenue || 0);
-			const totalExpenses = Number(expenses || 0);
-			const netProfit = totalRevenue - totalExpenses;
+		function setMetrics(totalIncome, totalExpenses, netProfit) {
+			const incomeValue = Number(totalIncome || 0);
+			const expensesValue = Number(totalExpenses || 0);
+			const netProfitValue = Number(netProfit || 0);
 
-			revenueValue.textContent = formatCurrency(totalRevenue);
-			expenseValue.textContent = formatCurrency(totalExpenses);
-			profitValue.textContent = formatCurrency(netProfit);
+			revenueValue.textContent = formatCurrency(incomeValue);
+			expenseValue.textContent = formatCurrency(expensesValue);
+			profitValue.textContent = formatCurrency(Math.abs(netProfitValue));
 		}
 
 		function setExpenseStatus(message, type = 'normal') {
@@ -262,12 +262,14 @@
 				}
 
 				const data = await response.json();
-				const totalRevenue = data?.total_revenue ?? data?.revenue ?? 0;
-				const totalExpenses = data?.total_expenses ?? data?.expenses ?? 0;
-				setMetrics(totalRevenue, totalExpenses);
+				const totalIncome = Number(data?.total_income ?? data?.total_revenue ?? data?.revenue ?? 0);
+				const totalExpenses = Number(data?.total_expenses ?? data?.expenses ?? 0);
+				const netProfit = Number(data?.net_profit ?? (totalIncome - totalExpenses));
+
+				setMetrics(totalIncome, totalExpenses, netProfit);
 				lastSync.textContent = `آخر تحديث: ${new Date().toLocaleString('ar-SA')}`;
 			} catch (error) {
-				setMetrics(0, 0);
+				setMetrics(0, 0, 0);
 				lastSync.textContent = 'آخر تحديث: تعذر جلب البيانات الآن';
 			}
 		}

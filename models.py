@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, String, Date, DateTime, Numeric, ForeignKey
+from sqlalchemy import Boolean, Column, Integer, String, Date, DateTime, Numeric, ForeignKey, text
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -73,4 +73,26 @@ class Treatment(Base):
     color = Column(String, nullable=True)
 
     patient = relationship("Patient", back_populates="treatments")
+
+
+class Expense(Base):
+    __tablename__ = "expenses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    doctor_name = Column(String, nullable=True)
+    amount = Column(Numeric(12, 2), nullable=False)
+    description = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
+
+
+class FinancialTransaction(Base):
+    __tablename__ = "financial_transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    patient_id = Column(Integer, ForeignKey("patients.id"), nullable=True)
+    doctor_name = Column(String, nullable=True)
+    amount = Column(Numeric(12, 2), nullable=False)
+    type = Column(String, nullable=False, default="expense")
+    description = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
     

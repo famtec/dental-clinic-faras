@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import text
+from sqlalchemy import text, func
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel, Field, ConfigDict
@@ -151,6 +151,25 @@ class TreatmentResponse(BaseModel):
     treatment_type: str
     notes: Optional[str] = None
     color: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ExpenseCreate(BaseModel):
+    amount: Decimal
+    description: str
+    type: str = "expense"
+    patient_id: Optional[int] = None
+    doctor_name: Optional[str] = None
+
+
+class ExpenseResponse(BaseModel):
+    id: int
+    amount: Decimal
+    type: str
+    patient_id: Optional[int] = None
+    description: str
+    doctor_name: Optional[str] = None
+    created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -594,6 +613,67 @@ def create_treatment(treatment: TreatmentCreate, db: Session = Depends(database.
     db.commit()
     db.refresh(db_treatment)
     return db_treatment
+
+
+@app.post("/api/finance", response_model=ExpenseResponse)
+@app.post("/api/finance/expenses", response_model=ExpenseResponse)
+def create_expense(expense: ExpenseCreate, db: Session = Depends(database.get_db)):
+    if expense.amount <= 0:
+        raise HTTPException(status_code=400, detail="قيمة المصروف يجب أن تكون أكبر من صفر.")
+
+    description = expense.description.strip()
+    if not description:
+        raise HTTPException(status_code=400, detail="وصف المصروف مطلوب.")
+
+    transaction_type = expense.type.strip().lower()
+    if transaction_type not in {"income", "expense"}:
+        raise HTTPException(status_code=400, detail="نوع العملية يجب أن يكون income أو expense.")
+
+    if expense.patient_id is not None:
+        patient = db.query(models.Patient).filter(models.Patient.id == expense.patient_id).first()
+        if not patient:
+            raise HTTPException(status_code=404, detail="Patient not found")
+
+    try:
+        db_expense = models.FinancialTransaction(
+            patient_id=expense.patient_id,
+            doctor_name=expense.doctor_name,
+            amount=expense.amount,
+            type=transaction_type,
+            description=description,
+        )
+        db.add(db_expense)
+        db.commit()
+        db.refresh(db_expense)
+        return db_expense
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر حفظ المصروف حالياً. حاول مرة أخرى.")
+
+
+@app.get("/api/finance/summary")
+def get_finance_summary(db: Session = Depends(database.get_db)):
+    total_income = (
+        db.query(func.coalesce(func.sum(models.FinancialTransaction.amount), 0))
+        .filter(models.FinancialTransaction.type == "income")
+        .scalar()
+    )
+    total_expenses = (
+        db.query(func.coalesce(func.sum(models.FinancialTransaction.amount), 0))
+        .filter(models.FinancialTransaction.type == "expense")
+        .scalar()
+    )
+
+    income_value = Decimal(total_income or 0)
+    expenses_value = Decimal(total_expenses or 0)
+    net_profit = income_value - expenses_value
+
+    return {
+        "total_income": float(income_value),
+        "total_expenses": float(expenses_value),
+        "net_profit": float(net_profit),
+        "total_revenue": float(income_value),
+    }
 
 
 @app.get("/api/patients/{patient_id}/treatments", response_model=List[TreatmentResponse])
