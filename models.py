@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, String, Date, DateTime, Numeric, ForeignKey, text
+from sqlalchemy import Boolean, Column, Integer, String, Date, DateTime, Numeric, ForeignKey, Text, text
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
@@ -36,6 +36,7 @@ class Patient(Base):
     birth_date = Column(Date, nullable=True)
     gender = Column(String, nullable=True)
     medical_history = Column(String, nullable=True)
+    chart_state = Column(Text, nullable=True)
 
     visits = relationship("Visit", back_populates="patient", cascade="all, delete-orphan")
     treatments = relationship("Treatment", back_populates="patient", cascade="all, delete-orphan")
@@ -46,8 +47,10 @@ class Appointment(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     patient_name = Column(String, nullable=False)
+    appointment_date = Column(DateTime, nullable=True)
     appointment_time = Column(String, nullable=False)
     procedure_type = Column(String, nullable=False)
+    notes = Column(String, nullable=True)
     status = Column(String, default="Pending")
 
 

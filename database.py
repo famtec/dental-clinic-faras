@@ -26,6 +26,9 @@ def init_db():
             if "doctor_name" not in columns:
                 with engine.begin() as connection:
                     connection.execute(text("ALTER TABLE patients ADD COLUMN doctor_name VARCHAR"))
+            if "chart_state" not in columns:
+                with engine.begin() as connection:
+                    connection.execute(text("ALTER TABLE patients ADD COLUMN chart_state TEXT"))
 
         if "users" in inspector.get_table_names():
             user_columns = {column["name"] for column in inspector.get_columns("users")}
@@ -38,6 +41,27 @@ def init_db():
             if "patient_id" not in finance_columns:
                 with engine.begin() as connection:
                     connection.execute(text("ALTER TABLE financial_transactions ADD COLUMN patient_id INTEGER"))
+
+        if "appointments" in inspector.get_table_names():
+            appointment_columns = {column["name"] for column in inspector.get_columns("appointments")}
+            if "patient_name" not in appointment_columns:
+                with engine.begin() as connection:
+                    connection.execute(text("ALTER TABLE appointments ADD COLUMN patient_name VARCHAR NOT NULL DEFAULT ''"))
+            if "appointment_time" not in appointment_columns:
+                with engine.begin() as connection:
+                    connection.execute(text("ALTER TABLE appointments ADD COLUMN appointment_time VARCHAR NOT NULL DEFAULT ''"))
+            if "procedure_type" not in appointment_columns:
+                with engine.begin() as connection:
+                    connection.execute(text("ALTER TABLE appointments ADD COLUMN procedure_type VARCHAR NOT NULL DEFAULT ''"))
+            if "status" not in appointment_columns:
+                with engine.begin() as connection:
+                    connection.execute(text("ALTER TABLE appointments ADD COLUMN status VARCHAR NOT NULL DEFAULT 'Pending'"))
+            if "appointment_date" not in appointment_columns:
+                with engine.begin() as connection:
+                    connection.execute(text("ALTER TABLE appointments ADD COLUMN appointment_date DATETIME"))
+            if "notes" not in appointment_columns:
+                with engine.begin() as connection:
+                    connection.execute(text("ALTER TABLE appointments ADD COLUMN notes VARCHAR"))
 
 
 def get_db():

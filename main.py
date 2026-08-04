@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text, func
 from sqlalchemy.orm import Session
 from typing import List, Optional
+import json
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
@@ -113,30 +114,41 @@ class PatientUpdate(BaseModel):
     medical_history: Optional[str] = None
 
 
+class PatientChartUpdate(BaseModel):
+    chart_state: dict[str, str] | str
+
+
 class PatientResponse(PatientCreate):
     id: int
+    chart_state: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 
 class AppointmentCreate(BaseModel):
     patient_name: Optional[str] = None
+    appointment_date: Optional[datetime] = None
     appointment_time: Optional[str] = None
     procedure_type: Optional[str] = None
+    notes: Optional[str] = None
     status: str = "Pending"
     patient_id: Optional[int] = None
+
+
+class AppointmentUpdate(BaseModel):
     appointment_date: Optional[datetime] = None
-    notes: Optional[str] = None
+    appointment_time: Optional[str] = None
+    description: Optional[str] = None
 
 
 class AppointmentResponse(BaseModel):
     id: int
     patient_name: Optional[str] = None
+    appointment_date: Optional[datetime] = None
     appointment_time: Optional[str] = None
     procedure_type: Optional[str] = None
+    notes: Optional[str] = None
     status: str
     patient_id: Optional[int] = None
-    appointment_date: Optional[datetime] = None
-    notes: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -173,6 +185,17 @@ class ExpenseResponse(BaseModel):
     patient_id: Optional[int] = None
     description: str
     doctor_name: Optional[str] = None
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FinancialTransactionResponse(BaseModel):
+    id: int
+    patient_id: Optional[int] = None
+    doctor_name: Optional[str] = None
+    amount: Decimal
+    type: str
+    description: str
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
@@ -532,6 +555,31 @@ def update_patient(patient_id: int, patient_update: PatientUpdate, db: Session =
     return patient
 
 
+@app.put("/api/patients/{patient_id}/chart", response_model=PatientResponse)
+def update_patient_chart(patient_id: int, chart_update: PatientChartUpdate, db: Session = Depends(database.get_db)):
+    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    chart_state = chart_update.chart_state
+    if isinstance(chart_state, str):
+        chart_state_value = chart_state.strip()
+        if not chart_state_value:
+            raise HTTPException(status_code=400, detail="Chart state cannot be empty")
+    else:
+        chart_state_value = json.dumps(chart_state, ensure_ascii=False)
+
+    try:
+        patient.chart_state = chart_state_value
+        db.commit()
+        db.refresh(patient)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر حفظ حالة المخطط السني حالياً. حاول مرة أخرى.")
+
+    return patient
+
+
 # 6. مسار لحجز موعد جديد لمريض [POST]
 @app.post("/api/appointments", response_model=AppointmentResponse)
 def create_appointment(appointment: AppointmentCreate, db: Session = Depends(database.get_db)):
@@ -542,14 +590,39 @@ def create_appointment(appointment: AppointmentCreate, db: Session = Depends(dat
 
     db_appointment = models.Appointment(
         patient_name=appointment.patient_name or "",
+        appointment_date=appointment.appointment_date,
         appointment_time=appointment.appointment_time or "",
         procedure_type=appointment.procedure_type or "",
+        notes=appointment.notes,
         status=appointment.status,
     )
     db.add(db_appointment)
     db.commit()
     db.refresh(db_appointment)
     return db_appointment
+
+
+@app.put("/api/appointments/{appointment_id}", response_model=AppointmentResponse)
+def update_appointment(appointment_id: int, appointment_update: AppointmentUpdate, db: Session = Depends(database.get_db)):
+    appointment = db.query(models.Appointment).filter(models.Appointment.id == appointment_id).first()
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    try:
+        if appointment_update.appointment_date is not None:
+            appointment.appointment_date = appointment_update.appointment_date
+        if appointment_update.appointment_time is not None:
+            appointment.appointment_time = appointment_update.appointment_time.strip()
+        if appointment_update.description is not None:
+            appointment.notes = appointment_update.description.strip()
+
+        db.commit()
+        db.refresh(appointment)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر تحديث الموعد حالياً. حاول مرة أخرى.")
+
+    return appointment
 
 
 # 7. مسار لجلب قائمة بجميع المواعيد المحجوزة [GET]
@@ -687,6 +760,17 @@ def get_finance_summary(db: Session = Depends(database.get_db)):
         "net_profit": float(net_profit),
         "total_revenue": float(income_value),
     }
+
+
+@app.get("/api/finance/patient/{patient_id}", response_model=List[FinancialTransactionResponse])
+def get_patient_financial_transactions(patient_id: int, db: Session = Depends(database.get_db)):
+    return (
+        db.query(models.FinancialTransaction)
+        .filter(models.FinancialTransaction.patient_id == patient_id)
+        .filter(models.FinancialTransaction.type == "income")
+        .order_by(models.FinancialTransaction.created_at.desc())
+        .all()
+    )
 
 
 @app.get("/api/patients/{patient_id}/treatments", response_model=List[TreatmentResponse])

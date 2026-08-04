@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
   <title>الملف الطبي الشامل للمريض</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
@@ -21,6 +22,14 @@
     }
     .xray-toast {
       animation: financeToastIn 280ms ease-out;
+    }
+    .dental-canvas-stage canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .modal-pop {
+      animation: financeToastIn 220ms ease-out;
     }
   </style>
 </head>
@@ -54,9 +63,27 @@
           <h2 class="text-xl font-extrabold text-indigo-900">المخطط السني التفاعلي</h2>
           <span class="rounded-full bg-indigo-50 px-3 py-1 text-sm font-medium text-indigo-700">تحديث مباشر</span>
         </div>
-        <div class="rounded-[24px] border border-slate-100 bg-slate-50/90 p-3">
-          <div id="chartPlaceholder" class="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
-            جاري تحميل بيانات المريض...
+        <div class="rounded-[24px] border border-slate-100 bg-slate-950/95 p-3 shadow-inner shadow-slate-900/20">
+          <div class="relative overflow-hidden rounded-[22px] border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(99,102,241,0.32),_transparent_35%),linear-gradient(160deg,_rgba(15,23,42,0.96),_rgba(30,41,59,0.98))]">
+            <div id="dentalChartStage" class="dental-canvas-stage h-[500px] w-full"></div>
+            <div class="pointer-events-none absolute inset-x-4 top-4 flex flex-wrap items-center justify-between gap-3">
+              <div class="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold tracking-[0.18em] text-white/90 backdrop-blur">3D DENTAL ATLAS</div>
+              <div id="chartSceneHint" class="rounded-full border border-cyan-300/20 bg-cyan-400/15 px-3 py-1 text-xs font-semibold text-cyan-100 backdrop-blur">انقر على أي سن لتعديل حالته</div>
+            </div>
+            <div class="pointer-events-none absolute inset-x-4 bottom-4 grid gap-2 sm:grid-cols-3">
+              <div class="rounded-2xl border border-white/10 bg-white/10 px-3 py-3 text-white/90 backdrop-blur">
+                <p class="text-xs text-slate-200/80">الحالة الحمراء</p>
+                <p class="mt-1 text-sm font-bold">تسوس</p>
+              </div>
+              <div class="rounded-2xl border border-white/10 bg-white/10 px-3 py-3 text-white/90 backdrop-blur">
+                <p class="text-xs text-slate-200/80">الحالة الزرقاء</p>
+                <p class="mt-1 text-sm font-bold">حشوة</p>
+              </div>
+              <div class="rounded-2xl border border-white/10 bg-white/10 px-3 py-3 text-white/90 backdrop-blur">
+                <p class="text-xs text-slate-200/80">الحالة الرمادية</p>
+                <p class="mt-1 text-sm font-bold">مخلوع</p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -141,25 +168,64 @@
                 تسجيل الدفع المالي
               </button>
             </form>
+
+            <div class="mt-4 rounded-[24px] border border-slate-100 bg-white/90 p-4 shadow-sm">
+              <div class="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h3 class="text-lg font-extrabold text-slate-800">سجل المدفوعات التفصيلي</h3>
+                  <p class="mt-1 text-xs text-slate-500">يعرض أحدث الدفعات الخاصة بهذا المريض أولاً مع الوقت الكامل للحركة.</p>
+                </div>
+                <span id="financeLedgerCount" class="rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">0 دفعة</span>
+              </div>
+              <div class="overflow-hidden rounded-[20px] border border-slate-200">
+                <div class="max-h-[360px] overflow-auto">
+                  <table class="min-w-full border-collapse text-right">
+                    <thead class="sticky top-0 z-10 bg-slate-50/95 backdrop-blur">
+                      <tr class="border-b border-slate-200 text-sm text-slate-600">
+                        <th class="px-4 py-3 font-semibold">اليوم والتاريخ</th>
+                        <th class="px-4 py-3 font-semibold">المبلغ المستلم</th>
+                        <th class="px-4 py-3 font-semibold">البيان</th>
+                      </tr>
+                    </thead>
+                    <tbody id="financeLedgerTableBody" class="divide-y divide-slate-100 bg-white text-sm text-slate-700">
+                      <tr id="financeLedgerEmptyState">
+                        <td colspan="3" class="px-4 py-6 text-center text-slate-500">لا توجد دفعات مالية مسجلة لهذا المريض حتى الآن.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
         <div class="panel-soft rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/80">
-          <h2 class="mb-4 text-xl font-extrabold text-indigo-900">ملخص المواعيد</h2>
-          <div class="overflow-x-auto">
-            <table class="min-w-full border-collapse text-right">
-              <thead>
-                <tr class="border-b border-slate-200 bg-slate-50 text-sm text-slate-600">
-                  <th class="px-3 py-2 font-semibold">التاريخ</th>
-                  <th class="px-3 py-2 font-semibold">الحالة</th>
-                </tr>
-              </thead>
-              <tbody id="appointmentsTableBody" class="divide-y divide-slate-100 text-sm text-slate-700">
-                <tr>
-                  <td colspan="2" class="px-3 py-4 text-center text-slate-500">لا توجد مواعيد حالياً.</td>
-                </tr>
-              </tbody>
-            </table>
+          <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 class="text-xl font-extrabold text-indigo-900">إدارة مواعيد هذا المريض</h2>
+              <p class="mt-1 text-sm text-slate-500">عرض مباشر للمواعيد المرتبطة بهذا الملف مع تعديل سريع للموعد والوصف.</p>
+            </div>
+            <span id="patientAppointmentsCount" class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">0 موعد</span>
+          </div>
+          <div class="overflow-hidden rounded-[22px] border border-slate-200 bg-white">
+            <div class="max-h-[360px] overflow-auto">
+              <table class="min-w-full border-collapse text-right">
+                <thead class="sticky top-0 z-10 bg-slate-50/95 backdrop-blur">
+                  <tr class="border-b border-slate-200 text-sm text-slate-600">
+                    <th class="px-3 py-3 font-semibold">اليوم والتاريخ</th>
+                    <th class="px-3 py-3 font-semibold">الوقت</th>
+                    <th class="px-3 py-3 font-semibold">الوصف</th>
+                    <th class="px-3 py-3 font-semibold">الحالة</th>
+                    <th class="px-3 py-3 font-semibold">إجراء</th>
+                  </tr>
+                </thead>
+                <tbody id="patientAppointmentsTableBody" class="divide-y divide-slate-100 text-sm text-slate-700">
+                  <tr id="patientAppointmentsEmptyState">
+                    <td colspan="5" class="px-3 py-6 text-center text-slate-500">لا توجد مواعيد مسجلة لهذا المريض حتى الآن.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </section>
@@ -170,6 +236,57 @@
         تطوير وإدارة: المهندس فارس حلاوي © 2026
       </p>
     </footer>
+  </div>
+
+  <div id="toothStatusModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+    <div class="modal-pop w-full max-w-md rounded-[28px] border border-white/20 bg-white p-5 shadow-2xl shadow-slate-950/50 sm:p-6">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <p class="text-sm font-semibold text-indigo-600">تحديث حالة السن</p>
+          <h3 class="mt-1 text-2xl font-extrabold text-slate-900">السن <span id="toothStatusNumber">0</span></h3>
+        </div>
+        <button id="closeToothStatusModalBtn" type="button" class="rounded-full bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-200">إغلاق</button>
+      </div>
+      <p class="mt-3 text-sm leading-7 text-slate-600">اختر الحالة السنية المناسبة وسيتم حفظها فورًا على الملف السحابي.</p>
+      <div class="mt-5 grid gap-3 sm:grid-cols-3">
+        <button type="button" data-tooth-status="decay" class="rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm font-bold text-red-700 transition hover:-translate-y-0.5 hover:bg-red-100">تسوس</button>
+        <button type="button" data-tooth-status="filling" class="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4 text-sm font-bold text-blue-700 transition hover:-translate-y-0.5 hover:bg-blue-100">حشوة</button>
+        <button type="button" data-tooth-status="extracted" class="rounded-2xl border border-slate-300 bg-slate-100 px-4 py-4 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:bg-slate-200">مخلوع</button>
+      </div>
+      <p id="toothStatusSavingHint" class="mt-4 text-xs font-semibold text-slate-500">لن يتم حفظ التعديل حتى يتم اختيار الحالة.</p>
+    </div>
+  </div>
+
+  <div id="appointmentEditModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+    <div class="modal-pop w-full max-w-2xl rounded-[28px] border border-white/20 bg-white p-5 shadow-2xl shadow-slate-950/50 sm:p-6">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <p class="text-sm font-semibold text-indigo-600">تعديل موعد</p>
+          <h3 class="mt-1 text-2xl font-extrabold text-slate-900">تحديث تفاصيل الموعد</h3>
+        </div>
+        <button id="closeAppointmentEditModalBtn" type="button" class="rounded-full bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-200">إغلاق</button>
+      </div>
+      <form id="appointmentEditForm" class="mt-5 space-y-4">
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="block">
+            <span class="mb-1 block text-xs font-semibold text-slate-500">التاريخ</span>
+            <input id="appointmentEditDate" type="date" required class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
+          </label>
+          <label class="block">
+            <span class="mb-1 block text-xs font-semibold text-slate-500">الوقت</span>
+            <input id="appointmentEditTime" type="time" required class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
+          </label>
+        </div>
+        <label class="block">
+          <span class="mb-1 block text-xs font-semibold text-slate-500">الوصف</span>
+          <textarea id="appointmentEditDescription" rows="4" required class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"></textarea>
+        </label>
+        <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+          <button id="cancelAppointmentEditBtn" type="button" class="rounded-2xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100">إلغاء</button>
+          <button id="saveAppointmentEditBtn" type="submit" class="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700">حفظ التعديلات</button>
+        </div>
+      </form>
+    </div>
   </div>
 
   <script src="api-config.js"></script>
@@ -183,6 +300,25 @@
     let currentPatient = null;
     let isEditing = false;
     const XRAY_API_BASE_URL = 'https://onrender.com';
+    const TOOTH_STATUS_OPTIONS = {
+      decay: { label: 'تسوس', color: '#ef4444' },
+      filling: { label: 'حشوة', color: '#3b82f6' },
+      extracted: { label: 'مخلوع', color: '#475569' },
+    };
+    const DEFAULT_TOOTH_COLOR = '#f8fafc';
+
+    let currentChartState = {};
+    let dentalChartScene = null;
+    let dentalChartCamera = null;
+    let dentalChartRenderer = null;
+    let dentalChartRaycaster = null;
+    let dentalChartPointer = null;
+    let dentalChartAnimationFrame = null;
+    let dentalToothMeshes = [];
+    let hoveredToothMesh = null;
+    let activeToothMesh = null;
+    let currentAppointments = [];
+    let activeAppointment = null;
 
     function getPatientIdFromUrl() {
       const params = new URLSearchParams(window.location.search);
@@ -200,6 +336,207 @@
         age -= 1;
       }
       return `${age} سنة`;
+    }
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    function normalizeText(value) {
+      return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    }
+
+    function parseChartState(rawState) {
+      if (!rawState) return {};
+
+      let parsedState = rawState;
+      if (typeof rawState === 'string') {
+        try {
+          parsedState = JSON.parse(rawState);
+        } catch (error) {
+          return {};
+        }
+      }
+
+      if (!parsedState || typeof parsedState !== 'object' || Array.isArray(parsedState)) {
+        return {};
+      }
+
+      const normalizedState = {};
+      Object.entries(parsedState).forEach(([key, value]) => {
+        normalizedState[String(key)] = resolveToothColor(value);
+      });
+      return normalizedState;
+    }
+
+    function resolveStatusKey(value) {
+      if (!value) return null;
+
+      if (typeof value === 'object') {
+        if (value.status) return resolveStatusKey(value.status);
+        if (value.color) return resolveStatusKey(value.color);
+      }
+
+      const normalized = String(value).trim().toLowerCase();
+      if (TOOTH_STATUS_OPTIONS[normalized]) return normalized;
+
+      if (normalized === '#ef4444' || normalized === 'red' || normalized === 'rgb(239, 68, 68)') return 'decay';
+      if (normalized === '#3b82f6' || normalized === 'blue' || normalized === 'rgb(59, 130, 246)') return 'filling';
+      if (normalized === '#475569' || normalized === 'gray' || normalized === 'grey' || normalized === 'rgb(71, 85, 105)') return 'extracted';
+
+      return null;
+    }
+
+    function resolveToothColor(value) {
+      const statusKey = resolveStatusKey(value);
+      if (statusKey && TOOTH_STATUS_OPTIONS[statusKey]) {
+        return TOOTH_STATUS_OPTIONS[statusKey].color;
+      }
+
+      const textValue = String(value || '').trim();
+      if (!textValue) return DEFAULT_TOOTH_COLOR;
+      return textValue;
+    }
+
+    function getToothMaterialColor(mesh) {
+      const toothNumber = String(mesh?.userData?.toothNumber || '');
+      return currentChartState[toothNumber] || DEFAULT_TOOTH_COLOR;
+    }
+
+    function setToothMeshColor(mesh, color) {
+      if (!mesh || !mesh.material) return;
+
+      mesh.material.color.set(color || DEFAULT_TOOTH_COLOR);
+      mesh.material.emissive.set('#000000');
+      mesh.material.emissiveIntensity = 0.18;
+    }
+
+    function updateToothHoverState(mesh) {
+      if (hoveredToothMesh && hoveredToothMesh !== mesh) {
+        hoveredToothMesh.scale.setScalar(1);
+      }
+
+      hoveredToothMesh = mesh;
+      if (hoveredToothMesh) {
+        hoveredToothMesh.scale.setScalar(1.08);
+      }
+    }
+
+    function formatToothNumberLabel(number) {
+      return String(number).padStart(2, '0');
+    }
+
+    function createToothNumberSprite(number) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 256;
+      const context = canvas.getContext('2d');
+      if (!context) return null;
+
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.beginPath();
+      context.arc(128, 128, 86, 0, Math.PI * 2);
+      context.fillStyle = 'rgba(15, 23, 42, 0.65)';
+      context.fill();
+      context.lineWidth = 8;
+      context.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+      context.stroke();
+      context.fillStyle = '#ffffff';
+      context.font = 'bold 86px Tajawal, sans-serif';
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillText(formatToothNumberLabel(number), 128, 128);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.needsUpdate = true;
+      const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+      const sprite = new THREE.Sprite(material);
+      sprite.scale.set(0.72, 0.72, 0.72);
+      sprite.position.set(0, 1.18, 0.18);
+      return sprite;
+    }
+
+    function createToothMesh(toothNumber, x, y, z) {
+      const geometry = new THREE.CylinderGeometry(0.34, 0.46, 1.18, 12, 1, false);
+      const material = new THREE.MeshStandardMaterial({
+        color: DEFAULT_TOOTH_COLOR,
+        roughness: 0.42,
+        metalness: 0.08,
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(x, y, z);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.userData.toothNumber = toothNumber;
+
+      const label = createToothNumberSprite(toothNumber);
+      if (label) mesh.add(label);
+
+      return mesh;
+    }
+
+    function getPatientAppointmentDateValue(appointment) {
+      if (appointment?.appointment_date) return appointment.appointment_date;
+      return '';
+    }
+
+    function formatAppointmentDateTime(value) {
+      if (!value) return '—';
+      const dateValue = new Date(value);
+      if (Number.isNaN(dateValue.getTime())) return '—';
+
+      return dateValue.toLocaleString('ar-EG', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: false,
+      });
+    }
+
+    function formatAppointmentTimeValue(appointment) {
+      if (appointment?.appointment_time) return appointment.appointment_time;
+      const dateValue = getPatientAppointmentDateValue(appointment);
+      if (!dateValue) return '—';
+      const parsed = new Date(dateValue);
+      if (Number.isNaN(parsed.getTime())) return '—';
+      return parsed.toLocaleTimeString('ar-EG', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: false,
+      });
+    }
+
+    function formatAppointmentDescription(appointment) {
+      return appointment?.notes || appointment?.description || appointment?.procedure_type || '—';
+    }
+
+    function getAppointmentStatusBadgeClass(status) {
+      const normalized = String(status || 'Pending').trim().toLowerCase();
+      if (normalized === 'completed') return 'bg-emerald-100 text-emerald-700';
+      if (normalized === 'cancelled') return 'bg-rose-100 text-rose-700';
+      return 'bg-amber-100 text-amber-700';
+    }
+
+    function isAppointmentForCurrentPatient(appointment) {
+      if (!currentPatient) return false;
+
+      if (appointment?.patient_id && String(appointment.patient_id) === String(currentPatient.id)) {
+        return true;
+      }
+
+      const currentName = normalizeText(currentPatient.full_name);
+      const appointmentName = normalizeText(appointment?.patient_name);
+      if (!currentName || !appointmentName) return false;
+
+      return currentName === appointmentName;
     }
 
     function showToast(message) {
@@ -259,6 +596,525 @@
       const dt = new Date(value);
       if (Number.isNaN(dt.getTime())) return 'تاريخ غير متاح';
       return dt.toLocaleString('ar-SA');
+    }
+
+    function formatFinanceLedgerDate(value) {
+      if (!value) return 'تاريخ غير متاح';
+      const dt = new Date(value);
+      if (Number.isNaN(dt.getTime())) return 'تاريخ غير متاح';
+
+      return dt.toLocaleString('ar-EG', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: false,
+      });
+    }
+
+    function formatFinanceAmount(value) {
+      const amount = Number(value);
+      if (Number.isNaN(amount)) return '—';
+      return new Intl.NumberFormat('ar-EG', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(amount);
+    }
+
+    function createMedicalToast(message) {
+      const existingToast = document.getElementById('medicalActionToast');
+      if (existingToast) existingToast.remove();
+
+      const toast = document.createElement('div');
+      toast.id = 'medicalActionToast';
+      toast.className = 'fixed left-1/2 top-5 z-[60] -translate-x-1/2 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-sm font-bold text-white shadow-2xl shadow-indigo-500/30';
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      setTimeout(() => toast.remove(), 2400);
+    }
+
+    function initDentalChart() {
+      const container = document.getElementById('dentalChartStage');
+      if (!container || !window.THREE) return;
+
+      container.innerHTML = '';
+      dentalToothMeshes = [];
+      hoveredToothMesh = null;
+
+      dentalChartScene = new THREE.Scene();
+      dentalChartScene.background = new THREE.Color(0x0f172a);
+      dentalChartScene.fog = new THREE.Fog(0x0f172a, 12, 34);
+
+      const width = container.clientWidth || 600;
+      const height = container.clientHeight || 500;
+
+      dentalChartCamera = new THREE.PerspectiveCamera(35, width / height, 0.1, 100);
+      dentalChartCamera.position.set(0, 0.6, 16.5);
+
+      dentalChartRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+      dentalChartRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      dentalChartRenderer.setSize(width, height, false);
+      dentalChartRenderer.shadowMap.enabled = true;
+      dentalChartRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      container.appendChild(dentalChartRenderer.domElement);
+
+      dentalChartRaycaster = new THREE.Raycaster();
+      dentalChartPointer = new THREE.Vector2();
+
+      const ambientLight = new THREE.AmbientLight(0xffffff, 1.35);
+      dentalChartScene.add(ambientLight);
+
+      const topLight = new THREE.DirectionalLight(0xffffff, 2.4);
+      topLight.position.set(8, 14, 10);
+      topLight.castShadow = true;
+      topLight.shadow.mapSize.width = 2048;
+      topLight.shadow.mapSize.height = 2048;
+      dentalChartScene.add(topLight);
+
+      const fillLight = new THREE.PointLight(0x38bdf8, 1.7, 40);
+      fillLight.position.set(-6, 1, 10);
+      dentalChartScene.add(fillLight);
+
+      const glowLight = new THREE.PointLight(0xa855f7, 1.2, 40);
+      glowLight.position.set(7, -1, 12);
+      dentalChartScene.add(glowLight);
+
+      const jawMaterial = new THREE.MeshStandardMaterial({
+        color: 0x1e293b,
+        roughness: 0.9,
+        metalness: 0.05,
+        transparent: true,
+        opacity: 0.55,
+      });
+
+      const upperJaw = new THREE.Mesh(new THREE.BoxGeometry(18.5, 0.9, 2.2), jawMaterial);
+      upperJaw.position.set(0, 4.0, -0.9);
+      upperJaw.receiveShadow = true;
+      dentalChartScene.add(upperJaw);
+
+      const lowerJaw = new THREE.Mesh(new THREE.BoxGeometry(18.5, 0.9, 2.2), jawMaterial);
+      lowerJaw.position.set(0, -4.0, -0.9);
+      lowerJaw.receiveShadow = true;
+      dentalChartScene.add(lowerJaw);
+
+      const upperTeethGroup = new THREE.Group();
+      const lowerTeethGroup = new THREE.Group();
+
+      for (let index = 0; index < 16; index += 1) {
+        const toothNumber = index + 1;
+        const progress = index / 15;
+        const x = -7.3 + (progress * 14.6);
+        const archOffset = Math.sin(progress * Math.PI) * 1.65;
+        const z = Math.cos(progress * Math.PI) * 0.6;
+        const tooth = createToothMesh(toothNumber, x, 4.1 + archOffset * 0.08, z);
+        upperTeethGroup.add(tooth);
+        dentalToothMeshes.push(tooth);
+      }
+
+      for (let index = 0; index < 16; index += 1) {
+        const toothNumber = index + 17;
+        const progress = index / 15;
+        const x = 7.3 - (progress * 14.6);
+        const archOffset = Math.sin(progress * Math.PI) * 1.65;
+        const z = Math.cos(progress * Math.PI) * -0.6;
+        const tooth = createToothMesh(toothNumber, x, -4.1 - archOffset * 0.08, z);
+        lowerTeethGroup.add(tooth);
+        dentalToothMeshes.push(tooth);
+      }
+
+      dentalChartScene.add(upperTeethGroup);
+      dentalChartScene.add(lowerTeethGroup);
+
+      const floor = new THREE.Mesh(
+        new THREE.PlaneGeometry(30, 18),
+        new THREE.MeshStandardMaterial({ color: 0x020617, transparent: true, opacity: 0.55 })
+      );
+      floor.rotation.x = -Math.PI / 2;
+      floor.position.y = -7.1;
+      floor.receiveShadow = true;
+      dentalChartScene.add(floor);
+
+      container.style.cursor = 'grab';
+      container.addEventListener('pointerdown', handleDentalChartPointerDown);
+      container.addEventListener('pointermove', handleDentalChartPointerMove);
+      container.addEventListener('pointerleave', () => {
+        container.style.cursor = 'grab';
+        updateToothHoverState(null);
+      });
+
+      window.addEventListener('resize', resizeDentalChart);
+      resizeDentalChart();
+      animateDentalChart();
+    }
+
+    function animateDentalChart() {
+      if (!dentalChartRenderer || !dentalChartScene || !dentalChartCamera) return;
+
+      if (dentalChartAnimationFrame) {
+        cancelAnimationFrame(dentalChartAnimationFrame);
+      }
+
+      const renderFrame = () => {
+        dentalChartAnimationFrame = window.requestAnimationFrame(renderFrame);
+        if (dentalToothMeshes.length > 0) {
+          dentalToothMeshes.forEach((mesh) => {
+            const baseColor = getToothMaterialColor(mesh);
+            setToothMeshColor(mesh, baseColor);
+          });
+        }
+        dentalChartRenderer.render(dentalChartScene, dentalChartCamera);
+      };
+
+      renderFrame();
+    }
+
+    function resizeDentalChart() {
+      const container = document.getElementById('dentalChartStage');
+      if (!container || !dentalChartRenderer || !dentalChartCamera) return;
+
+      const width = container.clientWidth || 600;
+      const height = container.clientHeight || 500;
+      dentalChartCamera.aspect = width / height;
+      dentalChartCamera.updateProjectionMatrix();
+      dentalChartRenderer.setSize(width, height, false);
+    }
+
+    function refreshDentalChartFromState() {
+      dentalToothMeshes.forEach((mesh) => {
+        const toothNumber = String(mesh.userData.toothNumber);
+        const colorValue = currentChartState[toothNumber] || DEFAULT_TOOTH_COLOR;
+        setToothMeshColor(mesh, colorValue);
+      });
+    }
+
+    function setPatientChartState(rawState) {
+      currentChartState = parseChartState(rawState);
+      refreshDentalChartFromState();
+    }
+
+    function openToothStatusModal(mesh) {
+      if (!mesh) return;
+
+      activeToothMesh = mesh;
+      const toothNumberElement = document.getElementById('toothStatusNumber');
+      const modal = document.getElementById('toothStatusModal');
+      const hint = document.getElementById('toothStatusSavingHint');
+
+      if (toothNumberElement) {
+        toothNumberElement.textContent = mesh.userData.toothNumber;
+      }
+
+      if (hint) {
+        hint.textContent = 'اختر الحالة المناسبة وسيتم حفظها مباشرة على الملف السحابي.';
+      }
+
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      }
+    }
+
+    function closeToothStatusModal() {
+      activeToothMesh = null;
+      const modal = document.getElementById('toothStatusModal');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+    }
+
+    async function saveToothStatus(statusKey) {
+      if (!activeToothMesh) return;
+
+      const patientId = getPatientIdFromUrl();
+      if (!patientId) return;
+
+      const toothNumber = String(activeToothMesh.userData.toothNumber);
+      const previousChartState = { ...currentChartState };
+      const selectedConfig = TOOTH_STATUS_OPTIONS[statusKey];
+
+      if (!selectedConfig) return;
+
+      currentChartState[toothNumber] = selectedConfig.color;
+      refreshDentalChartFromState();
+
+      const hint = document.getElementById('toothStatusSavingHint');
+      if (hint) hint.textContent = 'جاري حفظ التحديث...';
+
+      try {
+        const response = await fetch(apiUrl(`/api/patients/${patientId}/chart`), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chart_state: currentChartState }),
+        });
+
+        if (!response.ok) {
+          throw new Error('تعذر حفظ حالة السن');
+        }
+
+        const updatedPatient = await response.json();
+        currentPatient = updatedPatient;
+        setPatientChartState(updatedPatient.chart_state || currentChartState);
+        createMedicalToast(`تم تحديث السن ${toothNumber} إلى ${selectedConfig.label}`);
+        closeToothStatusModal();
+      } catch (error) {
+        currentChartState = previousChartState;
+        refreshDentalChartFromState();
+        if (hint) hint.textContent = 'تعذر الحفظ الآن. أعد المحاولة بعد قليل.';
+      }
+    }
+
+    function handleDentalChartPointerMove(event) {
+      const container = event.currentTarget;
+      if (!container || !dentalChartRaycaster || !dentalChartCamera) return;
+
+      const rectangle = container.getBoundingClientRect();
+      dentalChartPointer.x = ((event.clientX - rectangle.left) / rectangle.width) * 2 - 1;
+      dentalChartPointer.y = -((event.clientY - rectangle.top) / rectangle.height) * 2 + 1;
+
+      dentalChartRaycaster.setFromCamera(dentalChartPointer, dentalChartCamera);
+      const intersections = dentalChartRaycaster.intersectObjects(dentalToothMeshes, false);
+      const hovered = intersections.length > 0 ? intersections[0].object : null;
+
+      container.style.cursor = hovered ? 'pointer' : 'grab';
+      updateToothHoverState(hovered);
+    }
+
+    function handleDentalChartPointerDown(event) {
+      const container = event.currentTarget;
+      if (!container || !dentalChartRaycaster || !dentalChartCamera) return;
+
+      const rectangle = container.getBoundingClientRect();
+      dentalChartPointer.x = ((event.clientX - rectangle.left) / rectangle.width) * 2 - 1;
+      dentalChartPointer.y = -((event.clientY - rectangle.top) / rectangle.height) * 2 + 1;
+
+      dentalChartRaycaster.setFromCamera(dentalChartPointer, dentalChartCamera);
+      const intersections = dentalChartRaycaster.intersectObjects(dentalToothMeshes, false);
+      if (intersections.length > 0) {
+        openToothStatusModal(intersections[0].object);
+      }
+    }
+
+    function updatePatientAppointmentsCount(count) {
+      const countBadge = document.getElementById('patientAppointmentsCount');
+      if (!countBadge) return;
+      countBadge.textContent = `${count} موعد`;
+    }
+
+    function createAppointmentRow(appointment) {
+      const row = document.createElement('tr');
+      row.className = 'transition hover:bg-violet-50/40';
+
+      const dateValue = formatAppointmentDateTime(getPatientAppointmentDateValue(appointment));
+      const timeValue = formatAppointmentTimeValue(appointment);
+      const descriptionValue = formatAppointmentDescription(appointment);
+      const statusValue = appointment?.status || 'Pending';
+      const badgeClass = getAppointmentStatusBadgeClass(statusValue);
+
+      row.innerHTML = `
+        <td class="px-3 py-3 align-top text-slate-600">${escapeHtml(dateValue)}</td>
+        <td class="px-3 py-3 align-top font-semibold text-slate-700">${escapeHtml(timeValue)}</td>
+        <td class="px-3 py-3 align-top leading-7 text-slate-700">${escapeHtml(descriptionValue)}</td>
+        <td class="px-3 py-3 align-top">
+          <span class="rounded-full px-3 py-1 text-xs font-bold ${badgeClass}">${escapeHtml(statusValue)}</span>
+        </td>
+        <td class="px-3 py-3 align-top">
+          <button type="button" data-appointment-id="${escapeHtml(appointment?.id)}" class="edit-appointment-btn rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-xs font-bold text-indigo-700 transition hover:bg-indigo-100">تعديل الموعد</button>
+        </td>
+      `;
+
+      return row;
+    }
+
+    function renderPatientAppointments(records) {
+      const tableBody = document.getElementById('patientAppointmentsTableBody');
+      const emptyState = document.getElementById('patientAppointmentsEmptyState');
+      if (!tableBody) return;
+
+      tableBody.querySelectorAll('[data-appointment-row="1"]').forEach((row) => row.remove());
+
+      const safeRecords = Array.isArray(records) ? records : [];
+      updatePatientAppointmentsCount(safeRecords.length);
+
+      if (safeRecords.length === 0) {
+        if (emptyState) emptyState.classList.remove('hidden');
+        return;
+      }
+
+      if (emptyState) emptyState.classList.add('hidden');
+      safeRecords.forEach((appointment) => {
+        const row = createAppointmentRow(appointment);
+        row.setAttribute('data-appointment-row', '1');
+        tableBody.appendChild(row);
+      });
+
+      attachAppointmentRowListeners();
+    }
+
+    function getCurrentPatientAppointments() {
+      if (!currentPatient) return [];
+
+      return currentAppointments.filter((appointment) => isAppointmentForCurrentPatient(appointment));
+    }
+
+    function hydrateAppointmentModal(appointment) {
+      const dateInput = document.getElementById('appointmentEditDate');
+      const timeInput = document.getElementById('appointmentEditTime');
+      const descriptionInput = document.getElementById('appointmentEditDescription');
+      const modal = document.getElementById('appointmentEditModal');
+
+      if (!appointment) return;
+
+      activeAppointment = appointment;
+
+      if (dateInput) {
+        const appointmentDate = appointment.appointment_date ? new Date(appointment.appointment_date) : null;
+        dateInput.value = appointmentDate && !Number.isNaN(appointmentDate.getTime())
+          ? appointmentDate.toISOString().slice(0, 10)
+          : '';
+      }
+
+      if (timeInput) {
+        if (appointment.appointment_time) {
+          timeInput.value = String(appointment.appointment_time).slice(0, 5);
+        } else if (appointment.appointment_date) {
+          const appointmentDate = new Date(appointment.appointment_date);
+          timeInput.value = !Number.isNaN(appointmentDate.getTime())
+            ? appointmentDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
+            : '';
+        } else {
+          timeInput.value = '';
+        }
+      }
+
+      if (descriptionInput) {
+        descriptionInput.value = appointment.notes || appointment.description || appointment.procedure_type || '';
+      }
+
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      }
+    }
+
+    function closeAppointmentModal() {
+      activeAppointment = null;
+      const modal = document.getElementById('appointmentEditModal');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+    }
+
+    async function loadPatientAppointments() {
+      const patientId = getPatientIdFromUrl();
+      if (!patientId || !currentPatient) {
+        renderPatientAppointments([]);
+        return;
+      }
+
+      try {
+        const response = await fetch(apiUrl('/api/appointments'));
+        if (!response.ok) {
+          throw new Error('Failed to load appointments');
+        }
+
+        const records = await response.json();
+        currentAppointments = Array.isArray(records) ? records : [];
+        const patientAppointments = getCurrentPatientAppointments().sort((left, right) => {
+          const leftValue = new Date(left.appointment_date || 0).getTime();
+          const rightValue = new Date(right.appointment_date || 0).getTime();
+          return rightValue - leftValue;
+        });
+        renderPatientAppointments(patientAppointments);
+      } catch (error) {
+        currentAppointments = [];
+        renderPatientAppointments([]);
+      }
+    }
+
+    async function submitAppointmentEdit(event) {
+      event.preventDefault();
+
+      if (!activeAppointment) return;
+
+      const dateInput = document.getElementById('appointmentEditDate');
+      const timeInput = document.getElementById('appointmentEditTime');
+      const descriptionInput = document.getElementById('appointmentEditDescription');
+      const saveButton = document.getElementById('saveAppointmentEditBtn');
+      const patientId = getPatientIdFromUrl();
+
+      if (!patientId) return;
+
+      const selectedDate = dateInput ? dateInput.value : '';
+      const selectedTime = timeInput ? timeInput.value : '';
+      const selectedDescription = descriptionInput ? descriptionInput.value.trim() : '';
+
+      if (!selectedDate || !selectedTime || !selectedDescription) {
+        alert('يرجى إكمال حقول الموعد قبل الحفظ.');
+        return;
+      }
+
+      const appointmentDateTime = new Date(`${selectedDate}T${selectedTime}:00`);
+      if (Number.isNaN(appointmentDateTime.getTime())) {
+        alert('صيغة التاريخ أو الوقت غير صحيحة.');
+        return;
+      }
+
+      if (saveButton) {
+        saveButton.disabled = true;
+        saveButton.textContent = 'جاري الحفظ...';
+      }
+
+      try {
+        const response = await fetch(apiUrl(`/api/appointments/${activeAppointment.id}`), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            appointment_date: appointmentDateTime.toISOString(),
+            appointment_time: selectedTime,
+            description: selectedDescription,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to update appointment');
+        }
+
+        const updatedAppointment = await response.json();
+        currentAppointments = currentAppointments.map((appointment) => (
+          String(appointment.id) === String(updatedAppointment.id) ? updatedAppointment : appointment
+        ));
+
+        closeAppointmentModal();
+        await loadPatientAppointments();
+        createMedicalToast('تم تحديث الموعد بنجاح');
+      } catch (error) {
+        alert('تعذر تحديث الموعد الآن. يرجى المحاولة لاحقاً.');
+      } finally {
+        if (saveButton) {
+          saveButton.disabled = false;
+          saveButton.textContent = 'حفظ التعديلات';
+        }
+      }
+    }
+
+    function attachAppointmentRowListeners() {
+      const tableBody = document.getElementById('patientAppointmentsTableBody');
+      if (!tableBody) return;
+
+      tableBody.querySelectorAll('.edit-appointment-btn').forEach((button) => {
+        button.addEventListener('click', () => {
+          const appointmentId = button.getAttribute('data-appointment-id');
+          const appointment = currentAppointments.find((item) => String(item.id) === String(appointmentId));
+          if (appointment) {
+            hydrateAppointmentModal(appointment);
+          }
+        });
+      });
     }
 
     function createXRayCard(record) {
@@ -322,6 +1178,98 @@
 
       const totalCards = gallery.querySelectorAll('[data-xray-card="1"]').length;
       updateXRayGalleryCount(totalCards);
+    }
+
+    function getFinanceLedgerEndpoint(patientId) {
+      return apiUrl(`/api/finance/patient/${encodeURIComponent(String(patientId))}`);
+    }
+
+    function getFinancePaymentEndpoint() {
+      return apiUrl('/api/finance');
+    }
+
+    function updateFinanceLedgerCount(count) {
+      const countBadge = document.getElementById('financeLedgerCount');
+      if (!countBadge) return;
+      countBadge.textContent = `${count} دفعة`;
+    }
+
+    function createFinanceLedgerRow(record) {
+      const row = document.createElement('tr');
+      row.setAttribute('data-finance-row', '1');
+      row.className = 'transition hover:bg-violet-50/50';
+
+      const createdAt = formatFinanceLedgerDate(record?.created_at);
+      const amount = formatFinanceAmount(record?.amount);
+      const description = (record?.description || '—').toString();
+
+      row.innerHTML = `
+        <td class="px-4 py-3 align-top text-slate-600">${createdAt}</td>
+        <td class="px-4 py-3 align-top font-bold text-emerald-700">${amount} ل.س</td>
+        <td class="px-4 py-3 align-top leading-7 text-slate-700">${description}</td>
+      `;
+      return row;
+    }
+
+    function renderFinanceLedger(records) {
+      const tableBody = document.getElementById('financeLedgerTableBody');
+      const emptyState = document.getElementById('financeLedgerEmptyState');
+      if (!tableBody) return;
+
+      tableBody.querySelectorAll('[data-finance-row="1"]').forEach((row) => row.remove());
+
+      const safeRecords = Array.isArray(records) ? records : [];
+      updateFinanceLedgerCount(safeRecords.length);
+
+      if (safeRecords.length === 0) {
+        if (emptyState) emptyState.classList.remove('hidden');
+        return;
+      }
+
+      if (emptyState) emptyState.classList.add('hidden');
+      safeRecords.forEach((record) => {
+        const row = createFinanceLedgerRow(record);
+        tableBody.appendChild(row);
+      });
+    }
+
+    function prependFinanceLedgerRow(record) {
+      const tableBody = document.getElementById('financeLedgerTableBody');
+      const emptyState = document.getElementById('financeLedgerEmptyState');
+      if (!tableBody) return;
+
+      if (emptyState) emptyState.classList.add('hidden');
+
+      const row = createFinanceLedgerRow(record);
+      row.style.opacity = '0';
+      row.style.transform = 'translateY(-6px)';
+      tableBody.prepend(row);
+
+      requestAnimationFrame(() => {
+        row.style.transition = 'opacity 180ms ease, transform 180ms ease';
+        row.style.opacity = '1';
+        row.style.transform = 'translateY(0)';
+      });
+
+      const totalRows = tableBody.querySelectorAll('[data-finance-row="1"]').length;
+      updateFinanceLedgerCount(totalRows);
+    }
+
+    async function loadFinanceLedger() {
+      const patientId = getPatientIdFromUrl();
+      if (!patientId) return;
+
+      try {
+        const response = await fetch(getFinanceLedgerEndpoint(patientId));
+        if (!response.ok) {
+          throw new Error('Failed to load finance ledger');
+        }
+
+        const records = await response.json();
+        renderFinanceLedger(records);
+      } catch (error) {
+        renderFinanceLedger([]);
+      }
     }
 
     async function loadPatientXRayGallery() {
@@ -410,7 +1358,7 @@
       };
 
       try {
-        const response = await fetch('https://dental-clinic-faras.onrender.com/api/finance', {
+        const response = await fetch(getFinancePaymentEndpoint(), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -420,6 +1368,8 @@
           throw new Error('Failed to register payment');
         }
 
+        const createdRecord = await response.json();
+        prependFinanceLedgerRow(createdRecord);
         showFinanceSuccessAlert('تم تسجيل الدفعة وضخها في حسابات العيادة بنجاح!');
         if (paymentInput) {
           paymentInput.value = '';
@@ -503,15 +1453,16 @@
 
     async function loadPatientRecord() {
       const patientId = getPatientIdFromUrl();
-      const chartPlaceholder = document.getElementById('chartPlaceholder');
       const patientName = document.getElementById('patientName');
       const patientPhone = document.getElementById('patientPhone');
       const patientAge = document.getElementById('patientAge');
       const patientHistory = document.getElementById('patientHistory');
-      const appointmentsTableBody = document.getElementById('appointmentsTableBody');
+      const chartSceneHint = document.getElementById('chartSceneHint');
 
       if (!patientId) {
-        chartPlaceholder.innerHTML = '<div class="text-rose-600">لم يتم العثور على معرف المريض في الرابط.</div>';
+        if (chartSceneHint) {
+          chartSceneHint.textContent = 'لم يتم العثور على معرف المريض في الرابط.';
+        }
         return;
       }
 
@@ -527,27 +1478,39 @@
         patientPhone.textContent = patient.phone || '—';
         patientAge.textContent = calculateAge(patient.birth_date);
         patientHistory.textContent = patient.medical_history || 'لا توجد ملاحظات طبية متاحة.';
+        if (chartSceneHint) {
+          chartSceneHint.textContent = `الملف الخاص بـ ${patient.full_name || 'المريض'} جاهز للمراجعة`;
+        }
 
-        chartPlaceholder.innerHTML = `
-          <div class="rounded-2xl bg-white p-4 shadow-sm">
-            <h3 class="text-lg font-bold text-indigo-900">${patient.full_name || 'المريض'}</h3>
-            <p class="mt-2 text-sm text-slate-600">المخطط السني هنا سيظهر لاحقًا مع تفاصيل العلاج والتشخيص.</p>
-          </div>
-        `;
-
-        appointmentsTableBody.innerHTML = `
-          <tr>
-            <td colspan="2" class="px-3 py-4 text-center text-slate-500">لا توجد مواعيد مسجلة لهذا المريض حاليًا.</td>
-          </tr>
-        `;
+        setPatientChartState(patient.chart_state);
+        await loadPatientAppointments();
       } catch (error) {
         console.error(error);
-        chartPlaceholder.innerHTML = '<div class="text-rose-600">حدث خطأ أثناء تحميل الملف الطبي.</div>';
+        if (chartSceneHint) {
+          chartSceneHint.textContent = 'حدث خطأ أثناء تحميل الملف الطبي.';
+        }
       }
     }
 
     document.getElementById('editProfileBtn').addEventListener('click', () => toggleProfileEditMode(true));
     document.getElementById('saveProfileBtn').addEventListener('click', savePatientProfile);
+    document.getElementById('closeToothStatusModalBtn').addEventListener('click', closeToothStatusModal);
+    document.getElementById('toothStatusModal').addEventListener('click', (event) => {
+      if (event.target && event.target.id === 'toothStatusModal') {
+        closeToothStatusModal();
+      }
+    });
+    document.querySelectorAll('[data-tooth-status]').forEach((button) => {
+      button.addEventListener('click', () => saveToothStatus(button.getAttribute('data-tooth-status')));
+    });
+    document.getElementById('closeAppointmentEditModalBtn').addEventListener('click', closeAppointmentModal);
+    document.getElementById('cancelAppointmentEditBtn').addEventListener('click', closeAppointmentModal);
+    document.getElementById('appointmentEditModal').addEventListener('click', (event) => {
+      if (event.target && event.target.id === 'appointmentEditModal') {
+        closeAppointmentModal();
+      }
+    });
+    document.getElementById('appointmentEditForm').addEventListener('submit', submitAppointmentEdit);
     const financialPaymentForm = document.getElementById('financialPaymentForm');
     if (financialPaymentForm) {
       financialPaymentForm.addEventListener('submit', submitFinancialPayment);
@@ -558,8 +1521,10 @@
     }
 
     window.addEventListener('DOMContentLoaded', () => {
+      initDentalChart();
       loadPatientRecord();
       loadPatientXRayGallery();
+      loadFinanceLedger();
     });
   </script>
 </body>
