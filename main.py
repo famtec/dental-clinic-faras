@@ -6,7 +6,7 @@ from sqlalchemy import text, func
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import json
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import AliasChoices, BaseModel, Field, ConfigDict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 import os
@@ -130,13 +130,12 @@ class PatientResponse(PatientCreate):
 
 
 class AppointmentCreate(BaseModel):
+    patient_id: int
+    date: str = Field(validation_alias=AliasChoices("date", "appointment_date"))
+    time: str = Field(validation_alias=AliasChoices("time", "appointment_time"))
+    description: str = Field(validation_alias=AliasChoices("description", "notes", "procedure_type"))
     patient_name: Optional[str] = None
-    appointment_date: Optional[datetime] = None
-    appointment_time: Optional[str] = None
-    procedure_type: Optional[str] = None
-    notes: Optional[str] = None
     status: str = "Pending"
-    patient_id: Optional[int] = None
 
 
 class AppointmentUpdate(BaseModel):
@@ -604,25 +603,62 @@ def update_patient_chart(patient_id: int, chart_update: PatientChartUpdate, db: 
 
 
 # 6. مسار لحجز موعد جديد لمريض [POST]
-@app.post("/api/appointments", response_model=AppointmentResponse)
+@app.post("/api/appointments", response_model=AppointmentResponse, status_code=201)
 def create_appointment(appointment: AppointmentCreate, db: Session = Depends(database.get_db)):
-    if appointment.patient_id is not None:
-        patient = db.query(models.Patient).filter(models.Patient.id == appointment.patient_id).first()
-        if not patient:
-            raise HTTPException(status_code=404, detail="Patient not found")
+    patient = db.query(models.Patient).filter(models.Patient.id == appointment.patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    date_value = (appointment.date or "").strip()
+    time_value = (appointment.time or "").strip()
+    description_value = (appointment.description or "").strip()
+    if not date_value or not time_value or not description_value:
+        raise HTTPException(status_code=400, detail="Date, time, and description are required")
+
+    normalized_time = time_value if len(time_value) == 5 else time_value[:5]
+    if len(normalized_time) != 5 or normalized_time[2] != ":":
+        raise HTTPException(status_code=400, detail="Invalid time format. Expected HH:MM")
+
+    date_component = date_value
+    if "T" in date_component:
+        try:
+            parsed_date = datetime.fromisoformat(date_component.replace("Z", "+00:00"))
+            date_component = parsed_date.date().isoformat()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format")
+
+    try:
+        appointment_date_time = datetime.fromisoformat(f"{date_component}T{normalized_time}:00")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date/time format")
 
     db_appointment = models.Appointment(
-        patient_name=appointment.patient_name or "",
-        appointment_date=appointment.appointment_date,
-        appointment_time=appointment.appointment_time or "",
-        procedure_type=appointment.procedure_type or "",
-        notes=appointment.notes,
-        status=appointment.status,
+        patient_name=patient.full_name or appointment.patient_name or "",
+        appointment_date=appointment_date_time,
+        appointment_time=normalized_time,
+        procedure_type=description_value,
+        notes=description_value,
+        status=(appointment.status or "Pending").strip() or "Pending",
     )
-    db.add(db_appointment)
-    db.commit()
-    db.refresh(db_appointment)
-    return db_appointment
+
+    try:
+        db.add(db_appointment)
+        db.commit()
+        db.refresh(db_appointment)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر إنشاء الموعد حالياً. حاول مرة أخرى.")
+
+    return {
+        "id": db_appointment.id,
+        "patient_id": appointment.patient_id,
+        "patient_name": db_appointment.patient_name,
+        "appointment_date": db_appointment.appointment_date,
+        "appointment_time": db_appointment.appointment_time,
+        "procedure_type": db_appointment.procedure_type,
+        "notes": db_appointment.notes,
+        "status": db_appointment.status,
+    }
 
 
 @app.put("/api/appointments/{appointment_id}", response_model=AppointmentResponse, status_code=200)

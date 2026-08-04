@@ -30,12 +30,13 @@ def test_create_appointment_for_existing_patient():
         "/api/appointments",
         json={
             "patient_id": patient_id,
-            "appointment_date": "2026-07-24T10:30:00",
-            "notes": "Routine checkup"
+            "date": "2026-07-24",
+            "time": "10:30",
+            "description": "Routine checkup"
         }
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 201
     body = response.json()
     assert body["patient_id"] == patient_id
     assert body["status"] == "Pending"
