@@ -257,32 +257,32 @@
     </div>
   </div>
 
-  <div id="appointmentEditModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
-    <div class="modal-pop w-full max-w-2xl rounded-[28px] border border-white/20 bg-white p-5 shadow-2xl shadow-slate-950/50 sm:p-6">
+  <div id="appointmentEditModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 p-4 opacity-0 backdrop-blur-sm transition-opacity duration-200">
+    <div class="modal-pop w-full max-w-2xl scale-95 rounded-[28px] border border-violet-300/25 bg-[linear-gradient(155deg,_rgba(30,27,75,0.95),_rgba(49,46,129,0.94),_rgba(76,29,149,0.93))] p-5 text-violet-50 shadow-2xl shadow-indigo-950/70 transition-transform duration-200 sm:p-6">
       <div class="flex items-start justify-between gap-4">
         <div>
-          <p class="text-sm font-semibold text-indigo-600">تعديل موعد</p>
-          <h3 class="mt-1 text-2xl font-extrabold text-slate-900">تحديث تفاصيل الموعد</h3>
+          <p class="text-sm font-semibold text-violet-200">تعديل موعد</p>
+          <h3 class="mt-1 text-2xl font-extrabold text-white">تحديث تفاصيل الموعد</h3>
         </div>
-        <button id="closeAppointmentEditModalBtn" type="button" class="rounded-full bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-200">إغلاق</button>
+        <button id="closeAppointmentEditModalBtn" type="button" class="rounded-full border border-violet-200/30 bg-white/10 px-3 py-2 text-sm font-semibold text-violet-100 transition hover:bg-white/15">إغلاق</button>
       </div>
       <form id="appointmentEditForm" class="mt-5 space-y-4">
         <div class="grid gap-4 sm:grid-cols-2">
           <label class="block">
-            <span class="mb-1 block text-xs font-semibold text-slate-500">التاريخ</span>
-            <input id="appointmentEditDate" type="date" required class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
+            <span class="mb-1 block text-xs font-semibold text-violet-100">التاريخ</span>
+            <input id="appointmentEditDate" type="date" required class="w-full rounded-2xl border border-violet-200/30 bg-white/10 px-4 py-3 text-sm text-white outline-none transition placeholder:text-violet-200/60 focus:border-violet-300 focus:ring-4 focus:ring-violet-300/25" />
           </label>
           <label class="block">
-            <span class="mb-1 block text-xs font-semibold text-slate-500">الوقت</span>
-            <input id="appointmentEditTime" type="time" required class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
+            <span class="mb-1 block text-xs font-semibold text-violet-100">الوقت</span>
+            <input id="appointmentEditTime" type="time" required class="w-full rounded-2xl border border-violet-200/30 bg-white/10 px-4 py-3 text-sm text-white outline-none transition placeholder:text-violet-200/60 focus:border-violet-300 focus:ring-4 focus:ring-violet-300/25" />
           </label>
         </div>
         <label class="block">
-          <span class="mb-1 block text-xs font-semibold text-slate-500">الوصف</span>
-          <textarea id="appointmentEditDescription" rows="4" required class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"></textarea>
+          <span class="mb-1 block text-xs font-semibold text-violet-100">الوصف</span>
+          <textarea id="appointmentEditDescription" rows="4" required class="w-full rounded-2xl border border-violet-200/30 bg-white/10 px-4 py-3 text-sm text-white outline-none transition placeholder:text-violet-200/60 focus:border-violet-300 focus:ring-4 focus:ring-violet-300/25"></textarea>
         </label>
         <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
-          <button id="cancelAppointmentEditBtn" type="button" class="rounded-2xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100">إلغاء</button>
+          <button id="cancelAppointmentEditBtn" type="button" class="rounded-2xl border border-violet-200/35 bg-white/10 px-5 py-3 text-sm font-semibold text-violet-50 transition hover:bg-white/20">إلغاء</button>
           <button id="saveAppointmentEditBtn" type="submit" class="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700">حفظ التعديلات</button>
         </div>
       </form>
@@ -300,6 +300,7 @@
     let currentPatient = null;
     let isEditing = false;
     const XRAY_API_BASE_URL = 'https://onrender.com';
+    const APPOINTMENT_UPDATE_BASE_URL = window.DENTAL_APP_CONFIG?.apiBaseUrl || 'https://onrender.com';
     const TOOTH_STATUS_OPTIONS = {
       decay: { label: 'تسوس', color: '#ef4444' },
       filling: { label: 'حشوة', color: '#3b82f6' },
@@ -319,6 +320,11 @@
     let activeToothMesh = null;
     let currentAppointments = [];
     let activeAppointment = null;
+    let appointmentModalCloseTimer = null;
+
+    function getAppointmentUpdateEndpoint(appointmentId) {
+      return `${APPOINTMENT_UPDATE_BASE_URL}/api/appointments/${encodeURIComponent(String(appointmentId))}`;
+    }
 
     function getPatientIdFromUrl() {
       const urlParams = new URLSearchParams(window.location.search);
@@ -923,7 +929,7 @@
           <span class="rounded-full px-3 py-1 text-xs font-bold ${badgeClass}">${escapeHtml(statusValue)}</span>
         </td>
         <td class="px-3 py-3 align-top">
-          <button type="button" data-appointment-id="${escapeHtml(appointment?.id)}" class="edit-appointment-btn rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-xs font-bold text-indigo-700 transition hover:bg-indigo-100">تعديل الموعد</button>
+          <button type="button" data-appointment-id="${escapeHtml(appointment?.id)}" class="edit-appointment-btn rounded-2xl border border-violet-200 bg-gradient-to-r from-indigo-100 to-violet-100 px-4 py-2 text-xs font-bold text-indigo-800 shadow-sm transition hover:from-indigo-200 hover:to-violet-200">✏️ تعديل</button>
         </td>
       `;
 
@@ -996,8 +1002,20 @@
       }
 
       if (modal) {
+        if (appointmentModalCloseTimer) {
+          window.clearTimeout(appointmentModalCloseTimer);
+          appointmentModalCloseTimer = null;
+        }
+
         modal.classList.remove('hidden');
         modal.classList.add('flex');
+        requestAnimationFrame(() => {
+          modal.classList.remove('opacity-0');
+          const panel = modal.firstElementChild;
+          if (panel) {
+            panel.classList.remove('scale-95');
+          }
+        });
       }
     }
 
@@ -1005,8 +1023,17 @@
       activeAppointment = null;
       const modal = document.getElementById('appointmentEditModal');
       if (modal) {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
+        modal.classList.add('opacity-0');
+        const panel = modal.firstElementChild;
+        if (panel) {
+          panel.classList.add('scale-95');
+        }
+
+        appointmentModalCloseTimer = window.setTimeout(() => {
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+          appointmentModalCloseTimer = null;
+        }, 180);
       }
     }
 
@@ -1071,7 +1098,7 @@
       }
 
       try {
-        const response = await fetch(apiUrl(`/api/appointments/${activeAppointment.id}`), {
+        const response = await fetch(getAppointmentUpdateEndpoint(activeAppointment.id), {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1090,9 +1117,9 @@
           String(appointment.id) === String(updatedAppointment.id) ? updatedAppointment : appointment
         ));
 
-        closeAppointmentModal();
         await loadPatientAppointments();
         createMedicalToast('تم تحديث الموعد بنجاح');
+        closeAppointmentModal();
       } catch (error) {
         alert('تعذر تحديث الموعد الآن. يرجى المحاولة لاحقاً.');
       } finally {

@@ -625,11 +625,22 @@ def create_appointment(appointment: AppointmentCreate, db: Session = Depends(dat
     return db_appointment
 
 
-@app.put("/api/appointments/{appointment_id}", response_model=AppointmentResponse)
+@app.put("/api/appointments/{appointment_id}", response_model=AppointmentResponse, status_code=200)
 def update_appointment(appointment_id: int, appointment_update: AppointmentUpdate, db: Session = Depends(database.get_db)):
     appointment = db.query(models.Appointment).filter(models.Appointment.id == appointment_id).first()
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
+
+    has_any_update = any(
+        value is not None
+        for value in (
+            appointment_update.appointment_date,
+            appointment_update.appointment_time,
+            appointment_update.description,
+        )
+    )
+    if not has_any_update:
+        raise HTTPException(status_code=400, detail="No appointment fields provided for update")
 
     try:
         if appointment_update.appointment_date is not None:
@@ -641,11 +652,10 @@ def update_appointment(appointment_id: int, appointment_update: AppointmentUpdat
 
         db.commit()
         db.refresh(appointment)
+        return appointment
     except Exception:
         db.rollback()
         raise HTTPException(status_code=400, detail="تعذر تحديث الموعد حالياً. حاول مرة أخرى.")
-
-    return appointment
 
 
 # 7. مسار لجلب قائمة بجميع المواعيد المحجوزة [GET]
