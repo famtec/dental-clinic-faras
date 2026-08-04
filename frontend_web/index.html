@@ -450,10 +450,22 @@
           throw new Error('Failed to load patient stats');
         }
 
-        const stats = await response.json();
-        const totalPatientsValue = safeNumber(stats?.total_patients) ?? allPatients.length;
-        const activeAppointmentsValue = safeNumber(stats?.active_appointments) ?? calculateActiveAppointmentsFallback();
-        const pendingBalancesValue = safeNumber(stats?.pending_balances) ?? calculatePendingBalanceFallback();
+        const data = await response.json();
+        const totalPatientsValue = safeNumber(data?.total_patients) ?? allPatients.length;
+        const activeAppointmentsValue = safeNumber(data?.active_appointments) ?? calculateActiveAppointmentsFallback();
+
+        const pendingBalancesArray = Array.isArray(data?.pending_balances) ? data.pending_balances : [];
+        const pendingBalancesFromArray = pendingBalancesArray.reduce((sum, item) => {
+          if (item && typeof item === 'object') {
+            const objectValue = safeNumber(item.pending_balance ?? item.remaining_balance ?? item.balance_due ?? item.amount_due ?? item.debt);
+            return sum + (objectValue ?? 0);
+          }
+          return sum + (safeNumber(item) ?? 0);
+        }, 0);
+        const pendingBalancesValue = pendingBalancesArray.length > 0
+          ? pendingBalancesFromArray
+          : (safeNumber(data?.pending_balances) ?? calculatePendingBalanceFallback());
+        data.pending_balances = pendingBalancesValue;
 
         if (statsTotalPatients) {
           statsTotalPatients.innerText = String(totalPatientsValue);
@@ -464,8 +476,9 @@
           animateStatsValue(statsActiveAppointments, String(activeAppointmentsValue));
         }
         if (statsPendingBalances) {
-          statsPendingBalances.innerText = formatPendingBalance(pendingBalancesValue);
-          animateStatsValue(statsPendingBalances, formatPendingBalance(pendingBalancesValue));
+          const element = statsPendingBalances;
+          element.innerText = data.pending_balances.toLocaleString() + " ل.س";
+          animateStatsValue(element, data.pending_balances.toLocaleString() + " ل.س");
         }
       } catch (error) {
         const fallbackTotalPatients = allPatients.length;
@@ -481,8 +494,9 @@
           animateStatsValue(statsActiveAppointments, String(fallbackActiveAppointments));
         }
         if (statsPendingBalances) {
-          statsPendingBalances.innerText = formatPendingBalance(fallbackPendingBalances);
-          animateStatsValue(statsPendingBalances, formatPendingBalance(fallbackPendingBalances));
+          const element = statsPendingBalances;
+          element.innerText = fallbackPendingBalances.toLocaleString() + " ل.س";
+          animateStatsValue(element, fallbackPendingBalances.toLocaleString() + " ل.س");
         }
       } finally {
         setStatsLoadingState(false);
