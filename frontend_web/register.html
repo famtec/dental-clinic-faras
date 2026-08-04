@@ -165,7 +165,6 @@
     const activationCodeHint = document.getElementById('activationCodeHint');
     const emailLabel = document.getElementById('emailLabel');
     const togglePasswordBtn = document.getElementById('togglePasswordBtn');
-    const registerApiBaseUrl = 'https://onrender.com';
 
     function showMessage(text, type = 'error') {
       const baseClasses = 'rounded-2xl border px-4 py-3 text-sm font-medium shadow-sm animate-pop';
@@ -299,7 +298,7 @@
       setLoading(true);
 
       try {
-        const response = await fetch(`${registerApiBaseUrl}/api/auth/register`, {
+        const response = await fetch(apiUrl('/api/auth/register'), {
           method: 'POST',
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -317,7 +316,7 @@
           data = null;
         }
 
-        if (response.ok) {
+        if (response.status === 200) {
           if (data?.token) {
             localStorage.setItem("authToken", data.token);
           }

@@ -1,6 +1,10 @@
 (function () {
+  const productionApiBaseUrl = 'https://dental-clinic-faras.onrender.com';
+  const runtimeDefaultBase = window.location.protocol === 'file:' ? productionApiBaseUrl : '';
   const storedBase = localStorage.getItem('apiBaseUrlOverride');
-  const apiBaseUrl = storedBase ? storedBase.trim().replace(/\/+$/, '') : '';
+  const apiBaseUrl = storedBase
+    ? storedBase.trim().replace(/\/+$/, '')
+    : runtimeDefaultBase;
   const storedGoogleClientId = localStorage.getItem('googleClientIdOverride');
   const googleClientId = storedGoogleClientId ? storedGoogleClientId.trim() : '';
 
