@@ -64,6 +64,7 @@
                                 <th class="px-4 py-3 font-semibold">الوقت</th>
                                 <th class="px-4 py-3 font-semibold">الإجراء</th>
                                 <th class="px-4 py-3 font-semibold">الحالة</th>
+                                <th class="px-4 py-3 font-semibold">إجراءات</th>
                             </tr>
                         </thead>
                         <tbody id="appointmentsTableBody" class="divide-y divide-slate-100">
@@ -74,40 +75,60 @@
         </main>
     </div>
 
-    <div id="appointmentModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-4">
-        <div class="w-full max-w-[95vw] rounded-3xl border border-slate-200 bg-white p-4 shadow-2xl sm:max-w-md sm:p-6">
-            <div class="mb-5 flex items-start justify-between">
+    <div id="appointmentModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 p-4 opacity-0 backdrop-blur-sm transition-opacity duration-200">
+        <div class="w-full max-w-2xl scale-95 rounded-3xl border border-violet-300/25 bg-[#2e1065] p-5 text-violet-50 shadow-2xl shadow-indigo-950/70 transition-transform duration-200 sm:p-6">
+            <div class="mb-5 flex items-start justify-between gap-4">
                 <div>
-                    <p class="text-sm font-semibold text-indigo-600">إضافة موعد جديد</p>
-                    <h3 class="text-2xl font-bold text-slate-800">موعد طبي</h3>
+                    <p class="text-sm font-semibold text-violet-200">إضافة موعد جديد</p>
+                    <h3 class="mt-1 text-2xl font-extrabold text-white">موعد طبي جديد</h3>
                 </div>
-                <button id="closeModalBtn" type="button" class="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600 transition hover:bg-slate-200">إغلاق</button>
+                <button id="closeModalBtn" type="button" class="rounded-full border border-slate-300/45 bg-slate-200/20 px-3 py-2 text-sm font-semibold text-slate-100 transition hover:bg-slate-200/30">إغلاق</button>
             </div>
 
             <form id="appointmentForm" class="space-y-4">
                 <div>
-                    <label class="mb-1 block text-sm font-medium text-slate-600">اسم المريض</label>
-                    <input id="patientName" type="text" required class="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500" />
+                    <label class="mb-1 block text-xs font-semibold text-violet-100">اختر المريض</label>
+                    <div class="relative">
+                        <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-violet-200/80">🔎</span>
+                        <input
+                            id="appointmentPatientSearch"
+                            list="appointmentPatientOptions"
+                            type="text"
+                            required
+                            placeholder="ابحث باسم المريض ثم اختره من القائمة"
+                            class="w-full rounded-2xl border border-violet-200/30 bg-white/10 py-3 pr-10 pl-4 text-sm text-white outline-none transition placeholder:text-violet-200/60 focus:border-violet-300 focus:ring-4 focus:ring-violet-300/25"
+                        />
+                        <datalist id="appointmentPatientOptions"></datalist>
+                        <input id="appointmentPatientId" type="hidden" required />
+                    </div>
                 </div>
-                <div>
-                    <label class="mb-1 block text-sm font-medium text-slate-600">الوقت</label>
-                    <input id="appointmentTime" type="time" required class="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500" />
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <label class="block">
+                        <span class="mb-1 block text-xs font-semibold text-violet-100">التاريخ</span>
+                        <div class="relative">
+                            <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-violet-200/80">📅</span>
+                            <input id="appointmentDate" type="date" required class="w-full rounded-2xl border border-violet-200/30 bg-white/10 py-3 pr-10 pl-4 text-sm text-white outline-none transition focus:border-violet-300 focus:ring-4 focus:ring-violet-300/25" />
+                        </div>
+                    </label>
+                    <label class="block">
+                        <span class="mb-1 block text-xs font-semibold text-violet-100">الوقت</span>
+                        <div class="relative">
+                            <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-violet-200/80">🕒</span>
+                            <input id="appointmentTime" type="time" required class="w-full rounded-2xl border border-violet-200/30 bg-white/10 py-3 pr-10 pl-4 text-sm text-white outline-none transition focus:border-violet-300 focus:ring-4 focus:ring-violet-300/25" />
+                        </div>
+                    </label>
                 </div>
-                <div>
-                    <label class="mb-1 block text-sm font-medium text-slate-600">الإجراء</label>
-                    <select id="procedureType" class="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500">
-                        <option value="فحص">فحص</option>
-                        <option value="حشوة">حشوة</option>
-                        <option value="سحب عصب">سحب عصب</option>
-                        <option value="تقويم">تقويم</option>
-                    </select>
-                </div>
-                <div class="flex gap-3 pt-2">
-                    <button type="submit" class="flex-1 rounded-xl bg-indigo-600 px-4 py-3 font-bold text-white shadow-lg transition hover:bg-indigo-700">
+
+                <label class="block">
+                    <span class="mb-1 block text-xs font-semibold text-violet-100">الوصف / الملاحظات</span>
+                    <textarea id="appointmentDescription" rows="4" required placeholder="اكتب وصف الموعد أو الإجراء الطبي..." class="w-full rounded-2xl border border-indigo-300/35 bg-white/10 px-4 py-3 text-sm text-white outline-none transition placeholder:text-violet-200/60 focus:border-violet-300 focus:ring-4 focus:ring-violet-300/25"></textarea>
+                </label>
+
+                <div class="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end">
+                    <button id="cancelModalBtn" type="button" class="rounded-2xl border border-slate-300/45 bg-slate-200/20 px-5 py-3 text-sm font-semibold text-slate-100 transition hover:bg-slate-200/30">إلغاء</button>
+                    <button id="appointmentSubmitBtn" type="submit" class="rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-3 text-sm font-bold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700">
                         حفظ الموعد
-                    </button>
-                    <button id="cancelModalBtn" type="button" class="rounded-xl border border-slate-300 px-4 py-3 font-semibold text-slate-600 transition hover:bg-slate-100">
-                        إلغاء
                     </button>
                 </div>
             </form>
@@ -161,26 +182,194 @@
         renderTierBadge();
 
         const API_URL = apiUrl('/api/appointments');
+        const PATIENTS_API_URL = apiUrl('/api/patients');
         const tableBody = document.getElementById('appointmentsTableBody');
         const modal = document.getElementById('appointmentModal');
         const form = document.getElementById('appointmentForm');
+        const patientSearchInput = document.getElementById('appointmentPatientSearch');
+        const patientIdInput = document.getElementById('appointmentPatientId');
+        const patientOptionsList = document.getElementById('appointmentPatientOptions');
+        const appointmentSubmitBtn = document.getElementById('appointmentSubmitBtn');
+        let appointmentModalCloseTimer = null;
+        let allPatients = [];
+        let currentAppointments = [];
+        let activeAppointment = null;
 
-        function openModal() {
+        function normalizeText(value) {
+            return String(value || '').trim().toLowerCase();
+        }
+
+        function renderPatientOptions() {
+            if (!patientOptionsList) return;
+            patientOptionsList.innerHTML = allPatients.map((patient) => {
+                const patientName = String(patient?.full_name || '').trim();
+                const patientId = String(patient?.id || '').trim();
+                const optionValue = `${patientName} — #${patientId}`;
+                return `<option value="${optionValue}"></option>`;
+            }).join('');
+        }
+
+        function resolveSelectedPatient() {
+            const searchValue = String(patientSearchInput?.value || '').trim();
+            const idValue = String(patientIdInput?.value || '').trim();
+
+            if (idValue) {
+                const byId = allPatients.find((patient) => String(patient?.id) === idValue);
+                if (byId) {
+                    return byId;
+                }
+            }
+
+            const byLabel = allPatients.find((patient) => {
+                const patientName = String(patient?.full_name || '').trim();
+                const patientId = String(patient?.id || '').trim();
+                return `${patientName} — #${patientId}` === searchValue;
+            });
+            if (byLabel) {
+                if (patientIdInput) patientIdInput.value = String(byLabel.id);
+                return byLabel;
+            }
+
+            const byName = allPatients.find((patient) => normalizeText(patient?.full_name) === normalizeText(searchValue));
+            if (byName) {
+                if (patientIdInput) patientIdInput.value = String(byName.id);
+                return byName;
+            }
+
+            return null;
+        }
+
+        async function loadPatientsForAppointmentForm() {
+            try {
+                const response = await fetch(PATIENTS_API_URL);
+                if (!response.ok) {
+                    throw new Error('تعذر تحميل قائمة المرضى');
+                }
+
+                const data = await response.json();
+                allPatients = Array.isArray(data) ? data : [];
+                renderPatientOptions();
+            } catch (error) {
+                allPatients = [];
+                renderPatientOptions();
+            }
+        }
+
+        function setCreateMode() {
+            activeAppointment = null;
+            if (appointmentSubmitBtn) {
+                appointmentSubmitBtn.textContent = 'حفظ الموعد';
+            }
+        }
+
+        function setEditMode(appointment) {
+            activeAppointment = appointment;
+            if (appointmentSubmitBtn) {
+                appointmentSubmitBtn.textContent = 'حفظ التعديلات';
+            }
+
+            if (patientSearchInput) {
+                if (appointment?.patient_id) {
+                    const knownPatient = allPatients.find((patient) => String(patient.id) === String(appointment.patient_id));
+                    if (knownPatient) {
+                        patientSearchInput.value = `${knownPatient.full_name} — #${knownPatient.id}`;
+                    } else {
+                        const fallbackName = String(appointment?.patient_name || '').trim();
+                        patientSearchInput.value = fallbackName ? `${fallbackName} — #${appointment.patient_id}` : '';
+                    }
+                    if (patientIdInput) {
+                        patientIdInput.value = String(appointment.patient_id);
+                    }
+                } else {
+                    patientSearchInput.value = String(appointment?.patient_name || '').trim();
+                    if (patientIdInput) {
+                        patientIdInput.value = '';
+                    }
+                }
+            }
+
+            const dateInput = document.getElementById('appointmentDate');
+            const timeInput = document.getElementById('appointmentTime');
+            const descriptionInput = document.getElementById('appointmentDescription');
+
+            if (dateInput) {
+                const appointmentDate = appointment?.appointment_date ? new Date(appointment.appointment_date) : null;
+                dateInput.value = appointmentDate && !Number.isNaN(appointmentDate.getTime())
+                    ? appointmentDate.toISOString().slice(0, 10)
+                    : '';
+            }
+
+            if (timeInput) {
+                const appointmentTime = String(appointment?.appointment_time || '').slice(0, 5);
+                if (appointmentTime) {
+                    timeInput.value = appointmentTime;
+                } else {
+                    const appointmentDate = appointment?.appointment_date ? new Date(appointment.appointment_date) : null;
+                    timeInput.value = appointmentDate && !Number.isNaN(appointmentDate.getTime())
+                        ? appointmentDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
+                        : '';
+                }
+            }
+
+            if (descriptionInput) {
+                descriptionInput.value = String(appointment?.notes || appointment?.description || appointment?.procedure_type || '').trim();
+            }
+        }
+
+        function openModal(appointment = null) {
+            if (allPatients.length === 0) {
+                loadPatientsForAppointmentForm();
+            }
+
+            if (appointment) {
+                setEditMode(appointment);
+            } else {
+                setCreateMode();
+            }
+
+            if (appointmentModalCloseTimer) {
+                window.clearTimeout(appointmentModalCloseTimer);
+                appointmentModalCloseTimer = null;
+            }
+
             modal.classList.remove('hidden');
             modal.classList.add('flex');
+            requestAnimationFrame(() => {
+                modal.classList.remove('opacity-0');
+                const panel = modal.firstElementChild;
+                if (panel) {
+                    panel.classList.remove('scale-95');
+                }
+            });
         }
 
         function closeModal() {
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
+            setCreateMode();
+            modal.classList.add('opacity-0');
+            const panel = modal.firstElementChild;
+            if (panel) {
+                panel.classList.add('scale-95');
+            }
+
+            appointmentModalCloseTimer = window.setTimeout(() => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+                appointmentModalCloseTimer = null;
+            }, 180);
+
             form.reset();
+            if (patientIdInput) {
+                patientIdInput.value = '';
+            }
         }
 
         function renderAppointments(appointments) {
+            currentAppointments = Array.isArray(appointments) ? appointments : [];
+
             if (!appointments.length) {
                 tableBody.innerHTML = `
                     <tr>
-                        <td colspan="5" class="px-4 py-8 text-center text-sm text-slate-500">لا توجد مواعيد مسجلة حاليًا.</td>
+                        <td colspan="6" class="px-4 py-8 text-center text-sm text-slate-500">لا توجد مواعيد مسجلة حاليًا.</td>
                     </tr>
                 `;
                 return;
@@ -216,9 +405,64 @@
                             <span class="text-xs font-semibold text-slate-400 sm:hidden">الحالة</span>
                             <span class="rounded-full px-3 py-1 ${badgeClass}">${status}</span>
                         </td>
+                        <td class="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 text-sm last:border-b-0 sm:table-cell sm:border-b-0">
+                            <span class="text-xs font-semibold text-slate-400 sm:hidden">إجراءات</span>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button type="button" data-edit-appointment-id="${appointment.id ?? ''}" class="edit-appointment-btn rounded-xl border border-indigo-200 bg-gradient-to-r from-indigo-100 to-violet-100 px-3 py-2 text-xs font-extrabold text-indigo-800 shadow-sm transition hover:from-indigo-200 hover:to-violet-200">✏️ تعديل</button>
+                                <button type="button" data-delete-appointment-id="${appointment.id ?? ''}" class="delete-appointment-btn rounded-xl border border-rose-300 bg-gradient-to-r from-rose-500 to-red-600 px-3 py-2 text-xs font-extrabold text-white shadow-md shadow-rose-300/40 transition hover:from-rose-600 hover:to-red-700">🗑️ حذف</button>
+                            </div>
+                        </td>
                     </tr>
                 `;
             }).join('');
+
+            attachAppointmentRowListeners();
+        }
+
+        function attachAppointmentRowListeners() {
+            tableBody.querySelectorAll('.edit-appointment-btn').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const appointmentId = button.getAttribute('data-edit-appointment-id');
+                    if (!appointmentId) return;
+
+                    const appointment = currentAppointments.find((item) => String(item.id) === String(appointmentId));
+                    if (!appointment) return;
+
+                    openModal(appointment);
+                });
+            });
+
+            tableBody.querySelectorAll('.delete-appointment-btn').forEach((button) => {
+                button.addEventListener('click', async () => {
+                    const appointmentId = button.getAttribute('data-delete-appointment-id');
+                    if (!appointmentId) return;
+
+                    const confirmed = window.confirm('هل أنت متأكد من حذف هذا الموعد نهائياً؟');
+                    if (!confirmed) return;
+
+                    const previousText = button.textContent;
+                    button.disabled = true;
+                    button.textContent = '...جاري الحذف';
+
+                    try {
+                        const response = await fetch(`${API_URL}/${encodeURIComponent(String(appointmentId))}`, {
+                            method: 'DELETE',
+                        });
+
+                        if (!response.ok) {
+                            throw new Error('تعذر حذف الموعد حالياً.');
+                        }
+
+                        await loadAppointments();
+                        alert('تم حذف الموعد بنجاح');
+                    } catch (error) {
+                        alert('تعذر حذف الموعد الآن. يرجى المحاولة لاحقاً.');
+                    } finally {
+                        button.disabled = false;
+                        button.textContent = previousText || '🗑️ حذف';
+                    }
+                });
+            });
         }
 
         async function loadAppointments() {
@@ -233,7 +477,7 @@
                 console.error(error);
                 tableBody.innerHTML = `
                     <tr>
-                        <td colspan="5" class="px-4 py-8 text-center text-sm text-rose-600">تعذر الاتصال بالخادم.</td>
+                        <td colspan="6" class="px-4 py-8 text-center text-sm text-rose-600">تعذر الاتصال بالخادم.</td>
                     </tr>
                 `;
             }
@@ -251,16 +495,49 @@
         form.addEventListener('submit', async (event) => {
             event.preventDefault();
 
+            const selectedPatient = resolveSelectedPatient();
+            if (!selectedPatient) {
+                alert('يرجى اختيار مريض موجود من القائمة قبل حفظ الموعد.');
+                return;
+            }
+
+            const selectedDate = document.getElementById('appointmentDate').value;
+            const selectedTime = document.getElementById('appointmentTime').value;
+            const description = document.getElementById('appointmentDescription').value.trim();
+
+            if (!selectedDate || !selectedTime || !description) {
+                alert('يرجى تعبئة جميع حقول الموعد قبل الحفظ.');
+                return;
+            }
+
+            const appointmentDateTime = new Date(`${selectedDate}T${selectedTime}:00`);
+            if (Number.isNaN(appointmentDateTime.getTime())) {
+                alert('صيغة التاريخ أو الوقت غير صحيحة.');
+                return;
+            }
+
             const payload = {
-                patient_name: document.getElementById('patientName').value.trim(),
-                appointment_time: document.getElementById('appointmentTime').value,
-                procedure_type: document.getElementById('procedureType').value,
-                status: 'Pending'
+                patient_id: Number(selectedPatient.id),
+                patient_name: String(selectedPatient.full_name || ''),
+                date: selectedDate,
+                time: selectedTime,
+                description,
+                appointment_date: appointmentDateTime.toISOString(),
+                appointment_time: selectedTime,
+                notes: description,
+                procedure_type: description,
+                status: activeAppointment?.status || 'Pending'
             };
 
             try {
-                const response = await fetch(API_URL, {
-                    method: 'POST',
+                const isEditMode = Boolean(activeAppointment);
+                const method = isEditMode ? 'PUT' : 'POST';
+                const endpoint = isEditMode
+                    ? `${API_URL}/${encodeURIComponent(String(activeAppointment.id))}`
+                    : API_URL;
+
+                const response = await fetch(endpoint, {
+                    method,
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
@@ -272,14 +549,36 @@
 
                 closeModal();
                 await loadAppointments();
-                alert('تم حفظ الموعد بنجاح');
+                alert(isEditMode ? 'تم تحديث الموعد بنجاح' : 'تم حفظ الموعد بنجاح');
             } catch (error) {
                 console.error(error);
                 alert(`فشل حفظ الموعد: ${error.message}`);
             }
         });
 
-        window.addEventListener('DOMContentLoaded', loadAppointments);
+        if (patientSearchInput) {
+            patientSearchInput.addEventListener('input', () => {
+                if (patientIdInput) {
+                    patientIdInput.value = '';
+                }
+
+                const selectedPatient = resolveSelectedPatient();
+                if (selectedPatient && patientIdInput) {
+                    patientIdInput.value = String(selectedPatient.id);
+                }
+            });
+
+            patientSearchInput.addEventListener('blur', () => {
+                const selectedPatient = resolveSelectedPatient();
+                if (selectedPatient && patientSearchInput) {
+                    patientSearchInput.value = `${selectedPatient.full_name} — #${selectedPatient.id}`;
+                }
+            });
+        }
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            await Promise.all([loadAppointments(), loadPatientsForAppointmentForm()]);
+        });
     </script>
 </body>
 </html>
