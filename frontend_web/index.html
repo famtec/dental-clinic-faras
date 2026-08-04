@@ -123,7 +123,7 @@
             </div>
             <div class="relative mt-6 flex items-end justify-between gap-3">
               <div>
-                <div id="statsPendingBalances" class="stats-value text-4xl font-black tracking-tight text-emerald-200">--</div>
+                <div id="pendingBalancesCounter" class="stats-value text-4xl font-black tracking-tight text-emerald-200">--</div>
                 <p class="mt-1 text-xs font-medium text-slate-300">القيمة المتبقية غير المسددة من الزيارات</p>
               </div>
               <span class="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-bold text-emerald-100">Balance</span>
@@ -268,7 +268,7 @@
     const searchInput = document.getElementById('searchInput');
     const statsTotalPatients = document.getElementById('statsTotalPatients');
     const statsActiveAppointments = document.getElementById('statsActiveAppointments');
-    const statsPendingBalances = document.getElementById('statsPendingBalances');
+    const pendingBalancesCounter = document.getElementById('pendingBalancesCounter');
     const deletePatientModal = document.getElementById('deletePatientModal');
     const cancelDeletePatientBtn = document.getElementById('cancelDeletePatientBtn');
     const confirmDeletePatientBtn = document.getElementById('confirmDeletePatientBtn');
@@ -373,7 +373,7 @@
     }
 
     function setStatsLoadingState(isLoading) {
-      const cards = [statsTotalPatients, statsActiveAppointments, statsPendingBalances].filter(Boolean);
+      const cards = [statsTotalPatients, statsActiveAppointments, pendingBalancesCounter].filter(Boolean);
       cards.forEach((card) => {
         card.classList.toggle('opacity-60', isLoading);
         card.classList.toggle('animate-pulse', isLoading);
@@ -388,17 +388,18 @@
       el.textContent = nextValue;
     }
 
-    function formatPendingBalance(value) {
-      const numericValue = Number(value || 0);
-      return new Intl.NumberFormat('en-US', {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2,
-      }).format(numericValue);
-    }
-
     function safeNumber(value) {
       const numericValue = Number(value);
       return Number.isFinite(numericValue) ? numericValue : null;
+    }
+
+    function calculatePendingFromPatientCosts() {
+      return allPatients.reduce((sum, patient) => {
+        const totalTreatmentCost = Number(patient?.total_treatment_cost || 0);
+        const paidAmount = Number(patient?.paid_amount || 0);
+        const pendingAmount = Math.max(totalTreatmentCost - paidAmount, 0);
+        return sum + (Number.isFinite(pendingAmount) ? pendingAmount : 0);
+      }, 0);
     }
 
     function calculatePendingBalanceFallback() {
@@ -454,18 +455,11 @@
         const totalPatientsValue = safeNumber(data?.total_patients) ?? allPatients.length;
         const activeAppointmentsValue = safeNumber(data?.active_appointments) ?? calculateActiveAppointmentsFallback();
 
-        const pendingBalancesArray = Array.isArray(data?.pending_balances) ? data.pending_balances : [];
-        const pendingBalancesFromArray = pendingBalancesArray.reduce((sum, item) => {
-          if (item && typeof item === 'object') {
-            const objectValue = safeNumber(item.pending_balance ?? item.remaining_balance ?? item.balance_due ?? item.amount_due ?? item.debt);
-            return sum + (objectValue ?? 0);
-          }
-          return sum + (safeNumber(item) ?? 0);
-        }, 0);
-        const pendingBalancesValue = pendingBalancesArray.length > 0
-          ? pendingBalancesFromArray
-          : (safeNumber(data?.pending_balances) ?? calculatePendingBalanceFallback());
-        data.pending_balances = pendingBalancesValue;
+        const backendPendingBalance = safeNumber(data?.pending_balances);
+        const localPatientsPendingBalance = calculatePendingFromPatientCosts();
+        data.pending_balances = backendPendingBalance && backendPendingBalance !== 0
+          ? backendPendingBalance
+          : localPatientsPendingBalance;
 
         if (statsTotalPatients) {
           statsTotalPatients.innerText = String(totalPatientsValue);
@@ -475,15 +469,15 @@
           statsActiveAppointments.innerText = String(activeAppointmentsValue);
           animateStatsValue(statsActiveAppointments, String(activeAppointmentsValue));
         }
-        if (statsPendingBalances) {
-          const element = statsPendingBalances;
-          element.innerText = data.pending_balances.toLocaleString() + " ل.س";
-          animateStatsValue(element, data.pending_balances.toLocaleString() + " ل.س");
+        const pendingCard = document.getElementById("pendingBalancesCounter");
+        if (pendingCard && data.pending_balances !== undefined) {
+          pendingCard.innerText = Number(data.pending_balances).toLocaleString('ar-SY') + " ل.س";
+          animateStatsValue(pendingCard, Number(data.pending_balances).toLocaleString('ar-SY') + " ل.س");
         }
       } catch (error) {
         const fallbackTotalPatients = allPatients.length;
         const fallbackActiveAppointments = calculateActiveAppointmentsFallback();
-        const fallbackPendingBalances = calculatePendingBalanceFallback();
+        const fallbackPendingBalances = calculatePendingFromPatientCosts();
 
         if (statsTotalPatients) {
           statsTotalPatients.innerText = String(fallbackTotalPatients);
@@ -493,10 +487,10 @@
           statsActiveAppointments.innerText = String(fallbackActiveAppointments);
           animateStatsValue(statsActiveAppointments, String(fallbackActiveAppointments));
         }
-        if (statsPendingBalances) {
-          const element = statsPendingBalances;
-          element.innerText = fallbackPendingBalances.toLocaleString() + " ل.س";
-          animateStatsValue(element, fallbackPendingBalances.toLocaleString() + " ل.س");
+        const pendingCard = document.getElementById("pendingBalancesCounter");
+        if (pendingCard) {
+          pendingCard.innerText = Number(fallbackPendingBalances).toLocaleString('ar-SY') + " ل.س";
+          animateStatsValue(pendingCard, Number(fallbackPendingBalances).toLocaleString('ar-SY') + " ل.س");
         }
       } finally {
         setStatsLoadingState(false);
