@@ -320,6 +320,7 @@
           if (data?.token) {
             localStorage.setItem("authToken", data.token);
           }
+          localStorage.setItem("user_email", email);
           localStorage.setItem("user_tier", data.tier);
           if (!data?.tier) {
             localStorage.setItem("user_tier", "standard");

@@ -331,10 +331,17 @@
 			setUpgradeStatus('يتم التحقق من الكود مع الخادم الآن...', 'normal');
 
 			try {
+				const storedEmail = String(localStorage.getItem('user_email') || '').trim().toLowerCase();
+				const storedDoctorName = String(localStorage.getItem('doctor_name') || '').trim();
+
 				const response = await fetch(UPGRADE_ENDPOINT, {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ activation_code: activationCode })
+					body: JSON.stringify({
+						activation_code: activationCode,
+						email: storedEmail || null,
+						doctor_name: storedDoctorName || null
+					})
 				});
 
 				let data = null;
@@ -351,6 +358,9 @@
 				}
 
 				localStorage.setItem('user_tier', 'premium');
+				if (data?.email) {
+					localStorage.setItem('user_email', String(data.email).toLowerCase());
+				}
 				activeTier = 'premium';
 				renderTierBadge();
 				setUpgradeStatus('تم تفعيل Premium بنجاح. يتم تحديث التقارير الآن...', 'success');

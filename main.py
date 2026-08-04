@@ -198,8 +198,15 @@ class GoogleLoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     token: str
     doctor_name: Optional[str] = None
+    email: Optional[str] = None
     tier: str
     subscription_active: bool
+
+
+class UpgradeTierRequest(BaseModel):
+    activation_code: str
+    email: Optional[str] = None
+    doctor_name: Optional[str] = None
 
 
 def ensure_user_subscription_is_active(user: models.User) -> None:
@@ -226,7 +233,15 @@ def register_user(register_request: RegisterRequest, db: Session = Depends(datab
     try:
         normalized_email = register_request.email.strip().lower()
         activation_code = register_request.activation_code.strip()
-        user_tier = "premium" if "-Y-" in activation_code.upper() else "standard"
+        user_tier = (
+            "premium"
+            if (
+                "-Y-" in activation_code.upper()
+                or "PREMIUM" in activation_code.upper()
+                or "VIP" in activation_code.upper()
+            )
+            else "standard"
+        )
 
         if not normalized_email:
             raise HTTPException(status_code=400, detail="البريد الإلكتروني مطلوب.")
@@ -307,6 +322,7 @@ def login_user(login_request: LoginRequest, db: Session = Depends(database.get_d
     return LoginResponse(
         token="secure-session-token",
         doctor_name=user.doctor_name,
+        email=user.email,
         tier=user.tier or "standard",
         subscription_active=True,
     )
@@ -350,9 +366,72 @@ def google_login(login_request: GoogleLoginRequest, db: Session = Depends(databa
     return LoginResponse(
         token="secure-session-token",
         doctor_name=user.doctor_name,
+        email=user.email,
         tier=user.tier or "standard",
         subscription_active=True,
     )
+
+
+@app.post("/api/auth/upgrade-tier")
+def upgrade_user_tier(upgrade_request: UpgradeTierRequest, db: Session = Depends(database.get_db)):
+    activation_code = upgrade_request.activation_code.strip()
+    normalized_email = (upgrade_request.email or "").strip().lower()
+    doctor_name = (upgrade_request.doctor_name or "").strip()
+
+    if not activation_code:
+        raise HTTPException(status_code=400, detail="كود الترقية مطلوب.")
+
+    activation_key = (
+        db.query(models.ActivationKey)
+        .filter(models.ActivationKey.key_code == activation_code)
+        .first()
+    )
+
+    if not activation_key or activation_key.is_used:
+        raise HTTPException(status_code=400, detail="كود الترقية غير صالح أو مستخدم مسبقاً.")
+
+    is_premium_key = (
+        activation_key.duration_days >= 365
+        or "PREMIUM" in activation_code.upper()
+        or "VIP" in activation_code.upper()
+    )
+    if not is_premium_key:
+        raise HTTPException(status_code=400, detail="هذا الكود لا يفعّل باقة Premium.")
+
+    user = None
+    if normalized_email:
+        user = db.query(models.User).filter(models.User.email == normalized_email).first()
+
+    if user is None and doctor_name:
+        user = db.query(models.User).filter(models.User.doctor_name == doctor_name).first()
+
+    if user is None:
+        raise HTTPException(status_code=404, detail="تعذر تحديد الحساب المطلوب ترقيته.")
+
+    now = datetime.utcnow()
+    base_date = user.subscription_expires_at if user.subscription_expires_at and user.subscription_expires_at > now else now
+
+    try:
+        user.tier = "premium"
+        user.subscription_expires_at = base_date + timedelta(days=activation_key.duration_days)
+        user.is_active = True
+
+        activation_key.is_used = True
+        activation_key.used_by_email = user.email
+
+        db.commit()
+        db.refresh(user)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر تنفيذ الترقية حالياً. حاول مرة أخرى.")
+
+    return {
+        "message": "تمت ترقية الحساب إلى Premium بنجاح.",
+        "doctor_name": user.doctor_name,
+        "email": user.email,
+        "tier": user.tier,
+        "subscription_expires_at": user.subscription_expires_at.isoformat() if user.subscription_expires_at else None,
+    }
 
 
 # 4. مسار إرسال (حفظ) مريض جديد في النظام [POST]

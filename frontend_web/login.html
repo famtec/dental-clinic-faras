@@ -201,9 +201,10 @@
       googleStatusHint.classList.remove('hidden');
     }
 
-    function persistLoginSession(data) {
+    function persistLoginSession(data, fallbackEmail = '') {
       const token = data?.token || data?.accessToken || data?.access_token || data?.authToken || data?.auth_token;
       const tier = (data?.tier || 'standard').toString().toLowerCase();
+      const resolvedEmail = String(data?.email || fallbackEmail || '').trim().toLowerCase();
 
       if (rememberMeCheckbox.checked) {
         localStorage.setItem('rememberMe', 'true');
@@ -217,6 +218,10 @@
 
       if (data?.doctor_name) {
         localStorage.setItem('doctor_name', data.doctor_name);
+      }
+
+      if (resolvedEmail) {
+        localStorage.setItem('user_email', resolvedEmail);
       }
 
       localStorage.setItem('user_tier', tier);
@@ -410,7 +415,7 @@
         }
 
         if (response.status === 200) {
-          persistLoginSession(data);
+          persistLoginSession(data, email);
 
           window.location.href = 'index.html';
           return;
