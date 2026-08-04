@@ -261,6 +261,16 @@
       });
     }
 
+    function isPatientMatch(patient, query) {
+      const normalizedQuery = (query || '').trim().toLowerCase();
+      if (!normalizedQuery) return false;
+
+      const fullName = (patient.full_name ?? '').toLowerCase();
+      const phone = (patient.phone ?? '').toLowerCase();
+      const medicalHistory = (patient.medical_history ?? '').toLowerCase();
+      return fullName.includes(normalizedQuery) || phone.includes(normalizedQuery) || medicalHistory.includes(normalizedQuery);
+    }
+
     async function deletePatient(patientId) {
       const confirmed = confirm('هل أنت متأكد من حذف هذا المريض نهائياً؟');
       if (!confirmed) return;
@@ -283,21 +293,25 @@
 
     function renderPatients(patients, query=""){
       const sourcePatients = Array.isArray(patients) ? patients : [];
-      const filteredPatients = filterPatients(sourcePatients, query);
+      const normalizedQuery = (query || '').trim();
+      const matchedCount = normalizedQuery
+        ? sourcePatients.filter((patient) => isPatientMatch(patient, normalizedQuery)).length
+        : sourcePatients.length;
 
       patientsTableBody.innerHTML = '';
-      if(!filteredPatients || filteredPatients.length === 0){
+      if(!sourcePatients || sourcePatients.length === 0){
         emptyFeedback.classList.remove('hidden');
-        emptyFeedback.textContent = query
-          ? 'لا توجد نتائج تطابق البحث.'
-          : 'لا يوجد مرضى حتى الآن. استخدم "إضافة مريض جديد" لبدء القائمة.';
+        emptyFeedback.textContent = 'لا يوجد مرضى حتى الآن. استخدم "إضافة مريض جديد" لبدء القائمة.';
         return;
       }
       emptyFeedback.classList.add('hidden');
 
-      filteredPatients.forEach(p => {
+      sourcePatients.forEach(p => {
         const tr = document.createElement('tr');
-        tr.className = 'block rounded-2xl border border-slate-200 bg-white p-2 shadow-sm transition hover:bg-slate-50 sm:table-row sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0';
+        const matched = isPatientMatch(p, normalizedQuery);
+        tr.className = matched
+          ? 'block rounded-2xl border border-emerald-300 bg-emerald-50 p-2 shadow-sm ring-2 ring-emerald-200 transition hover:bg-emerald-100 sm:table-row sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0'
+          : 'block rounded-2xl border border-slate-200 bg-white p-2 shadow-sm transition hover:bg-slate-50 sm:table-row sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0';
 
         tr.innerHTML = `
           <td class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-sm text-slate-600 last:border-b-0 sm:table-cell sm:border-b-0">
@@ -338,6 +352,11 @@
         `;
         patientsTableBody.appendChild(tr);
       });
+
+      if (normalizedQuery && matchedCount === 0) {
+        emptyFeedback.classList.remove('hidden');
+        emptyFeedback.textContent = 'لا توجد مطابقة لهذا البحث، لكن القائمة الكاملة ما زالت ظاهرة.';
+      }
     }
 
     // Simple HTML escape
