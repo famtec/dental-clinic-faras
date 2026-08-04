@@ -23,9 +23,6 @@ import uvicorn
 
 app = FastAPI(title="Dental Clinic API")
 
-# 1. تشغيل السيرفر وإنشاء الجداول تلقائياً عند الإقلاع
-database.init_db()
-
 UPLOADS_DIR = "uploads"
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 ARCHIVE_UPLOADS_DIR = os.path.join(UPLOADS_DIR, "patient_xrays")
@@ -95,7 +92,25 @@ def seed_default_activation_key() -> None:
         db.close()
 
 
-seed_default_activation_key()
+
+@app.on_event("startup")
+def on_startup() -> None:
+    models.Base.metadata.create_all(bind=database.engine)
+
+    migration_db = database.SessionLocal()
+    try:
+        migration_db.execute(
+            text("ALTER TABLE patients ADD COLUMN IF NOT EXISTS total_treatment_cost FLOAT DEFAULT 0.0;")
+        )
+        migration_db.commit()
+    except Exception:
+        migration_db.rollback()
+    finally:
+        migration_db.close()
+
+    # Keep legacy SQLite-safe migration checks for existing local environments.
+    database.init_db()
+    seed_default_activation_key()
 
 # 2. تفعيل نظام CORS للسماح لموقع الويب وتطبيق الأندرويد بالاتصال بالـ API دون قيود أمنية ومتصفح
 app.add_middleware(
