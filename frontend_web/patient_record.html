@@ -167,7 +167,7 @@
               <p id="patientName" class="mt-1 text-lg font-bold text-slate-800">—</p>
               <input id="patientNameInput" type="text" class="mt-2 hidden w-full rounded-2xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
             </div>
-            <div class="grid gap-4 sm:grid-cols-2">
+            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <div class="rounded-[24px] bg-slate-50/90 p-4">
                 <p class="text-sm text-slate-500">الهاتف</p>
                 <p id="patientPhone" class="mt-1 font-semibold text-slate-800">—</p>
@@ -177,6 +177,11 @@
                 <p class="text-sm text-slate-500">العمر</p>
                 <p id="patientAge" class="mt-1 font-semibold text-slate-800">—</p>
                 <input id="patientAgeInput" type="number" min="0" class="mt-2 hidden w-full rounded-2xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" readonly disabled />
+              </div>
+              <div class="rounded-[24px] border border-amber-100 bg-amber-50/80 p-4">
+                <p class="text-sm text-amber-700">إجمالي تكلفة العلاج الكلية (ل.س)</p>
+                <p id="patientTotalTreatmentCost" class="mt-1 font-extrabold text-amber-800">0.00 ل.س</p>
+                <input id="patientTotalTreatmentCostInput" type="number" min="0" step="0.01" class="mt-2 hidden w-full rounded-2xl border border-amber-200 bg-white px-3 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-amber-400 focus:ring-4 focus:ring-amber-100" />
               </div>
             </div>
             <div class="rounded-[24px] bg-slate-50/90 p-4">
@@ -228,6 +233,11 @@
                     </tbody>
                   </table>
                 </div>
+              </div>
+              <div class="mt-4">
+                <span id="remainingBalanceBadge" class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-extrabold text-amber-700 shadow-sm">
+                  المتبقي بذمة المريض الحالي: 0.00 ل.س
+                </span>
               </div>
             </div>
 
@@ -1272,6 +1282,63 @@
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       }).format(amount);
+    }
+
+    function parseCurrencyNumber(value) {
+      const normalized = String(value ?? '').replace(/,/g, '').trim();
+      const parsed = Number(normalized);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function getCurrentTotalTreatmentCost() {
+      if (!currentPatient) return 0;
+      return Math.max(parseCurrencyNumber(currentPatient.total_treatment_cost), 0);
+    }
+
+    function getTotalReceivedPayments() {
+      if (!Array.isArray(currentFinanceLedger) || currentFinanceLedger.length === 0) return 0;
+      return currentFinanceLedger.reduce((sum, record) => {
+        const amount = parseCurrencyNumber(record?.amount);
+        return sum + (amount > 0 ? amount : 0);
+      }, 0);
+    }
+
+    function renderTotalTreatmentCostDisplay() {
+      const costDisplay = document.getElementById('patientTotalTreatmentCost');
+      const costInput = document.getElementById('patientTotalTreatmentCostInput');
+      const totalCost = getCurrentTotalTreatmentCost();
+      if (costDisplay) {
+        costDisplay.textContent = `${formatFinanceAmount(totalCost)} ل.س`;
+      }
+      if (costInput && !isEditing) {
+        costInput.value = totalCost > 0 ? String(totalCost) : '';
+      }
+    }
+
+    function renderRemainingBalanceBadge() {
+      const badge = document.getElementById('remainingBalanceBadge');
+      if (!badge) return;
+
+      const totalCost = getCurrentTotalTreatmentCost();
+      const totalReceived = getTotalReceivedPayments();
+      const remaining = Math.max(totalCost - totalReceived, 0);
+
+      badge.textContent = `المتبقي بذمة المريض الحالي: ${formatFinanceAmount(remaining)} ل.س`;
+
+      badge.classList.remove(
+        'border-amber-200',
+        'bg-amber-50',
+        'text-amber-700',
+        'border-emerald-200',
+        'bg-emerald-50',
+        'text-emerald-700',
+      );
+
+      if (remaining > 0) {
+        badge.classList.add('border-amber-200', 'bg-amber-50', 'text-amber-700');
+      } else {
+        badge.classList.add('border-emerald-200', 'bg-emerald-50', 'text-emerald-700');
+      }
     }
 
     function createMedicalToast(message) {
@@ -2322,8 +2389,9 @@
       tableBody.querySelectorAll('[data-finance-row="1"]').forEach((row) => row.remove());
 
       const safeRecords = Array.isArray(records) ? records : [];
-  currentFinanceLedger = safeRecords.map((record) => ({ ...record }));
+      currentFinanceLedger = safeRecords.map((record) => ({ ...record }));
       updateFinanceLedgerCount(safeRecords.length);
+      renderRemainingBalanceBadge();
 
       if (safeRecords.length === 0) {
         if (emptyState) emptyState.classList.remove('hidden');
@@ -2360,6 +2428,7 @@
       const totalRows = tableBody.querySelectorAll('[data-finance-row="1"]').length;
       updateFinanceLedgerCount(totalRows);
       currentFinanceLedger = [record, ...currentFinanceLedger];
+      renderRemainingBalanceBadge();
       attachFinanceRowListeners();
     }
 
@@ -2436,6 +2505,8 @@
       window.setTimeout(() => {
         row.style.backgroundColor = '';
       }, 320);
+
+      renderRemainingBalanceBadge();
     }
 
     async function submitFinanceEdit(event) {
@@ -2728,10 +2799,12 @@
       const patientName = document.getElementById('patientName');
       const patientPhone = document.getElementById('patientPhone');
       const patientAge = document.getElementById('patientAge');
+      const patientTotalTreatmentCost = document.getElementById('patientTotalTreatmentCost');
       const patientHistory = document.getElementById('patientHistory');
       const patientNameInput = document.getElementById('patientNameInput');
       const patientPhoneInput = document.getElementById('patientPhoneInput');
       const patientAgeInput = document.getElementById('patientAgeInput');
+      const patientTotalTreatmentCostInput = document.getElementById('patientTotalTreatmentCostInput');
       const patientHistoryInput = document.getElementById('patientHistoryInput');
 
       if (editBtn) editBtn.classList.toggle('hidden', editing);
@@ -2740,10 +2813,12 @@
       if (patientName) patientName.classList.toggle('hidden', editing);
       if (patientPhone) patientPhone.classList.toggle('hidden', editing);
       if (patientAge) patientAge.classList.toggle('hidden', editing);
+      if (patientTotalTreatmentCost) patientTotalTreatmentCost.classList.toggle('hidden', editing);
       if (patientHistory) patientHistory.classList.toggle('hidden', editing);
       if (patientNameInput) patientNameInput.classList.toggle('hidden', !editing);
       if (patientPhoneInput) patientPhoneInput.classList.toggle('hidden', !editing);
       if (patientAgeInput) patientAgeInput.classList.toggle('hidden', !editing);
+      if (patientTotalTreatmentCostInput) patientTotalTreatmentCostInput.classList.toggle('hidden', !editing);
       if (patientHistoryInput) patientHistoryInput.classList.toggle('hidden', !editing);
 
       if (patientAgeInput) {
@@ -2763,6 +2838,10 @@
           const currentAge = Number.isInteger(currentPatient.age) ? currentPatient.age : fallbackAge;
           patientAgeInput.value = currentAge != null ? String(currentAge) : '';
         }
+        if (patientTotalTreatmentCostInput) {
+          const costValue = Math.max(parseCurrencyNumber(currentPatient.total_treatment_cost), 0);
+          patientTotalTreatmentCostInput.value = costValue > 0 ? String(costValue) : '';
+        }
         if (patientHistoryInput) patientHistoryInput.value = currentPatient.medical_history || '';
       }
     }
@@ -2774,6 +2853,7 @@
       const patientNameInput = document.getElementById('patientNameInput');
       const patientPhoneInput = document.getElementById('patientPhoneInput');
       const patientAgeInput = document.getElementById('patientAgeInput');
+      const patientTotalTreatmentCostInput = document.getElementById('patientTotalTreatmentCostInput');
       const patientHistoryInput = document.getElementById('patientHistoryInput');
 
       const ageInputValue = patientAgeInput ? patientAgeInput.value.trim() : '';
@@ -2783,11 +2863,19 @@
         return;
       }
 
+      const totalTreatmentCostInputValue = patientTotalTreatmentCostInput ? patientTotalTreatmentCostInput.value.trim() : '';
+      const parsedTotalTreatmentCost = parseCurrencyNumber(totalTreatmentCostInputValue || currentPatient.total_treatment_cost);
+      if (parsedTotalTreatmentCost < 0) {
+        alert('يرجى إدخال تكلفة علاج صحيحة.');
+        return;
+      }
+
       const payload = {
         full_name: patientNameInput ? patientNameInput.value.trim() : currentPatient.full_name,
         phone: patientPhoneInput ? patientPhoneInput.value.trim() : currentPatient.phone,
         age: ageInputValue ? parsedAge : null,
         medical_history: patientHistoryInput ? patientHistoryInput.value.trim() : currentPatient.medical_history,
+        total_treatment_cost: parsedTotalTreatmentCost,
       };
 
       try {
@@ -2807,6 +2895,7 @@
         const patientName = document.getElementById('patientName');
         const patientPhone = document.getElementById('patientPhone');
         const patientAge = document.getElementById('patientAge');
+        const patientTotalTreatmentCost = document.getElementById('patientTotalTreatmentCost');
         const patientHistory = document.getElementById('patientHistory');
 
         if (patientName) patientName.textContent = updatedPatient.full_name || '—';
@@ -2821,8 +2910,12 @@
           patientAgeInput.disabled = true;
           patientAgeInput.setAttribute('readonly', 'readonly');
         }
+        if (patientTotalTreatmentCost) {
+          patientTotalTreatmentCost.textContent = `${formatFinanceAmount(Math.max(parseCurrencyNumber(updatedPatient.total_treatment_cost), 0))} ل.س`;
+        }
         if (patientHistory) patientHistory.textContent = updatedPatient.medical_history || 'لا توجد ملاحظات طبية متاحة.';
 
+        renderRemainingBalanceBadge();
         toggleProfileEditMode(false);
         showToast('تم حفظ التحديثات بنجاح');
       } catch (error) {
@@ -2873,7 +2966,10 @@
         patientName.textContent = patient.full_name || '—';
         patientPhone.textContent = patient.phone || '—';
         patientAge.textContent = patient.age ?? calculateAge(patient.birth_date);
+        renderTotalTreatmentCostDisplay();
+        renderRemainingBalanceBadge();
         const patientAgeInput = document.getElementById('patientAgeInput');
+        const patientTotalTreatmentCostInput = document.getElementById('patientTotalTreatmentCostInput');
         if (patientAgeInput) {
           const ageValue = Number.isInteger(patient.age)
             ? patient.age
@@ -2881,6 +2977,10 @@
           patientAgeInput.value = ageValue != null ? String(ageValue) : '';
           patientAgeInput.disabled = true;
           patientAgeInput.setAttribute('readonly', 'readonly');
+        }
+        if (patientTotalTreatmentCostInput) {
+          const costValue = Math.max(parseCurrencyNumber(patient.total_treatment_cost), 0);
+          patientTotalTreatmentCostInput.value = costValue > 0 ? String(costValue) : '';
         }
         patientHistory.textContent = patient.medical_history || 'لا توجد ملاحظات طبية متاحة.';
         if (chartSceneHint) {

@@ -116,6 +116,7 @@ class PatientCreate(BaseModel):
     birth_date: date = None
     gender: str = None
     medical_history: Optional[str] = None
+    total_treatment_cost: float = 0.0
 
 
 class PatientUpdate(BaseModel):
@@ -123,6 +124,7 @@ class PatientUpdate(BaseModel):
     full_name: Optional[str] = None
     phone: Optional[str] = None
     medical_history: Optional[str] = None
+    total_treatment_cost: Optional[float] = None
 
 
 class PatientChartUpdate(BaseModel):
@@ -653,7 +655,8 @@ def create_patient(
         phone=patient.phone,
         birth_date=patient.birth_date if patient.birth_date else None,
         gender=patient.gender if patient.gender else "Male",
-        medical_history=patient.medical_history
+        medical_history=patient.medical_history,
+        total_treatment_cost=float(patient.total_treatment_cost or 0.0),
     )
     db.add(db_patient)
     db.commit()
@@ -718,6 +721,8 @@ def update_patient(patient_id: int, patient_update: PatientUpdate, db: Session =
             patient.phone = patient_update.phone
         if patient_update.medical_history is not None:
             patient.medical_history = patient_update.medical_history
+        if patient_update.total_treatment_cost is not None:
+            patient.total_treatment_cost = max(float(patient_update.total_treatment_cost), 0.0)
 
         db.commit()
         db.refresh(patient)
@@ -1071,15 +1076,29 @@ def get_patient_stats(
 
     pending_balances = Decimal("0.00")
     if patient_ids:
-        visits = (
-            db.query(models.Visit)
-            .filter(models.Visit.patient_id.in_(patient_ids))
+        income_rows = (
+            db.query(
+                models.FinancialTransaction.patient_id,
+                func.coalesce(func.sum(models.FinancialTransaction.amount), 0).label("total_income"),
+            )
+            .filter(models.FinancialTransaction.patient_id.in_(patient_ids))
+            .filter(models.FinancialTransaction.type == "income")
+            .group_by(models.FinancialTransaction.patient_id)
             .all()
         )
-        for visit in visits:
-            total_cost = Decimal(str(visit.total_cost or 0))
-            amount_paid = Decimal(str(visit.amount_paid or 0))
-            remaining_balance = total_cost - amount_paid
+        income_by_patient_id = {
+            patient_id: Decimal(str(total_income or 0))
+            for patient_id, total_income in income_rows
+            if patient_id is not None
+        }
+
+        for patient in patients:
+            total_treatment_cost = Decimal(str(getattr(patient, "total_treatment_cost", 0) or 0))
+            if total_treatment_cost < 0:
+                total_treatment_cost = Decimal("0")
+
+            total_received = income_by_patient_id.get(patient.id, Decimal("0"))
+            remaining_balance = total_treatment_cost - total_received
             if remaining_balance > 0:
                 pending_balances += remaining_balance
 

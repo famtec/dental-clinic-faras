@@ -26,6 +26,9 @@ def init_db():
             if "doctor_name" not in columns:
                 with engine.begin() as connection:
                     connection.execute(text("ALTER TABLE patients ADD COLUMN doctor_name VARCHAR"))
+            if "total_treatment_cost" not in columns:
+                with engine.begin() as connection:
+                    connection.execute(text("ALTER TABLE patients ADD COLUMN total_treatment_cost FLOAT NOT NULL DEFAULT 0.0"))
             if "chart_state" not in columns:
                 with engine.begin() as connection:
                     connection.execute(text("ALTER TABLE patients ADD COLUMN chart_state TEXT"))
