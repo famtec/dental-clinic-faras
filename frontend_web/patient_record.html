@@ -31,6 +31,26 @@
     .modal-pop {
       animation: financeToastIn 220ms ease-out;
     }
+    #prescriptionPrintTemplate {
+      display: none;
+    }
+    @media print {
+      body * {
+        visibility: hidden !important;
+      }
+      #prescriptionPrintTemplate,
+      #prescriptionPrintTemplate * {
+        visibility: visible !important;
+      }
+      #prescriptionPrintTemplate {
+        display: block !important;
+        position: absolute;
+        inset: 0;
+        background: #ffffff;
+        color: #0f172a;
+        padding: 22px;
+      }
+    }
   </style>
 </head>
 <body class="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.22),_transparent_30%),linear-gradient(135deg,_#f8fafc_0%,_#eef2ff_45%,_#e0e7ff_100%)] text-slate-800">
@@ -39,7 +59,7 @@
     <div class="absolute left-[8%] top-[30%] h-56 w-56 rounded-full bg-violet-200/20 blur-3xl"></div>
   </div>
 
-  <div class="relative mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
+  <div id="patientRecordApp" class="relative mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
     <header class="panel-soft mb-6 rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/80">
       <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
@@ -198,6 +218,54 @@
                 </div>
               </div>
             </div>
+
+            <div class="mt-4 rounded-[24px] border border-violet-100 bg-violet-50/70 p-4 sm:p-5">
+              <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h3 class="text-lg font-extrabold text-violet-900">الوصفات الطبية</h3>
+                  <p class="mt-1 text-xs text-violet-700/80">أصدر وصفة جديدة للمريض واحتفظ بسجلها مع إمكانية الطباعة الفورية.</p>
+                </div>
+                <span id="prescriptionCountBadge" class="rounded-full bg-white/80 px-3 py-1 text-xs font-semibold text-violet-700">0 وصفة</span>
+              </div>
+
+              <form id="prescriptionForm" class="rounded-[22px] border border-violet-200 bg-white/85 p-4">
+                <div class="grid gap-3">
+                  <label class="block">
+                    <span class="mb-1 block text-xs font-semibold text-slate-700">الأدوية والمستحضرات</span>
+                    <textarea id="prescriptionMedicationsInput" rows="3" required placeholder="مثال: Amoxicillin 500mg, Paracetamol 500mg" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100"></textarea>
+                  </label>
+                  <label class="block">
+                    <span class="mb-1 block text-xs font-semibold text-slate-700">التعليمات والجرعات</span>
+                    <textarea id="prescriptionInstructionsInput" rows="3" required placeholder="مثال: حبة كل 8 ساعات بعد الطعام" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100"></textarea>
+                  </label>
+                </div>
+                <div class="mt-3 flex justify-end">
+                  <button id="prescriptionSubmitBtn" type="submit" class="rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 px-5 py-3 text-sm font-extrabold text-white shadow-lg shadow-violet-300/40 transition hover:-translate-y-0.5 hover:from-indigo-700 hover:via-violet-700 hover:to-purple-700">
+                    إصدار وحفظ الوصفة 📝
+                  </button>
+                </div>
+              </form>
+
+              <div class="mt-4 overflow-hidden rounded-[20px] border border-violet-200 bg-white">
+                <div class="max-h-[280px] overflow-auto">
+                  <table class="min-w-full border-collapse text-right">
+                    <thead class="sticky top-0 z-10 bg-violet-50/95 backdrop-blur">
+                      <tr class="border-b border-violet-100 text-sm text-violet-800">
+                        <th class="px-4 py-3 font-semibold">التاريخ</th>
+                        <th class="px-4 py-3 font-semibold">الأدوية</th>
+                        <th class="px-4 py-3 font-semibold">التعليمات</th>
+                        <th class="px-4 py-3 font-semibold">الإجراء</th>
+                      </tr>
+                    </thead>
+                    <tbody id="prescriptionsTableBody" class="divide-y divide-violet-100 bg-white text-sm text-slate-700">
+                      <tr id="prescriptionsEmptyState">
+                        <td colspan="4" class="px-4 py-6 text-center text-slate-500">لا توجد وصفات طبية مسجلة لهذا المريض حتى الآن.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -248,6 +316,41 @@
       </p>
     </footer>
   </div>
+
+  <section id="prescriptionPrintTemplate" aria-hidden="true">
+    <div class="mx-auto max-w-[800px] rounded-[24px] border border-indigo-200 bg-white p-6">
+      <div class="border-b border-indigo-100 pb-4">
+        <div class="flex items-center justify-between gap-4">
+          <div class="flex items-center gap-3">
+            <img src="logo.png" alt="شعار العيادة" class="h-16 w-16 rounded-xl border border-indigo-100 object-contain p-2" />
+            <div>
+              <p class="text-xs font-semibold tracking-[0.2em] text-indigo-600">PRESCRIPTION LETTER</p>
+              <h2 id="printClinicName" class="mt-1 text-2xl font-extrabold text-indigo-900">عيادتي الرقمية</h2>
+            </div>
+          </div>
+          <div class="text-right text-sm text-slate-600">
+            <p><span class="font-semibold text-slate-800">اسم المريض:</span> <span id="printPatientName">—</span></p>
+            <p class="mt-1"><span class="font-semibold text-slate-800">التاريخ:</span> <span id="printPrescriptionDate">—</span></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-5 space-y-5">
+        <div class="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4">
+          <p class="text-sm font-bold text-indigo-900">الأدوية والمستحضرات</p>
+          <p id="printMedications" class="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-700">—</p>
+        </div>
+        <div class="rounded-2xl border border-violet-100 bg-violet-50/50 p-4">
+          <p class="text-sm font-bold text-violet-900">التعليمات والجرعات</p>
+          <p id="printInstructions" class="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-700">—</p>
+        </div>
+      </div>
+
+      <div class="mt-8 border-t border-dashed border-slate-300 pt-5 text-center">
+        <p class="text-xs font-mono tracking-wide text-indigo-700">تطوير وإدارة: المهندس فارس حلاوي © 2026</p>
+      </div>
+    </div>
+  </section>
 
   <div id="toothStatusModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
     <div class="modal-pop w-full max-w-md rounded-[28px] border border-white/20 bg-white p-5 shadow-2xl shadow-slate-950/50 sm:p-6">
@@ -395,6 +498,7 @@
     const APPOINTMENT_DELETE_BASE_URL = 'https://dental-clinic-faras.onrender.com';
     const APPOINTMENT_CREATE_BASE_URL = 'https://dental-clinic-faras.onrender.com';
     const FINANCE_UPDATE_BASE_URL = 'https://dental-clinic-faras.onrender.com';
+    const PRESCRIPTION_BASE_URL = window.DENTAL_APP_CONFIG?.apiBaseUrl || 'https://dental-clinic-faras.onrender.com';
     const TOOTH_STATUS_OPTIONS = {
       decay: { label: 'تسوس', color: '#ef4444', metalness: 0.08, roughness: 0.42 },
       filling: { label: 'حشوة', color: '#3b82f6', metalness: 0.12, roughness: 0.36 },
@@ -442,6 +546,7 @@
     let financeEditModalCloseTimer = null;
     let deleteConfirmModalCloseTimer = null;
     let pendingDeleteAction = null;
+    let currentPrescriptions = [];
     let tooltipHoverMesh = null;
 
     function getAppointmentUpdateEndpoint(appointmentId) {
@@ -462,6 +567,14 @@
 
     function getFinanceTransactionDeleteEndpoint(transactionId) {
       return `${FINANCE_UPDATE_BASE_URL}/api/finance/transaction/${encodeURIComponent(String(transactionId))}`;
+    }
+
+    function getPrescriptionCreateEndpoint() {
+      return `${PRESCRIPTION_BASE_URL}/api/prescriptions`;
+    }
+
+    function getPatientPrescriptionsEndpoint(patientId) {
+      return `${PRESCRIPTION_BASE_URL}/api/prescriptions/patient/${encodeURIComponent(String(patientId))}`;
     }
 
     function openDeleteConfirmModal({ title, message, action }) {
@@ -983,6 +1096,184 @@
       document.body.appendChild(toast);
 
       setTimeout(() => toast.remove(), 2400);
+    }
+
+    function updatePrescriptionCount(count) {
+      const countBadge = document.getElementById('prescriptionCountBadge');
+      if (!countBadge) return;
+      countBadge.textContent = `${count} وصفة`;
+    }
+
+    function formatPrescriptionCreatedAt(value) {
+      if (!value) return 'تاريخ غير متاح';
+      const dt = new Date(value);
+      if (Number.isNaN(dt.getTime())) return 'تاريخ غير متاح';
+      return dt.toLocaleString('ar-EG', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: false,
+      });
+    }
+
+    function createPrescriptionRow(record) {
+      const row = document.createElement('tr');
+      row.setAttribute('data-prescription-row', '1');
+      row.setAttribute('data-prescription-id', String(record?.id ?? ''));
+      row.className = 'transition hover:bg-violet-50/40';
+
+      const createdAt = formatPrescriptionCreatedAt(record?.created_at);
+      const medications = String(record?.medications || '—');
+      const instructions = String(record?.instructions || '—');
+
+      row.innerHTML = `
+        <td class="px-4 py-3 align-top text-slate-600">${escapeHtml(createdAt)}</td>
+        <td class="px-4 py-3 align-top leading-7 text-slate-700">${escapeHtml(medications)}</td>
+        <td class="px-4 py-3 align-top leading-7 text-slate-700">${escapeHtml(instructions)}</td>
+        <td class="px-4 py-3 align-top">
+          <button type="button" data-print-prescription-id="${escapeHtml(record?.id)}" class="print-prescription-btn rounded-xl border border-sky-300 bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-2 text-xs font-extrabold text-white shadow-md shadow-sky-300/40 transition hover:from-sky-600 hover:to-blue-700">
+            طباعة 🖨️
+          </button>
+        </td>
+      `;
+      return row;
+    }
+
+    function populatePrescriptionPrintTemplate(record) {
+      const clinicNameEl = document.getElementById('printClinicName');
+      const patientNameEl = document.getElementById('printPatientName');
+      const dateEl = document.getElementById('printPrescriptionDate');
+      const medicationsEl = document.getElementById('printMedications');
+      const instructionsEl = document.getElementById('printInstructions');
+
+      const savedDoctorName = localStorage.getItem('doctor_name');
+      const clinicName = savedDoctorName ? `عيادة ${savedDoctorName}` : 'عيادتي الرقمية';
+      const patientName = String(currentPatient?.full_name || document.getElementById('patientName')?.textContent || '—').trim() || '—';
+
+      if (clinicNameEl) clinicNameEl.textContent = clinicName;
+      if (patientNameEl) patientNameEl.textContent = patientName;
+      if (dateEl) dateEl.textContent = formatPrescriptionCreatedAt(record?.created_at || new Date().toISOString());
+      if (medicationsEl) medicationsEl.textContent = String(record?.medications || '—');
+      if (instructionsEl) instructionsEl.textContent = String(record?.instructions || '—');
+    }
+
+    function printPrescriptionById(prescriptionId) {
+      const selected = currentPrescriptions.find((item) => String(item.id) === String(prescriptionId));
+      if (!selected) {
+        createMedicalToast('تعذر قراءة بيانات الوصفة للطباعة.');
+        return;
+      }
+
+      populatePrescriptionPrintTemplate(selected);
+      requestAnimationFrame(() => {
+        window.print();
+      });
+    }
+
+    function attachPrescriptionRowListeners() {
+      const tableBody = document.getElementById('prescriptionsTableBody');
+      if (!tableBody) return;
+
+      tableBody.querySelectorAll('.print-prescription-btn').forEach((button) => {
+        button.addEventListener('click', () => {
+          const prescriptionId = button.getAttribute('data-print-prescription-id');
+          if (!prescriptionId) return;
+          printPrescriptionById(prescriptionId);
+        });
+      });
+    }
+
+    function renderPrescriptions(records) {
+      const tableBody = document.getElementById('prescriptionsTableBody');
+      const emptyState = document.getElementById('prescriptionsEmptyState');
+      if (!tableBody) return;
+
+      tableBody.querySelectorAll('[data-prescription-row="1"]').forEach((row) => row.remove());
+
+      const safeRecords = Array.isArray(records) ? records : [];
+      currentPrescriptions = safeRecords.map((record) => ({ ...record }));
+      updatePrescriptionCount(safeRecords.length);
+
+      if (safeRecords.length === 0) {
+        if (emptyState) emptyState.classList.remove('hidden');
+        return;
+      }
+
+      if (emptyState) emptyState.classList.add('hidden');
+      safeRecords.forEach((record) => {
+        const row = createPrescriptionRow(record);
+        tableBody.appendChild(row);
+      });
+
+      attachPrescriptionRowListeners();
+    }
+
+    async function loadPatientPrescriptions() {
+      const patientId = getPatientIdFromUrl();
+      if (!patientId) return;
+
+      try {
+        const response = await fetch(getPatientPrescriptionsEndpoint(patientId));
+        if (!response.ok) {
+          throw new Error('Failed to load prescriptions');
+        }
+
+        const records = await response.json();
+        renderPrescriptions(records);
+      } catch (error) {
+        renderPrescriptions([]);
+      }
+    }
+
+    async function submitPrescriptionForm(event) {
+      event.preventDefault();
+
+      const patientId = getPatientIdFromUrl();
+      const medicationsInput = document.getElementById('prescriptionMedicationsInput');
+      const instructionsInput = document.getElementById('prescriptionInstructionsInput');
+      const submitButton = document.getElementById('prescriptionSubmitBtn');
+      if (!patientId || !medicationsInput || !instructionsInput || !submitButton) return;
+
+      const medications = medicationsInput.value.trim();
+      const instructions = instructionsInput.value.trim();
+
+      if (!medications || !instructions) {
+        createMedicalToast('يرجى إدخال الأدوية والتعليمات قبل حفظ الوصفة.');
+        return;
+      }
+
+      submitButton.disabled = true;
+      submitButton.textContent = '...جاري الحفظ';
+
+      try {
+        const response = await fetch(getPrescriptionCreateEndpoint(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            patient_id: Number(patientId),
+            medications,
+            instructions,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText || 'تعذر حفظ الوصفة الطبية.');
+        }
+
+        medicationsInput.value = '';
+        instructionsInput.value = '';
+        createMedicalToast('تم إصدار وحفظ الوصفة الطبية بنجاح 📝');
+        await loadPatientPrescriptions();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'تعذر حفظ الوصفة الطبية حالياً.';
+        createMedicalToast(message);
+      } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = 'إصدار وحفظ الوصفة 📝';
+      }
     }
 
     function initDentalChart() {
@@ -2342,12 +2633,17 @@
     if (xrayUploadForm) {
       xrayUploadForm.addEventListener('submit', uploadPatientXRay);
     }
+    const prescriptionForm = document.getElementById('prescriptionForm');
+    if (prescriptionForm) {
+      prescriptionForm.addEventListener('submit', submitPrescriptionForm);
+    }
 
     window.addEventListener('DOMContentLoaded', () => {
       initDentalChart();
       loadPatientRecord();
       loadPatientXRayGallery();
       loadFinanceLedger();
+      loadPatientPrescriptions();
     });
   </script>
 </body>

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -248,6 +248,37 @@ class FinancialTransactionUpdate(BaseModel):
     description: str
 
 
+class PrescriptionCreate(BaseModel):
+    patient_id: int
+    medications: str
+    instructions: str
+
+
+class PrescriptionResponse(BaseModel):
+    id: int
+    patient_id: int
+    medications: str
+    instructions: str
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InventoryItemCreate(BaseModel):
+    item_name: str
+    quantity: int
+    min_alert_quantity: int = 5
+
+
+class InventoryItemResponse(BaseModel):
+    id: int
+    doctor_email: str
+    item_name: str
+    quantity: int
+    min_alert_quantity: int
+    updated_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
 class PatientXRayResponse(BaseModel):
     id: int
     patient_id: int
@@ -324,6 +355,25 @@ def ensure_user_subscription_is_active(user: models.User) -> None:
             status_code=403,
             detail="عذراً، انتهت مدة الاشتراك السنوية. يرجى التواصل مع المهندس فارس حلاوي للتجديد ودفع الاشتراك.",
         )
+
+
+def require_premium_user_by_email(db: Session, doctor_email: str | None) -> models.User:
+    normalized_email = (doctor_email or "").strip().lower()
+    if not normalized_email:
+        raise HTTPException(status_code=401, detail="Doctor email header is required")
+
+    user = db.query(models.User).filter(models.User.email == normalized_email).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    if user.tier != "premium":
+        raise HTTPException(
+            status_code=403,
+            detail="هذه الميزة المحاسبية المتقدمة لإدارة المستودع متاحة حصرياً للباقة الفخمة (Premium).",
+        )
+
+    ensure_user_subscription_is_active(user)
+    return user
 
 
 @app.get("/health")
@@ -950,6 +1000,93 @@ def delete_financial_transaction(
         raise HTTPException(status_code=400, detail="تعذر حذف الدفعة المالية حالياً. حاول مرة أخرى.")
 
     return {"message": "تم حذف الدفعة المالية بنجاح"}
+
+
+@app.post("/api/prescriptions", response_model=PrescriptionResponse, status_code=201)
+def create_prescription(prescription: PrescriptionCreate, db: Session = Depends(database.get_db)):
+    patient = db.query(models.Patient).filter(models.Patient.id == prescription.patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    medications_value = (prescription.medications or "").strip()
+    instructions_value = (prescription.instructions or "").strip()
+    if not medications_value or not instructions_value:
+        raise HTTPException(status_code=400, detail="Medications and instructions are required")
+
+    try:
+        db_prescription = models.Prescription(
+            patient_id=prescription.patient_id,
+            medications=medications_value,
+            instructions=instructions_value,
+        )
+        db.add(db_prescription)
+        db.commit()
+        db.refresh(db_prescription)
+        return db_prescription
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر حفظ الوصفة الطبية حالياً. حاول مرة أخرى.")
+
+
+@app.get("/api/prescriptions/patient/{patient_id}", response_model=List[PrescriptionResponse])
+def get_patient_prescriptions(patient_id: int, db: Session = Depends(database.get_db)):
+    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    return (
+        db.query(models.Prescription)
+        .filter(models.Prescription.patient_id == patient_id)
+        .order_by(models.Prescription.created_at.desc())
+        .all()
+    )
+
+
+@app.post("/api/inventory", response_model=InventoryItemResponse, status_code=201)
+def create_inventory_item(
+    item: InventoryItemCreate,
+    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    db: Session = Depends(database.get_db),
+):
+    user = require_premium_user_by_email(db, doctor_email)
+
+    item_name = (item.item_name or "").strip()
+    if not item_name:
+        raise HTTPException(status_code=400, detail="اسم المادة مطلوب")
+    if item.quantity < 0:
+        raise HTTPException(status_code=400, detail="الكمية يجب أن تكون صفراً أو أكثر")
+    if item.min_alert_quantity < 0:
+        raise HTTPException(status_code=400, detail="حد التنبيه الأدنى يجب أن يكون صفراً أو أكثر")
+
+    try:
+        db_item = models.InventoryItem(
+            doctor_email=user.email,
+            item_name=item_name,
+            quantity=item.quantity,
+            min_alert_quantity=item.min_alert_quantity,
+        )
+        db.add(db_item)
+        db.commit()
+        db.refresh(db_item)
+        return db_item
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر حفظ مادة المستودع حالياً. حاول مرة أخرى.")
+
+
+@app.get("/api/inventory", response_model=List[InventoryItemResponse])
+def get_inventory_items(
+    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    db: Session = Depends(database.get_db),
+):
+    user = require_premium_user_by_email(db, doctor_email)
+
+    return (
+        db.query(models.InventoryItem)
+        .filter(models.InventoryItem.doctor_email == user.email)
+        .order_by(models.InventoryItem.updated_at.desc(), models.InventoryItem.id.desc())
+        .all()
+    )
 
 
 @app.get("/api/patients/{patient_id}/treatments", response_model=List[TreatmentResponse])
