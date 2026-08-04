@@ -94,18 +94,20 @@
               <div class="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold tracking-[0.18em] text-white/90 backdrop-blur">3D DENTAL ATLAS</div>
               <div id="chartSceneHint" class="rounded-full border border-cyan-300/20 bg-cyan-400/15 px-3 py-1 text-xs font-semibold text-cyan-100 backdrop-blur">انقر على أي سن لتعديل حالته</div>
             </div>
-            <div class="pointer-events-none absolute inset-x-4 bottom-4 grid gap-2 sm:grid-cols-3">
-              <div class="rounded-2xl border border-white/10 bg-white/10 px-3 py-3 text-white/90 backdrop-blur">
-                <p class="text-xs text-slate-200/80">الحالة الحمراء</p>
-                <p class="mt-1 text-sm font-bold">تسوس</p>
-              </div>
-              <div class="rounded-2xl border border-white/10 bg-white/10 px-3 py-3 text-white/90 backdrop-blur">
-                <p class="text-xs text-slate-200/80">الحالة الزرقاء</p>
-                <p class="mt-1 text-sm font-bold">حشوة</p>
-              </div>
-              <div class="rounded-2xl border border-white/10 bg-white/10 px-3 py-3 text-white/90 backdrop-blur">
-                <p class="text-xs text-slate-200/80">الحالة الرمادية</p>
-                <p class="mt-1 text-sm font-bold">مخلوع</p>
+            <div class="pointer-events-none absolute right-4 top-4 z-10">
+              <div class="inline-flex flex-wrap items-center gap-2 rounded-full border border-white/10 bg-slate-950/55 px-3 py-2 text-white shadow-[0_0_24px_rgba(15,23,42,0.22)] backdrop-blur-md">
+                <span class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-white/90">
+                  <span class="h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_12px_rgba(239,68,68,0.7)]"></span>
+                  تسوس
+                </span>
+                <span class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-white/90">
+                  <span class="h-2.5 w-2.5 rounded-full bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.7)]"></span>
+                  حشوة تجميلية
+                </span>
+                <span class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-white/90">
+                  <span class="h-2.5 w-2.5 rounded-full bg-slate-400 shadow-[0_0_10px_rgba(148,163,184,0.7)]"></span>
+                  مخلوع / زراعة
+                </span>
               </div>
             </div>
           </div>
@@ -946,31 +948,46 @@
 
     function createToothNumberSprite(labelValue) {
       const canvas = document.createElement('canvas');
-      canvas.width = 256;
-      canvas.height = 256;
+      canvas.width = 192;
+      canvas.height = 192;
       const context = canvas.getContext('2d');
       if (!context) return null;
 
       context.clearRect(0, 0, canvas.width, canvas.height);
+      context.fillStyle = 'rgba(15, 23, 42, 0.72)';
+      context.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+      context.lineWidth = 3;
+      const radius = 24;
+      const width = 132;
+      const height = 38;
+      const x = (canvas.width - width) / 2;
+      const y = (canvas.height - height) / 2;
       context.beginPath();
-      context.arc(128, 128, 86, 0, Math.PI * 2);
-      context.fillStyle = 'rgba(15, 23, 42, 0.65)';
+      context.moveTo(x + radius, y);
+      context.lineTo(x + width - radius, y);
+      context.quadraticCurveTo(x + width, y, x + width, y + radius);
+      context.lineTo(x + width, y + height - radius);
+      context.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+      context.lineTo(x + radius, y + height);
+      context.quadraticCurveTo(x, y + height, x, y + height - radius);
+      context.lineTo(x, y + radius);
+      context.quadraticCurveTo(x, y, x + radius, y);
+      context.closePath();
       context.fill();
-      context.lineWidth = 8;
-      context.strokeStyle = 'rgba(255, 255, 255, 0.35)';
       context.stroke();
       context.fillStyle = '#ffffff';
-      context.font = 'bold 56px Tajawal, sans-serif';
+      context.font = '700 28px Tajawal, sans-serif';
       context.textAlign = 'center';
       context.textBaseline = 'middle';
-      context.fillText(formatToothNumberLabel(labelValue), 128, 128);
+      context.fillText(formatToothNumberLabel(labelValue), canvas.width / 2, canvas.height / 2 + 1);
 
       const texture = new THREE.CanvasTexture(canvas);
       texture.needsUpdate = true;
       const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
       const sprite = new THREE.Sprite(material);
-      sprite.scale.set(0.72, 0.72, 0.72);
-      sprite.position.set(0, 1.18, 0.18);
+      sprite.scale.set(0.5, 0.18, 1);
+      sprite.renderOrder = 999;
+      sprite.position.set(0, 0, 0.25);
       return sprite;
     }
 
@@ -992,7 +1009,11 @@
       mesh.userData.palmerSymbolCode = palmerNotation?.symbolCode || String(toothNumber);
 
       const label = createToothNumberSprite(mesh.userData.palmerCode);
-      if (label) mesh.add(label);
+      if (label) {
+        const isUpperArch = toothNumber <= 16;
+        label.position.set(0, isUpperArch ? 1.42 : -1.42, 0.25);
+        mesh.add(label);
+      }
 
       return mesh;
     }
