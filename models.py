@@ -1,5 +1,6 @@
 from sqlalchemy import Boolean, Column, Integer, String, Date, DateTime, Numeric, ForeignKey, text
 from sqlalchemy.orm import relationship
+from datetime import datetime
 from database import Base
 
 
@@ -95,4 +96,14 @@ class FinancialTransaction(Base):
     type = Column(String, nullable=False, default="expense")
     description = Column(String, nullable=False)
     created_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
+
+
+class PatientXRay(Base):
+    __tablename__ = "patient_xrays"
+
+    id = Column(Integer, primary_key=True, index=True)
+    patient_id = Column(Integer, ForeignKey("patients.id"), index=True, nullable=False)
+    image_url = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    uploaded_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     

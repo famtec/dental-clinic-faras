@@ -19,6 +19,9 @@
     .finance-toast {
       animation: financeToastIn 280ms ease-out;
     }
+    .xray-toast {
+      animation: financeToastIn 280ms ease-out;
+    }
   </style>
 </head>
 <body class="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.22),_transparent_30%),linear-gradient(135deg,_#f8fafc_0%,_#eef2ff_45%,_#e0e7ff_100%)] text-slate-800">
@@ -54,6 +57,38 @@
         <div class="rounded-[24px] border border-slate-100 bg-slate-50/90 p-3">
           <div id="chartPlaceholder" class="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
             جاري تحميل بيانات المريض...
+          </div>
+        </div>
+
+        <div class="mt-6 rounded-[24px] border border-violet-100 bg-violet-50/70 p-4 sm:p-5">
+          <div class="mb-3">
+            <h3 class="text-lg font-bold text-violet-800">رفع صورة أشعة جديدة</h3>
+            <p class="mt-1 text-xs text-violet-700/80">قم بإرفاق صورة الأشعة مع وصف مختصر لتوثيق حالة المريض.</p>
+          </div>
+          <form id="xrayUploadForm" class="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+            <label class="block">
+              <span class="mb-1 block text-xs font-semibold text-slate-600">ملف الأشعة</span>
+              <input id="xrayFileInput" type="file" accept="image/*" required class="w-full rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-violet-100 file:px-3 file:py-2 file:text-xs file:font-bold file:text-violet-700" />
+            </label>
+            <label class="block">
+              <span class="mb-1 block text-xs font-semibold text-slate-600">وصف الأشعة</span>
+              <input id="xrayDescriptionInput" type="text" placeholder="مثال: أشعة بانوراما قبل العلاج" class="w-full rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm outline-none focus:border-violet-500 focus:ring-4 focus:ring-violet-100" />
+            </label>
+            <button id="xrayUploadBtn" type="submit" class="rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700">
+              رفع صورة الأشعة 📸
+            </button>
+          </form>
+        </div>
+
+        <div class="mt-5 rounded-[24px] border border-slate-100 bg-white/80 p-4 sm:p-5">
+          <div class="mb-3 flex items-center justify-between">
+            <h3 class="text-lg font-bold text-indigo-900">معرض صور الأشعة</h3>
+            <span id="xrayGalleryCount" class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">0 صورة</span>
+          </div>
+          <div id="xrayGallery" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div id="xrayGalleryEmpty" class="col-span-full rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+              لا توجد صور أشعة مرفوعة لهذا المريض حتى الآن.
+            </div>
           </div>
         </div>
       </section>
@@ -147,6 +182,7 @@
 
     let currentPatient = null;
     let isEditing = false;
+    const XRAY_API_BASE_URL = 'https://onrender.com';
 
     function getPatientIdFromUrl() {
       const params = new URLSearchParams(window.location.search);
@@ -190,6 +226,166 @@
       document.body.appendChild(toast);
 
       setTimeout(() => toast.remove(), 2600);
+    }
+
+    function showXRaySuccessAlert(message) {
+      const existingToast = document.getElementById('xrayUploadToast');
+      if (existingToast) existingToast.remove();
+
+      const toast = document.createElement('div');
+      toast.id = 'xrayUploadToast';
+      toast.className = 'xray-toast fixed left-1/2 top-5 z-50 -translate-x-1/2 rounded-2xl border border-violet-200 bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-2xl shadow-violet-300/40';
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      setTimeout(() => toast.remove(), 2600);
+    }
+
+    function getXRayEndpoint(patientId) {
+      return `${XRAY_API_BASE_URL}/api/patients/${encodeURIComponent(String(patientId))}/xrays`;
+    }
+
+    function resolveXRayImageUrl(imageUrl) {
+      const raw = String(imageUrl || '').trim();
+      if (!raw) return '';
+      if (raw.startsWith('http://') || raw.startsWith('https://')) {
+        return raw;
+      }
+      return `${XRAY_API_BASE_URL}${raw.startsWith('/') ? raw : '/' + raw}`;
+    }
+
+    function formatArabicDate(value) {
+      if (!value) return 'تاريخ غير متاح';
+      const dt = new Date(value);
+      if (Number.isNaN(dt.getTime())) return 'تاريخ غير متاح';
+      return dt.toLocaleString('ar-SA');
+    }
+
+    function createXRayCard(record) {
+      const card = document.createElement('article');
+      card.className = 'overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg';
+
+      const imageSrc = resolveXRayImageUrl(record?.image_url);
+      const description = (record?.description || 'بدون وصف').toString();
+      const uploadedAt = formatArabicDate(record?.uploaded_at);
+
+      card.innerHTML = `
+        <div class="aspect-[4/3] w-full overflow-hidden bg-slate-100">
+          <img src="${imageSrc}" alt="صورة أشعة" class="h-full w-full object-cover" loading="lazy" />
+        </div>
+        <div class="p-3">
+          <p class="text-sm font-semibold text-slate-800">${description}</p>
+          <p class="mt-1 text-xs text-slate-500">${uploadedAt}</p>
+        </div>
+      `;
+      return card;
+    }
+
+    function updateXRayGalleryCount(count) {
+      const countBadge = document.getElementById('xrayGalleryCount');
+      if (!countBadge) return;
+      countBadge.textContent = `${count} صورة`;
+    }
+
+    function renderXRayGallery(records) {
+      const gallery = document.getElementById('xrayGallery');
+      const emptyState = document.getElementById('xrayGalleryEmpty');
+      if (!gallery) return;
+
+      gallery.querySelectorAll('[data-xray-card="1"]').forEach((el) => el.remove());
+
+      const safeRecords = Array.isArray(records) ? records : [];
+      updateXRayGalleryCount(safeRecords.length);
+
+      if (safeRecords.length === 0) {
+        if (emptyState) emptyState.classList.remove('hidden');
+        return;
+      }
+
+      if (emptyState) emptyState.classList.add('hidden');
+      safeRecords.forEach((record) => {
+        const card = createXRayCard(record);
+        card.setAttribute('data-xray-card', '1');
+        gallery.appendChild(card);
+      });
+    }
+
+    function appendXRayCard(record) {
+      const gallery = document.getElementById('xrayGallery');
+      const emptyState = document.getElementById('xrayGalleryEmpty');
+      if (!gallery) return;
+
+      if (emptyState) emptyState.classList.add('hidden');
+      const card = createXRayCard(record);
+      card.setAttribute('data-xray-card', '1');
+      gallery.prepend(card);
+
+      const totalCards = gallery.querySelectorAll('[data-xray-card="1"]').length;
+      updateXRayGalleryCount(totalCards);
+    }
+
+    async function loadPatientXRayGallery() {
+      const patientId = getPatientIdFromUrl();
+      if (!patientId) return;
+
+      try {
+        const response = await fetch(getXRayEndpoint(patientId));
+        if (!response.ok) {
+          throw new Error('Failed to load xray gallery');
+        }
+
+        const records = await response.json();
+        renderXRayGallery(records);
+      } catch (error) {
+        renderXRayGallery([]);
+      }
+    }
+
+    async function uploadPatientXRay(event) {
+      event.preventDefault();
+
+      const patientId = getPatientIdFromUrl();
+      const fileInput = document.getElementById('xrayFileInput');
+      const descriptionInput = document.getElementById('xrayDescriptionInput');
+      const uploadButton = document.getElementById('xrayUploadBtn');
+      if (!patientId || !fileInput || !uploadButton) return;
+
+      const selectedFile = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+      const descriptionValue = descriptionInput ? descriptionInput.value.trim() : '';
+
+      if (!selectedFile) {
+        alert('يرجى اختيار صورة أشعة قبل الرفع.');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('description', descriptionValue);
+
+      uploadButton.disabled = true;
+      uploadButton.textContent = 'جاري الرفع...';
+
+      try {
+        const response = await fetch(getXRayEndpoint(patientId), {
+          method: 'POST',
+          body: formData
+        });
+
+        if (response.status !== 200) {
+          throw new Error('Failed to upload xray');
+        }
+
+        const createdRecord = await response.json();
+        appendXRayCard(createdRecord);
+        showXRaySuccessAlert('تم رفع صورة الأشعة بنجاح!');
+        fileInput.value = '';
+        if (descriptionInput) descriptionInput.value = '';
+      } catch (error) {
+        alert('تعذر رفع صورة الأشعة الآن. يرجى المحاولة لاحقاً.');
+      } finally {
+        uploadButton.disabled = false;
+        uploadButton.textContent = 'رفع صورة الأشعة 📸';
+      }
     }
 
     async function submitFinancialPayment(event) {
@@ -356,7 +552,15 @@
     if (financialPaymentForm) {
       financialPaymentForm.addEventListener('submit', submitFinancialPayment);
     }
-    window.addEventListener('DOMContentLoaded', loadPatientRecord);
+    const xrayUploadForm = document.getElementById('xrayUploadForm');
+    if (xrayUploadForm) {
+      xrayUploadForm.addEventListener('submit', uploadPatientXRay);
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadPatientRecord();
+      loadPatientXRayGallery();
+    });
   </script>
 </body>
 </html>

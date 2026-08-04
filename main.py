@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 import os
+from uuid import uuid4
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 import models
@@ -18,6 +19,9 @@ app = FastAPI(title="Dental Clinic API")
 
 # 1. تشغيل السيرفر وإنشاء الجداول تلقائياً عند الإقلاع
 database.init_db()
+
+UPLOADS_DIR = "uploads"
+os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 
 def seed_default_activation_key() -> None:
@@ -170,6 +174,15 @@ class ExpenseResponse(BaseModel):
     description: str
     doctor_name: Optional[str] = None
     created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PatientXRayResponse(BaseModel):
+    id: int
+    patient_id: int
+    image_url: str
+    description: Optional[str] = None
+    uploaded_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -685,10 +698,70 @@ def get_patient_treatments(patient_id: int, db: Session = Depends(database.get_d
     return db.query(models.Treatment).filter(models.Treatment.patient_id == patient_id).all()
 
 
+@app.post("/api/patients/{patient_id}/xrays", response_model=PatientXRayResponse)
+async def upload_patient_xray(
+    patient_id: int,
+    file: UploadFile = File(...),
+    description: str = Form(""),
+    db: Session = Depends(database.get_db),
+):
+    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    original_name = file.filename or "xray"
+    _, ext = os.path.splitext(original_name)
+    ext = ext.lower()
+    allowed_ext = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tiff"}
+    safe_ext = ext if ext in allowed_ext else ".bin"
+    unique_filename = f"xray_{patient_id}_{uuid4().hex}{safe_ext}"
+    saved_path = os.path.join(UPLOADS_DIR, unique_filename)
+
+    try:
+        content = await file.read()
+        with open(saved_path, "wb") as output_file:
+            output_file.write(content)
+
+        db_xray = models.PatientXRay(
+            patient_id=patient_id,
+            image_url=f"/uploads/{unique_filename}",
+            description=description.strip() or None,
+        )
+        db.add(db_xray)
+        db.commit()
+        db.refresh(db_xray)
+        return db_xray
+    except Exception:
+        db.rollback()
+        if os.path.exists(saved_path):
+            try:
+                os.remove(saved_path)
+            except OSError:
+                pass
+        raise HTTPException(status_code=400, detail="تعذر رفع صورة الأشعة حالياً. حاول مرة أخرى.")
+    finally:
+        await file.close()
+
+
+@app.get("/api/patients/{patient_id}/xrays", response_model=List[PatientXRayResponse])
+def get_patient_xrays(patient_id: int, db: Session = Depends(database.get_db)):
+    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    return (
+        db.query(models.PatientXRay)
+        .filter(models.PatientXRay.patient_id == patient_id)
+        .order_by(models.PatientXRay.uploaded_at.desc())
+        .all()
+    )
+
+
 @app.get("/", include_in_schema=False)
 def redirect_to_login():
     return RedirectResponse(url="/login.html", status_code=302)
 
+app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 app.mount("/", StaticFiles(directory="frontend_web", html=True), name="static")
 
 if __name__ == "__main__":

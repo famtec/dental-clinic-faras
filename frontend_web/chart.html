@@ -8,6 +8,16 @@
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
     <style>
         body { font-family: 'Tajawal', sans-serif; }
+        .badge-premium {
+            background: linear-gradient(130deg, #fef08a 0%, #f59e0b 45%, #fde68a 100%);
+            color: #5b3400;
+            box-shadow: 0 8px 28px rgba(245, 158, 11, 0.45);
+        }
+        .badge-standard {
+            background: linear-gradient(130deg, #4338ca 0%, #6366f1 100%);
+            color: #e0e7ff;
+            box-shadow: 0 8px 22px rgba(67, 56, 202, 0.35);
+        }
         .tooth { fill: #ffffff; stroke: #4f46e5; stroke-width: 2; cursor: pointer; transition: all 0.2s ease; }
         .tooth:hover { fill: #eef2ff; transform: translateY(-1px); }
         .tooth.active { fill: #c7d2fe; }
@@ -22,13 +32,17 @@
         <aside class="w-full bg-indigo-900 p-4 text-white shadow-lg lg:min-h-screen lg:w-72 lg:p-6 xl:w-80">
             <div class="mb-4 flex items-center justify-center gap-3 border-b border-indigo-700 pb-4 lg:mb-8">
                 <img src="logo.png" alt="شعار العيادة" class="h-14 w-14 rounded-xl object-contain bg-white/10 p-2 sm:h-16 sm:w-16" />
-                <h1 class="text-lg font-bold sm:text-xl">عيادتي الرقمية</h1>
+                <div class="flex flex-col items-start gap-2">
+                    <h1 id="clinicTitle" class="text-lg font-bold sm:text-xl">عيادتي الرقمية</h1>
+                    <span id="tierBadge" class="rounded-full px-3 py-1 text-xs font-extrabold tracking-wide">Standard</span>
+                </div>
             </div>
             <button id="mobileMenuToggle" type="button" class="mb-3 flex w-full items-center justify-center rounded-lg border border-indigo-700/60 bg-indigo-800/70 px-3 py-2 text-sm font-semibold text-white lg:hidden">☰ القائمة</button>
             <nav id="sidebarNav" class="hidden flex-col gap-2 lg:flex lg:gap-3">
                 <a href="index.html" class="block rounded-lg px-4 py-3 text-sm font-medium transition hover:bg-indigo-800">👥 لوحة مرضى</a>
                 <a href="appointments.html" class="block rounded-lg px-4 py-3 text-sm font-medium transition hover:bg-indigo-800">📅 المواعيد اليومية</a>
                 <a href="chart.html" class="block rounded-lg bg-indigo-700 px-4 py-3 text-sm font-bold">🦷 مخطط الأسنان</a>
+                <a href="finance.html" class="block rounded-lg px-4 py-3 text-sm font-medium transition hover:bg-indigo-800">📊 التقارير المالية</a>
             </nav>
         </aside>
 
@@ -191,9 +205,23 @@
     <script src="api-config.js"></script>
     <script>
         const doctorName = localStorage.getItem('doctor_name');
-        const titleElement = document.querySelector('h1');
+        const userTier = localStorage.getItem('user_tier');
+        const titleElement = document.getElementById('clinicTitle');
+        const tierBadge = document.getElementById('tierBadge');
         const mobileMenuToggle = document.getElementById('mobileMenuToggle');
         const sidebarNav = document.getElementById('sidebarNav');
+
+        function renderTierBadge() {
+            if (!tierBadge) return;
+            if (userTier === 'premium') {
+                tierBadge.className = 'badge-premium rounded-full px-3 py-1 text-xs font-extrabold tracking-wide';
+                tierBadge.textContent = 'Premium 👑';
+                return;
+            }
+
+            tierBadge.className = 'badge-standard rounded-full px-3 py-1 text-xs font-extrabold tracking-wide';
+            tierBadge.textContent = 'Standard';
+        }
 
         function syncSidebarNav() {
             if (!sidebarNav) return;
@@ -218,6 +246,7 @@
         if (titleElement) {
             titleElement.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادتي الرقمية';
         }
+        renderTierBadge();
 
         let selectedTooth = null;
         const PATIENTS_API_URL = apiUrl('/api/patients');
