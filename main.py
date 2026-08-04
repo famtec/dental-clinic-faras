@@ -929,6 +929,29 @@ def update_financial_transaction(
     return {"message": "تم تحديث الدفعة المالية بنجاح"}
 
 
+@app.delete("/api/finance/transaction/{transaction_id}", status_code=200)
+def delete_financial_transaction(
+    transaction_id: int,
+    db: Session = Depends(database.get_db),
+):
+    transaction = (
+        db.query(models.FinancialTransaction)
+        .filter(models.FinancialTransaction.id == transaction_id)
+        .first()
+    )
+    if not transaction:
+        raise HTTPException(status_code=404, detail="الدفعة المالية غير موجودة")
+
+    try:
+        db.delete(transaction)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر حذف الدفعة المالية حالياً. حاول مرة أخرى.")
+
+    return {"message": "تم حذف الدفعة المالية بنجاح"}
+
+
 @app.get("/api/patients/{patient_id}/treatments", response_model=List[TreatmentResponse])
 def get_patient_treatments(patient_id: int, db: Session = Depends(database.get_db)):
     patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()

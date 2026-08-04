@@ -140,6 +140,22 @@
     </div>
   </div>
 
+  <div id="deletePatientModal" class="fixed inset-0 z-[55] hidden items-center justify-center bg-indigo-950/75 p-3 opacity-0 backdrop-blur-md transition-opacity duration-200 sm:p-4">
+    <div class="w-full max-w-md scale-95 rounded-[26px] border border-indigo-200/20 bg-[linear-gradient(160deg,_rgba(30,27,75,0.96),_rgba(49,46,129,0.95),_rgba(67,56,202,0.94))] p-5 text-indigo-50 shadow-2xl shadow-indigo-950/70 transition-transform duration-200 sm:p-6">
+      <div class="flex items-start gap-3">
+        <div class="rounded-2xl bg-rose-500/20 px-3 py-2 text-2xl leading-none">⚠️</div>
+        <div>
+          <h3 class="text-lg font-extrabold text-white">تأكيد حذف المريض</h3>
+          <p class="mt-2 text-sm leading-7 text-indigo-100">هل أنت متأكد من حذف هذا المريض نهائياً؟ لا يمكن التراجع عن هذا الإجراء.</p>
+        </div>
+      </div>
+      <div class="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+        <button id="cancelDeletePatientBtn" type="button" class="rounded-xl border border-slate-300/45 bg-slate-200/20 px-4 py-2.5 text-sm font-semibold text-slate-100 transition hover:bg-slate-200/30">إلغاء</button>
+        <button id="confirmDeletePatientBtn" type="button" class="rounded-xl bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 px-4 py-2.5 text-sm font-extrabold text-white shadow-lg shadow-rose-900/40 transition hover:from-rose-700 hover:via-red-700 hover:to-rose-800">تأكيد الحذف النهائي</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toast" class="pointer-events-none fixed left-1/2 top-5 z-[60] hidden w-[min(92vw,24rem)] -translate-x-1/2 -translate-y-2 rounded-2xl border border-rose-200 bg-white/95 px-4 py-3 text-sm font-medium text-rose-700 opacity-0 shadow-xl shadow-rose-200/60 backdrop-blur transition duration-200"></div>
 
   <script src="api-config.js"></script>
@@ -215,11 +231,16 @@
     const cancelBtn = document.getElementById('cancelBtn');
     const patientForm = document.getElementById('patientForm');
     const searchInput = document.getElementById('searchInput');
+    const deletePatientModal = document.getElementById('deletePatientModal');
+    const cancelDeletePatientBtn = document.getElementById('cancelDeletePatientBtn');
+    const confirmDeletePatientBtn = document.getElementById('confirmDeletePatientBtn');
     const toast = document.getElementById('toast');
 
     // Utility: show/hide modal
     let toastTimer = null;
     let modalCloseTimer = null;
+    let deleteModalCloseTimer = null;
+    let pendingDeletePatientId = null;
 
     function openModal() {
       if (modalCloseTimer) {
@@ -240,6 +261,41 @@
         addPatientModal.classList.add('hidden');
         addPatientModal.classList.remove('flex');
         modalCloseTimer = null;
+      }, 180);
+    }
+
+    function openDeletePatientModal() {
+      if (!deletePatientModal) return;
+
+      if (deleteModalCloseTimer) {
+        window.clearTimeout(deleteModalCloseTimer);
+        deleteModalCloseTimer = null;
+      }
+
+      deletePatientModal.classList.remove('hidden');
+      deletePatientModal.classList.add('flex');
+      requestAnimationFrame(() => {
+        deletePatientModal.classList.remove('opacity-0');
+        const panel = deletePatientModal.firstElementChild;
+        if (panel) {
+          panel.classList.remove('scale-95');
+        }
+      });
+    }
+
+    function closeDeletePatientModal() {
+      if (!deletePatientModal) return;
+
+      deletePatientModal.classList.add('opacity-0');
+      const panel = deletePatientModal.firstElementChild;
+      if (panel) {
+        panel.classList.add('scale-95');
+      }
+
+      deleteModalCloseTimer = window.setTimeout(() => {
+        deletePatientModal.classList.add('hidden');
+        deletePatientModal.classList.remove('flex');
+        deleteModalCloseTimer = null;
       }, 180);
     }
 
@@ -305,12 +361,25 @@
       return fullName.includes(normalizedQuery) || phone.includes(normalizedQuery) || medicalHistory.includes(normalizedQuery);
     }
 
-    async function deletePatient(patientId) {
-      const confirmed = confirm('هل أنت متأكد من حذف هذا المريض نهائياً؟');
-      if (!confirmed) return;
+    function deletePatient(event, patientId) {
+      if (event) {
+        event.preventDefault();
+      }
+
+      pendingDeletePatientId = patientId;
+      openDeletePatientModal();
+    }
+
+    async function confirmDeletePatient() {
+      if (!pendingDeletePatientId) return;
+
+      if (confirmDeletePatientBtn) {
+        confirmDeletePatientBtn.disabled = true;
+        confirmDeletePatientBtn.textContent = '...جاري الحذف';
+      }
 
       try {
-        const response = await fetch(apiUrl(`/api/patients/${patientId}`), {
+        const response = await fetch(apiUrl(`/api/patients/${pendingDeletePatientId}`), {
           method: 'DELETE'
         });
 
@@ -318,10 +387,21 @@
           throw new Error('فشل حذف المريض');
         }
 
-        await fetchPatients();
+        allPatients = allPatients.filter(
+          (patient) => String(patient.id) !== String(pendingDeletePatientId)
+        );
+        renderPatients(allPatients, searchInput ? searchInput.value.trim() : '');
+        showToast('تم حذف المريض بنجاح.');
+        pendingDeletePatientId = null;
+        closeDeletePatientModal();
       } catch (error) {
         console.error('deletePatient error', error);
-        alert('تعذر حذف المريض. يرجى المحاولة لاحقًا.');
+        showToast('تعذر حذف المريض. يرجى المحاولة لاحقًا.');
+      } finally {
+        if (confirmDeletePatientBtn) {
+          confirmDeletePatientBtn.disabled = false;
+          confirmDeletePatientBtn.textContent = 'تأكيد الحذف النهائي';
+        }
       }
     }
 
@@ -377,7 +457,7 @@
               <button
                 type="button"
                 class="rounded-xl bg-rose-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700"
-                onclick="deletePatient(${Number(patient.id ?? 0)})"
+                onclick="deletePatient(event, ${Number(patient.id ?? 0)})"
               >
                 🗑️ حذف
               </button>
@@ -456,6 +536,17 @@
     addPatientBtn.addEventListener('click', openModal);
     closeModalBtn.addEventListener('click', closeModal);
     cancelBtn.addEventListener('click', function(){ patientForm.reset(); closeModal(); });
+    cancelDeletePatientBtn.addEventListener('click', function(){
+      pendingDeletePatientId = null;
+      closeDeletePatientModal();
+    });
+    confirmDeletePatientBtn.addEventListener('click', confirmDeletePatient);
+    deletePatientModal.addEventListener('click', function(event) {
+      if (event.target && event.target.id === 'deletePatientModal') {
+        pendingDeletePatientId = null;
+        closeDeletePatientModal();
+      }
+    });
     searchInput.addEventListener('input', function(){
       const query = this.value.trim();
       renderPatients(allPatients, query);

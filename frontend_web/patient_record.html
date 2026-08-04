@@ -362,6 +362,22 @@
     </div>
   </div>
 
+  <div id="deleteConfirmModal" class="fixed inset-0 z-[55] hidden items-center justify-center bg-indigo-950/75 p-3 opacity-0 backdrop-blur-md transition-opacity duration-200 sm:p-4">
+    <div class="w-full max-w-md scale-95 rounded-[26px] border border-indigo-200/20 bg-[linear-gradient(160deg,_rgba(30,27,75,0.96),_rgba(49,46,129,0.95),_rgba(67,56,202,0.94))] p-5 text-indigo-50 shadow-2xl shadow-indigo-950/70 transition-transform duration-200 sm:p-6">
+      <div class="flex items-start gap-3">
+        <div class="rounded-2xl bg-rose-500/20 px-3 py-2 text-2xl leading-none">⚠️</div>
+        <div>
+          <h3 id="deleteConfirmTitle" class="text-lg font-extrabold text-white">تأكيد الحذف</h3>
+          <p id="deleteConfirmMessage" class="mt-2 text-sm leading-7 text-indigo-100">هل أنت متأكد من تنفيذ الحذف؟ لا يمكن التراجع عن هذا الإجراء.</p>
+        </div>
+      </div>
+      <div class="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+        <button id="deleteConfirmCancelBtn" type="button" class="rounded-xl border border-slate-300/45 bg-slate-200/20 px-4 py-2.5 text-sm font-semibold text-slate-100 transition hover:bg-slate-200/30">إلغاء</button>
+        <button id="deleteConfirmActionBtn" type="button" class="rounded-xl bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 px-4 py-2.5 text-sm font-extrabold text-white shadow-lg shadow-rose-900/40 transition hover:from-rose-700 hover:via-red-700 hover:to-rose-800">تأكيد الحذف النهائي</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toothPalmerTooltip" class="pointer-events-none fixed z-[80] hidden rounded-2xl border border-cyan-200/35 bg-slate-900/90 px-3 py-2 text-xs font-semibold text-cyan-100 shadow-2xl shadow-cyan-900/40 backdrop-blur"></div>
 
   <script src="api-config.js"></script>
@@ -424,6 +440,8 @@
     let currentFinanceLedger = [];
     let activeFinanceTransaction = null;
     let financeEditModalCloseTimer = null;
+    let deleteConfirmModalCloseTimer = null;
+    let pendingDeleteAction = null;
     let tooltipHoverMesh = null;
 
     function getAppointmentUpdateEndpoint(appointmentId) {
@@ -440,6 +458,85 @@
 
     function getFinanceTransactionUpdateEndpoint(transactionId) {
       return `${FINANCE_UPDATE_BASE_URL}/api/finance/transaction/${encodeURIComponent(String(transactionId))}`;
+    }
+
+    function getFinanceTransactionDeleteEndpoint(transactionId) {
+      return `${FINANCE_UPDATE_BASE_URL}/api/finance/transaction/${encodeURIComponent(String(transactionId))}`;
+    }
+
+    function openDeleteConfirmModal({ title, message, action }) {
+      const modal = document.getElementById('deleteConfirmModal');
+      const titleEl = document.getElementById('deleteConfirmTitle');
+      const messageEl = document.getElementById('deleteConfirmMessage');
+      if (!modal || typeof action !== 'function') return;
+
+      pendingDeleteAction = action;
+
+      if (titleEl) {
+        titleEl.textContent = title || 'تأكيد الحذف';
+      }
+      if (messageEl) {
+        messageEl.textContent = message || 'هل أنت متأكد من تنفيذ الحذف؟ لا يمكن التراجع عن هذا الإجراء.';
+      }
+
+      if (deleteConfirmModalCloseTimer) {
+        window.clearTimeout(deleteConfirmModalCloseTimer);
+        deleteConfirmModalCloseTimer = null;
+      }
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      requestAnimationFrame(() => {
+        modal.classList.remove('opacity-0');
+        const panel = modal.firstElementChild;
+        if (panel) {
+          panel.classList.remove('scale-95');
+        }
+      });
+    }
+
+    function closeDeleteConfirmModal({ clearAction = true } = {}) {
+      const modal = document.getElementById('deleteConfirmModal');
+      if (!modal) return;
+
+      modal.classList.add('opacity-0');
+      const panel = modal.firstElementChild;
+      if (panel) {
+        panel.classList.add('scale-95');
+      }
+
+      deleteConfirmModalCloseTimer = window.setTimeout(() => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        deleteConfirmModalCloseTimer = null;
+      }, 180);
+
+      if (clearAction) {
+        pendingDeleteAction = null;
+      }
+    }
+
+    async function confirmDeleteFromModal() {
+      if (!pendingDeleteAction) return;
+
+      const actionButton = document.getElementById('deleteConfirmActionBtn');
+      if (actionButton) {
+        actionButton.disabled = true;
+        actionButton.textContent = '...جاري الحذف';
+      }
+
+      try {
+        await pendingDeleteAction();
+        closeDeleteConfirmModal();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'تعذر تنفيذ الحذف حالياً.';
+        createMedicalToast(message);
+      } finally {
+        if (actionButton) {
+          actionButton.disabled = false;
+          actionButton.textContent = 'تأكيد الحذف النهائي';
+        }
+      }
     }
 
     function getPatientIdFromUrl() {
@@ -1506,25 +1603,55 @@
     }
 
     async function deleteAppointmentById(appointmentId) {
-      const confirmed = confirm("هل أنت متأكد من حذف هذا الموعد نهائياً؟");
-      if (!confirmed) return;
+      const response = await fetch(getAppointmentDeleteEndpoint(appointmentId), {
+        method: 'DELETE',
+      });
 
-      try {
-        const response = await fetch(getAppointmentDeleteEndpoint(appointmentId), {
-          method: 'DELETE',
-        });
-
-        if (!response.ok) {
-          throw new Error('تعذر حذف الموعد حالياً.');
-        }
-
-        closeAppointmentModal();
-        closeAppointmentCreateModal();
-        await loadPatientAppointments();
-        createMedicalToast('تم حذف الموعد بنجاح');
-      } catch (error) {
-        alert('تعذر حذف الموعد الآن. يرجى المحاولة لاحقاً.');
+      if (!response.ok) {
+        throw new Error('تعذر حذف الموعد حالياً.');
       }
+
+      closeAppointmentModal();
+      closeAppointmentCreateModal();
+      await loadPatientAppointments();
+      createMedicalToast('تم حذف الموعد بنجاح');
+    }
+
+    function requestDeleteAppointment(appointmentId) {
+      if (!appointmentId) return;
+
+      openDeleteConfirmModal({
+        title: 'حذف الموعد',
+        message: 'هل أنت متأكد من حذف هذا الموعد نهائياً؟ لا يمكن التراجع عن هذا الإجراء.',
+        action: async () => {
+          await deleteAppointmentById(appointmentId);
+        },
+      });
+    }
+
+    async function deleteFinanceTransactionById(transactionId) {
+      const response = await fetch(getFinanceTransactionDeleteEndpoint(transactionId), {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('تعذر حذف الدفعة المالية حالياً.');
+      }
+
+      await loadFinanceLedger();
+      showFinanceSuccessAlert('تم حذف الدفعة المالية بنجاح');
+    }
+
+    function requestDeleteFinanceTransaction(transactionId) {
+      if (!transactionId) return;
+
+      openDeleteConfirmModal({
+        title: 'حذف الدفعة المالية',
+        message: 'هل أنت متأكد من حذف هذه الدفعة نهائياً؟ لا يمكن التراجع عن هذا الإجراء.',
+        action: async () => {
+          await deleteFinanceTransactionById(transactionId);
+        },
+      });
     }
 
     function attachAppointmentRowListeners() {
@@ -1542,18 +1669,10 @@
       });
 
       tableBody.querySelectorAll('.delete-appointment-btn').forEach((button) => {
-        button.addEventListener('click', async () => {
+        button.addEventListener('click', () => {
           const appointmentId = button.getAttribute('data-delete-appointment-id');
           if (!appointmentId) return;
-
-          button.disabled = true;
-          const previousText = button.textContent;
-          button.textContent = '...جاري الحذف';
-
-          await deleteAppointmentById(appointmentId);
-
-          button.disabled = false;
-          button.textContent = previousText || '🗑️ حذف';
+          requestDeleteAppointment(appointmentId);
         });
       });
     }
@@ -1650,13 +1769,22 @@
         <td class="finance-amount-cell px-4 py-3 align-top font-bold text-emerald-700">${amount} ل.س</td>
         <td class="finance-description-cell px-4 py-3 align-top leading-7 text-slate-700">${description}</td>
         <td class="px-4 py-3 align-top">
-          <button
-            type="button"
-            data-finance-edit-id="${String(record?.id ?? '')}"
-            class="finance-edit-btn rounded-xl border border-indigo-200 bg-gradient-to-r from-indigo-100 to-violet-100 px-3 py-2 text-xs font-extrabold text-indigo-800 shadow-sm transition hover:from-indigo-200 hover:to-violet-200"
-          >
-            ✏️ تعديل
-          </button>
+          <div class="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              data-finance-edit-id="${String(record?.id ?? '')}"
+              class="finance-edit-btn rounded-xl border border-indigo-200 bg-gradient-to-r from-indigo-100 to-violet-100 px-3 py-2 text-xs font-extrabold text-indigo-800 shadow-sm transition hover:from-indigo-200 hover:to-violet-200"
+            >
+              ✏️ تعديل
+            </button>
+            <button
+              type="button"
+              data-finance-delete-id="${String(record?.id ?? '')}"
+              class="finance-delete-btn rounded-xl border border-rose-300 bg-gradient-to-r from-rose-500 to-red-600 px-3 py-2 text-xs font-extrabold text-white shadow-md shadow-rose-300/40 transition hover:from-rose-600 hover:to-red-700"
+            >
+              🗑️ حذف
+            </button>
+          </div>
         </td>
       `;
       return row;
@@ -1847,6 +1975,14 @@
           const record = currentFinanceLedger.find((item) => String(item.id) === String(transactionId));
           if (!record) return;
           openFinanceEditModal(record);
+        });
+      });
+
+      tableBody.querySelectorAll('.finance-delete-btn').forEach((button) => {
+        button.addEventListener('click', () => {
+          const transactionId = button.getAttribute('data-finance-delete-id');
+          if (!transactionId) return;
+          requestDeleteFinanceTransaction(transactionId);
         });
       });
     }
@@ -2189,6 +2325,15 @@
       }
     });
     document.getElementById('financeEditForm').addEventListener('submit', submitFinanceEdit);
+    document.getElementById('deleteConfirmCancelBtn').addEventListener('click', () => {
+      closeDeleteConfirmModal();
+    });
+    document.getElementById('deleteConfirmActionBtn').addEventListener('click', confirmDeleteFromModal);
+    document.getElementById('deleteConfirmModal').addEventListener('click', (event) => {
+      if (event.target && event.target.id === 'deleteConfirmModal') {
+        closeDeleteConfirmModal();
+      }
+    });
     const financialPaymentForm = document.getElementById('financialPaymentForm');
     if (financialPaymentForm) {
       financialPaymentForm.addEventListener('submit', submitFinancialPayment);
