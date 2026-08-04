@@ -6,6 +6,7 @@ from sqlalchemy import text, func
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import json
+import re
 from pydantic import AliasChoices, BaseModel, Field, ConfigDict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
@@ -123,6 +124,44 @@ class PatientChartUpdate(BaseModel):
     chart_state: dict[str, str] | str
 
 
+PALMER_TOOTH_KEY_PATTERN = re.compile(r"^(UR|UL|LR|LL)[1-8]$")
+
+
+def normalize_palmer_chart_state(chart_state: dict[str, str] | str) -> dict[str, str]:
+    if isinstance(chart_state, str):
+        raw_value = chart_state.strip()
+        if not raw_value:
+            raise HTTPException(status_code=400, detail="Chart state cannot be empty")
+
+        try:
+            parsed_state = json.loads(raw_value)
+        except json.JSONDecodeError:
+            raise HTTPException(
+                status_code=400,
+                detail="Chart state must be a valid JSON object",
+            )
+    else:
+        parsed_state = chart_state
+
+    if not isinstance(parsed_state, dict):
+        raise HTTPException(status_code=400, detail="Chart state must be a JSON object")
+
+    normalized_state: dict[str, str] = {}
+    for key, value in parsed_state.items():
+        normalized_key = str(key).strip().upper()
+        if not PALMER_TOOTH_KEY_PATTERN.fullmatch(normalized_key):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Palmer tooth keys are required (UR1-UR8, UL1-UL8, LR1-LR8, LL1-LL8)"
+                ),
+            )
+
+        normalized_state[normalized_key] = "" if value is None else str(value)
+
+    return normalized_state
+
+
 class PatientResponse(PatientCreate):
     id: int
     chart_state: Optional[str] = None
@@ -202,6 +241,11 @@ class FinancialTransactionResponse(BaseModel):
     description: str
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+class FinancialTransactionUpdate(BaseModel):
+    amount: float
+    description: str
 
 
 class PatientXRayResponse(BaseModel):
@@ -583,13 +627,8 @@ def update_patient_chart(patient_id: int, chart_update: PatientChartUpdate, db: 
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
-    chart_state = chart_update.chart_state
-    if isinstance(chart_state, str):
-        chart_state_value = chart_state.strip()
-        if not chart_state_value:
-            raise HTTPException(status_code=400, detail="Chart state cannot be empty")
-    else:
-        chart_state_value = json.dumps(chart_state, ensure_ascii=False)
+    normalized_chart_state = normalize_palmer_chart_state(chart_update.chart_state)
+    chart_state_value = json.dumps(normalized_chart_state, ensure_ascii=False)
 
     try:
         patient.chart_state = chart_state_value
@@ -692,6 +731,22 @@ def update_appointment(appointment_id: int, appointment_update: AppointmentUpdat
     except Exception:
         db.rollback()
         raise HTTPException(status_code=400, detail="تعذر تحديث الموعد حالياً. حاول مرة أخرى.")
+
+
+@app.delete("/api/appointments/{appointment_id}", status_code=200)
+def delete_appointment(appointment_id: int, db: Session = Depends(database.get_db)):
+    appointment = db.query(models.Appointment).filter(models.Appointment.id == appointment_id).first()
+    if not appointment:
+        raise HTTPException(status_code=404, detail="الموعد غير موجود")
+
+    try:
+        db.delete(appointment)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر حذف الموعد حالياً. حاول مرة أخرى.")
+
+    return {"message": "تم حذف الموعد بنجاح"}
 
 
 # 7. مسار لجلب قائمة بجميع المواعيد المحجوزة [GET]
@@ -840,6 +895,38 @@ def get_patient_financial_transactions(patient_id: int, db: Session = Depends(da
         .order_by(models.FinancialTransaction.created_at.desc())
         .all()
     )
+
+
+@app.put("/api/finance/transaction/{transaction_id}", status_code=200)
+def update_financial_transaction(
+    transaction_id: int,
+    transaction_update: FinancialTransactionUpdate,
+    db: Session = Depends(database.get_db),
+):
+    transaction = (
+        db.query(models.FinancialTransaction)
+        .filter(models.FinancialTransaction.id == transaction_id)
+        .first()
+    )
+    if not transaction:
+        raise HTTPException(status_code=404, detail="الدفعة المالية غير موجودة")
+
+    description = transaction_update.description.strip()
+    if not description:
+        raise HTTPException(status_code=400, detail="وصف الدفعة مطلوب")
+    if transaction_update.amount <= 0:
+        raise HTTPException(status_code=400, detail="قيمة الدفعة يجب أن تكون أكبر من صفر")
+
+    try:
+        transaction.amount = Decimal(str(transaction_update.amount))
+        transaction.description = description
+        db.commit()
+        db.refresh(transaction)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر تحديث الدفعة المالية حالياً. حاول مرة أخرى.")
+
+    return {"message": "تم تحديث الدفعة المالية بنجاح"}
 
 
 @app.get("/api/patients/{patient_id}/treatments", response_model=List[TreatmentResponse])
