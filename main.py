@@ -30,8 +30,32 @@ def seed_default_activation_key() -> None:
 
         activation_keys = [
             ("TEST-STANDARD-30", 30),
+            ("TEST-STANDARD-A1B2C3", 30),
+            ("TEST-STANDARD-D4E5F6", 30),
+            ("TEST-STANDARD-G7H8J9", 30),
+            ("TEST-STANDARD-K2L4M6", 30),
+            ("TEST-STANDARD-N8P3Q5", 30),
+            ("TEST-STANDARD-R7S1T4", 30),
+            ("TEST-STANDARD-U6V2W8", 30),
+            ("TEST-STANDARD-X3Y5Z7", 30),
+
             ("TEST-PREMIUM-365", 365),
+            ("TEST-PREMIUM-1A2B3C", 365),
+            ("TEST-PREMIUM-4D5E6F", 365),
+            ("TEST-PREMIUM-7G8H9J", 365),
+            ("TEST-PREMIUM-K3L6M9", 365),
+            ("TEST-PREMIUM-N2P5Q8", 365),
+            ("TEST-PREMIUM-R4S7T1", 365),
+            ("TEST-PREMIUM-U8V6W3", 365),
+            ("TEST-PREMIUM-X5Y2Z9", 365),
+
             ("FARAS-VIP-999", 999),
+            ("FARAS-VIP-9A8B7C", 999),
+            ("FARAS-VIP-6D5E4F", 999),
+            ("FARAS-VIP-3G2H1J", 999),
+            ("FARAS-VIP-K9L8M7", 999),
+            ("FARAS-VIP-N6P5Q4", 999),
+            ("FARAS-VIP-R3S2T1", 999),
         ]
 
         for key_code, duration_days in activation_keys:
