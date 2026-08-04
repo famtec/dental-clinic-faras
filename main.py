@@ -15,6 +15,8 @@ from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 import models
 import database
+import os
+import uvicorn
 
 app = FastAPI(title="Dental Clinic API")
 
@@ -849,6 +851,6 @@ app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 app.mount("/", StaticFiles(directory="frontend_web", html=True), name="static")
 
 if __name__ == "__main__":
-    import uvicorn
+    # قراءة المنفذ ديناميكياً من بيئة Render العالمية، وإلا استخدام 8090 كبديل محلي
     port = int(os.environ.get("PORT", 8090))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
