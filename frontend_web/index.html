@@ -145,6 +145,8 @@
   <script src="api-config.js"></script>
   <script>
     const doctorName = localStorage.getItem('doctor_name');
+    const doctorEmail = localStorage.getItem('user_email');
+    const doctorId = localStorage.getItem('doctor_id');
     const userTier = localStorage.getItem('user_tier');
     const titleElement = document.getElementById('clinicTitle');
     const tierBadge = document.getElementById('tierBadge');
@@ -408,6 +410,8 @@
         full_name: formData.get('full_name') || '',
         phone: formData.get('phone') || '',
         medical_history: formData.get('medical_history') || '',
+        doctor_email: doctorEmail,
+        doctor_id: doctorId,
         birth_date: '2000-01-01',
         gender: 'Male'
       };
