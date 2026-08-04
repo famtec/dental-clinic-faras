@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel, Field, ConfigDict
@@ -22,17 +23,32 @@ database.init_db()
 def seed_default_activation_key() -> None:
     db = database.SessionLocal()
     try:
-        existing_key = db.query(models.ActivationKey).filter(
-            models.ActivationKey.key_code == "FARAS-30DAYS-2026"
-        ).first()
-        if existing_key is None:
-            new_key = models.ActivationKey(
-                key_code="FARAS-30DAYS-2026",
-                duration_days=30,
-                is_used=False,
+        db.execute(
+            text("DELETE FROM activation_keys WHERE key_code = :old_key"),
+            {"old_key": "FARAS-30DAYS-2026"},
+        )
+
+        activation_keys = [
+            ("TEST-STANDARD-30", 30),
+            ("TEST-PREMIUM-365", 365),
+            ("FARAS-VIP-999", 999),
+        ]
+
+        for key_code, duration_days in activation_keys:
+            db.execute(
+                text(
+                    """
+                    INSERT OR IGNORE INTO activation_keys (key_code, duration_days, is_used, used_by_email)
+                    VALUES (:key_code, :duration_days, 0, NULL)
+                    """
+                ),
+                {
+                    "key_code": key_code,
+                    "duration_days": duration_days,
+                },
             )
-            db.add(new_key)
-            db.commit()
+
+        db.commit()
     except Exception:
         db.rollback()
         raise
