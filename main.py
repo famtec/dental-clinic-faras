@@ -66,18 +66,21 @@ def seed_default_activation_key() -> None:
         ]
 
         for key_code, duration_days in activation_keys:
-            db.execute(
-                text(
-                    """
-                    INSERT OR IGNORE INTO activation_keys (key_code, duration_days, is_used, used_by_email)
-                    VALUES (:key_code, :duration_days, 0, NULL)
-                    """
-                ),
-                {
-                    "key_code": key_code,
-                    "duration_days": duration_days,
-                },
+            existing_key = (
+                db.query(models.ActivationKey)
+                .filter_by(key_code=key_code)
+                .first()
             )
+
+            if existing_key is None:
+                db.add(
+                    models.ActivationKey(
+                        key_code=key_code,
+                        duration_days=duration_days,
+                        is_used=False,
+                        used_by_email=None,
+                    )
+                )
 
         db.commit()
     except Exception:
