@@ -199,32 +199,32 @@ def health_check():
 
 @app.post("/api/auth/register")
 def register_user(register_request: RegisterRequest, db: Session = Depends(database.get_db)):
-    normalized_email = register_request.email.strip().lower()
-    activation_code = register_request.activation_code.strip()
-    user_tier = "premium" if "-Y-" in activation_code.upper() else "standard"
+    try:
+        normalized_email = register_request.email.strip().lower()
+        activation_code = register_request.activation_code.strip()
+        user_tier = "premium" if "-Y-" in activation_code.upper() else "standard"
 
-    if not normalized_email:
-        raise HTTPException(status_code=400, detail="البريد الإلكتروني مطلوب.")
+        if not normalized_email:
+            raise HTTPException(status_code=400, detail="البريد الإلكتروني مطلوب.")
 
-    activation_key = (
-        db.query(models.ActivationKey)
-        .filter(models.ActivationKey.key_code == activation_code)
-        .first()
-    )
-
-    if not activation_key or activation_key.is_used:
-        raise HTTPException(
-            status_code=400,
-            detail="كود التفعيل خاطئ، منتهي، أو تم استخدامه مسبقاً! يرجى التواصل مع المهندس فارس حلاوي لشراء كود جديد.",
+        activation_key = (
+            db.query(models.ActivationKey)
+            .filter(models.ActivationKey.key_code == activation_code)
+            .first()
         )
 
-    existing_user = db.query(models.User).filter(models.User.email == normalized_email).first()
-    if existing_user:
-        raise HTTPException(status_code=400, detail="هذا البريد الإلكتروني مُسجل مسبقًا.")
+        if not activation_key or activation_key.is_used:
+            raise HTTPException(
+                status_code=400,
+                detail="كود التفعيل خاطئ، منتهي، أو تم استخدامه مسبقاً! يرجى التواصل مع المهندس فارس حلاوي لشراء كود جديد.",
+            )
 
-    subscription_expires_at = datetime.utcnow() + timedelta(days=activation_key.duration_days)
+        existing_user = db.query(models.User).filter(models.User.email == normalized_email).first()
+        if existing_user:
+            raise HTTPException(status_code=400, detail="هذا البريد الإلكتروني مُسجل مسبقًا.")
 
-    try:
+        subscription_expires_at = datetime.utcnow() + timedelta(days=activation_key.duration_days)
+
         new_user = models.User(
             doctor_name=register_request.doctor_name,
             email=normalized_email,
@@ -240,16 +240,27 @@ def register_user(register_request: RegisterRequest, db: Session = Depends(datab
         db.add(new_user)
         db.commit()
         db.refresh(new_user)
-    except Exception:
+    except HTTPException:
         db.rollback()
         raise
+    except (TypeError, ValueError, AttributeError):
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر معالجة بيانات التسجيل. يرجى التحقق من الحقول المدخلة.")
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="حدث خطأ أثناء تنفيذ التسجيل. يرجى المحاولة مرة أخرى.")
 
-    return {
-        "message": "تم إنشاء الحساب بنجاح.",
-        "doctor_name": new_user.doctor_name,
-        "email": new_user.email,
-        "subscription_expires_at": subscription_expires_at.isoformat(),
-    }
+    try:
+        return {
+            "message": "تم إنشاء الحساب بنجاح.",
+            "doctor_name": new_user.doctor_name,
+            "email": new_user.email,
+            "tier": new_user.tier,
+            "token": "secure-session-token",
+            "subscription_expires_at": subscription_expires_at.isoformat(),
+        }
+    except Exception:
+        raise HTTPException(status_code=400, detail="تم إنشاء الحساب لكن تعذر تجهيز الاستجابة بشكل صحيح.")
 
 
 @app.post("/api/auth/login", response_model=LoginResponse)

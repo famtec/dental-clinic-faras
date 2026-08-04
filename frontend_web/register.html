@@ -301,11 +301,11 @@
       try {
         const response = await fetch(`${registerApiBaseUrl}/api/auth/register`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             doctor_name: fullName,
-            email,
-            password,
+            email: email,
+            password: password,
             activation_code: activationCode
           })
         });
