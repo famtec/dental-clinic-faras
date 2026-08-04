@@ -165,6 +165,7 @@
     const activationCodeHint = document.getElementById('activationCodeHint');
     const emailLabel = document.getElementById('emailLabel');
     const togglePasswordBtn = document.getElementById('togglePasswordBtn');
+    const registerApiBaseUrl = 'https://onrender.com';
 
     function showMessage(text, type = 'error') {
       const baseClasses = 'rounded-2xl border px-4 py-3 text-sm font-medium shadow-sm animate-pop';
@@ -215,20 +216,28 @@
       const activationCode = activationCodeInput.value.trim().toUpperCase();
       const completed = [fullName, email, password, activationCode].filter(Boolean).length;
 
-      progressBadge.textContent = `${completed} / 4 مكتملة`;
+      if (progressBadge) {
+        progressBadge.textContent = `${completed} / 4 مكتملة`;
+      }
 
       if (completed === 0) {
-        progressHint.textContent = 'ابدأ بإدخال بيانات الطبيب ثم أكمل كلمة المرور وكود التفعيل.';
+        if (progressHint) {
+          progressHint.textContent = 'ابدأ بإدخال بيانات الطبيب ثم أكمل كلمة المرور وكود التفعيل.';
+        }
         activationBadge.textContent = 'النموذج غير مكتمل';
         activationBadge.className = 'rounded-full bg-white px-3 py-1 text-xs font-bold text-emerald-700 shadow-sm';
         activationSummary.textContent = 'أكمل الحقول الأربعة لنجهّز الحساب للربط مع باقة الاشتراك.';
       } else if (completed < 4) {
-        progressHint.textContent = 'أنت في منتصف إعداد حساب العيادة. أكمل الحقول المتبقية.';
+        if (progressHint) {
+          progressHint.textContent = 'أنت في منتصف إعداد حساب العيادة. أكمل الحقول المتبقية.';
+        }
         activationBadge.textContent = 'قيد الاكتمال';
         activationBadge.className = 'rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700 shadow-sm';
         activationSummary.textContent = 'كل حقل تكمله يقرّبك من تفعيل لوحة الإدارة والوصول لملفات المرضى.';
       } else {
-        progressHint.textContent = 'البيانات مكتملة. يمكنك تنفيذ التفعيل الآن.';
+        if (progressHint) {
+          progressHint.textContent = 'البيانات مكتملة. يمكنك تنفيذ التفعيل الآن.';
+        }
         activationBadge.textContent = 'جاهز للتفعيل';
         activationBadge.className = 'rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700 shadow-sm';
         activationSummary.textContent = 'راجع الكود والبريد ثم اضغط تفعيل الحساب لإنشاء عيادتك الرقمية.';
@@ -290,7 +299,7 @@
       setLoading(true);
 
       try {
-        const response = await fetch(apiUrl('/api/auth/register'), {
+        const response = await fetch(`${registerApiBaseUrl}/api/auth/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -301,15 +310,27 @@
           })
         });
 
+        let data = null;
+        try {
+          data = await response.json();
+        } catch (error) {
+          data = null;
+        }
+
         if (response.ok) {
-          showMessage('تم تفعيل الحساب بنجاح! سيتم تحويلك إلى صفحة تسجيل الدخول...', 'success');
-          setTimeout(() => {
-            window.location.href = 'login.html';
-          }, 1400);
+          if (data?.token) {
+            localStorage.setItem("authToken", data.token);
+          }
+          localStorage.setItem("user_tier", data.tier);
+          if (!data?.tier) {
+            localStorage.setItem("user_tier", "standard");
+          }
+          window.location.href = 'login.html';
           return;
         }
 
-        showMessage('كود التفعيل خاطئ أو تم استخدامه مسبقاً! يرجى التواصل مع المهندس فارس حلاوي لشراء كود جديد.', 'error');
+        const safeErrorMessage = data?.message || data?.detail || data?.error || 'تعذر إتمام التسجيل الآن. تحقق من البيانات ثم حاول مرة أخرى.';
+        showMessage(safeErrorMessage, 'error');
       } catch (error) {
         showMessage('تعذر الاتصال بالخادم الآن. يرجى المحاولة لاحقًا.', 'error');
       } finally {
