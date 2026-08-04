@@ -234,6 +234,22 @@
       }
     }
 
+    function addPatientToLocalList(patient) {
+      if (!patient || patient.id == null) return;
+
+      const safeId = String(patient.id);
+      allPatients = [
+        patient,
+        ...allPatients.filter((existingPatient) => String(existingPatient.id) !== safeId),
+      ];
+
+      if (searchInput) {
+        searchInput.value = '';
+      }
+
+      renderPatients(allPatients, '');
+    }
+
     function filterPatients(patients, query=""){
       const normalizedQuery = (query || '').trim().toLowerCase();
       if (!normalizedQuery) return patients;
@@ -352,10 +368,11 @@
           body: JSON.stringify(payload)
         });
         if(!res.ok) throw new Error('Failed to create');
-        // Success: close modal, reset form, refresh table
+        const createdPatient = await res.json();
+        addPatientToLocalList(createdPatient);
         patientForm.reset();
         closeModal();
-        fetchPatients();
+        fetchPatients().catch((error) => console.error('refresh patients error', error));
       }catch(err){
         console.error('create patient error', err);
         alert('حدث خطأ أثناء إضافة المريض. الرجاء المحاولة لاحقًا.');
