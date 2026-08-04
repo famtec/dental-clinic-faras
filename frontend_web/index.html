@@ -361,6 +361,7 @@
     }
 
     let allPatients = [];
+    let allAppointmentsForStats = [];
 
     function getDoctorStatsHeaders() {
       const headers = { 'Content-Type': 'application/json' };
@@ -395,6 +396,47 @@
       }).format(numericValue);
     }
 
+    function safeNumber(value) {
+      const numericValue = Number(value);
+      return Number.isFinite(numericValue) ? numericValue : null;
+    }
+
+    function calculatePendingBalanceFallback() {
+      const balanceKeys = ['pending_balance', 'remaining_balance', 'balance_due', 'amount_due', 'debt'];
+      return allPatients.reduce((sum, patient) => {
+        const patientBalance = balanceKeys.reduce((candidate, key) => {
+          if (candidate !== null) return candidate;
+          return safeNumber(patient?.[key]);
+        }, null);
+        return sum + (patientBalance ?? 0);
+      }, 0);
+    }
+
+    function calculateActiveAppointmentsFallback() {
+      const now = new Date();
+      return allAppointmentsForStats.reduce((count, appointment) => {
+        const status = String(appointment?.status || '').trim().toLowerCase();
+        const appointmentDate = appointment?.appointment_date ? new Date(appointment.appointment_date) : null;
+        const isUpcoming = appointmentDate instanceof Date && !Number.isNaN(appointmentDate?.getTime?.()) && appointmentDate >= now;
+        const isPending = status === 'pending' || status === 'upcoming';
+        return count + (isUpcoming || isPending ? 1 : 0);
+      }, 0);
+    }
+
+    async function loadAppointmentsForStats() {
+      try {
+        const response = await fetch(apiUrl('/api/appointments'), { method: 'GET' });
+        if (!response.ok) {
+          throw new Error('Failed to load appointments for stats');
+        }
+
+        const data = await response.json();
+        allAppointmentsForStats = Array.isArray(data) ? data : [];
+      } catch (error) {
+        allAppointmentsForStats = [];
+      }
+    }
+
     async function loadPatientStats() {
       setStatsLoadingState(true);
 
@@ -409,13 +451,39 @@
         }
 
         const stats = await response.json();
-        animateStatsValue(statsTotalPatients, String(Number(stats?.total_patients ?? 0)));
-        animateStatsValue(statsActiveAppointments, String(Number(stats?.active_appointments ?? 0)));
-        animateStatsValue(statsPendingBalances, `${formatPendingBalance(stats?.pending_balances ?? 0)}`);
+        const totalPatientsValue = safeNumber(stats?.total_patients) ?? allPatients.length;
+        const activeAppointmentsValue = safeNumber(stats?.active_appointments) ?? calculateActiveAppointmentsFallback();
+        const pendingBalancesValue = safeNumber(stats?.pending_balances) ?? calculatePendingBalanceFallback();
+
+        if (statsTotalPatients) {
+          statsTotalPatients.innerText = String(totalPatientsValue);
+          animateStatsValue(statsTotalPatients, String(totalPatientsValue));
+        }
+        if (statsActiveAppointments) {
+          statsActiveAppointments.innerText = String(activeAppointmentsValue);
+          animateStatsValue(statsActiveAppointments, String(activeAppointmentsValue));
+        }
+        if (statsPendingBalances) {
+          statsPendingBalances.innerText = formatPendingBalance(pendingBalancesValue);
+          animateStatsValue(statsPendingBalances, formatPendingBalance(pendingBalancesValue));
+        }
       } catch (error) {
-        animateStatsValue(statsTotalPatients, '0');
-        animateStatsValue(statsActiveAppointments, '0');
-        animateStatsValue(statsPendingBalances, '0');
+        const fallbackTotalPatients = allPatients.length;
+        const fallbackActiveAppointments = calculateActiveAppointmentsFallback();
+        const fallbackPendingBalances = calculatePendingBalanceFallback();
+
+        if (statsTotalPatients) {
+          statsTotalPatients.innerText = String(fallbackTotalPatients);
+          animateStatsValue(statsTotalPatients, String(fallbackTotalPatients));
+        }
+        if (statsActiveAppointments) {
+          statsActiveAppointments.innerText = String(fallbackActiveAppointments);
+          animateStatsValue(statsActiveAppointments, String(fallbackActiveAppointments));
+        }
+        if (statsPendingBalances) {
+          statsPendingBalances.innerText = formatPendingBalance(fallbackPendingBalances);
+          animateStatsValue(statsPendingBalances, formatPendingBalance(fallbackPendingBalances));
+        }
       } finally {
         setStatsLoadingState(false);
       }
@@ -654,8 +722,10 @@
     if (yearElement) {
       yearElement.textContent = new Date().getFullYear();
     }
-    fetchPatients();
-    loadPatientStats();
+    window.addEventListener('DOMContentLoaded', async () => {
+      await Promise.all([fetchPatients(), loadAppointmentsForStats()]);
+      await loadPatientStats();
+    });
   </script>
 </body>
 </html>
