@@ -16,6 +16,13 @@
 			background: radial-gradient(circle at top, rgba(129, 140, 248, 0.28), rgba(30, 27, 75, 0.88));
 			backdrop-filter: blur(12px);
 		}
+		.premium-modal-enter {
+			animation: premiumPop 220ms ease-out;
+		}
+		@keyframes premiumPop {
+			from { opacity: 0; transform: scale(0.96) translateY(8px); }
+			to { opacity: 1; transform: scale(1) translateY(0); }
+		}
 	</style>
 </head>
 <body class="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.22),_transparent_30%),linear-gradient(135deg,_#f8fafc_0%,_#eef2ff_45%,_#e0e7ff_100%)] text-slate-800">
@@ -108,6 +115,26 @@
 			<p class="mx-auto max-w-xl text-base leading-8 text-indigo-50 sm:text-lg">
 				هذه الميزة المالية المتقدمة متاحة حصرياً لمشتركي الباقة الفخمة (Premium). يرجى التواصل مع المهندس فارس حلاوي لترقية اشتراكك وتفعيل التقارير المادية.
 			</p>
+			<div class="mt-7 flex flex-col items-center gap-4">
+				<button id="upgradeNowBtn" type="button" class="w-full max-w-sm rounded-2xl border border-amber-200/70 bg-gradient-to-r from-amber-300 via-yellow-300 to-amber-400 px-5 py-3 text-base font-extrabold text-amber-950 shadow-xl shadow-amber-500/30 transition hover:-translate-y-0.5 hover:from-amber-200 hover:to-yellow-300">
+					ترقية الحساب إلى Premium الآن
+				</button>
+				<button id="logoutSwitchAccountBtn" type="button" class="text-sm font-bold text-indigo-100 underline underline-offset-4 transition hover:text-white">
+					تسجيل الخروج لتغيير الحساب
+				</button>
+			</div>
+		</div>
+	</div>
+
+	<div id="premiumUpgradeModal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
+		<div class="premium-modal-enter w-full max-w-xl rounded-3xl border border-amber-200/40 bg-[linear-gradient(155deg,_#ffffff_0%,_#fefce8_45%,_#fff7ed_100%)] p-7 text-right shadow-2xl shadow-slate-900/30 sm:p-8">
+			<div class="mb-4 flex items-center justify-between gap-3">
+				<h4 class="text-xl font-extrabold text-amber-900 sm:text-2xl">تعليمات الترقية الفورية</h4>
+				<button id="closeUpgradeModalBtn" type="button" class="rounded-full border border-amber-200 bg-white/85 px-3 py-1 text-sm font-bold text-amber-800 transition hover:bg-amber-50">إغلاق</button>
+			</div>
+			<p class="leading-8 text-slate-700 sm:text-lg">
+				لتفعيل الميزات المحاسبية وحساب الأرباح، يرجى تحويل رسوم الاشتراك السنوي عبر سيريتل كاش أو بيمو، ثم التواصل مع المهندس فارس حلاوي لتزويدك بكود الترقية الفوري.
+			</p>
 		</div>
 	</div>
 
@@ -120,6 +147,10 @@
 		const sidebarNav = document.getElementById('sidebarNav');
 		const dashboardWrapper = document.getElementById('dashboardWrapper');
 		const premiumOverlay = document.getElementById('premiumOverlay');
+		const upgradeNowBtn = document.getElementById('upgradeNowBtn');
+		const logoutSwitchAccountBtn = document.getElementById('logoutSwitchAccountBtn');
+		const premiumUpgradeModal = document.getElementById('premiumUpgradeModal');
+		const closeUpgradeModalBtn = document.getElementById('closeUpgradeModalBtn');
 
 		const revenueValue = document.getElementById('revenueValue');
 		const expenseValue = document.getElementById('expenseValue');
@@ -231,6 +262,46 @@
 			mobileMenuToggle.addEventListener('click', () => {
 				sidebarNav.classList.toggle('hidden');
 			});
+		}
+
+		function openUpgradeModal() {
+			if (!premiumUpgradeModal) return;
+			premiumUpgradeModal.classList.remove('hidden');
+			premiumUpgradeModal.classList.add('flex');
+		}
+
+		function closeUpgradeModal() {
+			if (!premiumUpgradeModal) return;
+			premiumUpgradeModal.classList.add('hidden');
+			premiumUpgradeModal.classList.remove('flex');
+		}
+
+		function logoutToSwitchAccount() {
+			localStorage.clear();
+			document.body.classList.add('opacity-0');
+			setTimeout(() => {
+				window.location.href = 'login.html';
+			}, 180);
+		}
+
+		if (upgradeNowBtn) {
+			upgradeNowBtn.addEventListener('click', openUpgradeModal);
+		}
+
+		if (closeUpgradeModalBtn) {
+			closeUpgradeModalBtn.addEventListener('click', closeUpgradeModal);
+		}
+
+		if (premiumUpgradeModal) {
+			premiumUpgradeModal.addEventListener('click', (event) => {
+				if (event.target === premiumUpgradeModal) {
+					closeUpgradeModal();
+				}
+			});
+		}
+
+		if (logoutSwitchAccountBtn) {
+			logoutSwitchAccountBtn.addEventListener('click', logoutToSwitchAccount);
 		}
 
 		window.addEventListener('resize', syncSidebarNav);
