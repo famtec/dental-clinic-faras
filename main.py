@@ -1,10 +1,12 @@
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Header
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text, func
 from sqlalchemy.orm import Session
 from typing import List, Optional
+import csv
+import io
 import json
 import re
 from pydantic import AliasChoices, BaseModel, Field, ConfigDict
@@ -373,6 +375,28 @@ def require_premium_user_by_email(db: Session, doctor_email: str | None) -> mode
         )
 
     ensure_user_subscription_is_active(user)
+    return user
+
+
+def get_current_doctor_user(
+    db: Session,
+    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> models.User:
+    normalized_email = (doctor_email or "").strip().lower()
+    if not normalized_email:
+        auth_value = (authorization or "").strip()
+        if auth_value.lower().startswith("bearer "):
+            auth_value = auth_value[7:].strip()
+        normalized_email = auth_value.lower()
+
+    if not normalized_email:
+        raise HTTPException(status_code=401, detail="Doctor email header is required")
+
+    user = db.query(models.User).filter(models.User.email == normalized_email).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
     return user
 
 
@@ -1000,6 +1024,139 @@ def delete_financial_transaction(
         raise HTTPException(status_code=400, detail="تعذر حذف الدفعة المالية حالياً. حاول مرة أخرى.")
 
     return {"message": "تم حذف الدفعة المالية بنجاح"}
+
+
+@app.get("/api/finance/backup")
+def export_finance_backup(
+    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    db: Session = Depends(database.get_db),
+):
+    user = get_current_doctor_user(db, doctor_email=doctor_email, authorization=authorization)
+    doctor_name = (user.doctor_name or "").strip()
+    if not doctor_name:
+        doctor_name = user.email
+    doctor_identifiers = {doctor_name, user.email}
+
+    patients = (
+        db.query(models.Patient)
+        .filter(models.Patient.doctor_name.in_(doctor_identifiers))
+        .order_by(models.Patient.id.asc())
+        .all()
+    )
+    patient_name_to_id = {
+        (patient.full_name or "").strip().lower(): patient.id
+        for patient in patients
+        if (patient.full_name or "").strip()
+    }
+
+    transactions = (
+        db.query(models.FinancialTransaction)
+        .filter(models.FinancialTransaction.doctor_name.in_(doctor_identifiers))
+        .order_by(models.FinancialTransaction.created_at.asc(), models.FinancialTransaction.id.asc())
+        .all()
+    )
+
+    appointments = db.query(models.Appointment).order_by(models.Appointment.id.asc()).all()
+    filtered_appointments = [
+        appointment
+        for appointment in appointments
+        if (appointment.patient_name or "").strip().lower() in patient_name_to_id
+    ]
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow([
+        "record_type",
+        "record_id",
+        "patient_id",
+        "patient_name",
+        "doctor_name",
+        "birth_date",
+        "gender",
+        "medical_history",
+        "appointment_date",
+        "appointment_time",
+        "appointment_status",
+        "transaction_amount",
+        "transaction_type",
+        "transaction_description",
+        "created_at",
+    ])
+
+    for patient in patients:
+        writer.writerow([
+            "patient",
+            patient.id,
+            patient.id,
+            patient.full_name or "",
+            doctor_name,
+            patient.birth_date.isoformat() if patient.birth_date else "",
+            patient.gender or "",
+            patient.medical_history or "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        ])
+
+    for transaction in transactions:
+        linked_patient_name = ""
+        if transaction.patient_id is not None:
+            linked_patient = next((patient for patient in patients if patient.id == transaction.patient_id), None)
+            if linked_patient is not None:
+                linked_patient_name = linked_patient.full_name or ""
+
+        writer.writerow([
+            "financial_transaction",
+            transaction.id,
+            transaction.patient_id or "",
+            linked_patient_name,
+            transaction.doctor_name or doctor_name,
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            str(transaction.amount),
+            transaction.type or "",
+            transaction.description or "",
+            transaction.created_at.isoformat() if transaction.created_at else "",
+        ])
+
+    for appointment in filtered_appointments:
+        appointment_patient_id = patient_name_to_id.get((appointment.patient_name or "").strip().lower(), "")
+        writer.writerow([
+            "appointment",
+            appointment.id,
+            appointment_patient_id,
+            appointment.patient_name or "",
+            doctor_name,
+            "",
+            "",
+            "",
+            appointment.appointment_date.isoformat() if appointment.appointment_date else "",
+            appointment.appointment_time or "",
+            appointment.status or "",
+            "",
+            "",
+            appointment.notes or appointment.procedure_type or "",
+            appointment.appointment_date.isoformat() if appointment.appointment_date else "",
+        ])
+
+    csv_bytes = buffer.getvalue().encode("utf-8-sig")
+    buffer.close()
+
+    response = StreamingResponse(
+        iter([csv_bytes]),
+        media_type="text/csv",
+    )
+    response.headers["Content-Disposition"] = 'attachment; filename="dental_backup_2026.csv"'
+    return response
 
 
 @app.post("/api/prescriptions", response_model=PrescriptionResponse, status_code=201)
