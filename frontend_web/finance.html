@@ -12,16 +12,20 @@
 			background: rgba(255, 255, 255, 0.92);
 			backdrop-filter: blur(12px);
 		}
-		.premium-overlay {
-			background: radial-gradient(circle at top, rgba(129, 140, 248, 0.28), rgba(30, 27, 75, 0.88));
-			backdrop-filter: blur(12px);
+		.badge-premium {
+			background: linear-gradient(130deg, #fef08a 0%, #f59e0b 45%, #fde68a 100%);
+			color: #5b3400;
+			box-shadow: 0 8px 28px rgba(245, 158, 11, 0.45);
 		}
-		.premium-modal-enter {
-			animation: premiumPop 220ms ease-out;
+		.badge-standard {
+			background: linear-gradient(130deg, #4338ca 0%, #6366f1 100%);
+			color: #e0e7ff;
+			box-shadow: 0 8px 22px rgba(67, 56, 202, 0.35);
 		}
-		@keyframes premiumPop {
-			from { opacity: 0; transform: scale(0.96) translateY(8px); }
-			to { opacity: 1; transform: scale(1) translateY(0); }
+		.upgrade-card-hidden {
+			opacity: 0;
+			transform: translateY(-8px);
+			pointer-events: none;
 		}
 	</style>
 </head>
@@ -35,7 +39,10 @@
 		<aside class="panel-soft w-full border-b border-white/60 bg-indigo-900/95 p-4 text-white shadow-2xl shadow-indigo-950/15 lg:min-h-screen lg:w-72 lg:border-b-0 lg:border-l lg:border-white/10 lg:p-6 xl:w-80">
 			<div class="mb-4 flex items-center justify-center gap-3 border-b border-indigo-700 pb-4 lg:mb-8">
 				<img src="logo.png" alt="شعار العيادة" class="h-14 w-14 rounded-xl object-contain bg-white/10 p-2 sm:h-16 sm:w-16" />
-				<h1 id="clinicTitle" class="text-lg font-bold sm:text-xl">عيادتي الرقمية</h1>
+				<div class="flex flex-col items-start gap-2">
+					<h1 id="clinicTitle" class="text-lg font-bold sm:text-xl">عيادتي الرقمية</h1>
+					<span id="tierBadge" class="rounded-full px-3 py-1 text-xs font-extrabold tracking-wide">Standard</span>
+				</div>
 			</div>
 
 			<button id="mobileMenuToggle" type="button" class="mb-3 flex w-full items-center justify-center rounded-lg border border-indigo-700/60 bg-indigo-800/70 px-3 py-2 text-sm font-semibold text-white lg:hidden">☰ القائمة</button>
@@ -50,6 +57,29 @@
 
 		<main class="flex-1 p-4 sm:p-6 lg:p-8 xl:p-10">
 			<div id="dashboardWrapper" class="transition duration-300">
+				<section id="upgradeInlineCard" class="mb-6 rounded-[28px] border border-indigo-200 bg-gradient-to-br from-indigo-800 via-indigo-700 to-violet-700 p-6 text-white shadow-2xl shadow-indigo-900/35 transition duration-300 sm:p-7">
+					<div class="mx-auto max-w-3xl text-center">
+						<div class="mb-3 inline-flex rounded-full border border-indigo-200/40 bg-white/10 px-3 py-1 text-xs font-bold tracking-[0.2em] text-indigo-100">STANDARD PLAN</div>
+						<p class="text-lg font-bold leading-8 sm:text-xl">
+							أنت تستخدم الباقة القياسية الحالية. أدخل كود الترقية لتفعيل التقارير المادية وصافي الأرباح فوراً!
+						</p>
+						<form id="upgradeForm" class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-center">
+							<input
+								id="upgradeCodeInput"
+								type="text"
+								required
+								placeholder="أدخل كود الترقية"
+								class="w-full rounded-2xl border border-indigo-200/30 bg-white/90 px-4 py-3 text-right text-sm font-semibold text-slate-800 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-200 sm:max-w-sm"
+							/>
+							<button id="upgradeSubmitBtn" type="submit" class="rounded-2xl border border-amber-200/70 bg-gradient-to-r from-amber-300 via-yellow-300 to-amber-400 px-5 py-3 text-sm font-extrabold text-amber-950 shadow-xl shadow-amber-500/30 transition hover:-translate-y-0.5 hover:from-amber-200 hover:to-yellow-300">
+								تفعيل الترقية الفورية
+							</button>
+						</form>
+						<p id="upgradeStatus" class="mt-3 text-sm font-semibold text-indigo-100">أدخل الكود ثم اضغط التفعيل.</p>
+					</div>
+				</section>
+
+				<div id="premiumDataWrapper" class="transition duration-300">
 				<section class="panel-soft mb-6 rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/70 sm:p-6">
 					<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 						<div>
@@ -100,6 +130,7 @@
 						</div>
 					</form>
 				</section>
+				</div>
 			</div>
 
 			<footer class="mt-8 text-center text-xs font-mono tracking-wide text-indigo-500/90">
@@ -108,49 +139,24 @@
 		</main>
 	</div>
 
-	<div id="premiumOverlay" class="premium-overlay fixed inset-0 z-50 hidden items-center justify-center px-4">
-		<div class="w-full max-w-2xl rounded-3xl border border-violet-200/30 bg-white/10 p-8 text-center shadow-2xl shadow-violet-950/30 backdrop-blur-xl sm:p-10">
-			<div class="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full border border-white/25 bg-white/15 text-4xl">🔒</div>
-			<h3 class="mb-4 text-2xl font-extrabold text-white sm:text-3xl">وصول Premium مطلوب</h3>
-			<p class="mx-auto max-w-xl text-base leading-8 text-indigo-50 sm:text-lg">
-				هذه الميزة المالية المتقدمة متاحة حصرياً لمشتركي الباقة الفخمة (Premium). يرجى التواصل مع المهندس فارس حلاوي لترقية اشتراكك وتفعيل التقارير المادية.
-			</p>
-			<div class="mt-7 flex flex-col items-center gap-4">
-				<button id="upgradeNowBtn" type="button" class="w-full max-w-sm rounded-2xl border border-amber-200/70 bg-gradient-to-r from-amber-300 via-yellow-300 to-amber-400 px-5 py-3 text-base font-extrabold text-amber-950 shadow-xl shadow-amber-500/30 transition hover:-translate-y-0.5 hover:from-amber-200 hover:to-yellow-300">
-					ترقية الحساب إلى Premium الآن
-				</button>
-				<button id="logoutSwitchAccountBtn" type="button" class="text-sm font-bold text-indigo-100 underline underline-offset-4 transition hover:text-white">
-					تسجيل الخروج لتغيير الحساب
-				</button>
-			</div>
-		</div>
-	</div>
-
-	<div id="premiumUpgradeModal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
-		<div class="premium-modal-enter w-full max-w-xl rounded-3xl border border-amber-200/40 bg-[linear-gradient(155deg,_#ffffff_0%,_#fefce8_45%,_#fff7ed_100%)] p-7 text-right shadow-2xl shadow-slate-900/30 sm:p-8">
-			<div class="mb-4 flex items-center justify-between gap-3">
-				<h4 class="text-xl font-extrabold text-amber-900 sm:text-2xl">تعليمات الترقية الفورية</h4>
-				<button id="closeUpgradeModalBtn" type="button" class="rounded-full border border-amber-200 bg-white/85 px-3 py-1 text-sm font-bold text-amber-800 transition hover:bg-amber-50">إغلاق</button>
-			</div>
-			<p class="leading-8 text-slate-700 sm:text-lg">
-				لتفعيل الميزات المحاسبية وحساب الأرباح، يرجى تحويل رسوم الاشتراك السنوي عبر سيريتل كاش أو بيمو، ثم التواصل مع المهندس فارس حلاوي لتزويدك بكود الترقية الفوري.
-			</p>
-		</div>
-	</div>
+	<script src="api-config.js"></script>
 
 	<script>
-		// Premium gate at the very top of page load.
-		const userTier = localStorage.getItem("user_tier");
+		// Feature gate at the very top of page load.
+		const currentTier = localStorage.getItem("user_tier");
+		let activeTier = currentTier === 'premium' ? 'premium' : 'standard';
 
 		const clinicTitle = document.getElementById('clinicTitle');
+		const tierBadge = document.getElementById('tierBadge');
 		const mobileMenuToggle = document.getElementById('mobileMenuToggle');
 		const sidebarNav = document.getElementById('sidebarNav');
 		const dashboardWrapper = document.getElementById('dashboardWrapper');
-		const premiumOverlay = document.getElementById('premiumOverlay');
-		const upgradeNowBtn = document.getElementById('upgradeNowBtn');
-		const logoutSwitchAccountBtn = document.getElementById('logoutSwitchAccountBtn');
-		const premiumUpgradeModal = document.getElementById('premiumUpgradeModal');
-		const closeUpgradeModalBtn = document.getElementById('closeUpgradeModalBtn');
+		const upgradeInlineCard = document.getElementById('upgradeInlineCard');
+		const premiumDataWrapper = document.getElementById('premiumDataWrapper');
+		const upgradeForm = document.getElementById('upgradeForm');
+		const upgradeCodeInput = document.getElementById('upgradeCodeInput');
+		const upgradeSubmitBtn = document.getElementById('upgradeSubmitBtn');
+		const upgradeStatus = document.getElementById('upgradeStatus');
 
 		const revenueValue = document.getElementById('revenueValue');
 		const expenseValue = document.getElementById('expenseValue');
@@ -161,9 +167,10 @@
 		const expenseStatus = document.getElementById('expenseStatus');
 		const expenseSubmitBtn = document.getElementById('expenseSubmitBtn');
 
-		const RENDER_BASE_URL = 'https://onrender.com';
+		const RENDER_BASE_URL = 'https://dental-clinic-faras.onrender.com';
 		const METRICS_ENDPOINT = `${RENDER_BASE_URL}/api/finance/summary`;
 		const EXPENSE_POST_ENDPOINT = `${RENDER_BASE_URL}/api/finance/expenses`;
+		const UPGRADE_ENDPOINT = `${RENDER_BASE_URL}/api/auth/upgrade-tier`;
 
 		function syncSidebarNav() {
 			if (!sidebarNav) return;
@@ -200,6 +207,51 @@
 				expenseStatus.className = 'text-sm font-medium text-slate-500';
 			}
 			expenseStatus.textContent = message;
+		}
+
+		function setUpgradeStatus(message, type = 'normal') {
+			if (!upgradeStatus) return;
+			if (type === 'error') {
+				upgradeStatus.className = 'mt-3 text-sm font-semibold text-rose-100';
+			} else if (type === 'success') {
+				upgradeStatus.className = 'mt-3 text-sm font-semibold text-emerald-200';
+			} else {
+				upgradeStatus.className = 'mt-3 text-sm font-semibold text-indigo-100';
+			}
+			upgradeStatus.textContent = message;
+		}
+
+		function renderTierBadge() {
+			if (!tierBadge) return;
+			if (activeTier === 'premium') {
+				tierBadge.className = 'badge-premium rounded-full px-3 py-1 text-xs font-extrabold tracking-wide';
+				tierBadge.textContent = 'Premium 👑';
+				return;
+			}
+
+			tierBadge.className = 'badge-standard rounded-full px-3 py-1 text-xs font-extrabold tracking-wide';
+			tierBadge.textContent = 'Standard';
+		}
+
+		function renderTierExperience() {
+			if (activeTier === 'premium') {
+				if (upgradeInlineCard) {
+					upgradeInlineCard.classList.add('upgrade-card-hidden');
+					setTimeout(() => {
+						upgradeInlineCard.classList.add('hidden');
+					}, 220);
+				}
+				premiumDataWrapper.classList.remove('pointer-events-none', 'blur-[4px]', 'opacity-70');
+				fetchFinancialMetrics();
+				return;
+			}
+
+			if (upgradeInlineCard) {
+				upgradeInlineCard.classList.remove('hidden', 'upgrade-card-hidden');
+			}
+			premiumDataWrapper.classList.add('pointer-events-none', 'blur-[4px]', 'opacity-70');
+			setMetrics(0, 0);
+			lastSync.textContent = 'آخر تحديث: متاح بعد الترقية إلى Premium';
 		}
 
 		async function fetchFinancialMetrics() {
@@ -264,44 +316,51 @@
 			});
 		}
 
-		function openUpgradeModal() {
-			if (!premiumUpgradeModal) return;
-			premiumUpgradeModal.classList.remove('hidden');
-			premiumUpgradeModal.classList.add('flex');
-		}
+		async function submitUpgradeCode(event) {
+			event.preventDefault();
+			const activationCode = String(upgradeCodeInput?.value || '').trim();
 
-		function closeUpgradeModal() {
-			if (!premiumUpgradeModal) return;
-			premiumUpgradeModal.classList.add('hidden');
-			premiumUpgradeModal.classList.remove('flex');
-		}
+			if (!activationCode) {
+				setUpgradeStatus('يرجى إدخال كود الترقية أولاً.', 'error');
+				return;
+			}
 
-		function logoutToSwitchAccount() {
-			localStorage.clear();
-			document.body.classList.add('opacity-0');
-			setTimeout(() => {
-				window.location.href = 'login.html';
-			}, 180);
-		}
+			if (!upgradeSubmitBtn) return;
+			upgradeSubmitBtn.disabled = true;
+			upgradeSubmitBtn.textContent = 'جاري التحقق...';
+			setUpgradeStatus('يتم التحقق من الكود مع الخادم الآن...', 'normal');
 
-		if (upgradeNowBtn) {
-			upgradeNowBtn.addEventListener('click', openUpgradeModal);
-		}
+			try {
+				const response = await fetch(UPGRADE_ENDPOINT, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ activation_code: activationCode })
+				});
 
-		if (closeUpgradeModalBtn) {
-			closeUpgradeModalBtn.addEventListener('click', closeUpgradeModal);
-		}
-
-		if (premiumUpgradeModal) {
-			premiumUpgradeModal.addEventListener('click', (event) => {
-				if (event.target === premiumUpgradeModal) {
-					closeUpgradeModal();
+				let data = null;
+				try {
+					data = await response.json();
+				} catch (error) {
+					data = null;
 				}
-			});
-		}
 
-		if (logoutSwitchAccountBtn) {
-			logoutSwitchAccountBtn.addEventListener('click', logoutToSwitchAccount);
+				if (!response.ok) {
+					const safeMessage = data?.detail || data?.message || 'تعذر تفعيل الترقية حالياً. تأكد من الكود ثم أعد المحاولة.';
+					setUpgradeStatus(safeMessage, 'error');
+					return;
+				}
+
+				localStorage.setItem('user_tier', 'premium');
+				activeTier = 'premium';
+				renderTierBadge();
+				setUpgradeStatus('تم تفعيل Premium بنجاح. يتم تحديث التقارير الآن...', 'success');
+				renderTierExperience();
+			} catch (error) {
+				setUpgradeStatus('تعذر الاتصال بالخادم أثناء محاولة الترقية.', 'error');
+			} finally {
+				upgradeSubmitBtn.disabled = false;
+				upgradeSubmitBtn.textContent = 'تفعيل الترقية الفورية';
+			}
 		}
 
 		window.addEventListener('resize', syncSidebarNav);
@@ -309,15 +368,17 @@
 
 		const doctorName = localStorage.getItem('doctor_name');
 		clinicTitle.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادتي الرقمية';
+		renderTierBadge();
 
-		if (userTier !== 'premium') {
-			dashboardWrapper.classList.add('pointer-events-none', 'select-none', 'blur-[8px]', 'opacity-40');
-			premiumOverlay.classList.remove('hidden');
-			premiumOverlay.classList.add('flex');
-		} else {
-			fetchFinancialMetrics();
+		if (expenseForm) {
 			expenseForm.addEventListener('submit', submitExpense);
 		}
+
+		if (upgradeForm) {
+			upgradeForm.addEventListener('submit', submitUpgradeCode);
+		}
+
+		renderTierExperience();
 	</script>
 </body>
 </html>
