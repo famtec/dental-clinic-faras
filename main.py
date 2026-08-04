@@ -4,7 +4,7 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text, func
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Literal
 import csv
 import io
 import json
@@ -110,6 +110,7 @@ app.add_middleware(
 # 3. بناء مخطط (Schema) لاستقبال بيانات المريض عبر الـ API وتدقيقها (Pydantic)
 class PatientCreate(BaseModel):
     doctor_name: Optional[str] = None
+    doctor_email: Optional[str] = None
     full_name: str
     phone: str
     birth_date: date = None
@@ -185,6 +186,10 @@ class AppointmentUpdate(BaseModel):
     appointment_date: Optional[datetime] = None
     appointment_time: Optional[str] = None
     description: Optional[str] = None
+
+
+class AppointmentStatusUpdate(BaseModel):
+    status: Literal["checked_in", "no_show", "pending"]
 
 
 class AppointmentResponse(BaseModel):
@@ -624,9 +629,26 @@ def upgrade_user_tier(upgrade_request: UpgradeTierRequest, db: Session = Depends
 
 # 4. مسار إرسال (حفظ) مريض جديد في النظام [POST]
 @app.post("/api/patients", response_model=PatientResponse)
-def create_patient(patient: PatientCreate, db: Session = Depends(database.get_db)):
+def create_patient(
+    patient: PatientCreate,
+    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    db: Session = Depends(database.get_db),
+):
+    current_user = None
+    try:
+        current_user = get_current_doctor_user(db, doctor_email=doctor_email, authorization=authorization)
+    except HTTPException:
+        current_user = None
+
+    resolved_doctor_name = (patient.doctor_name or "").strip()
+    if not resolved_doctor_name and current_user is not None:
+        resolved_doctor_name = (current_user.doctor_name or current_user.email or "").strip()
+    if not resolved_doctor_name:
+        resolved_doctor_name = (patient.doctor_email or doctor_email or "").strip().lower()
+
     db_patient = models.Patient(
-        doctor_name=patient.doctor_name,
+        doctor_name=resolved_doctor_name or None,
         full_name=patient.full_name,
         phone=patient.phone,
         birth_date=patient.birth_date if patient.birth_date else None,
@@ -762,7 +784,7 @@ def create_appointment(appointment: AppointmentCreate, db: Session = Depends(dat
         appointment_time=normalized_time,
         procedure_type=description_value,
         notes=description_value,
-        status=(appointment.status or "Pending").strip() or "Pending",
+        status=(appointment.status or "pending").strip().lower() or "pending",
     )
 
     try:
@@ -816,6 +838,31 @@ def update_appointment(appointment_id: int, appointment_update: AppointmentUpdat
     except Exception:
         db.rollback()
         raise HTTPException(status_code=400, detail="تعذر تحديث الموعد حالياً. حاول مرة أخرى.")
+
+
+@app.put("/api/appointments/{appointment_id}/status", status_code=200)
+def update_appointment_status(
+    appointment_id: int,
+    status_update: AppointmentStatusUpdate,
+    db: Session = Depends(database.get_db),
+):
+    appointment = db.query(models.Appointment).filter(models.Appointment.id == appointment_id).first()
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    try:
+        appointment.status = status_update.status.strip().lower()
+        db.commit()
+        db.refresh(appointment)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر تحديث حالة الموعد حالياً. حاول مرة أخرى.")
+
+    return {
+        "message": "Appointment status updated successfully",
+        "appointment_id": appointment.id,
+        "status": appointment.status,
+    }
 
 
 @app.delete("/api/appointments/{appointment_id}", status_code=200)
@@ -984,11 +1031,20 @@ def get_patient_stats(
 
     doctor_identifiers = {doctor_name, user.email}
 
-    patients = (
+    linked_patients = (
         db.query(models.Patient)
         .filter(models.Patient.doctor_name.in_(doctor_identifiers))
         .all()
     )
+    patients = linked_patients
+    if not patients:
+        legacy_patients = (
+            db.query(models.Patient)
+            .filter(models.Patient.doctor_name.is_(None))
+            .all()
+        )
+        patients = legacy_patients
+
     patient_ids = [patient.id for patient in patients]
     patient_names = {
         (patient.full_name or "").strip().lower(): patient.id

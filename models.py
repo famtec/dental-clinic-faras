@@ -52,7 +52,7 @@ class Appointment(Base):
     appointment_time = Column(String, nullable=False)
     procedure_type = Column(String, nullable=False)
     notes = Column(String, nullable=True)
-    status = Column(String, default="Pending")
+    status = Column(String, nullable=False, default="pending", server_default=text("'pending'"))
 
 
 class Visit(Base):

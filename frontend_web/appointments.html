@@ -8,6 +8,16 @@
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
     <style>
         body { font-family: 'Tajawal', sans-serif; }
+        @keyframes toastIn {
+            0% { opacity: 0; transform: translate(-50%, -16px) scale(0.96); filter: blur(2px); }
+            100% { opacity: 1; transform: translate(-50%, 0) scale(1); filter: blur(0); }
+        }
+        @keyframes toastOut {
+            0% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -12px) scale(0.98); }
+        }
+        .toast-enter { animation: toastIn 240ms cubic-bezier(0.2, 0.9, 0.2, 1) forwards; }
+        .toast-exit { animation: toastOut 180ms ease-in forwards; }
         .badge-premium {
             background: linear-gradient(130deg, #fef08a 0%, #f59e0b 45%, #fde68a 100%);
             color: #5b3400;
@@ -66,7 +76,7 @@
                                 <th class="px-4 py-3 font-semibold">اسم المريض</th>
                                 <th class="px-4 py-3 font-semibold">الوقت</th>
                                 <th class="px-4 py-3 font-semibold">الإجراء</th>
-                                <th class="px-4 py-3 font-semibold">الحالة</th>
+                                <th class="px-4 py-3 font-semibold">حالة الموعد</th>
                                 <th class="px-4 py-3 font-semibold">إجراءات</th>
                             </tr>
                         </thead>
@@ -76,6 +86,9 @@
                 </div>
             </section>
         </main>
+    </div>
+
+    <div id="toast" class="pointer-events-none fixed left-1/2 top-6 z-[70] hidden w-[min(92vw,28rem)] -translate-x-1/2 rounded-3xl border border-white/20 bg-[linear-gradient(160deg,_rgba(15,23,42,0.96),_rgba(49,46,129,0.95),_rgba(67,56,202,0.94))] px-4 py-3 text-sm font-semibold text-white shadow-2xl shadow-indigo-950/40 backdrop-blur-xl opacity-0">
     </div>
 
     <div id="appointmentModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 p-4 opacity-0 backdrop-blur-sm transition-opacity duration-200">
@@ -182,14 +195,115 @@
         const patientIdInput = document.getElementById('appointmentPatientId');
         const patientOptionsList = document.getElementById('appointmentPatientOptions');
         const appointmentSubmitBtn = document.getElementById('appointmentSubmitBtn');
+        const toast = document.getElementById('toast');
         const currentDoctorName = localStorage.getItem('doctor_name') || 'الطبيب المعالج';
         let appointmentModalCloseTimer = null;
         let allPatients = [];
         let currentAppointments = [];
         let activeAppointment = null;
+        let toastTimer = null;
+
+        const APPOINTMENT_STATUS_OPTIONS = {
+            pending: {
+                label: 'في الانتظار',
+                rowClass: 'bg-amber-50/80 ring-1 ring-amber-200/70',
+                badgeClass: 'bg-amber-100 text-amber-800 border border-amber-200',
+            },
+            checked_in: {
+                label: 'دخل العيادة',
+                rowClass: 'bg-emerald-50/80 ring-1 ring-emerald-200/70',
+                badgeClass: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
+            },
+            no_show: {
+                label: 'تخلف عن الموعد',
+                rowClass: 'bg-rose-50/80 ring-1 ring-rose-200/70',
+                badgeClass: 'bg-rose-100 text-rose-800 border border-rose-200',
+            },
+        };
+
+        function normalizeAppointmentStatus(status) {
+            const normalized = String(status || 'pending').trim().toLowerCase();
+            return Object.prototype.hasOwnProperty.call(APPOINTMENT_STATUS_OPTIONS, normalized)
+                ? normalized
+                : 'pending';
+        }
+
+        function getAppointmentStatusMeta(status) {
+            return APPOINTMENT_STATUS_OPTIONS[normalizeAppointmentStatus(status)] || APPOINTMENT_STATUS_OPTIONS.pending;
+        }
+
+        function setAppointmentRowStatus(row, status) {
+            if (!row) return;
+
+            const normalizedStatus = normalizeAppointmentStatus(status);
+            row.dataset.appointmentStatus = normalizedStatus;
+            row.classList.remove(
+                'bg-amber-50/80', 'ring-1', 'ring-amber-200/70',
+                'bg-emerald-50/80', 'ring-1', 'ring-emerald-200/70',
+                'bg-rose-50/80', 'ring-1', 'ring-rose-200/70'
+            );
+            row.classList.add(...getAppointmentStatusMeta(normalizedStatus).rowClass.split(' '));
+        }
+
+        function showToast(message, tone = 'info') {
+            if (!toast) {
+                alert(message);
+                return;
+            }
+
+            if (toastTimer) {
+                window.clearTimeout(toastTimer);
+                toastTimer = null;
+            }
+
+            const toneClasses = {
+                success: 'border-emerald-300/30 bg-[linear-gradient(160deg,_rgba(6,78,59,0.96),_rgba(16,185,129,0.9),_rgba(5,150,105,0.95))] shadow-emerald-950/30',
+                error: 'border-rose-300/30 bg-[linear-gradient(160deg,_rgba(127,29,29,0.96),_rgba(225,29,72,0.9),_rgba(190,18,60,0.95))] shadow-rose-950/30',
+                info: 'border-white/20 bg-[linear-gradient(160deg,_rgba(15,23,42,0.96),_rgba(49,46,129,0.95),_rgba(67,56,202,0.94))] shadow-indigo-950/40',
+            };
+
+            toast.className = `pointer-events-none fixed left-1/2 top-6 z-[70] hidden w-[min(92vw,28rem)] -translate-x-1/2 rounded-3xl border px-4 py-3 text-sm font-semibold text-white shadow-2xl backdrop-blur-xl opacity-0 ${toneClasses[tone] || toneClasses.info}`;
+            toast.textContent = message;
+            toast.classList.remove('hidden', 'toast-exit');
+            toast.classList.add('toast-enter');
+
+            toastTimer = window.setTimeout(() => {
+                toast.classList.remove('toast-enter');
+                toast.classList.add('toast-exit');
+                window.setTimeout(() => {
+                    toast.classList.add('hidden');
+                    toast.classList.remove('toast-exit');
+                }, 180);
+            }, 2400);
+        }
 
         function normalizeText(value) {
             return String(value || '').trim().toLowerCase();
+        }
+
+        function getAppointmentRowClass(status) {
+            return getAppointmentStatusMeta(status).rowClass;
+        }
+
+        function renderAppointmentStatusSelect(status, appointmentId) {
+            const normalizedStatus = normalizeAppointmentStatus(status);
+            const statusLabel = getAppointmentStatusMeta(normalizedStatus).label;
+
+            return `
+                <label class="flex flex-col gap-2">
+                    <span class="text-xs font-semibold text-slate-500 sm:hidden">حالة الموعد</span>
+                    <select
+                        data-status-select="1"
+                        data-appointment-id="${appointmentId ?? ''}"
+                        class="w-full min-w-[10rem] rounded-2xl border border-slate-200 bg-white/90 px-3 py-2 text-xs font-bold text-slate-700 shadow-sm outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                    >
+                        <option value="pending" ${normalizedStatus === 'pending' ? 'selected' : ''}>في الانتظار</option>
+                        <option value="checked_in" ${normalizedStatus === 'checked_in' ? 'selected' : ''}>دخل العيادة</option>
+                        <option value="no_show" ${normalizedStatus === 'no_show' ? 'selected' : ''}>تخلف عن الموعد</option>
+                    </select>
+                    <span class="sm:hidden text-[11px] font-semibold text-slate-400">${statusLabel}</span>
+                </label>
+            `;
         }
 
         function renderPatientOptions() {
@@ -420,7 +534,7 @@
         function renderAppointments(appointments) {
             currentAppointments = Array.isArray(appointments) ? appointments : [];
 
-            if (!appointments.length) {
+            if (!currentAppointments.length) {
                 tableBody.innerHTML = `
                     <tr>
                         <td colspan="6" class="px-4 py-8 text-center text-sm text-slate-500">لا توجد مواعيد مسجلة حاليًا.</td>
@@ -429,16 +543,13 @@
                 return;
             }
 
-            tableBody.innerHTML = appointments.map((appointment) => {
-                const status = appointment.status || 'Pending';
-                const badgeClass = status === 'Completed'
-                    ? 'bg-emerald-100 text-emerald-700'
-                    : status === 'Cancelled'
-                        ? 'bg-rose-100 text-rose-700'
-                        : 'bg-amber-100 text-amber-700';
+            tableBody.innerHTML = currentAppointments.map((appointment) => {
+                const normalizedStatus = normalizeAppointmentStatus(appointment.status);
+                const statusMeta = getAppointmentStatusMeta(normalizedStatus);
+                const rowClass = `appointment-row block rounded-2xl border border-slate-200 p-2 shadow-sm transition hover:shadow-md sm:table-row sm:rounded-none sm:border-0 sm:p-0 ${statusMeta.rowClass}`;
 
                 return `
-                    <tr class="block rounded-2xl border border-slate-200 bg-white p-2 shadow-sm transition hover:bg-slate-50 sm:table-row sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0">
+                    <tr data-appointment-id="${appointment.id ?? ''}" data-appointment-status="${normalizedStatus}" class="${rowClass}">
                         <td class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-sm text-slate-600 last:border-b-0 sm:table-cell sm:border-b-0">
                             <span class="text-xs font-semibold text-slate-400 sm:hidden">ID</span>
                             <span>${appointment.id ?? '-'}</span>
@@ -456,8 +567,8 @@
                             <span>${appointment.procedure_type || '—'}</span>
                         </td>
                         <td class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-sm last:border-b-0 sm:table-cell sm:border-b-0">
-                            <span class="text-xs font-semibold text-slate-400 sm:hidden">الحالة</span>
-                            <span class="rounded-full px-3 py-1 ${badgeClass}">${status}</span>
+                            <span class="text-xs font-semibold text-slate-400 sm:hidden">حالة الموعد</span>
+                            ${renderAppointmentStatusSelect(normalizedStatus, appointment.id)}
                         </td>
                         <td class="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 text-sm last:border-b-0 sm:table-cell sm:border-b-0">
                             <span class="text-xs font-semibold text-slate-400 sm:hidden">إجراءات</span>
@@ -472,6 +583,7 @@
             }).join('');
 
             attachAppointmentRowListeners();
+            attachAppointmentStatusListeners();
         }
 
         function attachAppointmentRowListeners() {
@@ -531,6 +643,61 @@
                     }
 
                     sendWhatsappReminder(appointment);
+                });
+            });
+        }
+
+        async function updateAppointmentStatus(appointmentId, status, triggerElement) {
+            const response = await fetch(apiUrl(`/api/appointments/${encodeURIComponent(String(appointmentId))}/status`), {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ status }),
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || 'تعذر تحديث حالة الموعد حالياً');
+            }
+
+            const row = triggerElement?.closest('tr');
+            if (row) {
+                setAppointmentRowStatus(row, status);
+            }
+
+            return response.json().catch(() => ({}));
+        }
+
+        function attachAppointmentStatusListeners() {
+            tableBody.querySelectorAll('[data-status-select="1"]').forEach((select) => {
+                select.addEventListener('change', async () => {
+                    const appointmentId = select.getAttribute('data-appointment-id');
+                    const nextStatus = normalizeAppointmentStatus(select.value);
+                    const row = select.closest('tr');
+                    const previousStatus = normalizeAppointmentStatus(row?.dataset.appointmentStatus || select.getAttribute('data-previous-status') || 'pending');
+
+                    if (!appointmentId) return;
+
+                    select.disabled = true;
+                    select.setAttribute('data-previous-status', previousStatus);
+
+                    try {
+                        await updateAppointmentStatus(appointmentId, nextStatus, select);
+                        if (row) {
+                            row.dataset.appointmentStatus = nextStatus;
+                            setAppointmentRowStatus(row, nextStatus);
+                        }
+                        showToast('تم تحديث حالة الموعد بنجاح', 'success');
+                    } catch (error) {
+                        select.value = previousStatus;
+                        if (row) {
+                            setAppointmentRowStatus(row, previousStatus);
+                        }
+                        showToast('تعذر تحديث حالة الموعد. حاول مرة أخرى.', 'error');
+                    } finally {
+                        select.disabled = false;
+                    }
                 });
             });
         }
@@ -596,7 +763,7 @@
                 appointment_time: selectedTime,
                 notes: description,
                 procedure_type: description,
-                status: activeAppointment?.status || 'Pending'
+                status: normalizeAppointmentStatus(activeAppointment?.status || 'pending')
             };
 
             try {
@@ -619,10 +786,10 @@
 
                 closeModal();
                 await loadAppointments();
-                alert(isEditMode ? 'تم تحديث الموعد بنجاح' : 'تم حفظ الموعد بنجاح');
+                showToast(isEditMode ? 'تم تحديث الموعد بنجاح' : 'تم حفظ الموعد بنجاح', 'success');
             } catch (error) {
                 console.error(error);
-                alert(`فشل حفظ الموعد: ${error.message}`);
+                showToast(`فشل حفظ الموعد: ${error.message}`, 'error');
             }
         });
 

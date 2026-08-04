@@ -55,7 +55,7 @@ def init_db():
                     connection.execute(text("ALTER TABLE appointments ADD COLUMN procedure_type VARCHAR NOT NULL DEFAULT ''"))
             if "status" not in appointment_columns:
                 with engine.begin() as connection:
-                    connection.execute(text("ALTER TABLE appointments ADD COLUMN status VARCHAR NOT NULL DEFAULT 'Pending'"))
+                    connection.execute(text("ALTER TABLE appointments ADD COLUMN status VARCHAR NOT NULL DEFAULT 'pending'"))
             if "appointment_date" not in appointment_columns:
                 with engine.begin() as connection:
                     connection.execute(text("ALTER TABLE appointments ADD COLUMN appointment_date DATETIME"))
