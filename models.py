@@ -10,6 +10,7 @@ class User(Base):
     doctor_name = Column(String, nullable=True)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
+    tier = Column(String, default="standard", nullable=False)
     subscription_expires_at = Column(DateTime, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
 

@@ -27,6 +27,12 @@ def init_db():
                 with engine.begin() as connection:
                     connection.execute(text("ALTER TABLE patients ADD COLUMN doctor_name VARCHAR"))
 
+        if "users" in inspector.get_table_names():
+            user_columns = {column["name"] for column in inspector.get_columns("users")}
+            if "tier" not in user_columns:
+                with engine.begin() as connection:
+                    connection.execute(text("ALTER TABLE users ADD COLUMN tier VARCHAR NOT NULL DEFAULT 'standard'"))
+
 
 def get_db():
     db = SessionLocal()

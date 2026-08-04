@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>عيادتي الرقمية - تسجيل الدخول</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
   <style>
@@ -114,6 +115,18 @@
             </button>
           </form>
 
+          <div class="my-5 flex items-center gap-3 text-xs text-slate-400">
+            <span class="h-px flex-1 bg-slate-200"></span>
+            <span>أو</span>
+            <span class="h-px flex-1 bg-slate-200"></span>
+          </div>
+
+          <div class="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+            <p class="mb-3 text-center text-xs font-semibold text-slate-600">الدخول السريع باستخدام Google</p>
+            <div id="googleSignInButton" class="flex justify-center"></div>
+            <p id="googleStatusHint" class="mt-3 hidden text-center text-xs font-medium text-slate-500"></p>
+          </div>
+
           <div class="mt-5 flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
             <span>لا تملك حسابًا بعد؟</span>
             <a href="register.html" class="font-bold text-indigo-700 transition hover:text-indigo-800">فعّل عيادتك الآن</a>
@@ -144,6 +157,8 @@
     const loginHint = document.getElementById('loginHint');
     const emailPreview = document.getElementById('emailPreview');
     const capsLockHint = document.getElementById('capsLockHint');
+    const googleStatusHint = document.getElementById('googleStatusHint');
+    const googleSignInButton = document.getElementById('googleSignInButton');
 
     function showMessage(text, type = 'error') {
       const baseClasses = 'rounded-2xl border px-4 py-3 text-sm font-medium shadow-sm';
@@ -164,6 +179,139 @@
     function setLoading(isLoading) {
       submitBtn.disabled = isLoading;
       submitBtn.textContent = isLoading ? 'جاري تسجيل الدخول...' : 'تسجيل الدخول الرقمي';
+    }
+
+    function setGoogleHint(text = '', type = 'normal') {
+      if (!text) {
+        googleStatusHint.classList.add('hidden');
+        googleStatusHint.textContent = '';
+        return;
+      }
+
+      const baseClass = 'mt-3 text-center text-xs font-medium';
+      if (type === 'error') {
+        googleStatusHint.className = `${baseClass} text-rose-600`;
+      } else if (type === 'success') {
+        googleStatusHint.className = `${baseClass} text-emerald-700`;
+      } else {
+        googleStatusHint.className = `${baseClass} text-slate-500`;
+      }
+
+      googleStatusHint.textContent = text;
+      googleStatusHint.classList.remove('hidden');
+    }
+
+    function persistLoginSession(data) {
+      const token = data?.token || data?.accessToken || data?.access_token || data?.authToken || data?.auth_token;
+      const tier = (data?.tier || 'standard').toString().toLowerCase();
+
+      if (rememberMeCheckbox.checked) {
+        localStorage.setItem('rememberMe', 'true');
+      } else {
+        localStorage.removeItem('rememberMe');
+      }
+
+      if (token) {
+        localStorage.setItem('authToken', token);
+      }
+
+      if (data?.doctor_name) {
+        localStorage.setItem('doctor_name', data.doctor_name);
+      }
+
+      localStorage.setItem('user_tier', tier);
+    }
+
+    async function submitGoogleCredential(credential) {
+      setGoogleHint('جاري التحقق من حساب Google...', 'normal');
+      hideMessage();
+
+      try {
+        const response = await fetch(apiUrl('/api/auth/google-login'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ credential })
+        });
+
+        let data = null;
+        try {
+          data = await response.json();
+        } catch (error) {
+          data = null;
+        }
+
+        if (response.status === 200) {
+          persistLoginSession(data);
+          setGoogleHint('تم تسجيل الدخول بنجاح. جارٍ التحويل...', 'success');
+          window.location.href = 'index.html';
+          return;
+        }
+
+        if (response.status === 403) {
+          showMessage('عذراً، انتهت مدة الاشتراك السنوية. يرجى التواصل مع المهندس فارس حلاوي للتجديد ودفع الاشتراك.', 'error');
+          setGoogleHint('هذا الحساب غير نشط حالياً بسبب حالة الاشتراك.', 'error');
+          return;
+        }
+
+        if (response.status === 401) {
+          showMessage('هذا البريد غير مفعّل في النظام. أنشئ الحساب أولاً ثم استخدم Google.', 'error');
+          setGoogleHint('لا يوجد حساب مرتبط بهذا البريد داخل النظام.', 'error');
+          return;
+        }
+
+        if (response.status === 503) {
+          showMessage('تسجيل الدخول عبر Google غير مُفعّل على الخادم بعد. يرجى ضبط Google Client ID في إعدادات السيرفر.', 'error');
+          setGoogleHint('الخدمة غير مفعلة حالياً.', 'error');
+          return;
+        }
+
+        const fallbackMessage = data?.message || data?.detail || data?.error || 'تعذر تسجيل الدخول عبر Google.';
+        showMessage(fallbackMessage, 'error');
+        setGoogleHint('فشل تسجيل الدخول عبر Google.', 'error');
+      } catch (error) {
+        showMessage('تعذر الاتصال بالخادم الآن. يرجى المحاولة لاحقًا.', 'error');
+        setGoogleHint('تعذر التحقق من Google حالياً.', 'error');
+      }
+    }
+
+    function initializeGoogleSignIn(retryCount = 0) {
+      const googleClientId = window.DENTAL_APP_CONFIG?.googleClientId || '';
+
+      if (!googleClientId) {
+        setGoogleHint('زر Google يحتاج إعداد Google Client ID مرة واحدة في localStorage عبر المفتاح googleClientIdOverride.', 'normal');
+        return;
+      }
+
+      if (!window.google || !window.google.accounts || !window.google.accounts.id) {
+        if (retryCount < 12) {
+          setTimeout(() => initializeGoogleSignIn(retryCount + 1), 250);
+          return;
+        }
+        setGoogleHint('تعذر تحميل مكتبة Google. حدّث الصفحة وحاول مرة أخرى.', 'error');
+        return;
+      }
+
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: (response) => {
+          if (!response || !response.credential) {
+            setGoogleHint('لم يتم استلام بيانات اعتماد Google.', 'error');
+            return;
+          }
+          submitGoogleCredential(response.credential);
+        }
+      });
+
+      window.google.accounts.id.renderButton(googleSignInButton, {
+        type: 'standard',
+        theme: 'outline',
+        size: 'large',
+        text: 'signin_with',
+        shape: 'pill',
+        width: 290
+      });
+
+      window.google.accounts.id.prompt();
     }
 
     function updateLoginInsights() {
@@ -262,21 +410,7 @@
         }
 
         if (response.status === 200) {
-          const token = data?.token || data?.accessToken || data?.access_token || data?.authToken || data?.auth_token;
-
-          if (rememberMeCheckbox.checked) {
-            localStorage.setItem('rememberMe', 'true');
-          } else {
-            localStorage.removeItem('rememberMe');
-          }
-
-          if (token) {
-            localStorage.setItem('authToken', token);
-          }
-
-          if (data?.doctor_name) {
-            localStorage.setItem('doctor_name', data.doctor_name);
-          }
+          persistLoginSession(data);
 
           window.location.href = 'index.html';
           return;
@@ -290,6 +424,12 @@
         setLoading(false);
       }
     });
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initializeGoogleSignIn);
+    } else {
+      initializeGoogleSignIn();
+    }
   </script>
 </body>
 </html>

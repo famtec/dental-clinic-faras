@@ -7,6 +7,9 @@ from typing import List, Optional
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+import os
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token
 import models
 import database
 
@@ -148,10 +151,29 @@ class RegisterRequest(BaseModel):
     activation_code: str
 
 
+class GoogleLoginRequest(BaseModel):
+    credential: str
+
+
 class LoginResponse(BaseModel):
     token: str
     doctor_name: Optional[str] = None
+    tier: str
     subscription_active: bool
+
+
+def ensure_user_subscription_is_active(user: models.User) -> None:
+    now = datetime.utcnow()
+    subscription_expired = (
+        user.subscription_expires_at is not None
+        and user.subscription_expires_at < now
+    )
+
+    if not user.is_active or subscription_expired:
+        raise HTTPException(
+            status_code=403,
+            detail="عذراً، انتهت مدة الاشتراك السنوية. يرجى التواصل مع المهندس فارس حلاوي للتجديد ودفع الاشتراك.",
+        )
 
 
 @app.get("/health")
@@ -163,6 +185,7 @@ def health_check():
 def register_user(register_request: RegisterRequest, db: Session = Depends(database.get_db)):
     normalized_email = register_request.email.strip().lower()
     activation_code = register_request.activation_code.strip()
+    user_tier = "premium" if "-Y-" in activation_code.upper() else "standard"
 
     if not normalized_email:
         raise HTTPException(status_code=400, detail="البريد الإلكتروني مطلوب.")
@@ -190,6 +213,7 @@ def register_user(register_request: RegisterRequest, db: Session = Depends(datab
             doctor_name=register_request.doctor_name,
             email=normalized_email,
             hashed_password=register_request.password,
+            tier=user_tier,
             subscription_expires_at=subscription_expires_at,
             is_active=True,
         )
@@ -227,21 +251,55 @@ def login_user(login_request: LoginRequest, db: Session = Depends(database.get_d
     if user.hashed_password != login_request.password:
         raise HTTPException(status_code=401, detail="البريد الإلكتروني أو كلمة المرور غير صحيحة!")
 
-    now = datetime.utcnow()
-    subscription_expired = (
-        user.subscription_expires_at is not None
-        and user.subscription_expires_at < now
-    )
-
-    if not user.is_active or subscription_expired:
-        raise HTTPException(
-            status_code=403,
-            detail="عذراً، انتهت مدة الاشتراك السنوية. يرجى التواصل مع المهندس فارس حلاوي للتجديد ودفع الاشتراك.",
-        )
+    ensure_user_subscription_is_active(user)
 
     return LoginResponse(
         token="secure-session-token",
         doctor_name=user.doctor_name,
+        tier=user.tier or "standard",
+        subscription_active=True,
+    )
+
+
+@app.post("/api/auth/google-login", response_model=LoginResponse)
+def google_login(login_request: GoogleLoginRequest, db: Session = Depends(database.get_db)):
+    google_client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+    if not google_client_id:
+        raise HTTPException(
+            status_code=503,
+            detail="Google Sign-In is not configured on the server. Missing GOOGLE_CLIENT_ID.",
+        )
+
+    credential = login_request.credential.strip()
+    if not credential:
+        raise HTTPException(status_code=400, detail="Google credential is required.")
+
+    try:
+        token_payload = id_token.verify_oauth2_token(
+            credential,
+            google_requests.Request(),
+            google_client_id,
+        )
+    except Exception:
+        raise HTTPException(status_code=401, detail="تعذر التحقق من حساب Google.")
+
+    if not token_payload.get("email_verified"):
+        raise HTTPException(status_code=401, detail="بريد Google غير موثق.")
+
+    email = str(token_payload.get("email", "")).strip().lower()
+    if not email:
+        raise HTTPException(status_code=401, detail="تعذر قراءة البريد من حساب Google.")
+
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="لا يوجد حساب مفعل بهذا البريد داخل النظام.")
+
+    ensure_user_subscription_is_active(user)
+
+    return LoginResponse(
+        token="secure-session-token",
+        doctor_name=user.doctor_name,
+        tier=user.tier or "standard",
         subscription_active=True,
     )
 
