@@ -388,18 +388,86 @@
       el.textContent = nextValue;
     }
 
+    const counterAnimationHandles = new WeakMap();
+
+    function animateCount(element, start, end, duration, formatter) {
+      if (!element) return;
+
+      const previousFrameHandle = counterAnimationHandles.get(element);
+      if (previousFrameHandle) {
+        cancelAnimationFrame(previousFrameHandle);
+      }
+
+      const safeStart = Number.isFinite(Number(start)) ? Number(start) : 0;
+      const safeEnd = Number.isFinite(Number(end)) ? Number(end) : 0;
+      const safeDuration = Math.max(1000, Math.min(Number(duration) || 1200, 1500));
+      const formatValue = typeof formatter === 'function'
+        ? formatter
+        : (value) => Number(value).toLocaleString('ar-SY');
+
+      const startTime = performance.now();
+      const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+
+      const step = (timestamp) => {
+        const elapsed = timestamp - startTime;
+        const progress = Math.min(elapsed / safeDuration, 1);
+        const easedProgress = easeOutCubic(progress);
+        const currentValue = safeStart + ((safeEnd - safeStart) * easedProgress);
+
+        element.style.transform = `translateY(${(1 - progress) * 8}px)`;
+        element.style.filter = `blur(${(1 - progress) * 2.4}px)`;
+        element.textContent = formatValue(currentValue);
+
+        if (progress < 1) {
+          const frameHandle = requestAnimationFrame(step);
+          counterAnimationHandles.set(element, frameHandle);
+          return;
+        }
+
+        element.style.transform = '';
+        element.style.filter = '';
+        element.textContent = formatValue(safeEnd);
+        counterAnimationHandles.delete(element);
+        animateStatsValue(element, formatValue(safeEnd));
+      };
+
+      const frameHandle = requestAnimationFrame(step);
+      counterAnimationHandles.set(element, frameHandle);
+    }
+
     function safeNumber(value) {
       const numericValue = Number(value);
       return Number.isFinite(numericValue) ? numericValue : null;
     }
 
     function calculatePendingFromPatientCosts() {
-      return allPatients.reduce((sum, patient) => {
-        const totalTreatmentCost = Number(patient?.total_treatment_cost || 0);
-        const paidAmount = Number(patient?.paid_amount || 0);
-        const pendingAmount = Math.max(totalTreatmentCost - paidAmount, 0);
-        return sum + (Number.isFinite(pendingAmount) ? pendingAmount : 0);
-      }, 0);
+      let dynamicTotalDebt = 0;
+
+      allPatients.forEach((patient) => {
+        let patientNetDebt = (Number(patient?.total_treatment_cost || 0) - Number(patient?.paid_amount || patient?.total_paid || 0));
+        if (!Number.isFinite(patientNetDebt) || patientNetDebt < 0) {
+          patientNetDebt = 0;
+        }
+        if (patientNetDebt > 0) {
+          dynamicTotalDebt += patientNetDebt;
+        }
+      });
+
+      return dynamicTotalDebt;
+    }
+
+    function renderPendingBalancesFromPatients() {
+      const dynamicTotalDebt = calculatePendingFromPatientCosts();
+      const element = document.getElementById("pendingBalancesCounter");
+      if (!element) return;
+
+      animateCount(
+        element,
+        0,
+        dynamicTotalDebt,
+        1250,
+        (value) => `${Number(value).toLocaleString('ar-SY')} ل.س`
+      );
     }
 
     function calculatePendingBalanceFallback() {
@@ -455,43 +523,24 @@
         const totalPatientsValue = safeNumber(data?.total_patients) ?? allPatients.length;
         const activeAppointmentsValue = safeNumber(data?.active_appointments) ?? calculateActiveAppointmentsFallback();
 
-        const backendPendingBalance = safeNumber(data?.pending_balances);
-        const localPatientsPendingBalance = calculatePendingFromPatientCosts();
-        data.pending_balances = backendPendingBalance && backendPendingBalance !== 0
-          ? backendPendingBalance
-          : localPatientsPendingBalance;
-
         if (statsTotalPatients) {
-          statsTotalPatients.innerText = String(totalPatientsValue);
-          animateStatsValue(statsTotalPatients, String(totalPatientsValue));
+          animateCount(statsTotalPatients, 0, totalPatientsValue, 1100, (value) => String(Math.round(value)));
         }
         if (statsActiveAppointments) {
-          statsActiveAppointments.innerText = String(activeAppointmentsValue);
-          animateStatsValue(statsActiveAppointments, String(activeAppointmentsValue));
+          animateCount(statsActiveAppointments, 0, activeAppointmentsValue, 1150, (value) => String(Math.round(value)));
         }
-        const pendingCard = document.getElementById("pendingBalancesCounter");
-        if (pendingCard && data.pending_balances !== undefined) {
-          pendingCard.innerText = Number(data.pending_balances).toLocaleString('ar-SY') + " ل.س";
-          animateStatsValue(pendingCard, Number(data.pending_balances).toLocaleString('ar-SY') + " ل.س");
-        }
+        renderPendingBalancesFromPatients();
       } catch (error) {
         const fallbackTotalPatients = allPatients.length;
         const fallbackActiveAppointments = calculateActiveAppointmentsFallback();
-        const fallbackPendingBalances = calculatePendingFromPatientCosts();
 
         if (statsTotalPatients) {
-          statsTotalPatients.innerText = String(fallbackTotalPatients);
-          animateStatsValue(statsTotalPatients, String(fallbackTotalPatients));
+          animateCount(statsTotalPatients, 0, fallbackTotalPatients, 1100, (value) => String(Math.round(value)));
         }
         if (statsActiveAppointments) {
-          statsActiveAppointments.innerText = String(fallbackActiveAppointments);
-          animateStatsValue(statsActiveAppointments, String(fallbackActiveAppointments));
+          animateCount(statsActiveAppointments, 0, fallbackActiveAppointments, 1150, (value) => String(Math.round(value)));
         }
-        const pendingCard = document.getElementById("pendingBalancesCounter");
-        if (pendingCard) {
-          pendingCard.innerText = Number(fallbackPendingBalances).toLocaleString('ar-SY') + " ل.س";
-          animateStatsValue(pendingCard, Number(fallbackPendingBalances).toLocaleString('ar-SY') + " ل.س");
-        }
+        renderPendingBalancesFromPatients();
       } finally {
         setStatsLoadingState(false);
       }
@@ -505,11 +554,14 @@
         const data = await res.json();
         allPatients = Array.isArray(data) ? data : [];
         renderPatients(allPatients, searchInput.value.trim());
+        await loadAppointmentsForStats();
+        await loadPatientStats();
       }catch(err){
         console.error('fetchPatients error', err);
         patientsTableBody.innerHTML = '';
         emptyFeedback.classList.remove('hidden');
         emptyFeedback.textContent = 'حدث خطأ أثناء تحميل بيانات المرضى.';
+        await loadPatientStats();
       }
     }
 
@@ -564,6 +616,7 @@
           (patient) => String(patient.id) !== String(pendingDeletePatientId)
         );
         renderPatients(allPatients, searchInput ? searchInput.value.trim() : '');
+        await loadPatientStats();
         showToast('تم حذف المريض بنجاح.');
         pendingDeletePatientId = null;
         closeDeletePatientModal();
@@ -731,8 +784,7 @@
       yearElement.textContent = new Date().getFullYear();
     }
     window.addEventListener('DOMContentLoaded', async () => {
-      await Promise.all([fetchPatients(), loadAppointmentsForStats()]);
-      await loadPatientStats();
+      await fetchPatients();
     });
   </script>
 </body>
