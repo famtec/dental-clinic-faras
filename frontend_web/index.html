@@ -373,6 +373,22 @@
       return headers;
     }
 
+    function getDoctorAuthHeaders() {
+      const headers = { 'Content-Type': 'application/json' };
+      const email = String(localStorage.getItem('user_email') || '').trim();
+      const token = String(localStorage.getItem('authToken') || '').trim();
+
+      if (email) {
+        headers['X-Doctor-Email'] = email;
+      }
+
+      if (token) {
+        headers.Authorization = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+      }
+
+      return headers;
+    }
+
     function setStatsLoadingState(isLoading) {
       const cards = [statsTotalPatients, statsActiveAppointments, pendingBalancesCounter].filter(Boolean);
       cards.forEach((card) => {
@@ -550,7 +566,10 @@
     // Fetch and render patients
     async function fetchPatients(){
       try{
-        const res = await fetch(API_URL, { method: 'GET' });
+        const res = await fetch(API_URL, {
+          method: 'GET',
+          headers: getDoctorAuthHeaders(),
+        });
         if (!res.ok) throw new Error('Network response not ok');
         const data = await res.json();
         allPatients = Array.isArray(data) ? data : [];
