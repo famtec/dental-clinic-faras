@@ -768,12 +768,25 @@ def get_all_patients(
 
     response_payload: list[dict] = []
     for patient in patients:
-        patient_data = PatientResponse.model_validate(patient).model_dump()
         paid_amount = paid_amount_by_patient_id.get(patient.id, Decimal("0"))
         if paid_amount < 0:
             paid_amount = Decimal("0")
-        patient_data["paid_amount"] = float(paid_amount)
-        response_payload.append(patient_data)
+
+        response_payload.append(
+            {
+                "id": patient.id,
+                "doctor_name": patient.doctor_name,
+                "doctor_email": None,
+                "full_name": patient.full_name,
+                "phone": patient.phone,
+                "birth_date": patient.birth_date,
+                "gender": patient.gender,
+                "medical_history": patient.medical_history,
+                "total_treatment_cost": float(getattr(patient, "total_treatment_cost", 0) or 0),
+                "chart_state": getattr(patient, "chart_state", None),
+                "paid_amount": float(paid_amount),
+            }
+        )
 
     return response_payload
 
