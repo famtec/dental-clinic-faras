@@ -187,6 +187,7 @@ def normalize_palmer_chart_state(chart_state: dict[str, str] | str) -> dict[str,
 class PatientResponse(PatientCreate):
     id: int
     chart_state: Optional[str] = None
+    paid_amount: float = 0.0
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -718,8 +719,63 @@ def create_patient(
 
 # 5. مسار جلب قائمة جميع المرضى المخزنين في العيادة [GET]
 @app.get("/api/patients", response_model=List[PatientResponse])
-def get_all_patients(db: Session = Depends(database.get_db)):
-    return db.query(models.Patient).all()
+def get_all_patients(
+    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    db: Session = Depends(database.get_db),
+):
+    user = get_current_doctor_user(db, doctor_email=doctor_email, authorization=authorization)
+    doctor_name = (user.doctor_name or "").strip()
+    if not doctor_name:
+        doctor_name = user.email
+
+    doctor_identifiers = {doctor_name, user.email}
+
+    linked_patients = (
+        db.query(models.Patient)
+        .filter(models.Patient.doctor_name.in_(doctor_identifiers))
+        .all()
+    )
+    patients = linked_patients
+    if not patients:
+        patients = (
+            db.query(models.Patient)
+            .filter(models.Patient.doctor_name.is_(None))
+            .all()
+        )
+
+    patient_ids = [patient.id for patient in patients]
+    paid_amount_by_patient_id: dict[int, Decimal] = {}
+
+    if patient_ids:
+        income_rows = (
+            db.query(
+                models.FinancialTransaction.patient_id,
+                func.coalesce(func.sum(models.FinancialTransaction.amount), 0).label("total_paid"),
+            )
+            .filter(models.FinancialTransaction.patient_id.in_(patient_ids))
+            .filter(models.FinancialTransaction.type == "income")
+            .filter(models.FinancialTransaction.amount > 0)
+            .group_by(models.FinancialTransaction.patient_id)
+            .all()
+        )
+
+        paid_amount_by_patient_id = {
+            patient_id: Decimal(str(total_paid or 0))
+            for patient_id, total_paid in income_rows
+            if patient_id is not None
+        }
+
+    response_payload: list[dict] = []
+    for patient in patients:
+        patient_data = PatientResponse.model_validate(patient).model_dump()
+        paid_amount = paid_amount_by_patient_id.get(patient.id, Decimal("0"))
+        if paid_amount < 0:
+            paid_amount = Decimal("0")
+        patient_data["paid_amount"] = float(paid_amount)
+        response_payload.append(patient_data)
+
+    return response_payload
 
 
 @app.get("/api/patients/{patient_id}", response_model=PatientResponse)
