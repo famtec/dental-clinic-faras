@@ -710,6 +710,7 @@
     let pendingDeleteAction = null;
     let currentPrescriptions = [];
     let tooltipHoverMesh = null;
+    let dentalPointerDownState = null;
 
     function getAppointmentUpdateEndpoint(appointmentId) {
       return `${APPOINTMENT_UPDATE_BASE_URL}/api/appointments/${encodeURIComponent(String(appointmentId))}`;
@@ -1731,10 +1732,13 @@
       container.style.cursor = 'grab';
       container.addEventListener('pointerdown', handleDentalChartPointerDown);
       container.addEventListener('pointermove', handleDentalChartPointerMove);
+      container.addEventListener('pointerup', handleDentalChartPointerUp);
+      container.addEventListener('pointercancel', handleDentalChartPointerCancel);
       container.addEventListener('pointerleave', () => {
         container.style.cursor = 'grab';
         updateToothHoverState(null);
         tooltipHoverMesh = null;
+        dentalPointerDownState = null;
         hidePalmerTooltip();
       });
 
@@ -1869,6 +1873,19 @@
       const container = event.currentTarget;
       if (!container || !dentalChartRaycaster || !dentalChartCamera) return;
 
+      if (dentalPointerDownState) {
+        const deltaX = Math.abs(event.clientX - dentalPointerDownState.startX);
+        const deltaY = Math.abs(event.clientY - dentalPointerDownState.startY);
+        if (deltaX > 10 || deltaY > 10) {
+          dentalPointerDownState.hasMoved = true;
+        }
+      }
+
+      // Hover effects are disabled for touch to avoid accidental state changes while swiping.
+      if (event.pointerType === 'touch') {
+        return;
+      }
+
       const rectangle = container.getBoundingClientRect();
       dentalChartPointer.x = ((event.clientX - rectangle.left) / rectangle.width) * 2 - 1;
       dentalChartPointer.y = -((event.clientY - rectangle.top) / rectangle.height) * 2 + 1;
@@ -1892,6 +1909,30 @@
       const container = event.currentTarget;
       if (!container || !dentalChartRaycaster || !dentalChartCamera) return;
 
+      dentalPointerDownState = {
+        startX: event.clientX,
+        startY: event.clientY,
+        hasMoved: false,
+      };
+
+      if (event.pointerType === 'touch') {
+        // Prevent synthetic click propagation that can auto-close or auto-select modal actions on mobile.
+        event.preventDefault();
+      }
+    }
+
+    function handleDentalChartPointerUp(event) {
+      const container = event.currentTarget;
+      if (!container || !dentalChartRaycaster || !dentalChartCamera) return;
+
+      const pointerState = dentalPointerDownState;
+      dentalPointerDownState = null;
+
+      // Treat only tap as selection; swipe/drag should just pan the wrapper.
+      if (pointerState?.hasMoved) {
+        return;
+      }
+
       const rectangle = container.getBoundingClientRect();
       dentalChartPointer.x = ((event.clientX - rectangle.left) / rectangle.width) * 2 - 1;
       dentalChartPointer.y = -((event.clientY - rectangle.top) / rectangle.height) * 2 + 1;
@@ -1903,6 +1944,10 @@
         showPalmerTooltip(selectedMesh, event.clientX, event.clientY);
         openToothStatusModal(selectedMesh);
       }
+    }
+
+    function handleDentalChartPointerCancel() {
+      dentalPointerDownState = null;
     }
 
     function updatePatientAppointmentsCount(count) {
