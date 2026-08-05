@@ -288,30 +288,14 @@
     }
 
     function initializeGoogleButton() {
-      const googleClientId = (
-        window.DENTAL_APP_CONFIG?.googleClientId
-        || document.querySelector('meta[name="google-signin-client_id"]')?.content
-        || ''
-      ).trim();
-
-      if (!googleClientId) {
-        setGoogleHint('Google Client ID غير مضبوط في إعدادات النشر.', 'error');
-        return;
-      }
-
-      if (!window.google || !window.google.accounts || !window.google.accounts.id) {
-        setGoogleHint('تعذر تحميل مكتبة Google Sign-In. حدّث الصفحة وحاول مجددًا.', 'error');
-        return;
-      }
-
+      const googleBtnElement = document.getElementById('googleBtnContainer');
+      googleBtnElement.innerHTML = '';
       window.google.accounts.id.initialize({
-        client_id: googleClientId,
+        client_id: '://googleusercontent.com',
         callback: handleCredentialResponse
       });
-
-      googleBtnContainer.innerHTML = '';
       window.google.accounts.id.renderButton(
-        googleBtnContainer,
+        googleBtnElement,
         { theme: 'outline', size: 'large', text: 'signin_with', width: '100%' }
       );
     }
