@@ -1128,19 +1128,20 @@ def get_patient_stats(
 
     pending_balances = Decimal("0.00")
     if patient_ids:
-        income_rows = (
+        received_rows = (
             db.query(
                 models.FinancialTransaction.patient_id,
-                func.coalesce(func.sum(models.FinancialTransaction.amount), 0).label("total_income"),
+                func.coalesce(func.sum(models.FinancialTransaction.amount), 0).label("total_received"),
             )
             .filter(models.FinancialTransaction.patient_id.in_(patient_ids))
-            .filter(models.FinancialTransaction.type == "income")
+            .filter(models.FinancialTransaction.type.in_(["income", "received"]))
+            .filter(models.FinancialTransaction.amount > 0)
             .group_by(models.FinancialTransaction.patient_id)
             .all()
         )
-        income_by_patient_id = {
-            patient_id: Decimal(str(total_income or 0))
-            for patient_id, total_income in income_rows
+        received_by_patient_id = {
+            patient_id: Decimal(str(total_received or 0))
+            for patient_id, total_received in received_rows
             if patient_id is not None
         }
 
@@ -1149,10 +1150,13 @@ def get_patient_stats(
             if total_treatment_cost < 0:
                 total_treatment_cost = Decimal("0")
 
-            total_received = income_by_patient_id.get(patient.id, Decimal("0"))
-            remaining_balance = total_treatment_cost - total_received
-            if remaining_balance > 0:
-                pending_balances += remaining_balance
+            total_received = received_by_patient_id.get(patient.id, Decimal("0"))
+            if total_received < 0:
+                total_received = Decimal("0")
+
+            # Prevent overpayments or corrupted values from creating negative debt.
+            patient_net_debt = max(total_treatment_cost - total_received, Decimal("0"))
+            pending_balances += patient_net_debt
 
     return {
         "total_patients": len(patients),
