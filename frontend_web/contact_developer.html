@@ -67,7 +67,7 @@
 </head>
 <body class="min-h-screen text-slate-100">
 	<div class="flex min-h-screen flex-col lg:flex-row">
-		<aside class="w-full border-l border-white/10 bg-[linear-gradient(180deg,_rgba(30,27,75,0.96),_rgba(49,46,129,0.92),_rgba(76,29,149,0.94))] p-4 text-white shadow-2xl lg:min-h-screen lg:w-72 lg:p-6 xl:w-80">
+		<aside class="hidden w-full border-l border-white/10 bg-[linear-gradient(180deg,_rgba(30,27,75,0.96),_rgba(49,46,129,0.92),_rgba(76,29,149,0.94))] p-4 text-white shadow-2xl md:flex lg:min-h-screen lg:w-72 lg:p-6 xl:w-80">
 			<div class="mb-4 flex items-center justify-center gap-3 border-b border-indigo-300/25 pb-4 lg:mb-8">
 				<img src="logo.png" alt="شعار العيادة" class="h-14 w-14 rounded-xl border border-white/15 bg-white/10 object-contain p-2 sm:h-16 sm:w-16" />
 				<div class="flex flex-col items-start gap-2">
@@ -75,10 +75,6 @@
 					<span id="tierBadge" class="rounded-full px-3 py-1 text-xs font-extrabold tracking-wide">Standard</span>
 				</div>
 			</div>
-
-			<button id="mobileMenuToggle" type="button" class="mb-3 flex w-full items-center justify-center rounded-xl border border-indigo-300/30 bg-indigo-800/60 px-3 py-2 text-sm font-semibold text-white lg:hidden">
-				☰ القائمة
-			</button>
 
 			<nav id="sidebarNav" class="hidden flex-col gap-2 lg:flex lg:gap-3">
 				<a href="index.html" class="block rounded-xl px-4 py-3 text-sm font-semibold transition hover:bg-indigo-700/80">👥 لوحة المرضى</a>
@@ -93,7 +89,40 @@
 			</button>
 		</aside>
 
-		<main class="relative flex flex-1 items-center justify-center p-5 sm:p-8 lg:p-10">
+		<div class="fixed inset-x-0 top-0 z-[60] border-b border-white/15 bg-[#1e1b4b]/90 shadow-2xl shadow-indigo-950/35 backdrop-blur-2xl md:hidden">
+			<div class="relative mx-auto flex w-full max-w-none items-center justify-between gap-3 px-4 py-3 sm:px-6">
+				<div class="flex min-w-0 items-center gap-3 text-white">
+					<img src="logo.png" alt="شعار العيادة" class="h-10 w-10 rounded-xl border border-white/10 bg-white/10 object-contain p-1.5 shadow-lg shadow-indigo-950/25" />
+					<div class="min-w-0">
+						<div class="flex min-w-0 items-center gap-2">
+							<p id="mobileClinicTitle" class="truncate text-sm font-extrabold tracking-tight text-white">عيادتي الرقمية</p>
+							<span id="mobileTierBadge" class="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[11px] font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Standard</span>
+						</div>
+					</div>
+				</div>
+
+				<button id="mobileMenuToggle" type="button" class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white shadow-lg shadow-indigo-950/20 transition hover:bg-white/15" aria-expanded="false" aria-controls="mobileMenuDropdown">
+					<svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+						<path d="M4 7h16"></path>
+						<path d="M4 12h16"></path>
+						<path d="M4 17h16"></path>
+					</svg>
+				</button>
+
+				<div id="mobileMenuDropdown" class="absolute left-0 right-0 top-full hidden border-t border-white/10 bg-[#1e1b4b] px-4 py-3 shadow-2xl shadow-indigo-950/35 md:hidden">
+					<div class="mx-auto flex w-full max-w-none flex-col gap-2 sm:px-2">
+						<a href="index.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">👥 لوحة المرضى</a>
+						<a href="appointments.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">📅 المواعيد اليومية</a>
+						<a href="finance.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">📊 التقارير المالية</a>
+						<a href="inventory.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">📦 مخزن المواد</a>
+						<a href="contact_developer.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">🛠️ تواصل مع المطور</a>
+						<button id="mobileLogoutBtn" type="button" class="rounded-2xl border border-rose-300/30 bg-rose-500/15 px-4 py-3 text-right text-sm font-bold text-rose-100 transition hover:bg-rose-500/25">⎋ تسجيل الخروج</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<main class="relative flex flex-1 items-center justify-center p-5 pt-24 sm:p-8 sm:pt-24 lg:p-10">
 			<div class="pointer-events-none absolute inset-0 overflow-hidden">
 				<div class="absolute left-10 top-10 h-40 w-40 rounded-full bg-indigo-400/15 blur-3xl"></div>
 				<div class="absolute bottom-10 right-12 h-44 w-44 rounded-full bg-cyan-400/10 blur-3xl"></div>
@@ -195,8 +224,11 @@
 		const userTier = localStorage.getItem('user_tier');
 		const titleElement = document.getElementById('clinicTitle');
 		const tierBadge = document.getElementById('tierBadge');
+		const mobileClinicTitle = document.getElementById('mobileClinicTitle');
+		const mobileTierBadge = document.getElementById('mobileTierBadge');
 		const mobileMenuToggle = document.getElementById('mobileMenuToggle');
-		const sidebarNav = document.getElementById('sidebarNav');
+		const mobileMenuDropdown = document.getElementById('mobileMenuDropdown');
+		const mobileLogoutBtn = document.getElementById('mobileLogoutBtn');
 		const logoutBtn = document.getElementById('logoutBtn');
 		const shamCashQr = document.getElementById('shamCashQr');
 
@@ -211,21 +243,18 @@
 			if (userTier === 'premium') {
 				tierBadge.className = 'badge-premium rounded-full px-3 py-1 text-xs font-extrabold tracking-wide';
 				tierBadge.textContent = 'Premium 👑';
+				if (mobileTierBadge) {
+					mobileTierBadge.className = 'shrink-0 rounded-full border border-emerald-300/30 bg-emerald-400/15 px-2 py-1 text-[11px] font-extrabold tracking-wide text-emerald-50 shadow-[0_0_18px_rgba(52,211,153,0.18)]';
+					mobileTierBadge.textContent = 'Premium 👑';
+				}
 				return;
 			}
 
 			tierBadge.className = 'badge-standard rounded-full px-3 py-1 text-xs font-extrabold tracking-wide';
 			tierBadge.textContent = 'Standard';
-		}
-
-		function syncSidebarNav() {
-			if (!sidebarNav) return;
-			if (window.innerWidth >= 1024) {
-				sidebarNav.classList.remove('hidden');
-				sidebarNav.classList.add('flex');
-			} else {
-				sidebarNav.classList.add('hidden');
-				sidebarNav.classList.remove('flex');
+			if (mobileTierBadge) {
+				mobileTierBadge.className = 'shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[11px] font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]';
+				mobileTierBadge.textContent = 'Standard';
 			}
 		}
 
@@ -237,10 +266,15 @@
 		if (titleElement) {
 			titleElement.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادتي الرقمية';
 		}
+		if (mobileClinicTitle) {
+			mobileClinicTitle.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادتي الرقمية';
+		}
 
-		if (mobileMenuToggle && sidebarNav) {
+		if (mobileMenuToggle && mobileMenuDropdown) {
 			mobileMenuToggle.addEventListener('click', () => {
-				sidebarNav.classList.toggle('hidden');
+				const isHidden = mobileMenuDropdown.classList.contains('hidden');
+				mobileMenuDropdown.classList.toggle('hidden');
+				mobileMenuToggle.setAttribute('aria-expanded', String(isHidden));
 			});
 		}
 
@@ -248,13 +282,15 @@
 			logoutBtn.addEventListener('click', handleLogout);
 		}
 
+		if (mobileLogoutBtn) {
+			mobileLogoutBtn.addEventListener('click', handleLogout);
+		}
+
 		if (shamCashQr) {
 			shamCashQr.src = buildQrSrc(shamCashPaymentUrl);
 		}
 
-		window.addEventListener('resize', syncSidebarNav);
 		renderTierBadge();
-		syncSidebarNav();
 	</script>
 </body>
 </html>

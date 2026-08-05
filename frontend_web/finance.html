@@ -35,8 +35,8 @@
 		<div class="absolute left-[6%] top-[22%] h-56 w-56 rounded-full bg-violet-200/20 blur-3xl"></div>
 	</div>
 
-	<div id="patientRecordApp" class="relative w-full min-h-screen flex flex-col px-4 pt-28 pb-6 sm:px-6 sm:pt-32 lg:px-8 lg:pt-32 xl:px-10">
-		<header class="fixed inset-x-0 top-0 z-50 w-full border-b border-white/15 bg-[#1e1b4b]/85 shadow-2xl shadow-indigo-950/35 backdrop-blur-2xl">
+	<div id="patientRecordApp" class="relative flex min-h-screen w-full flex-col overflow-x-hidden px-4 pt-24 pb-6 sm:px-6 sm:pt-32 md:pt-32 lg:px-8 lg:pt-32 xl:px-10">
+		<header class="fixed inset-x-0 top-0 z-50 hidden w-full border-b border-white/15 bg-[#1e1b4b]/85 shadow-2xl shadow-indigo-950/35 backdrop-blur-2xl md:block">
 			<div class="mx-auto flex w-full max-w-none flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8 xl:px-10">
 				<div class="flex items-center gap-3 text-white">
 					<img src="logo.png" alt="شعار العيادة" class="h-12 w-12 rounded-xl border border-white/10 bg-white/10 object-contain p-2 shadow-lg shadow-indigo-950/25" />
@@ -57,7 +57,40 @@
 			</div>
 		</header>
 
-		<main class="flex-1 p-4 sm:p-6 lg:p-8 xl:p-10">
+		<div class="fixed inset-x-0 top-0 z-[60] border-b border-white/15 bg-[#1e1b4b]/90 shadow-2xl shadow-indigo-950/35 backdrop-blur-2xl md:hidden">
+			<div class="relative mx-auto flex w-full max-w-none items-center justify-between gap-3 px-4 py-3 sm:px-6">
+				<div class="flex min-w-0 items-center gap-3 text-white">
+					<img src="logo.png" alt="شعار العيادة" class="h-10 w-10 rounded-xl border border-white/10 bg-white/10 object-contain p-1.5 shadow-lg shadow-indigo-950/25" />
+					<div class="min-w-0">
+						<div class="flex min-w-0 items-center gap-2">
+							<p id="mobileClinicTitle" class="truncate text-sm font-extrabold tracking-tight text-white">عيادتي الرقمية</p>
+							<span id="mobileTierBadge" class="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[11px] font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Standard</span>
+						</div>
+					</div>
+				</div>
+
+				<button id="mobileMenuToggle" type="button" class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white shadow-lg shadow-indigo-950/20 transition hover:bg-white/15" aria-expanded="false" aria-controls="mobileMenuDropdown">
+					<svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+						<path d="M4 7h16"></path>
+						<path d="M4 12h16"></path>
+						<path d="M4 17h16"></path>
+					</svg>
+				</button>
+
+				<div id="mobileMenuDropdown" class="absolute left-0 right-0 top-full hidden border-t border-white/10 bg-[#1e1b4b]/98 px-4 py-3 shadow-2xl shadow-indigo-950/35 backdrop-blur-2xl md:hidden">
+					<div class="mx-auto flex w-full max-w-none flex-col gap-2 sm:px-2">
+						<a href="index.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">👥 لوحة المرضى</a>
+						<a href="appointments.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">📅 المواعيد اليومية</a>
+						<a href="finance.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">📊 التقارير المالية</a>
+						<a href="inventory.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">📦 مخزن المواد</a>
+						<a href="contact_developer.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">🛠️ تواصل مع المطور</a>
+						<button id="mobileLogoutBtn" type="button" class="rounded-2xl border border-rose-300/30 bg-rose-500/15 px-4 py-3 text-right text-sm font-bold text-rose-100 transition hover:bg-rose-500/25">⎋ تسجيل الخروج</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<main class="min-w-0 flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8 xl:p-10">
 			<div id="dashboardWrapper" class="transition duration-300">
 				<section id="upgradeInlineCard" class="mb-6 rounded-[28px] border border-indigo-200 bg-gradient-to-br from-indigo-800 via-indigo-700 to-violet-700 p-6 text-white shadow-2xl shadow-indigo-900/35 transition duration-300 sm:p-7">
 					<div class="mx-auto max-w-3xl text-center">
@@ -150,6 +183,11 @@
 
 		const clinicTitle = document.getElementById('clinicTitle');
 		const tierBadge = document.getElementById('tierBadge');
+		const mobileClinicTitle = document.getElementById('mobileClinicTitle');
+		const mobileTierBadge = document.getElementById('mobileTierBadge');
+		const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+		const mobileMenuDropdown = document.getElementById('mobileMenuDropdown');
+		const mobileLogoutBtn = document.getElementById('mobileLogoutBtn');
 		const logoutBtn = document.getElementById('logoutBtn');
 		const dashboardWrapper = document.getElementById('dashboardWrapper');
 		const upgradeInlineCard = document.getElementById('upgradeInlineCard');
@@ -168,6 +206,14 @@
 		const expenseForm = document.getElementById('expenseForm');
 		const expenseStatus = document.getElementById('expenseStatus');
 		const expenseSubmitBtn = document.getElementById('expenseSubmitBtn');
+
+		function handleLogout() {
+			localStorage.removeItem('doctor_name');
+			localStorage.removeItem('user_email');
+			localStorage.removeItem('doctor_id');
+			localStorage.removeItem('user_tier');
+			window.location.href = 'login.html';
+		}
 
 		const RENDER_BASE_URL = 'https://dental-clinic-faras.onrender.com';
 		const METRICS_ENDPOINT = `${RENDER_BASE_URL}/api/finance/summary`;
@@ -229,11 +275,19 @@
 			if (activeTier === 'premium') {
 				tierBadge.className = 'badge-premium rounded-full px-3 py-1 text-xs font-extrabold tracking-wide';
 				tierBadge.textContent = 'Premium 👑';
+				if (mobileTierBadge) {
+					mobileTierBadge.className = 'shrink-0 rounded-full border border-emerald-300/30 bg-emerald-400/15 px-2 py-1 text-[11px] font-extrabold tracking-wide text-emerald-50 shadow-[0_0_18px_rgba(52,211,153,0.18)]';
+					mobileTierBadge.textContent = 'Premium 👑';
+				}
 				return;
 			}
 
 			tierBadge.className = 'badge-standard rounded-full px-3 py-1 text-xs font-extrabold tracking-wide';
 			tierBadge.textContent = 'Standard';
+			if (mobileTierBadge) {
+				mobileTierBadge.className = 'shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[11px] font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]';
+				mobileTierBadge.textContent = 'Standard';
+			}
 		}
 
 		function renderTierExperience() {
@@ -316,12 +370,18 @@
 		}
 
 		if (logoutBtn) {
-			logoutBtn.addEventListener('click', () => {
-				localStorage.removeItem('doctor_name');
-				localStorage.removeItem('user_email');
-				localStorage.removeItem('doctor_id');
-				localStorage.removeItem('user_tier');
-				window.location.href = 'login.html';
+			logoutBtn.addEventListener('click', handleLogout);
+		}
+
+		if (mobileLogoutBtn) {
+			mobileLogoutBtn.addEventListener('click', handleLogout);
+		}
+
+		if (mobileMenuToggle && mobileMenuDropdown) {
+			mobileMenuToggle.addEventListener('click', () => {
+				const isHidden = mobileMenuDropdown.classList.contains('hidden');
+				mobileMenuDropdown.classList.toggle('hidden');
+				mobileMenuToggle.setAttribute('aria-expanded', String(isHidden));
 			});
 		}
 
@@ -384,6 +444,9 @@
 
 		const doctorName = localStorage.getItem('doctor_name');
 		clinicTitle.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادتي الرقمية';
+		if (mobileClinicTitle) {
+			mobileClinicTitle.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادتي الرقمية';
+		}
 		renderTierBadge();
 
 		if (expenseForm) {
