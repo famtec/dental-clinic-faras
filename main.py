@@ -445,15 +445,6 @@ def register_user(register_request: RegisterRequest, db: Session = Depends(datab
     try:
         normalized_email = register_request.email.strip().lower()
         activation_code = register_request.activation_code.strip()
-        user_tier = (
-            "premium"
-            if (
-                "-Y-" in activation_code.upper()
-                or "PREMIUM" in activation_code.upper()
-                or "VIP" in activation_code.upper()
-            )
-            else "standard"
-        )
 
         if not normalized_email:
             raise HTTPException(status_code=400, detail="البريد الإلكتروني مطلوب.")
@@ -469,6 +460,18 @@ def register_user(register_request: RegisterRequest, db: Session = Depends(datab
                 status_code=400,
                 detail="كود التفعيل خاطئ، منتهي، أو تم استخدامه مسبقاً! يرجى التواصل مع المهندس فارس حلاوي لشراء كود جديد.",
             )
+
+        user_tier = (
+            "premium"
+            if (
+                activation_key.duration_days >= 365
+                or "-Y-" in activation_code.upper()
+                or "PREMIUM" in activation_code.upper()
+                or "VIP" in activation_code.upper()
+                or activation_code.upper().startswith("PRM-")
+            )
+            else "standard"
+        )
 
         existing_user = db.query(models.User).filter(models.User.email == normalized_email).first()
         if existing_user:
