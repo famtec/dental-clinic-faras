@@ -123,7 +123,7 @@
 
           <div class="rounded-2xl border border-slate-200 bg-white px-4 py-4">
             <p class="mb-3 text-center text-xs font-semibold text-slate-600">الدخول السريع باستخدام Google</p>
-            <div id="googleSignInButton" class="flex justify-center"></div>
+            <div id="googleBtnContainer" class="flex justify-center"></div>
             <p id="googleStatusHint" class="mt-3 hidden text-center text-xs font-medium text-slate-500"></p>
           </div>
 
@@ -158,7 +158,7 @@
     const emailPreview = document.getElementById('emailPreview');
     const capsLockHint = document.getElementById('capsLockHint');
     const googleStatusHint = document.getElementById('googleStatusHint');
-    const googleSignInButton = document.getElementById('googleSignInButton');
+    const googleBtnContainer = document.getElementById('googleBtnContainer');
 
     function showMessage(text, type = 'error') {
       const baseClasses = 'rounded-2xl border px-4 py-3 text-sm font-medium shadow-sm';
@@ -227,46 +227,53 @@
       localStorage.setItem('user_tier', tier);
     }
 
-    async function submitGoogleCredential(credential) {
+    function showPremiumToast(message) {
+      const toast = document.createElement('div');
+      toast.className = 'fixed left-1/2 top-5 z-50 w-[92%] max-w-sm -translate-x-1/2 rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-3 text-center text-sm font-bold text-white shadow-2xl';
+      toast.textContent = message;
+      toast.style.opacity = '0';
+      toast.style.transform = 'translate(-50%, -10px)';
+      toast.style.transition = 'opacity 220ms ease, transform 220ms ease';
+      document.body.appendChild(toast);
+
+      requestAnimationFrame(() => {
+        toast.style.opacity = '1';
+        toast.style.transform = 'translate(-50%, 0)';
+      });
+    }
+
+    async function handleCredentialResponse(response) {
+      if (!response || !response.credential) {
+        setGoogleHint('لم يتم استلام رمز اعتماد Google.', 'error');
+        return;
+      }
+
       setGoogleHint('جاري التحقق من حساب Google...', 'normal');
       hideMessage();
 
       try {
-        const response = await fetch(apiUrl('/api/auth/google-login'), {
+        const serverResponse = await fetch('/api/auth/google', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ credential })
+          body: JSON.stringify({ credential: response.credential })
         });
 
         let data = null;
         try {
-          data = await response.json();
+          data = await serverResponse.json();
         } catch (error) {
           data = null;
         }
 
-        if (response.status === 200) {
-          persistLoginSession(data);
-          setGoogleHint('تم تسجيل الدخول بنجاح. جارٍ التحويل...', 'success');
+        if (serverResponse.status === 200) {
+          const userEmail = String(data?.email || data?.user_email || '').trim().toLowerCase();
+          const userTier = String(data?.tier || data?.user_tier || 'standard').trim().toLowerCase();
+
+          localStorage.setItem('user_email', userEmail);
+          localStorage.setItem('user_tier', userTier);
+
+          showPremiumToast('تم تسجيل الدخول بنجاح. مرحبًا بك في الباقة المميزة');
           window.location.href = 'index.html';
-          return;
-        }
-
-        if (response.status === 403) {
-          showMessage('عذراً، انتهت مدة الاشتراك السنوية. يرجى التواصل مع المهندس فارس حلاوي للتجديد ودفع الاشتراك.', 'error');
-          setGoogleHint('هذا الحساب غير نشط حالياً بسبب حالة الاشتراك.', 'error');
-          return;
-        }
-
-        if (response.status === 401) {
-          showMessage('هذا البريد غير مفعّل في النظام. أنشئ الحساب أولاً ثم استخدم Google.', 'error');
-          setGoogleHint('لا يوجد حساب مرتبط بهذا البريد داخل النظام.', 'error');
-          return;
-        }
-
-        if (response.status === 503) {
-          showMessage('تسجيل الدخول عبر Google غير مُفعّل على الخادم بعد. يرجى ضبط Google Client ID في إعدادات السيرفر.', 'error');
-          setGoogleHint('الخدمة غير مفعلة حالياً.', 'error');
           return;
         }
 
@@ -279,44 +286,33 @@
       }
     }
 
-    function initializeGoogleSignIn(retryCount = 0) {
-      const googleClientId = window.DENTAL_APP_CONFIG?.googleClientId || '';
+    function initializeGoogleButton() {
+      const googleClientId = (
+        window.DENTAL_APP_CONFIG?.googleClientId
+        || document.querySelector('meta[name="google-signin-client_id"]')?.content
+        || ''
+      ).trim();
 
       if (!googleClientId) {
-        setGoogleHint('زر Google يحتاج إعداد Google Client ID مرة واحدة في localStorage عبر المفتاح googleClientIdOverride.', 'normal');
+        setGoogleHint('Google Client ID غير مضبوط في إعدادات النشر.', 'error');
         return;
       }
 
       if (!window.google || !window.google.accounts || !window.google.accounts.id) {
-        if (retryCount < 12) {
-          setTimeout(() => initializeGoogleSignIn(retryCount + 1), 250);
-          return;
-        }
-        setGoogleHint('تعذر تحميل مكتبة Google. حدّث الصفحة وحاول مرة أخرى.', 'error');
+        setGoogleHint('تعذر تحميل مكتبة Google Sign-In. حدّث الصفحة وحاول مجددًا.', 'error');
         return;
       }
 
       window.google.accounts.id.initialize({
         client_id: googleClientId,
-        callback: (response) => {
-          if (!response || !response.credential) {
-            setGoogleHint('لم يتم استلام بيانات اعتماد Google.', 'error');
-            return;
-          }
-          submitGoogleCredential(response.credential);
-        }
+        callback: handleCredentialResponse
       });
 
-      window.google.accounts.id.renderButton(googleSignInButton, {
-        type: 'standard',
-        theme: 'outline',
-        size: 'large',
-        text: 'signin_with',
-        shape: 'pill',
-        width: 290
-      });
-
-      window.google.accounts.id.prompt();
+      googleBtnContainer.innerHTML = '';
+      window.google.accounts.id.renderButton(
+        googleBtnContainer,
+        { theme: 'outline', size: 'large', text: 'signin_with', width: '100%' }
+      );
     }
 
     function updateLoginInsights() {
@@ -430,11 +426,7 @@
       }
     });
 
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initializeGoogleSignIn);
-    } else {
-      initializeGoogleSignIn();
-    }
+    window.onload = initializeGoogleButton;
   </script>
 </body>
 </html>

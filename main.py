@@ -538,6 +538,7 @@ def login_user(login_request: LoginRequest, db: Session = Depends(database.get_d
     )
 
 
+@app.post("/api/auth/google", response_model=LoginResponse)
 @app.post("/api/auth/google-login", response_model=LoginResponse)
 def google_login(login_request: GoogleLoginRequest, db: Session = Depends(database.get_db)):
     google_client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
@@ -567,9 +568,45 @@ def google_login(login_request: GoogleLoginRequest, db: Session = Depends(databa
     if not email:
         raise HTTPException(status_code=401, detail="تعذر قراءة البريد من حساب Google.")
 
+    full_name = str(token_payload.get("name", "")).strip()
+    if not full_name:
+        given_name = str(token_payload.get("given_name", "")).strip()
+        family_name = str(token_payload.get("family_name", "")).strip()
+        full_name = f"{given_name} {family_name}".strip()
+
     user = db.query(models.User).filter(models.User.email == email).first()
     if not user:
-        raise HTTPException(status_code=401, detail="لا يوجد حساب مفعل بهذا البريد داخل النظام.")
+        try:
+            fallback_doctor_name = full_name or email.split("@")[0]
+            user = models.User(
+                doctor_name=fallback_doctor_name,
+                email=email,
+                hashed_password=f"google-oauth-{uuid4().hex}",
+                tier="standard",
+                is_active=True,
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        except Exception:
+            db.rollback()
+            raise HTTPException(status_code=400, detail="تعذر إنشاء الحساب تلقائياً عبر Google.")
+    else:
+        try:
+            user_updated = False
+            if full_name and not (user.doctor_name or "").strip():
+                user.doctor_name = full_name
+                user_updated = True
+            if not user.tier:
+                user.tier = "standard"
+                user_updated = True
+
+            if user_updated:
+                db.commit()
+                db.refresh(user)
+        except Exception:
+            db.rollback()
+            raise HTTPException(status_code=400, detail="تعذر تحديث بيانات حساب Google.")
 
     ensure_user_subscription_is_active(user)
 
