@@ -243,7 +243,8 @@
     }
 
     async function handleCredentialResponse(response) {
-      if (!response || !response.credential) {
+      const credentialToken = String(response?.credential || '').trim();
+      if (!credentialToken) {
         setGoogleHint('لم يتم استلام رمز اعتماد Google.', 'error');
         return;
       }
@@ -252,10 +253,10 @@
       hideMessage();
 
       try {
-        const serverResponse = await fetch('/api/auth/google', {
+        const serverResponse = await fetch(apiUrl('/api/auth/google'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ credential: response.credential })
+          body: JSON.stringify({ credential: credentialToken })
         });
 
         let data = null;
@@ -266,8 +267,8 @@
         }
 
         if (serverResponse.status === 200) {
-          const userEmail = String(data?.email || data?.user_email || '').trim().toLowerCase();
-          const userTier = String(data?.tier || data?.user_tier || 'standard').trim().toLowerCase();
+          const userEmail = String(data?.user_email || data?.email || '').trim().toLowerCase();
+          const userTier = String(data?.user_tier || data?.tier || 'standard').trim().toLowerCase();
 
           localStorage.setItem('user_email', userEmail);
           localStorage.setItem('user_tier', userTier);
