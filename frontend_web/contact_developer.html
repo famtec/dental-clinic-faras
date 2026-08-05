@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>تواصل مع المطور - عيادتي الرقمية</title>
+	<script src="https://cdn.tailwindcss.com"></script>
+	<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
+	<style>
+		:root {
+			--bg-main: #090719;
+			--bg-panel: #151139;
+			--accent-indigo: #818cf8;
+			--accent-cyan: #22d3ee;
+			--accent-violet: #a78bfa;
+			--accent-green: #25d366;
+		}
+
+		body {
+			font-family: 'Tajawal', sans-serif;
+			background:
+				radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.24), transparent 35%),
+				radial-gradient(circle at 85% 0%, rgba(56, 189, 248, 0.14), transparent 28%),
+				radial-gradient(circle at 80% 85%, rgba(139, 92, 246, 0.22), transparent 30%),
+				var(--bg-main);
+		}
+
+		.badge-premium {
+			background: linear-gradient(130deg, #fef08a 0%, #f59e0b 45%, #fde68a 100%);
+			color: #5b3400;
+			box-shadow: 0 8px 28px rgba(245, 158, 11, 0.45);
+		}
+
+		.badge-standard {
+			background: linear-gradient(130deg, #4338ca 0%, #6366f1 100%);
+			color: #e0e7ff;
+			box-shadow: 0 8px 22px rgba(67, 56, 202, 0.35);
+		}
+
+		@keyframes profileFloat {
+			0%, 100% { transform: translateY(0px); }
+			50% { transform: translateY(-7px); }
+		}
+
+		@keyframes iconHoverFloat {
+			0% { transform: translateY(0px); }
+			100% { transform: translateY(-4px); }
+		}
+
+		@keyframes pulseGlow {
+			0%, 100% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.12), 0 0 0 0 rgba(167, 139, 250, 0.08); }
+			50% { box-shadow: 0 0 0 10px rgba(34, 211, 238, 0.04), 0 0 0 18px rgba(167, 139, 250, 0.03); }
+		}
+
+		.profile-float {
+			animation: profileFloat 6s ease-in-out infinite;
+		}
+
+		.action-link:hover .action-icon {
+			animation: iconHoverFloat 0.7s ease-in-out infinite alternate;
+		}
+
+		.action-link:hover .action-shell {
+			animation: pulseGlow 1.5s ease-in-out infinite;
+		}
+	</style>
+</head>
+<body class="min-h-screen text-slate-100">
+	<div class="flex min-h-screen flex-col lg:flex-row">
+		<aside class="w-full border-l border-white/10 bg-[linear-gradient(180deg,_rgba(30,27,75,0.96),_rgba(49,46,129,0.92),_rgba(76,29,149,0.94))] p-4 text-white shadow-2xl lg:min-h-screen lg:w-72 lg:p-6 xl:w-80">
+			<div class="mb-4 flex items-center justify-center gap-3 border-b border-indigo-300/25 pb-4 lg:mb-8">
+				<img src="logo.png" alt="شعار العيادة" class="h-14 w-14 rounded-xl border border-white/15 bg-white/10 object-contain p-2 sm:h-16 sm:w-16" />
+				<div class="flex flex-col items-start gap-2">
+					<h1 id="clinicTitle" class="text-lg font-extrabold tracking-tight sm:text-xl">عيادتي الرقمية</h1>
+					<span id="tierBadge" class="rounded-full px-3 py-1 text-xs font-extrabold tracking-wide">Standard</span>
+				</div>
+			</div>
+
+			<button id="mobileMenuToggle" type="button" class="mb-3 flex w-full items-center justify-center rounded-xl border border-indigo-300/30 bg-indigo-800/60 px-3 py-2 text-sm font-semibold text-white lg:hidden">
+				☰ القائمة
+			</button>
+
+			<nav id="sidebarNav" class="hidden flex-col gap-2 lg:flex lg:gap-3">
+				<a href="index.html" class="block rounded-xl px-4 py-3 text-sm font-semibold transition hover:bg-indigo-700/80">👥 لوحة المرضى</a>
+				<a href="appointments.html" class="block rounded-xl px-4 py-3 text-sm font-semibold transition hover:bg-indigo-700/80">📅 المواعيد اليومية</a>
+				<a href="finance.html" class="block rounded-xl px-4 py-3 text-sm font-semibold transition hover:bg-indigo-700/80">📊 التقارير المالية</a>
+				<a href="inventory.html" class="block rounded-xl px-4 py-3 text-sm font-semibold transition hover:bg-indigo-700/80">📦 مخزن المواد</a>
+				<a href="contact_developer.html" class="block rounded-xl bg-cyan-500/20 px-4 py-3 text-sm font-extrabold text-cyan-100 shadow-[0_0_24px_rgba(34,211,238,0.25)] ring-1 ring-cyan-300/40">🛠️ تواصل مع المطور</a>
+			</nav>
+
+			<button id="logoutBtn" type="button" class="mt-4 w-full rounded-xl border border-rose-300/30 bg-rose-500/15 px-4 py-2.5 text-sm font-bold text-rose-100 transition hover:bg-rose-500/25 lg:mt-6">
+				⎋ تسجيل الخروج
+			</button>
+		</aside>
+
+		<main class="relative flex flex-1 items-center justify-center p-5 sm:p-8 lg:p-10">
+			<div class="pointer-events-none absolute inset-0 overflow-hidden">
+				<div class="absolute left-10 top-10 h-40 w-40 rounded-full bg-indigo-400/15 blur-3xl"></div>
+				<div class="absolute bottom-10 right-12 h-44 w-44 rounded-full bg-cyan-400/10 blur-3xl"></div>
+			</div>
+
+			<section class="profile-float relative z-10 w-full max-w-3xl rounded-[34px] border border-white/15 bg-[linear-gradient(165deg,_rgba(15,23,42,0.92),_rgba(30,41,59,0.90),_rgba(49,46,129,0.88))] p-6 shadow-[0_24px_80px_rgba(15,23,42,0.6)] backdrop-blur-xl sm:p-8 lg:p-10">
+				<div class="mb-8 text-center">
+					<div class="mx-auto mb-4 inline-flex h-20 w-20 items-center justify-center rounded-3xl border border-cyan-300/30 bg-cyan-400/10 text-4xl shadow-[0_0_35px_rgba(34,211,238,0.25)]">👨🏻‍💻</div>
+					<h2 class="text-2xl font-black leading-tight text-white sm:text-3xl">المهندس فارس حلاوي - مطور المنصة السحابية الشاملة</h2>
+					<p class="mt-3 text-sm leading-7 text-indigo-100/85 sm:text-base">بوابتك الأسرع للدعم الفني، الترقية، التطوير، وضبط منصة العيادة الرقمية بأعلى كفاءة.</p>
+				</div>
+
+				<div class="grid gap-4 sm:gap-5">
+					<a href="tel:0956907698" class="action-link group block rounded-2xl border border-cyan-300/30 bg-cyan-400/10 p-4 transition duration-300 hover:-translate-y-1 hover:border-cyan-200/60 hover:bg-cyan-400/15">
+						<div class="action-shell flex items-center gap-4 rounded-xl">
+							<span class="action-icon inline-flex h-12 w-12 items-center justify-center rounded-xl border border-cyan-200/50 bg-cyan-300/20 text-cyan-100 shadow-[0_0_18px_rgba(34,211,238,0.35)]">
+								<svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M3 5.5C3 4.12 4.12 3 5.5 3h1.64a2 2 0 0 1 1.9 1.37l.73 2.2a2 2 0 0 1-.5 2.03l-1.19 1.2a15.7 15.7 0 0 0 6.12 6.12l1.2-1.19a2 2 0 0 1 2.03-.5l2.2.73a2 2 0 0 1 1.37 1.9v1.64A2.5 2.5 0 0 1 18.5 21h-1C9.49 21 3 14.51 3 6.5v-1Z"/>
+									<path stroke-linecap="round" d="M15.5 4.5a4 4 0 0 1 4 4"/>
+									<path stroke-linecap="round" d="M15.5 1.5a7 7 0 0 1 7 7"/>
+								</svg>
+							</span>
+							<div>
+								<p class="text-base font-extrabold text-cyan-100 sm:text-lg">اتصال هاتفي مباشر</p>
+								<p class="text-xs font-medium text-cyan-100/70 sm:text-sm">0956907698</p>
+							</div>
+						</div>
+					</a>
+
+					<a href="https://wa.meً%20بشمهندس%20فارس،%20أحتاج%20إلى%20الدعم%20الفني%20أو%20ترقية%20الباقة%20في%20العيادة%20الرقمية" class="action-link group block rounded-2xl border border-emerald-300/30 bg-emerald-400/10 p-4 transition duration-300 hover:-translate-y-1 hover:border-emerald-200/60 hover:bg-emerald-400/15">
+						<div class="action-shell flex items-center gap-4 rounded-xl">
+							<span class="action-icon inline-flex h-12 w-12 items-center justify-center rounded-xl border border-emerald-200/50 bg-emerald-300/20 text-emerald-100 shadow-[0_0_20px_rgba(37,211,102,0.35)]">
+								<svg viewBox="0 0 24 24" class="h-6 w-6" fill="currentColor">
+									<path d="M12 2.1c-5.46 0-9.9 4.3-9.9 9.62 0 1.87.55 3.7 1.59 5.28L2 22l5.19-1.56a10.15 10.15 0 0 0 4.81 1.22c5.46 0 9.9-4.3 9.9-9.62S17.46 2.1 12 2.1Zm0 17.94c-1.49 0-2.96-.39-4.25-1.14l-.31-.18-3.08.93.96-2.96-.2-.31a8.07 8.07 0 0 1-1.25-4.34c0-4.45 3.69-8.06 8.23-8.06s8.23 3.61 8.23 8.06-3.69 8.06-8.23 8.06Zm4.52-5.9c-.25-.12-1.48-.73-1.71-.82-.23-.08-.4-.12-.57.12-.17.24-.65.82-.8.99-.15.16-.29.19-.54.06-.25-.12-1.04-.38-1.97-1.2-.73-.65-1.22-1.45-1.36-1.69-.14-.24-.01-.37.1-.49.1-.1.25-.27.37-.41.12-.14.16-.24.25-.4.08-.16.04-.31-.02-.43-.06-.12-.57-1.36-.78-1.86-.21-.49-.42-.42-.57-.43h-.49c-.17 0-.43.06-.66.31-.23.24-.86.83-.86 2.03 0 1.2.89 2.36 1.01 2.52.12.16 1.75 2.77 4.24 3.88.59.25 1.05.4 1.41.51.59.18 1.13.16 1.56.1.48-.07 1.48-.6 1.69-1.17.21-.58.21-1.08.15-1.17-.06-.1-.23-.16-.48-.28Z"/>
+								</svg>
+							</span>
+							<div>
+								<p class="text-base font-extrabold text-emerald-100 sm:text-lg">مراسلة فورية عبر واتساب</p>
+								<p class="text-xs font-medium text-emerald-100/70 sm:text-sm">استجابة سريعة للدعم والترقيات</p>
+							</div>
+						</div>
+					</a>
+
+					<a href="mailto:fareshalawi17@://gmail.com" class="action-link group block rounded-2xl border border-violet-300/30 bg-violet-400/10 p-4 transition duration-300 hover:-translate-y-1 hover:border-violet-200/60 hover:bg-violet-400/15">
+						<div class="action-shell flex items-center gap-4 rounded-xl">
+							<span class="action-icon inline-flex h-12 w-12 items-center justify-center rounded-xl border border-violet-200/50 bg-violet-300/20 text-violet-100 shadow-[0_0_18px_rgba(167,139,250,0.32)]">
+								<svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.9">
+									<rect x="3" y="5" width="18" height="14" rx="2"></rect>
+									<path stroke-linecap="round" stroke-linejoin="round" d="m4 7 8 6 8-6"></path>
+								</svg>
+							</span>
+							<div>
+								<p class="text-base font-extrabold text-violet-100 sm:text-lg">إرسال بريد إلكتروني رسمي</p>
+								<p class="text-xs font-medium text-violet-100/70 sm:text-sm">fareshalawi17@://gmail.com</p>
+							</div>
+						</div>
+					</a>
+
+					<div class="rounded-2xl border border-amber-300/30 bg-amber-400/10 p-4">
+						<div class="mb-3 flex items-center gap-3">
+							<span class="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-amber-200/50 bg-amber-300/20 text-amber-100 shadow-[0_0_18px_rgba(251,191,36,0.28)]">⚙️</span>
+							<div>
+								<p class="text-base font-extrabold text-amber-100 sm:text-lg">الدفع الإلكتروني عبر شام كاش</p>
+								<p class="text-xs font-medium text-amber-100/75 sm:text-sm">امسح الكود لإتمام الدفع مباشرة</p>
+							</div>
+						</div>
+						<div class="flex flex-col items-center gap-3 rounded-2xl border border-white/10 bg-slate-900/35 p-3 sm:flex-row sm:items-start sm:justify-between">
+							<div class="rounded-xl bg-white p-2 shadow-lg">
+								<img id="shamCashQr" alt="Sham Cash QR" class="h-36 w-36 rounded-lg object-cover sm:h-40 sm:w-40" />
+							</div>
+							<p class="max-w-sm text-sm font-bold leading-7 text-amber-100/95">يرجى ارسال صورة إشعار للتأكد من اتمام عملية الشراء</p>
+						</div>
+					</div>
+				</div>
+
+				<footer class="mt-8 border-t border-white/10 pt-5 text-center">
+					<p class="text-xs font-mono tracking-wider text-indigo-200/90">تطوير وإدارة: المهندس فارس حلاوي © 2026</p>
+				</footer>
+			</section>
+		</main>
+	</div>
+
+	<script>
+		const doctorName = localStorage.getItem('doctor_name');
+		const userTier = localStorage.getItem('user_tier');
+		const titleElement = document.getElementById('clinicTitle');
+		const tierBadge = document.getElementById('tierBadge');
+		const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+		const sidebarNav = document.getElementById('sidebarNav');
+		const logoutBtn = document.getElementById('logoutBtn');
+		const shamCashQr = document.getElementById('shamCashQr');
+
+		const shamCashPaymentUrl = 'https://shamcash.app';
+
+		function buildQrSrc(url) {
+			return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`;
+		}
+
+		function renderTierBadge() {
+			if (!tierBadge) return;
+			if (userTier === 'premium') {
+				tierBadge.className = 'badge-premium rounded-full px-3 py-1 text-xs font-extrabold tracking-wide';
+				tierBadge.textContent = 'Premium 👑';
+				return;
+			}
+
+			tierBadge.className = 'badge-standard rounded-full px-3 py-1 text-xs font-extrabold tracking-wide';
+			tierBadge.textContent = 'Standard';
+		}
+
+		function syncSidebarNav() {
+			if (!sidebarNav) return;
+			if (window.innerWidth >= 1024) {
+				sidebarNav.classList.remove('hidden');
+				sidebarNav.classList.add('flex');
+			} else {
+				sidebarNav.classList.add('hidden');
+				sidebarNav.classList.remove('flex');
+			}
+		}
+
+		function handleLogout() {
+			localStorage.clear();
+			window.location.href = 'login.html';
+		}
+
+		if (titleElement) {
+			titleElement.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادتي الرقمية';
+		}
+
+		if (mobileMenuToggle && sidebarNav) {
+			mobileMenuToggle.addEventListener('click', () => {
+				sidebarNav.classList.toggle('hidden');
+			});
+		}
+
+		if (logoutBtn) {
+			logoutBtn.addEventListener('click', handleLogout);
+		}
+
+		if (shamCashQr) {
+			shamCashQr.src = buildQrSrc(shamCashPaymentUrl);
+		}
+
+		window.addEventListener('resize', syncSidebarNav);
+		renderTierBadge();
+		syncSidebarNav();
+	</script>
+</body>
+</html>
