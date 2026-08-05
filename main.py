@@ -2,7 +2,8 @@ from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Hea
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import text, func
+from sqlalchemy import text
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from typing import List, Optional, Literal
 import csv
