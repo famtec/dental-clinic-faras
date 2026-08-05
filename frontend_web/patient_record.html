@@ -65,7 +65,7 @@
         <div class="flex items-center gap-3 text-white">
           <img src="logo.png" alt="شعار العيادة" class="h-12 w-12 rounded-xl border border-white/10 bg-white/10 object-contain p-2 shadow-lg shadow-indigo-950/25" />
           <div class="flex items-center gap-3">
-            <p id="clinicTitle" class="text-lg font-extrabold tracking-tight text-white sm:text-xl">عيادتي الرقمية</p>
+            <p id="clinicTitle" class="text-lg font-extrabold tracking-tight text-white sm:text-xl">عيادة الطبيب</p>
             <span id="tierBadge" class="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Standard</span>
           </div>
         </div>
@@ -88,7 +88,7 @@
           <img src="logo.png" alt="شعار العيادة" class="h-10 w-10 rounded-xl border border-white/10 bg-white/10 object-contain p-1.5 shadow-lg shadow-indigo-950/25" />
           <div class="min-w-0">
             <div class="flex min-w-0 items-center gap-2">
-              <p id="mobileClinicTitle" class="truncate text-sm font-extrabold tracking-tight text-white">عيادتي الرقمية</p>
+              <p id="mobileClinicTitle" class="truncate text-sm font-extrabold tracking-tight text-white">عيادة الطبيب</p>
               <span id="mobileTierBadge" class="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[11px] font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Standard</span>
             </div>
           </div>
@@ -567,10 +567,10 @@
     const mobileMenuDropdown = document.getElementById('mobileMenuDropdown');
     const mobileLogoutBtn = document.getElementById('mobileLogoutBtn');
     if (clinicTitle) {
-      clinicTitle.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادتي الرقمية';
+            clinicTitle.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادة الطبيب';
     }
     if (mobileClinicTitle) {
-      mobileClinicTitle.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادتي الرقمية';
+            mobileClinicTitle.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادة الطبيب';
     }
 
     function renderTierBadge() {
@@ -1486,7 +1486,7 @@
       const instructionsEl = document.getElementById('printInstructions');
 
       const savedDoctorName = localStorage.getItem('doctor_name');
-      const clinicName = savedDoctorName ? `عيادة ${savedDoctorName}` : 'عيادتي الرقمية';
+      const clinicName = savedDoctorName ? `عيادة ${savedDoctorName}` : 'عيادة الطبيب';
       const patientName = String(currentPatient?.full_name || document.getElementById('patientName')?.textContent || '—').trim() || '—';
 
       if (clinicNameEl) clinicNameEl.textContent = clinicName;
