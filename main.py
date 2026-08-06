@@ -550,10 +550,10 @@ def google_auth(payload: dict, db: Session = Depends(database.get_db)):
     try:
         # 1. فحص التوكن القادم من خوادم جوجل السحابية
         idinfo = id_token.verify_oauth2_token(
-            token, 
-            requests.Request(), 
-            "://googleusercontent.com"
-        )
+    token, 
+    requests.Request(), 
+    "446271578356-qju6aml2tiqbd2v6p23utrfb7nosketm.apps.googleusercontent.com" # 👈 إلصق مفتاحك هنا بدقة تامة
+)
         email = idinfo['email']
         name = idinfo.get('name', 'طبيب أسنان')
         

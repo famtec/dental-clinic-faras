@@ -915,11 +915,11 @@
     if (yearElement) {
       yearElement.textContent = new Date().getFullYear();
     }
-    // 🔒 جدار الحماية التجاري الصارم لحظر الحسابات غير المفعلة بحسابات جوجل
- userTier = localStorage.getItem("user_tier");
+// 🔒 جدار الحماية التجاري الصارم لحظر الحسابات غير المفعلة بحسابات جوجل
+userTier = localStorage.getItem("user_tier");
 if (userTier === "pending_activation") {
     // مسح واجهة الموقع بالكامل وحقن شاشة القفل الفخمة باسمك ورقمك
-    document.body.innerHTML = 
+    document.body.innerHTML = `
         <div class="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6 font-sans" dir="rtl">
             <div class="max-w-xl w-full bg-indigo-950/40 backdrop-blur-xl border border-indigo-500/20 p-8 rounded-3xl shadow-2xl text-center space-y-6">
                 <!-- أيقونة القفل الذهبي المتوهج -->
@@ -941,7 +941,7 @@ if (userTier === "pending_activation") {
                 <!-- نموذج إدخال الكود الفوري -->
                 <div class="space-y-3">
                     <input type="text" id="activationKeyInput" placeholder="أدخل كود التفعيل هنا (مثال: TEST-PREMIUM-365)" 
-                           class="w-full bg-slate-900 border border-indigo-500/20 rounded-xl px-4 py-3 text-center text-sm focus:outline-none focus:border-purple-500 transition-colors text-white placeholder-slate-500">
+                           class="w-full bg-slate-900 border border-indigo-500/20 rounded-xl px-4 py-3 text-center text-sm focus:outline-none focus:border-purple-500 transition-colors text-white placeholder-slate-500" />
                     
                     <button onclick="activateClinicAccount()" 
                             class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-purple-600/20 active:scale-[0.98]">
@@ -953,7 +953,7 @@ if (userTier === "pending_activation") {
     `;
 }
 
-// دالة التحقق من الكود وإعادة الترقية الفورية للباقة
+// دالة التحقق من الكود وإعادة الترقية الفورية للباقة السحابية أونلاين
 function activateClinicAccount() {
     const keyCode = document.getElementById("activationKeyInput").value.trim();
     if (!keyCode) {
@@ -982,17 +982,12 @@ function activateClinicAccount() {
     .catch(err => alert("حدث خطأ أثناء الاتصال بالسيرفر السحابي."));
 }
 
-// الدالة الأساسية القديمة بعد التحقق من القفل التجاري
+// الدالة الأساسية القديمة بعد التحقق من القفل التجاري المحكم
 window.addEventListener('DOMContentLoaded', async () => {
     if (localStorage.getItem("user_tier") !== "pending_activation") {
         await fetchPatients();
     }
 });
-// حظر الالتفاف عبر الروابط المباشرة
-if (localStorage.getItem("user_tier") === "pending_activation") {
-    window.location.href = "index.html"; // طرده فوراً وإعادته لشاشة الدفع والقفل
-}
-
-  </script>
+</script>
 </body>
 </html>
