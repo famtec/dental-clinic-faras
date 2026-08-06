@@ -916,10 +916,10 @@
       yearElement.textContent = new Date().getFullYear();
     }
     // 🔒 جدار الحماية التجاري الصارم لحظر الحسابات غير المفعلة بحسابات جوجل
-const userTier = localStorage.getItem("user_tier");
+ userTier = localStorage.getItem("user_tier");
 if (userTier === "pending_activation") {
     // مسح واجهة الموقع بالكامل وحقن شاشة القفل الفخمة باسمك ورقمك
-    document.body.innerHTML = `
+    document.body.innerHTML = 
         <div class="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6 font-sans" dir="rtl">
             <div class="max-w-xl w-full bg-indigo-950/40 backdrop-blur-xl border border-indigo-500/20 p-8 rounded-3xl shadow-2xl text-center space-y-6">
                 <!-- أيقونة القفل الذهبي المتوهج -->
