@@ -543,7 +543,7 @@ def login_user(login_request: LoginRequest, db: Session = Depends(database.get_d
     )
 
 
-@app.post("/api/auth/google", response_model=LoginResponse)
+
 @app.post("/api/auth/google")
 def google_auth(payload: dict, db: Session = Depends(database.get_db)):
     token = payload.get("credential")
