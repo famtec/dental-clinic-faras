@@ -1667,3 +1667,49 @@ if __name__ == "__main__":
     # قراءة المنفذ ديناميكياً من بيئة Render العالمية، وإلا استخدام 8090 كبديل محلي
     port = int(os.environ.get("PORT", 8090))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
+
+# المخطط البرمجي لاستقبال طلب التفعيل من الـ Frontend
+class ActivationRequest(BaseModel):
+    email: str
+    activation_key: str
+
+@app.post("/api/activate")
+def activate_account(request: ActivationRequest, db: Session = Depends(database.get_db)):
+    # 1. القائمة الصارمة للأكواد المعتمدة في السيرفر السحابي لمنع التلاعب والتخمين
+    allowed_premium_keys = [
+        "TEST-PREMIUM-365", "TEST-PREMIUM-1A2B3C", "TEST-PREMIUM-4D5E6F", 
+        "TEST-PREMIUM-7G8H9I", "TEST-PREMIUM-K3L4M5"
+    ]
+    allowed_standard_keys = [
+        "TEST-STANDARD-A1B2C3", "TEST-STANDARD-D4E5F6", "TEST-STANDARD-G7H8I9",
+        "TEST-STANDARD-K2L4M5", "TEST-STANDARD-N8P3Q5", "TEST-STANDARD-R7S1T4",
+        "TEST-STANDARD-U6V2W8", "TEST-STANDARD-X3Y5Z7"
+    ]
+    
+    # تحديد نوع الرتبة التجارية بناءً على الكود المدخل
+    target_tier = None
+    if request.activation_key in allowed_premium_keys:
+        target_tier = "premium"
+    elif request.activation_key in allowed_standard_keys:
+        target_tier = "standard"
+    else:
+        raise HTTPException(status_code=400, detail="كود التفعيل خاطئ، منتهي، أو غير مدرج بالسيرفر!")
+        
+    # 2. البحث عن الطبيب المستهدف في جدول قاعدة البيانات لتعديل رتبته
+    user = db.query(models.User).filter(models.User.email == request.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="حساب الطبيب المستهدف غير موجود!")
+        
+    try:
+        # 3. حقن الرتبة الجديدة وترقيتها أبدياً وسحابياً في سوبابيز
+        user.tier = target_tier
+        db.commit()
+        db.refresh(user)
+        return {
+            "status": "success", 
+            "message": f"تم تفعيل عيادتك الرقمية بنجاح وترقيتها إلى باقة ({target_tier})!", 
+            "user_tier": user.tier
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"فشل تحديث قاعدة البيانات السحابية: {e}")
