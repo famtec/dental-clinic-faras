@@ -915,9 +915,84 @@
     if (yearElement) {
       yearElement.textContent = new Date().getFullYear();
     }
-    window.addEventListener('DOMContentLoaded', async () => {
-      await fetchPatients();
-    });
+    // 🔒 جدار الحماية التجاري الصارم لحظر الحسابات غير المفعلة بحسابات جوجل
+const userTier = localStorage.getItem("user_tier");
+if (userTier === "pending_activation") {
+    // مسح واجهة الموقع بالكامل وحقن شاشة القفل الفخمة باسمك ورقمك
+    document.body.innerHTML = `
+        <div class="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6 font-sans" dir="rtl">
+            <div class="max-w-xl w-full bg-indigo-950/40 backdrop-blur-xl border border-indigo-500/20 p-8 rounded-3xl shadow-2xl text-center space-y-6">
+                <!-- أيقونة القفل الذهبي المتوهج -->
+                <div class="w-20 h-20 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-center mx-auto text-4xl shadow-lg shadow-amber-500/5 animate-pulse">
+                    🔒
+                </div>
+                
+                <h1 class="text-2xl font-bold text-amber-400">حسابك قيد التفعيل ⏳</h1>
+                
+                <p class="text-slate-300 leading-relaxed text-sm">
+                    مرحباً بك في المنصة السحابية الشاملة للعيادات الرقمية. للبَدء في استخدام البرنامج وأرشفة المرضى والمواعيد والمخزن، يرجى تفعيل عيادتك الرقمية عبر إدخال كود التفعيل السنوي المعتمد.
+                </p>
+                
+                <div class="bg-indigo-950/60 border border-indigo-500/10 p-4 rounded-2xl text-xs text-slate-400 space-y-2">
+                    <p class="font-semibold text-slate-300">📞 للتفعيل الفوري واستلام كود التشغيل كاش، يرجى التواصل مع مطور المنصة:</p>
+                    <p class="text-sm text-indigo-400 font-bold">المهندس فارس حلاوي: 0956907698 🛠️</p>
+                </div>
+                
+                <!-- نموذج إدخال الكود الفوري -->
+                <div class="space-y-3">
+                    <input type="text" id="activationKeyInput" placeholder="أدخل كود التفعيل هنا (مثال: TEST-PREMIUM-365)" 
+                           class="w-full bg-slate-900 border border-indigo-500/20 rounded-xl px-4 py-3 text-center text-sm focus:outline-none focus:border-purple-500 transition-colors text-white placeholder-slate-500">
+                    
+                    <button onclick="activateClinicAccount()" 
+                            class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-purple-600/20 active:scale-[0.98]">
+                        تفعيل الحساب الآن 🚀
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// دالة التحقق من الكود وإعادة الترقية الفورية للباقة
+function activateClinicAccount() {
+    const keyCode = document.getElementById("activationKeyInput").value.trim();
+    if (!keyCode) {
+        alert("يرجى كتابة كود التفعيل أولاً!");
+        return;
+    }
+    
+    fetch('/api/activate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            email: localStorage.getItem("user_email"), 
+            activation_key: keyCode 
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === "success") {
+            alert("🎉 تم تفعيل عيادتك الرقمية بنجاح باهر! جاري تحويلك للباقة...");
+            localStorage.setItem("user_tier", data.user_tier);
+            window.location.reload();
+        } else {
+            alert("❌ كود التفعيل غير صحيح أو مستخدم مسبقاً! يرجى مراجعة المهندس فارس.");
+        }
+    })
+    .catch(err => alert("حدث خطأ أثناء الاتصال بالسيرفر السحابي."));
+}
+
+// الدالة الأساسية القديمة بعد التحقق من القفل التجاري
+window.addEventListener('DOMContentLoaded', async () => {
+    if (localStorage.getItem("user_tier") !== "pending_activation") {
+        await fetchPatients();
+    }
+});
+// حظر الالتفاف عبر الروابط المباشرة
+if (localStorage.getItem("user_tier") === "pending_activation") {
+    window.location.href = "index.html"; // طرده فوراً وإعادته لشاشة الدفع والقفل
+}
+
   </script>
 </body>
 </html>

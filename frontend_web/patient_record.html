@@ -3268,6 +3268,11 @@
       loadFinanceLedger();
       loadPatientPrescriptions();
     });
+    // حظر الالتفاف عبر الروابط المباشرة
+if (localStorage.getItem("user_tier") === "pending_activation") {
+    window.location.href = "index.html"; // طرده فوراً وإعادته لشاشة الدفع والقفل
+}
+
   </script>
 </body>
 </html>

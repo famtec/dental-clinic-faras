@@ -544,18 +544,31 @@ def login_user(login_request: LoginRequest, db: Session = Depends(database.get_d
 
 
 @app.post("/api/auth/google", response_model=LoginResponse)
-@app.post("/api/auth/google-login", response_model=LoginResponse)
-def google_login(login_request: GoogleLoginRequest, db: Session = Depends(database.get_db)):
-    google_client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
-    if not google_client_id:
-        raise HTTPException(
-            status_code=503,
-            detail="Google Sign-In is not configured on the server. Missing GOOGLE_CLIENT_ID.",
+@app.post("/api/auth/google")
+def google_auth(payload: dict, db: Session = Depends(database.get_db)):
+    token = payload.get("credential")
+    try:
+        # 1. فحص التوكن القادم من خوادم جوجل السحابية
+        idinfo = id_token.verify_oauth2_token(
+            token, 
+            requests.Request(), 
+            "://googleusercontent.com"
         )
-
-    credential = login_request.credential.strip()
-    if not credential:
-        raise HTTPException(status_code=400, detail="Google credential is required.")
+        email = idinfo['email']
+        name = idinfo.get('name', 'طبيب أسنان')
+        
+        # 2. فحص الحساب في قاعدة البيانات الأبدية وسوبابيز
+        user = db.query(models.User).filter(models.User.email == email).first()
+        if not user:
+            # 🔒 التعديل الاستراتيجي: حظر الحسابات الجديدة برتبة قيد التفعيل لمنع الدخول المجاني
+            user = models.User(email=email, full_name=name, tier="pending_activation")
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+            
+        return {"status": "success", "user_email": user.email, "user_tier": user.tier}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"فشل التوثيق السحابي من جوجل: {e}")
 
     try:
         token_payload = id_token.verify_oauth2_token(
