@@ -412,6 +412,45 @@
     });
 
     window.onload = initializeGoogleButton;
+    // دالة الاستجابة والتقاط التوكن السحابي من جوجل وضخه في بايثون
+function handleCredentialResponse(response) {
+    // 1. التأكد من التقاط التوكن بنجاح
+    if (!response.credential) {
+        alert("فشل التقاط رمز التوثيق من جوجل!");
+        return;
+    }
+
+    fetch('https://dental-clinic-faras.onrender.com', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+            credential: response.credential // حقن كائن الـ credential بدقة متناهية مع السيرفر
+        })
+    })
+    .then(async res => {
+        if (res.ok) {
+            const data = await res.json();
+            
+            // 3. حفظ الجلسة المحاسبية والبروفايل داخل ذاكرة المتصفح المحلية
+            localStorage.setItem("user_email", data.user_email);
+            localStorage.setItem("user_tier", data.user_tier); // سيخزن pending_activation أو premium
+            
+            alert("🎉 تم التحقق والتوثيق عبر خوادم Google بنجاح باهر!");
+            
+            // 4. العبور التلقائي الفوري إلى اللوحة الرئيسية ليصطدم بجدار الحماية التجاري الصارم
+            window.location.href = "index.html";
+        } else {
+            alert("فشل تسجيل الدخول عبر Google. (السيرفر رفض التوكن)");
+        }
+    })
+    .catch(err => {
+        console.error("خطأ في شبكة الاتصال السحابية:", err);
+        alert("فشل تسجيل الدخول عبر Google. تأكد من استقرار السيرفر أونلاين.");
+    });
+}
+
   </script>
 </body>
 </html>
