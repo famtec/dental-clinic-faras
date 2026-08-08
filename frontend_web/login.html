@@ -242,45 +242,68 @@
       });
     }
 
-   async function handleCredentialResponse(response) {
-    setGoogleHint('جاري التحقق من حساب Google...', 'normal');
-    hideMessage();
+  // 1. دالة الاستجابة والتقاط التوكن السحابي وضخه في بايثون
+function handleCredentialResponse(response) {
+    if (!response.credential) {
+        alert("فشل التقاط رمز التوثيق من جوجل!");
+        return;
+    }
 
-    try {
-        // 🚀 الاتصال المباشر والآمن بنطاقك المعتمد حصرياً
-        const serverResponse = await fetch('https://dental-clinic-faras.onrender.com', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ credential: response.credential })
-        });
-
-        let data = null;
-        try {
-            data = await serverResponse.json();
-        } catch (error) {
-            data = null;
-        }
-
-        if (serverResponse.status === 200 && data) {
-            const userEmail = String(data.user_email || '').trim().toLowerCase();
-            const userTier = String(data.user_tier || 'standard').trim().toLowerCase();
+    // إرسال التوكن مباشرة لنطاقك الرسمي المعتمد حصرياً
+    fetch('https://dental-clinic-faras.onrender.com', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+            credential: response.credential 
+        })
+    })
+    .then(async res => {
+        if (res.ok) {
+            const data = await res.json();
             
             // حفظ الجلسة المحاسبية والبروفايل داخل ذاكرة المتصفح المحلية
-            localStorage.setItem("user_email", userEmail);
-            localStorage.setItem("user_tier", userTier);
+            localStorage.setItem("user_email", data.user_email);
+            localStorage.setItem("user_tier", data.user_tier); // سيخزن pending_activation أو premium
             
-            setGoogleHint('تم التسجيل بنجاح! جاري التوجيه...', 'success');
-            setTimeout(() => {
-                window.location.href = "index.html";
-            }, 1000);
+            alert("🎉 تم التحقق والتوثيق عبر خوادم Google بنجاح باهر!");
+            window.location.href = "index.html";
         } else {
-            setGoogleHint('فشل تسجيل الدخول عبر Google. (السيرفر رفض التوكن)', 'error');
+            alert("فشل تسجيل الدخول عبر Google. (السيرفر رفض التوكن)");
         }
-    } catch (err) {
-        console.error("خطأ في الاتصال بالشبكة المعتمدة:", err);
-        setGoogleHint('فشل تسجيل الدخول. تأكد من استقرار السيرفر.', 'error');
-    }
+    })
+    .catch(err => {
+        console.error("خطأ في شبكة الاتصال السحابية:", err);
+        alert("فشل تسجيل الدخول عبر Google. تأكد من استقرار السيرفر أونلاين.");
+    });
 }
+
+// 2. دالة إجبارية لبناء وإظهار زر جوجل بقوة القانون البرمجي فور تحميل الصفحة
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        if (typeof google !== 'undefined' && google.accounts) {
+            // تفريغ الحاوية أولاً لضمان عدم التكرار أو التداخل
+            const btnContainer = document.getElementById("googleBtnContainer");
+            if (btnContainer) {
+                btnContainer.innerHTML = ""; 
+                
+                google.accounts.id.initialize({
+                    client_id: "://googleusercontent.com",
+                    callback: handleCredentialResponse
+                });
+                
+                google.accounts.id.renderButton(
+                    btnContainer,
+                    { theme: "outline", size: "large", text: "signin_with", width: "100%" }
+                );
+            }
+        } else {
+            console.error("تنبيه: مكتبة Google SDK تستغرق وقتاً للتحميل، جاري المحاولة مجدداً...");
+        }
+    }, 300); // تأخير ناعم بمقدار 300ms لضمان اكتمال سحب الـ SDK السحابي من خوادم جوجل
+});
+
 </script>
 </body>
 </html>
