@@ -242,215 +242,45 @@
       });
     }
 
-    async function handleCredentialResponse(response) {
-      const credentialToken = String(response?.credential || '').trim();
-      if (!credentialToken) {
-        setGoogleHint('لم يتم استلام رمز اعتماد Google.', 'error');
-        return;
-      }
+   async function handleCredentialResponse(response) {
+    setGoogleHint('جاري التحقق من حساب Google...', 'normal');
+    hideMessage();
 
-      setGoogleHint('جاري التحقق من حساب Google...', 'normal');
-      hideMessage();
-
-      try {
-        const serverResponse = await fetch(apiUrl('/api/auth/google'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ credential: credentialToken })
+    try {
+        // 🚀 الاتصال المباشر والآمن بنطاقك المعتمد حصرياً
+        const serverResponse = await fetch('https://dental-clinic-faras.onrender.com', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ credential: response.credential })
         });
 
         let data = null;
         try {
-          data = await serverResponse.json();
+            data = await serverResponse.json();
         } catch (error) {
-          data = null;
+            data = null;
         }
 
-        if (serverResponse.status === 200) {
-          const userEmail = String(data?.user_email || data?.email || '').trim().toLowerCase();
-          const userTier = String(data?.user_tier || data?.tier || 'standard').trim().toLowerCase();
-
-          localStorage.setItem('user_email', userEmail);
-          localStorage.setItem('user_tier', userTier);
-
-          showPremiumToast('تم تسجيل الدخول بنجاح. مرحبًا بك في الباقة المميزة');
-          window.location.href = 'index.html';
-          return;
-        }
-
-        const fallbackMessage = data?.message || data?.detail || data?.error || 'تعذر تسجيل الدخول عبر Google.';
-        showMessage(fallbackMessage, 'error');
-        setGoogleHint('فشل تسجيل الدخول عبر Google.', 'error');
-      } catch (error) {
-        showMessage('تعذر الاتصال بالخادم الآن. يرجى المحاولة لاحقًا.', 'error');
-        setGoogleHint('تعذر التحقق من Google حالياً.', 'error');
-      }
-    }
-
-    function initializeGoogleButton() {
-      const googleBtnElement = document.getElementById('googleBtnContainer');
-      googleBtnElement.innerHTML = '';
-      window.google.accounts.id.initialize({
-        client_id: '446271578356-qju6aml2tiqbd2v6p23utrfb7nosketm.apps.googleusercontent.com',
-        callback: handleCredentialResponse
-      });
-      window.google.accounts.id.renderButton(
-        googleBtnElement,
-        { theme: 'outline', size: 'large', text: 'signin_with', width: '100%' }
-      );
-    }
-
-    function updateLoginInsights() {
-      const email = emailInput.value.trim().toLowerCase();
-      const password = passwordInput.value;
-      const hasEmail = email.length > 0;
-      const hasPassword = password.length > 0;
-
-      if (!hasEmail && !hasPassword) {
-        loginStatusBadge.textContent = 'بانتظار البيانات';
-        loginStatusBadge.className = 'rounded-full bg-white px-3 py-1 text-xs font-bold text-cyan-700 shadow-sm';
-        loginHint.textContent = 'ابدأ بكتابة البريد الإلكتروني وكلمة المرور لتفعيل زر الدخول بشكل تفاعلي.';
-        emailPreview.classList.add('hidden');
-        emailPreview.textContent = '';
-        return;
-      }
-
-      if (hasEmail && !hasPassword) {
-        loginStatusBadge.textContent = 'أدخل كلمة المرور';
-        loginStatusBadge.className = 'rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700 shadow-sm';
-        loginHint.textContent = 'تم التعرف على البريد الإلكتروني. بقيت خطوة واحدة لإتمام الدخول.';
-      } else if (hasEmail && hasPassword) {
-        loginStatusBadge.textContent = 'جاهز للدخول';
-        loginStatusBadge.className = 'rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700 shadow-sm';
-        loginHint.textContent = rememberMeCheckbox.checked
-          ? 'سيتم تذكر الجلسة على هذا الجهاز بعد نجاح الدخول.'
-          : 'البيانات مكتملة. يمكنك المتابعة إلى لوحة العيادة.';
-      } else {
-        loginStatusBadge.textContent = 'أدخل البريد';
-        loginStatusBadge.className = 'rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700 shadow-sm';
-        loginHint.textContent = 'ابدأ بالبريد الإلكتروني الطبي الخاص بالحساب.';
-      }
-
-      if (hasEmail) {
-        emailPreview.classList.remove('hidden');
-        emailPreview.textContent = `سيتم تسجيل الدخول باستخدام: ${email}`;
-      } else {
-        emailPreview.classList.add('hidden');
-        emailPreview.textContent = '';
-      }
-    }
-
-    togglePasswordBtn.addEventListener('click', () => {
-      const isHidden = passwordInput.type === 'password';
-      passwordInput.type = isHidden ? 'text' : 'password';
-      togglePasswordBtn.textContent = isHidden ? 'إخفاء' : 'إظهار';
-    });
-
-    passwordInput.addEventListener('keyup', (event) => {
-      if (typeof event.getModifierState === 'function') {
-        capsLockHint.classList.toggle('hidden', !event.getModifierState('CapsLock'));
-      }
-    });
-
-    emailInput.addEventListener('input', updateLoginInsights);
-    passwordInput.addEventListener('input', updateLoginInsights);
-    rememberMeCheckbox.addEventListener('change', updateLoginInsights);
-    updateLoginInsights();
-
-    loginForm.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      hideMessage();
-
-      const email = emailInput.value.trim().toLowerCase();
-      const password = passwordInput.value;
-
-      if (!email || !password) {
-        showMessage('يرجى إدخال البريد الإلكتروني وكلمة المرور قبل المتابعة.', 'error');
-        return;
-      }
-
-      setLoading(true);
-
-      try {
-        const response = await fetch(apiUrl('/api/auth/login'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        });
-
-        let data = null;
-        try {
-          data = await response.json();
-        } catch (error) {
-          data = null;
-        }
-
-        if (response.status === 403) {
-          showMessage('عذراً، انتهت مدة الاشتراك السنوية. يرجى التواصل مع المهندس فارس حلاوي للتجديد ودفع الاشتراك.', 'error');
-          return;
-        }
-
-        if (response.status === 401) {
-          showMessage('البريد الإلكتروني أو كلمة المرور غير صحيحة!', 'error');
-          return;
-        }
-
-        if (response.status === 200) {
-          persistLoginSession(data, email);
-
-          window.location.href = 'index.html';
-          return;
-        }
-
-        const fallbackMessage = data?.message || data?.detail || data?.error || 'تعذر تسجيل الدخول';
-        showMessage(fallbackMessage, 'error');
-      } catch (error) {
-        showMessage('تعذر الاتصال بالخادم الآن. يرجى المحاولة لاحقًا.', 'error');
-      } finally {
-        setLoading(false);
-      }
-    });
-
-    window.onload = initializeGoogleButton;
-    // دالة الاستجابة والتقاط التوكن السحابي من جوجل وضخه في بايثون
-function handleCredentialResponse(response) {
-    // 1. التأكد من التقاط التوكن بنجاح
-    if (!response.credential) {
-        alert("فشل التقاط رمز التوثيق من جوجل!");
-        return;
-    }
-
-    fetch('https://dental-clinic-faras.onrender.com', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ 
-            credential: response.credential // حقن كائن الـ credential بدقة متناهية مع السيرفر
-        })
-    })
-    .then(async res => {
-        if (res.ok) {
-            const data = await res.json();
+        if (serverResponse.status === 200 && data) {
+            const userEmail = String(data.user_email || '').trim().toLowerCase();
+            const userTier = String(data.user_tier || 'standard').trim().toLowerCase();
             
-            // 3. حفظ الجلسة المحاسبية والبروفايل داخل ذاكرة المتصفح المحلية
-            localStorage.setItem("user_email", data.user_email);
-            localStorage.setItem("user_tier", data.user_tier); // سيخزن pending_activation أو premium
+            // حفظ الجلسة المحاسبية والبروفايل داخل ذاكرة المتصفح المحلية
+            localStorage.setItem("user_email", userEmail);
+            localStorage.setItem("user_tier", userTier);
             
-            alert("🎉 تم التحقق والتوثيق عبر خوادم Google بنجاح باهر!");
-            
-            // 4. العبور التلقائي الفوري إلى اللوحة الرئيسية ليصطدم بجدار الحماية التجاري الصارم
-            window.location.href = "index.html";
+            setGoogleHint('تم التسجيل بنجاح! جاري التوجيه...', 'success');
+            setTimeout(() => {
+                window.location.href = "index.html";
+            }, 1000);
         } else {
-            alert("فشل تسجيل الدخول عبر Google. (السيرفر رفض التوكن)");
+            setGoogleHint('فشل تسجيل الدخول عبر Google. (السيرفر رفض التوكن)', 'error');
         }
-    })
-    .catch(err => {
-        console.error("خطأ في شبكة الاتصال السحابية:", err);
-        alert("فشل تسجيل الدخول عبر Google. تأكد من استقرار السيرفر أونلاين.");
-    });
+    } catch (err) {
+        console.error("خطأ في الاتصال بالشبكة المعتمدة:", err);
+        setGoogleHint('فشل تسجيل الدخول. تأكد من استقرار السيرفر.', 'error');
+    }
 }
-
-  </script>
+</script>
 </body>
 </html>
