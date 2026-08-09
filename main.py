@@ -556,7 +556,7 @@ def google_auth(payload: dict, db: Session = Depends(database.get_db)):
         idinfo = id_token.verify_oauth2_token(
             token, 
             requests.Request(), 
-            "://googleusercontent.com"
+            ":446271578356-qju6aml2tiqbd2v6p23utrfb7nosketm.apps.googleusercontent.com"
         )
         email = idinfo['email']
         name = idinfo.get('name', 'طبيب أسنان')
