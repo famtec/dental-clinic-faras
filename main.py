@@ -553,11 +553,12 @@ def google_auth(payload: dict, db: Session = Depends(database.get_db)):
         
     try:
         # 2. فك التشفير والتحقق الصارم بمفتاحك الشخصي المعتمد لـ Render
-        idinfo = id_token.verify_oauth2_token(
-            token, 
-            requests.Request(), 
-            ":446271578356-qju6aml2tiqbd2v6p23utrfb7nosketm.apps.googleusercontent.com"
-        )
+         idinfo = id_token.verify_oauth2_token(
+    token, 
+    requests.Request(), 
+    "446271578356-qju6aml2tiqbd2v6p23utrfb7nosketm.apps.googleusercontent.com" # 👈 تأكد من تطابقه كلياً هنا أيضاً
+)
+
         email = idinfo['email']
         name = idinfo.get('name', 'طبيب أسنان')
         
