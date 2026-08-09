@@ -546,26 +546,22 @@ def login_user(login_request: LoginRequest, db: Session = Depends(database.get_d
 
 @app.post("/api/auth/google")
 def google_auth(payload: dict, db: Session = Depends(database.get_db)):
-    # 1. التقاط التوكن بالمسمى المطابق للواجهة تماماً لمنع الرفض الأمني
     token = payload.get("credential")
     if not token:
         raise HTTPException(status_code=400, detail="رمز التوكن غير مرسل من الواجهة!")
         
     try:
-        # 2. فك التشفير والتحقق الصارم بمفتاحك الشخصي المعتمد لـ Render
-         idinfo = id_token.verify_oauth2_token(
-    token, 
-    requests.Request(), 
-    "446271578356-qju6aml2tiqbd2v6p23utrfb7nosketm.apps.googleusercontent.com" # 👈 تأكد من تطابقه كلياً هنا أيضاً
-)
-
+        # فك التشفير والتحقق الصارم بمفتاحك الشخصي المعتمد والجديد 100%
+        idinfo = id_token.verify_oauth2_token(
+            token, 
+            requests.Request(), 
+            ":446271578356-qju6aml2tiqbd2v6p23utrfb7nosketm.apps.googleusercontent.com"
+        )
         email = idinfo['email']
         name = idinfo.get('name', 'طبيب أسنان')
         
-        # 3. فحص الحساب في قاعدة البيانات الأبدية وسوبابيز
         user = db.query(models.User).filter(models.User.email == email).first()
         if not user:
-            # حظر الحسابات الجديدة برتبة قيد التفعيل لحماية أرباحك الاستثمارية
             user = models.User(email=email, full_name=name, tier="pending_activation")
             db.add(user)
             db.commit()
@@ -574,6 +570,7 @@ def google_auth(payload: dict, db: Session = Depends(database.get_db)):
         return {"status": "success", "user_email": user.email, "user_tier": user.tier}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"فشل التوثيق السحابي من جوجل: {e}")
+
 
     try:
         token_payload = id_token.verify_oauth2_token(
