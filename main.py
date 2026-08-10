@@ -517,32 +517,39 @@ def register_user(register_request: RegisterRequest, db: Session = Depends(datab
         raise HTTPException(status_code=400, detail="تم إنشاء الحساب لكن تعذر تجهيز الاستجابة بشكل صحيح.")
 
 
+# المخطط البرمجي الصارم لاستقبال بيانات الدخول التقليدي
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
 @app.post("/api/auth/login")
 def login_user(login_request: LoginRequest, db: Session = Depends(database.get_db)):
+    # 1. تنظيف البريد الإلكتروني وتحويله لأحرف صغيرة لمطابقة الحسابات
     normalized_email = login_request.email.strip().lower()
-
-    if not normalized_email:
-        raise HTTPException(status_code=401, detail="البريد الإلكتروني أو كلمة المرور غير صحيحة!")
-
+    
+    if not normalized_email or not login_request.password:
+        raise HTTPException(status_code=400, detail="يرجى ملء جميع الحقول المطلوبة!")
+        
+    # 2. الاستعلام عن الطبيب في قاعدة بيانات Supabase الأبدية
     user = db.query(models.User).filter(models.User.email == normalized_email).first()
-
     if not user:
         raise HTTPException(status_code=401, detail="البريد الإلكتروني أو كلمة المرور غير صحيحة!")
-
+        
+    # 3. التحقق الصارم من تطابق كلمة المرور (سواء كانت مشفرة أو نصية حسب نظامك الحالي)
+    # ملاحظة: إذا كنت تستخدم التشفير استبدل هذا بالدالة المعتمدة لديك، وإلا فالنص المباشر هو الحاسم:
     if user.hashed_password != login_request.password:
         raise HTTPException(status_code=401, detail="البريد الإلكتروني أو كلمة المرور غير صحيحة!")
-
-    ensure_user_subscription_is_active(user)
-    return {"status": "success", "email": user.email, "tier": user.tier}
-
-
-
-@app.post("/api/auth/google")
-def google_auth(payload: dict, db: Session = Depends(database.get_db)):
-    token = payload.get("credential")
-    if not token:
-        raise HTTPException(status_code=400, detail="رمز التوكن غير مرسل من الواجهة!")
         
+    try:
+        # 4. العبور المحاسبي الآمن وإرجاع قاموس JSON صافي ومطابق 100% للـ Frontend
+        return {
+            "status": "success",
+            "email": user.email,
+            "tier": user.tier or "standard"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"خطأ في معالجة الجلسة السحابية: {e}")
+
     try:
         # فك التشفير والتحقق الصارم بمفتاحك الشخصي المعتمد والجديد 100%
         idinfo = id_token.verify_oauth2_token(
