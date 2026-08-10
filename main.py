@@ -517,7 +517,7 @@ def register_user(register_request: RegisterRequest, db: Session = Depends(datab
         raise HTTPException(status_code=400, detail="تم إنشاء الحساب لكن تعذر تجهيز الاستجابة بشكل صحيح.")
 
 
-@app.post("/api/auth/login", response_model=LoginResponse)
+@app.post("/api/auth/login")
 def login_user(login_request: LoginRequest, db: Session = Depends(database.get_db)):
     normalized_email = login_request.email.strip().lower()
 
@@ -533,14 +533,7 @@ def login_user(login_request: LoginRequest, db: Session = Depends(database.get_d
         raise HTTPException(status_code=401, detail="البريد الإلكتروني أو كلمة المرور غير صحيحة!")
 
     ensure_user_subscription_is_active(user)
-
-    return LoginResponse(
-        token="secure-session-token",
-        doctor_name=user.doctor_name,
-        email=user.email,
-        tier=user.tier or "standard",
-        subscription_active=True,
-    )
+    return {"status": "success", "email": user.email, "tier": user.tier}
 
 
 
