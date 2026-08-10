@@ -21,7 +21,7 @@ import models
 import database
 import os
 import uvicorn
-
+from pydantic import BaseModel
 app = FastAPI(title="Dental Clinic API")
 
 UPLOADS_DIR = "uploads"
