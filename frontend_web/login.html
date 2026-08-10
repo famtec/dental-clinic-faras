@@ -250,7 +250,8 @@ function handleCredentialResponse(response) {
     }
 
     // إرسال التوكن مباشرة لنطاقك الرسمي المعتمد حصرياً
-    fetch('https://dental-clinic-faras.onrender.com', {
+    fetch('/api/auth/google', {
+
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -317,7 +318,8 @@ async function loginUser(event) {
     }
 
     try {
-        const response = await fetch('https://dental-clinic-faras.onrender.com', {
+        const response = await fetch('/api/auth/login', {
+
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
