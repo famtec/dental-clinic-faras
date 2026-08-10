@@ -304,7 +304,51 @@ window.addEventListener('load', () => {
         }
     }, 300); // تأخير ناعم بمقدار 300ms لضمان اكتمال سحب الـ SDK السحابي من خوادم جوجل
 });
+// 🔐 دالة تسجيل الدخول التقليدي الصارمة والمعصومة من إعادة التحميل قواعدياً
+async function loginUser(event) {
+    if (event) event.preventDefault();
 
+    const emailInput = document.getElementById("email") || document.querySelector('input[type="email"]');
+    const passwordInput = document.getElementById("password") || document.querySelector('input[type="password"]');
+    
+    if (!emailInput || !passwordInput || !emailInput.value || !passwordInput.value) {
+        alert("يرجى ملء جميع الحقول المطلوبة أولاً!");
+        return;
+    }
+
+    try {
+        const response = await fetch('https://onrender.com', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: emailInput.value.trim(),
+                password: passwordInput.value
+            })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            localStorage.setItem("user_email", data.email || emailInput.value.trim());
+            localStorage.setItem("user_tier", data.tier || "standard");
+            alert("🎉 تم تسجيل الدخول الرقمي بنجاح باهر!");
+            window.location.href = "index.html";
+        } else {
+            const errorData = await response.json().catch(() => ({}));
+            alert("❌ خطأ: " + (errorData.detail || "البريد الإلكتروني أو كلمة المرور غير صحيحة!"));
+        }
+    } catch (error) {
+        console.error("خطأ في الشبكة المعتمدة للاتصال:", error);
+        alert("فشل الاتصال بالسيرفر السحابي. يرجى مراجعة استقرار خادم Render.");
+    }
+}
+
+// ربط نموذج الـ Form التقليدي بالدالة ومنع الإنعاش تلقائياً
+document.addEventListener("DOMContentLoaded", () => {
+    const loginForm = document.querySelector("form");
+    if (loginForm) {
+        loginForm.addEventListener("submit", loginUser);
+    }
+});
 </script>
 </body>
 </html>
