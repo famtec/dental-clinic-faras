@@ -90,7 +90,7 @@
 				<button id="logoutBtn" type="button" class="rounded-2xl border border-rose-300/30 bg-rose-500/15 px-4 py-2.5 text-sm font-bold text-rose-100 transition hover:-translate-y-0.5 hover:border-rose-200/50 hover:bg-rose-500/25 hover:shadow-[0_0_24px_rgba(244,63,94,0.18)]">⎋ تسجيل الخروج</button>
 			</div>
 
-			<button id="mobileMenuToggle" type="button" class="ml-auto inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white shadow-lg shadow-indigo-950/20 transition hover:bg-white/15 md:hidden" aria-expanded="false" aria-controls="mobileMenuDropdown">
+			<button id="mobileMenuToggle" type="button" class="mr-auto inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white shadow-lg shadow-indigo-950/20 transition hover:bg-white/15 md:hidden" aria-expanded="false" aria-controls="mobileMenuDropdown">
 				<svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
 					<path d="M4 7h16"></path>
 					<path d="M4 12h16"></path>
@@ -208,7 +208,7 @@
 		</main>
 
 	<script>
-		const doctorName = localStorage.getItem('doctor_name');
+		const doctorName = localStorage.getItem('doctor_name') || localStorage.getItem('user_name');
 		const userTier = localStorage.getItem('user_tier');
 		const titleElement = document.getElementById('clinicTitle');
 		const tierBadge = document.getElementById('tierBadge');
@@ -242,7 +242,7 @@
 		}
 
 		if (titleElement) {
-			titleElement.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادة الطبيب';
+			titleElement.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادة الطبيب المعتمد';
 		}
 
 		if (mobileMenuToggle && mobileMenuDropdown) {

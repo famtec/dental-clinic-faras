@@ -187,7 +187,7 @@
 
     <script src="api-config.js"></script>
     <script>
-        const doctorName = localStorage.getItem('doctor_name');
+        const doctorName = localStorage.getItem('doctor_name') || localStorage.getItem('user_name');
         const userTier = localStorage.getItem('user_tier');
         const titleElement = document.getElementById('clinicTitle');
         const tierBadge = document.getElementById('tierBadge');
@@ -243,10 +243,10 @@
         }
 
         if (titleElement) {
-            titleElement.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادة الطبيب';
+            titleElement.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادة الطبيب المعتمد';
         }
         if (mobileClinicTitle) {
-            mobileClinicTitle.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادة الطبيب';
+            mobileClinicTitle.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادة الطبيب المعتمد';
         }
         renderTierBadge();
 

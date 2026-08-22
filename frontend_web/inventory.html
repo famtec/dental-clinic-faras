@@ -182,7 +182,7 @@
 	<script src="api-config.js"></script>
 	<script>
 		const userTier = localStorage.getItem("user_tier");
-		const doctorName = localStorage.getItem('doctor_name');
+		const doctorName = localStorage.getItem('doctor_name') || localStorage.getItem('user_name');
 		const doctorEmail = localStorage.getItem('user_email');
 		const clinicTitle = document.getElementById('clinicTitle');
 		const tierBadge = document.getElementById('tierBadge');

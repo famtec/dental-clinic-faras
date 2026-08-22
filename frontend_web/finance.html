@@ -442,10 +442,10 @@
 			}
 		}
 
-		const doctorName = localStorage.getItem('doctor_name');
-		clinicTitle.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادة الطبيب';
+		const doctorName = localStorage.getItem('doctor_name') || localStorage.getItem('user_name');
+		clinicTitle.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادة الطبيب المعتمد';
 		if (mobileClinicTitle) {
-			mobileClinicTitle.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادة الطبيب';
+			mobileClinicTitle.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادة الطبيب المعتمد';
 		}
 		renderTierBadge();
 
