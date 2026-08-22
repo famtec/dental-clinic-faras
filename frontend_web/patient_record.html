@@ -574,6 +574,139 @@
     const mobileClinicTitle = document.getElementById('mobileClinicTitle');
     const doctorName = localStorage.getItem('doctor_name') || localStorage.getItem('user_name');
     const userTier = (localStorage.getItem('user_tier') || 'standard').toString().toLowerCase();
+    // 🔒 حظر فوري ومتزامن قبل أي تسجيل لمستمع DOMContentLoaded أو أي طلب Fetch لبيانات محمية (السجل الطبي/المالي/الأشعة) -- التوجيه وحده في نهاية الملف لم يكن كافياً لأن السكربت يستمر بالتنفيذ حتى بعد استدعاء window.location.
+    if (userTier === 'pending_activation') {
+        window.location.replace('index.html');
+    }
+
+    // 🔒 قفل التجديد الشهري اللطيف (Soft Paywall) لحساب expired_subscription:
+    // غير هدّام عمداً -- ينقل عناصر body الحالية داخل غلاف مموَّه (blur) بدل
+    // حذفها، ويضيف نافذة التجديد كعنصر شقيق (وليس ابناً للغلاف) حتى لا يكسر
+    // CSS filter تموضعها الثابت (position: fixed) ولا يموّهها هي أيضاً بالخطأ.
+    function renderExpiredSubscriptionLock() {
+        if (document.getElementById('expiredSubscriptionOverlay')) return;
+
+        const blurWrap = document.createElement('div');
+        blurWrap.id = 'expiredBlurWrap';
+        blurWrap.style.filter = 'blur(8px)';
+        blurWrap.style.pointerEvents = 'none';
+        blurWrap.style.userSelect = 'none';
+        while (document.body.firstChild) {
+            blurWrap.appendChild(document.body.firstChild);
+        }
+        document.body.appendChild(blurWrap);
+
+        const overlay = document.createElement('div');
+        overlay.id = 'expiredSubscriptionOverlay';
+        overlay.setAttribute('dir', 'rtl');
+        overlay.className = 'fixed inset-0 z-[999] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 font-sans';
+        overlay.innerHTML = `
+            <div class="max-w-xl w-full bg-indigo-950/60 backdrop-blur-2xl border border-purple-500/25 p-8 rounded-3xl shadow-2xl shadow-purple-950/60 text-center space-y-6">
+                <div class="w-20 h-20 bg-purple-500/10 border border-purple-500/30 rounded-2xl flex items-center justify-center mx-auto text-4xl shadow-lg shadow-purple-500/10 animate-pulse">
+                🔒
+                </div>
+
+                <h1 class="text-2xl font-bold text-purple-300">انتهت صلاحية باقتك</h1>
+
+                <p class="text-slate-300 leading-relaxed text-sm">
+                    مرحباً يا دكتور، نود إعلامك بأن فترة صلاحية باقتك الحالية قد انتهت. سجلات مرضاك، مواعيدك، ومخزن عيادتك في أمان تام ومحفوظة أبدياً داخل السيرفر ولا تضيع أبداً 🔒. للمتابعة الفورية واستعادة صلاحيات الإدارة كاملة، يرجى إدخال كود التجديد الشهري الجديد. للدعم الفني السريع والحصول على الكود كاش، يرجى التواصل مع مطور المنصة المهندس فارس حلاوي على الرقم: 0956907698 🛠️
+                </p>
+
+                <div class="space-y-3">
+                    <input type="text" id="renewalKeyInput" placeholder="أدخل كود التجديد الجديد هنا"
+                           class="w-full bg-slate-900 border border-purple-500/25 rounded-xl px-4 py-3 text-center text-sm focus:outline-none focus:border-purple-400 transition-colors text-white placeholder-slate-500" />
+
+                    <p id="renewalStatusMsg" class="text-xs min-h-[1rem]"></p>
+
+                    <button id="renewSubscriptionBtn" onclick="renewSubscription()"
+                            class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-purple-600/30 active:scale-[0.98]">
+                        تجديد الاشتراك ومتابعة العمل 🚀
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+    }
+
+    // دالة التحقق من كود التجديد الشهري -- تستدعي نفس مسار /api/activate الموحّد
+    // (مسار مزدوج الغرض: يفعّل حساباً جديداً أو يجدّد حساباً منتهياً بنفس المنطق)
+    function renewSubscription() {
+        const input = document.getElementById('renewalKeyInput');
+        const statusEl = document.getElementById('renewalStatusMsg');
+        const btn = document.getElementById('renewSubscriptionBtn');
+        const keyCode = (input && input.value || '').trim();
+
+        if (!keyCode) {
+            if (statusEl) {
+                statusEl.textContent = 'يرجى إدخال كود التجديد أولاً.';
+                statusEl.className = 'text-xs min-h-[1rem] text-rose-400';
+            }
+            return;
+        }
+
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'جاري التحقق من الكود...';
+        }
+        if (statusEl) {
+            statusEl.textContent = 'يتم الاتصال بالخادم الآن...';
+            statusEl.className = 'text-xs min-h-[1rem] text-indigo-300';
+        }
+
+        fetch('/api/activate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: localStorage.getItem('user_email'),
+                activation_key: keyCode,
+            }),
+        })
+            .then(async (res) => {
+                let data = null;
+                try {
+                    data = await res.json();
+                } catch (parseError) {
+                    data = null;
+                }
+
+                if (!res.ok) {
+                    const message = (data && data.detail) || 'تعذر التحقق من الكود. حاول مرة أخرى.';
+                    if (statusEl) {
+                        statusEl.textContent = message;
+                        statusEl.className = 'text-xs min-h-[1rem] text-rose-400';
+                    }
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = 'تجديد الاشتراك ومتابعة العمل 🚀';
+                    }
+                    return;
+                }
+
+                localStorage.setItem('user_tier', data.user_tier);
+                if (statusEl) {
+                    statusEl.textContent = '🎉 تم التجديد بنجاح!';
+                    statusEl.className = 'text-xs min-h-[1rem] text-emerald-400';
+                }
+                // رسالة تهنئة منبثقة فورية حسب الطلب، ثم إعادة تحميل الصفحة مباشرة
+                // لإظهار كامل عناصر لوحة التحكم بعد استعادة الصلاحيات.
+                alert('🎉 تم تجديد اشتراكك بنجاح! سيتم تحديث الصفحة الآن لإظهار كامل صلاحيات لوحة التحكم.');
+                window.location.reload();
+            })
+            .catch(() => {
+                if (statusEl) {
+                    statusEl.textContent = 'تعذر الاتصال بالخادم. تحقق من الإنترنت وحاول مرة أخرى.';
+                    statusEl.className = 'text-xs min-h-[1rem] text-rose-400';
+                }
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'تجديد الاشتراك ومتابعة العمل 🚀';
+                }
+            });
+    }
+
+    if (userTier === 'expired_subscription') {
+        renderExpiredSubscriptionLock();
+    }
     const tierBadge = document.getElementById('tierBadge');
     const mobileTierBadge = document.getElementById('mobileTierBadge');
     const logoutBtn = document.getElementById('logoutBtn');
@@ -3405,6 +3538,12 @@
     }
 
     window.addEventListener('DOMContentLoaded', () => {
+      // خط دفاع ثانٍ: حتى لو لم يكتمل التوجيه أعلاه بعد، لا تُنفَّذ أي
+      // عملية جلب بيانات محمية لحساب بانتظار التفعيل.
+      const activeGateTier = localStorage.getItem('user_tier');
+      if (activeGateTier === 'pending_activation' || activeGateTier === 'expired_subscription') {
+        return;
+      }
       initDentalChart();
       bindArchiveDropzone();
       loadPatientRecord();
@@ -3412,10 +3551,8 @@
       loadFinanceLedger();
       loadPatientPrescriptions();
     });
-    // حظر الالتفاف عبر الروابط المباشرة
-if (localStorage.getItem("user_tier") === "pending_activation") {
-    window.location.href = "index.html"; // طرده فوراً وإعادته لشاشة الدفع والقفل
-}
+    // ملاحظة: تمت إزالة الفحص المكرر الذي كان هنا -- أصبح الحظر يحدث الآن
+    // فوراً في أعلى هذا السكربت (انظر تعريف userTier بالأعلى).
 
   </script>
 </body>

@@ -23,12 +23,19 @@ import os
 import uvicorn
 import asyncio
 import requests
+import secrets
+import string
 from zoneinfo import ZoneInfo
 from pydantic import BaseModel
 app = FastAPI(title="Dental Clinic API")
 
 # معرّف عميل Google الرسمي (بدون أي رموز إضافية مثل ":" في البداية، وإلا يفشل التحقق بخطأ invalid_client)
 GOOGLE_CLIENT_ID = "446271578356-qju6aml2tiqbd2v6p23utrfb7nosketm.apps.googleusercontent.com"
+
+# مفتاح إداري سرّي لتوليد أكواد التجديد الشهرية عبر /api/admin/renewal-keys/generate
+# فقط -- **يجب** ضبطه كمتغيّر بيئة حقيقي (ADMIN_SECRET_KEY) في إعدادات Render قبل
+# الإطلاق التجاري؛ القيمة الافتراضية بالأسفل معروفة للجميع ولا تصلح للإنتاج.
+ADMIN_SECRET_KEY = os.getenv("ADMIN_SECRET_KEY", "change-me-fares-admin-2026")
 
 UPLOADS_DIR = "uploads"
 os.makedirs(UPLOADS_DIR, exist_ok=True)
@@ -99,6 +106,50 @@ def seed_default_activation_key() -> None:
         db.close()
 
 
+# --- محرّك تجديد الاشتراك الشهري (Renewal Retention Engine) ---------------
+
+def generate_renewal_activation_code(tier: str = "premium") -> str:
+    # يولّد كوداً عشوائياً عالي الإنتروبيا بصيغة "PM-xxxxxxxxxxxxx" (فخمة/شهرية)
+    # أو "STD-xxxxxxxxxxxxx" (قياسية)، باستخدام وحدة secrets (وليس random العادية)
+    # لأنه سيُستخدم كتوكن دفع فعلي -- يجب ألا يكون قابلاً للتخمين.
+    prefix = "PM" if tier == "premium" else "STD"
+    alphabet = string.ascii_letters + string.digits
+    suffix = "".join(secrets.choice(alphabet) for _ in range(13))
+    return f"{prefix}-{suffix}"
+
+
+def sweep_expired_subscriptions() -> int:
+    # انتقال استباقي وجماعي: يبحث عن كل حساب "premium"/"standard" تجاوز تاريخ
+    # انتهاء اشتراكه، ويحوّل عمود tier إلى "expired_subscription" مباشرة --
+    # بدون حذف أو حظر الحساب، وبدون أي تأثير على جداول المرضى/المواعيد/المخزون.
+    # هذا مجرّد تحسين استباقي (best-effort): بما أن خطة Render المجانية تُسبت
+    # الخدمة بالكامل عند عدم وجود طلبات واردة، فإن هذه الحلقة الدورية لن تعمل
+    # أثناء السبات -- الحارس الفعلي والموثوق 100% هو الفحص الكسول (lazy) داخل
+    # ensure_user_subscription_is_active() الذي يعمل عند أي طلب API فعلي، بغض
+    # النظر عمّا إذا كانت هذه الحلقة قد عملت أم لا.
+    db = database.SessionLocal()
+    try:
+        now = datetime.utcnow()
+        expired_users = (
+            db.query(models.User)
+            .filter(models.User.subscription_expires_at.isnot(None))
+            .filter(models.User.subscription_expires_at < now)
+            .filter(models.User.tier.in_(["premium", "standard"]))
+            .all()
+        )
+        for expired_user in expired_users:
+            expired_user.tier = "expired_subscription"
+            expired_user.is_active = False
+
+        if expired_users:
+            db.commit()
+        return len(expired_users)
+    except Exception:
+        db.rollback()
+        return 0
+    finally:
+        db.close()
+
 
 @app.on_event("startup")
 def on_startup() -> None:
@@ -115,9 +166,30 @@ def on_startup() -> None:
     finally:
         migration_db.close()
 
+    activation_keys_migration_db = database.SessionLocal()
+    try:
+        activation_keys_migration_db.execute(
+            text("ALTER TABLE activation_keys ADD COLUMN IF NOT EXISTS intended_tier VARCHAR;")
+        )
+        activation_keys_migration_db.commit()
+    except Exception:
+        activation_keys_migration_db.rollback()
+    finally:
+        activation_keys_migration_db.close()
+
     # Keep legacy SQLite-safe migration checks for existing local environments.
     database.init_db()
     seed_default_activation_key()
+
+    # انتقال استباقي فوري عند إقلاع الخادم لأي اشتراكات كانت قد انتهت أثناء
+    # فترة السبات (خارج ساعات العمل، أو انقطاع الخدمة). بعدها تتولى الحلقة
+    # الدورية بالأسفل (وأيضاً الفحص الكسول عند كل طلب) بقية العمل.
+    try:
+        expired_count = sweep_expired_subscriptions()
+        if expired_count:
+            print(f"🔄 [RENEWAL ENGINE] تم نقل {expired_count} حساباً إلى expired_subscription عند الإقلاع.")
+    except Exception as exc:
+        print(f"⚠️ [RENEWAL ENGINE] فشل الفحص الاستباقي عند الإقلاع: {exc}")
 
 
 # --- Keep-alive ping ضد سبات Render المجاني ---
@@ -151,6 +223,13 @@ async def _keep_render_alive_loop() -> None:
             print("⏰ [KEEP ALIVE] تم إرسال نبضة تنشيط بنجاح.")
         except Exception as exc:
             print(f"⚠️ [KEEP ALIVE] فشل إرسال النبضة: {exc}")
+
+        try:
+            expired_count = await asyncio.to_thread(sweep_expired_subscriptions)
+            if expired_count:
+                print(f"🔄 [RENEWAL ENGINE] تم نقل {expired_count} حساباً إلى expired_subscription.")
+        except Exception as exc:
+            print(f"⚠️ [RENEWAL ENGINE] فشل الفحص الدوري: {exc}")
 
 
 @app.on_event("startup")
@@ -425,17 +504,41 @@ class UpgradeTierRequest(BaseModel):
     doctor_name: Optional[str] = None
 
 
-def ensure_user_subscription_is_active(user: models.User) -> None:
+def ensure_user_subscription_is_active(user: models.User, db: Session | None = None) -> None:
     now = datetime.utcnow()
     subscription_expired = (
         user.subscription_expires_at is not None
         and user.subscription_expires_at < now
     )
 
-    if not user.is_active or subscription_expired:
+    if subscription_expired:
+        # الانتقال التلقائي (Lifecycle transition): لا حذف ولا حظر صريح --
+        # فقط عمود tier يتحول إلى "expired_subscription" ليعكس الحقيقة. كل
+        # بيانات العيادة (مرضى/مواعيد/مخزون/ملفات) تبقى كما هي تماماً في
+        # قاعدة البيانات؛ فقط الوصول عبر الـ API يُمنع حتى التجديد.
+        if (user.tier or "").strip().lower() != "expired_subscription":
+            user.tier = "expired_subscription"
+            user.is_active = False
+            if db is not None:
+                try:
+                    db.commit()
+                    db.refresh(user)
+                except Exception:
+                    db.rollback()
+
         raise HTTPException(
             status_code=403,
-            detail="عذراً، انتهت مدة الاشتراك السنوية. يرجى التواصل مع المهندس فارس حلاوي للتجديد ودفع الاشتراك.",
+            detail=(
+                "انتهت صلاحية باقتك الحالية. لا تقلق أبداً، جميع سجلات مرضاك ومواعيدك "
+                "ومخزون عيادتك محفوظة بأمان تام داخل السيرفر ولن تضيع مطلقاً. يرجى إدخال "
+                "كود التجديد الشهري لاستعادة كامل صلاحيات الإدارة فوراً."
+            ),
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=403,
+            detail="عذراً، حسابك غير مُفعَّل حالياً. يرجى التواصل مع المهندس فارس حلاوي.",
         )
 
 
@@ -454,7 +557,7 @@ def require_premium_user_by_email(db: Session, doctor_email: str | None) -> mode
             detail="هذه الميزة المحاسبية المتقدمة لإدارة المستودع متاحة حصرياً للباقة الفخمة (Premium).",
         )
 
-    ensure_user_subscription_is_active(user)
+    ensure_user_subscription_is_active(user, db)
     return user
 
 
@@ -477,6 +580,28 @@ def get_current_doctor_user(
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
+    return user
+
+
+def require_active_doctor_user(
+    db: Session = Depends(database.get_db),
+    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> models.User:
+    # الحارس الفعلي (من طرف السيرفر) لجدار الحماية التجاري: يُستخدم على كل
+    # مسار يخدم بيانات المرضى/المواعيد/المالية/الروشتات، وليس فقط شاشة القفل
+    # في الواجهة الأمامية -- فتلك الشاشة يمكن تجاوزها بسهولة بطلب مباشر إلى
+    # الـ API (curl/Postman/تعطيل الجافاسكربت). هذه الدالة تمنع ذلك فعلياً.
+    user = get_current_doctor_user(db, doctor_email=doctor_email, authorization=authorization)
+
+    normalized_tier = (user.tier or "").strip().lower()
+    if normalized_tier in ("", "pending_activation"):
+        raise HTTPException(
+            status_code=402,
+            detail="حسابك بانتظار التفعيل. يرجى إدخال كود تفعيل صالح عبر /api/activate قبل استخدام هذه الميزة.",
+        )
+
+    ensure_user_subscription_is_active(user, db)
     return user
 
 
@@ -663,7 +788,7 @@ def google_login(google_request: GoogleLoginRequest, db: Session = Depends(datab
         raise HTTPException(status_code=400, detail="تعذر تحديث بيانات حساب Google.")
 
     # لا نمنح أي رتبة تلقائياً هنا - نتحقق فقط من أن اشتراكه الحالي (إن وُجد) ما زال فعالاً
-    ensure_user_subscription_is_active(user)
+    ensure_user_subscription_is_active(user, db)
 
     return LoginResponse(
         token="secure-session-token",
@@ -744,17 +869,16 @@ def create_patient(
     authorization: str | None = Header(default=None, alias="Authorization"),
     db: Session = Depends(database.get_db),
 ):
-    current_user = None
-    try:
-        current_user = get_current_doctor_user(db, doctor_email=doctor_email, authorization=authorization)
-    except HTTPException:
-        current_user = None
+    # ملاحظة أمنية هامة: كان هذا المسار سابقاً "يفشل بأمان مفتوح" -- أي فشل في
+    # التحقق من الهوية (get_current_doctor_user) كان يُبتلع بصمت عبر
+    # except HTTPException، ويستمر في إنشاء المريض بأي اسم طبيب يُرسله الطالب
+    # في جسم الطلب، بلا أي مصادقة حقيقية. الآن: أي فشل في التحقق من الهوية أو
+    # حالة التفعيل/الاشتراك يوقف الطلب فوراً (fail closed) بدلاً من المتابعة.
+    current_user = require_active_doctor_user(db=db, doctor_email=doctor_email, authorization=authorization)
 
     resolved_doctor_name = (patient.doctor_name or "").strip()
-    if not resolved_doctor_name and current_user is not None:
-        resolved_doctor_name = (current_user.doctor_name or current_user.email or "").strip()
     if not resolved_doctor_name:
-        resolved_doctor_name = (patient.doctor_email or doctor_email or "").strip().lower()
+        resolved_doctor_name = (current_user.doctor_name or current_user.email or "").strip()
 
     db_patient = models.Patient(
         doctor_name=resolved_doctor_name or None,
@@ -778,7 +902,7 @@ def get_all_patients(
     authorization: str | None = Header(default=None, alias="Authorization"),
     db: Session = Depends(database.get_db),
 ):
-    user = get_current_doctor_user(db, doctor_email=doctor_email, authorization=authorization)
+    user = require_active_doctor_user(db=db, doctor_email=doctor_email, authorization=authorization)
     doctor_name = (user.doctor_name or "").strip()
     if not doctor_name:
         doctor_name = user.email
@@ -845,8 +969,134 @@ def get_all_patients(
     return response_payload
 
 
+@app.get("/api/patients/stats", response_model=PatientStatsResponse)
+def get_patient_stats(
+    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    db: Session = Depends(database.get_db),
+):
+    # NOTE: this route MUST be declared before "/api/patients/{patient_id}"
+    # (see that route further down this file). FastAPI/Starlette match routes
+    # in registration order, and "{patient_id}" is a plain string path
+    # parameter with no int converter in the path template -- so if this
+    # route were declared afterward, a GET to /api/patients/stats would be
+    # captured by get_patient() instead, which does int("stats"), fails,
+    # and raises HTTPException(404, detail="المريض غير موجود")
+    # -- which is exactly the "Patient Not Found" popup this route used to
+    # trigger. Do not move this back below get_patient().
+    user = require_active_doctor_user(db=db, doctor_email=doctor_email, authorization=authorization)
+    doctor_name = (user.doctor_name or "").strip()
+    if not doctor_name:
+        doctor_name = user.email
+
+    doctor_identifiers = {doctor_name, user.email}
+
+    linked_patients = (
+        db.query(models.Patient)
+        .filter(models.Patient.doctor_name.in_(doctor_identifiers))
+        .all()
+    )
+    patients = linked_patients
+    if not patients:
+        legacy_patients = (
+            db.query(models.Patient)
+            .filter(models.Patient.doctor_name.is_(None))
+            .all()
+        )
+        patients = legacy_patients
+
+    # Step 1: Safe patient ID extraction -- only IDs of patients that are
+    # currently active and actually belong to this doctor (or are legacy
+    # unassigned patients). Any patient_id NOT in this list (e.g. an
+    # orphaned financial_transactions row left behind by a deleted patient)
+    # can never contribute to the sums below.
+    patient_ids = [patient.id for patient in patients]
+
+    try:
+        patient_names = {
+            (patient.full_name or "").strip().lower(): patient.id
+            for patient in patients
+            if (patient.full_name or "").strip()
+        }
+
+        now = datetime.utcnow()
+        active_appointments = 0
+        if patient_names:
+            appointments = db.query(models.Appointment).all()
+            for appointment in appointments:
+                appointment_patient_name = (appointment.patient_name or "").strip().lower()
+                if appointment_patient_name not in patient_names:
+                    continue
+
+                appointment_status = (appointment.status or "").strip().lower()
+                appointment_date = appointment.appointment_date
+                is_upcoming = appointment_date is not None and appointment_date >= now
+                is_pending = appointment_status in {"pending", "upcoming"}
+
+                if is_upcoming or is_pending:
+                    active_appointments += 1
+
+        pending_balances = Decimal("0.00")
+        if patient_ids:
+            # Step 2: In-list transaction filtering -- only sum transaction
+            # rows whose patient_id is inside our verified active array.
+            received_rows = (
+                db.query(
+                    models.FinancialTransaction.patient_id,
+                    func.coalesce(func.sum(models.FinancialTransaction.amount), 0).label("total_received"),
+                )
+                .filter(models.FinancialTransaction.patient_id.in_(patient_ids))
+                .filter(models.FinancialTransaction.type.in_(["income", "received"]))
+                .filter(models.FinancialTransaction.amount > 0)
+                .group_by(models.FinancialTransaction.patient_id)
+                .all()
+            )
+            received_by_patient_id = {
+                patient_id: Decimal(str(total_received or 0))
+                for patient_id, total_received in received_rows
+                if patient_id is not None
+            }
+
+            for patient in patients:
+                total_treatment_cost = Decimal(str(getattr(patient, "total_treatment_cost", 0) or 0))
+                if total_treatment_cost < 0:
+                    total_treatment_cost = Decimal("0")
+
+                total_received = received_by_patient_id.get(patient.id, Decimal("0"))
+                if total_received < 0:
+                    total_received = Decimal("0")
+
+                # Prevent overpayments or corrupted values from creating negative debt.
+                patient_net_debt = max(total_treatment_cost - total_received, Decimal("0"))
+                pending_balances += patient_net_debt
+
+        return {
+            "total_patients": len(patients),
+            "active_appointments": active_appointments,
+            "pending_balances": float(pending_balances),
+        }
+    except Exception:
+        # Step 3: Fallback exception boundary -- never let a corrupted
+        # transaction/appointment row surface as a 500 (or a stray 404) toast
+        # on the dashboard. total_patients is still accurate since the
+        # doctor-scoped patient query above already succeeded; only the
+        # appointment/balance calculation is defended here. Auth failures
+        # from get_current_doctor_user() above are NOT caught -- those should
+        # still surface as real 401s, not a silently "successful" zeroed
+        # payload.
+        return {
+            "total_patients": len(patients),
+            "active_appointments": 0,
+            "pending_balances": 0.0,
+        }
+
+
 @app.get("/api/patients/{patient_id}", response_model=PatientResponse)
-def get_patient(patient_id: str, db: Session = Depends(database.get_db)):
+def get_patient(
+    patient_id: str,
+    db: Session = Depends(database.get_db),
+    _activation_gate: models.User = Depends(require_active_doctor_user),
+):
     try:
         patient_id_int = int(patient_id)
     except (TypeError, ValueError):
@@ -864,7 +1114,11 @@ def get_patient(patient_id: str, db: Session = Depends(database.get_db)):
 
 
 @app.delete("/api/patients/{patient_id}")
-def delete_patient(patient_id: int, db: Session = Depends(database.get_db)):
+def delete_patient(
+    patient_id: int,
+    db: Session = Depends(database.get_db),
+    _activation_gate: models.User = Depends(require_active_doctor_user),
+):
     patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -882,7 +1136,12 @@ def delete_patient(patient_id: int, db: Session = Depends(database.get_db)):
 
 
 @app.put("/api/patients/{patient_id}", response_model=PatientResponse)
-def update_patient(patient_id: int, patient_update: PatientUpdate, db: Session = Depends(database.get_db)):
+def update_patient(
+    patient_id: int,
+    patient_update: PatientUpdate,
+    db: Session = Depends(database.get_db),
+    _activation_gate: models.User = Depends(require_active_doctor_user),
+):
     patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -909,7 +1168,12 @@ def update_patient(patient_id: int, patient_update: PatientUpdate, db: Session =
 
 
 @app.put("/api/patients/{patient_id}/chart", response_model=PatientResponse)
-def update_patient_chart(patient_id: int, chart_update: PatientChartUpdate, db: Session = Depends(database.get_db)):
+def update_patient_chart(
+    patient_id: int,
+    chart_update: PatientChartUpdate,
+    db: Session = Depends(database.get_db),
+    _activation_gate: models.User = Depends(require_active_doctor_user),
+):
     patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -930,7 +1194,11 @@ def update_patient_chart(patient_id: int, chart_update: PatientChartUpdate, db: 
 
 # 6. مسار لحجز موعد جديد لمريض [POST]
 @app.post("/api/appointments", response_model=AppointmentResponse, status_code=201)
-def create_appointment(appointment: AppointmentCreate, db: Session = Depends(database.get_db)):
+def create_appointment(
+    appointment: AppointmentCreate,
+    db: Session = Depends(database.get_db),
+    _activation_gate: models.User = Depends(require_active_doctor_user),
+):
     patient = db.query(models.Patient).filter(models.Patient.id == appointment.patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -988,7 +1256,12 @@ def create_appointment(appointment: AppointmentCreate, db: Session = Depends(dat
 
 
 @app.put("/api/appointments/{appointment_id}", response_model=AppointmentResponse, status_code=200)
-def update_appointment(appointment_id: int, appointment_update: AppointmentUpdate, db: Session = Depends(database.get_db)):
+def update_appointment(
+    appointment_id: int,
+    appointment_update: AppointmentUpdate,
+    db: Session = Depends(database.get_db),
+    _activation_gate: models.User = Depends(require_active_doctor_user),
+):
     appointment = db.query(models.Appointment).filter(models.Appointment.id == appointment_id).first()
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
@@ -1025,6 +1298,7 @@ def update_appointment_status(
     appointment_id: int,
     status_update: AppointmentStatusUpdate,
     db: Session = Depends(database.get_db),
+    _activation_gate: models.User = Depends(require_active_doctor_user),
 ):
     appointment = db.query(models.Appointment).filter(models.Appointment.id == appointment_id).first()
     if not appointment:
@@ -1046,7 +1320,11 @@ def update_appointment_status(
 
 
 @app.delete("/api/appointments/{appointment_id}", status_code=200)
-def delete_appointment(appointment_id: int, db: Session = Depends(database.get_db)):
+def delete_appointment(
+    appointment_id: int,
+    db: Session = Depends(database.get_db),
+    _activation_gate: models.User = Depends(require_active_doctor_user),
+):
     appointment = db.query(models.Appointment).filter(models.Appointment.id == appointment_id).first()
     if not appointment:
         raise HTTPException(status_code=404, detail="الموعد غير موجود")
@@ -1063,13 +1341,20 @@ def delete_appointment(appointment_id: int, db: Session = Depends(database.get_d
 
 # 7. مسار لجلب قائمة بجميع المواعيد المحجوزة [GET]
 @app.get("/api/appointments", response_model=List[AppointmentResponse])
-def get_all_appointments(db: Session = Depends(database.get_db)):
+def get_all_appointments(
+    db: Session = Depends(database.get_db),
+    _activation_gate: models.User = Depends(require_active_doctor_user),
+):
     return db.query(models.Appointment).all()
 
 
 # 8. مسار لتسجيل زيارة علاجية جديدة لمريض مع تفاصيل الأسنان [POST]
 @app.post("/api/visits", response_model=VisitResponse)
-def create_visit(visit: VisitCreate, db: Session = Depends(database.get_db)):
+def create_visit(
+    visit: VisitCreate,
+    db: Session = Depends(database.get_db),
+    _activation_gate: models.User = Depends(require_active_doctor_user),
+):
     patient = db.query(models.Patient).filter(models.Patient.id == visit.patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -1119,7 +1404,11 @@ def create_visit(visit: VisitCreate, db: Session = Depends(database.get_db)):
 
 
 @app.post("/api/treatments", response_model=TreatmentResponse)
-def create_treatment(treatment: TreatmentCreate, db: Session = Depends(database.get_db)):
+def create_treatment(
+    treatment: TreatmentCreate,
+    db: Session = Depends(database.get_db),
+    _activation_gate: models.User = Depends(require_active_doctor_user),
+):
     patient = db.query(models.Patient).filter(models.Patient.id == treatment.patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -1139,7 +1428,11 @@ def create_treatment(treatment: TreatmentCreate, db: Session = Depends(database.
 
 @app.post("/api/finance", response_model=ExpenseResponse)
 @app.post("/api/finance/expenses", response_model=ExpenseResponse)
-def create_expense(expense: ExpenseCreate, db: Session = Depends(database.get_db)):
+def create_expense(
+    expense: ExpenseCreate,
+    db: Session = Depends(database.get_db),
+    _activation_gate: models.User = Depends(require_active_doctor_user),
+):
     if expense.amount <= 0:
         raise HTTPException(status_code=400, detail="قيمة المصروف يجب أن تكون أكبر من صفر.")
 
@@ -1174,7 +1467,10 @@ def create_expense(expense: ExpenseCreate, db: Session = Depends(database.get_db
 
 
 @app.get("/api/finance/summary")
-def get_finance_summary(db: Session = Depends(database.get_db)):
+def get_finance_summary(
+    db: Session = Depends(database.get_db),
+    _activation_gate: models.User = Depends(require_active_doctor_user),
+):
     total_income = (
         db.query(func.coalesce(func.sum(models.FinancialTransaction.amount), 0))
         .filter(models.FinancialTransaction.type == "income")
@@ -1198,98 +1494,12 @@ def get_finance_summary(db: Session = Depends(database.get_db)):
     }
 
 
-@app.get("/api/patients/stats", response_model=PatientStatsResponse)
-def get_patient_stats(
-    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
-    authorization: str | None = Header(default=None, alias="Authorization"),
-    db: Session = Depends(database.get_db),
-):
-    user = get_current_doctor_user(db, doctor_email=doctor_email, authorization=authorization)
-    doctor_name = (user.doctor_name or "").strip()
-    if not doctor_name:
-        doctor_name = user.email
-
-    doctor_identifiers = {doctor_name, user.email}
-
-    linked_patients = (
-        db.query(models.Patient)
-        .filter(models.Patient.doctor_name.in_(doctor_identifiers))
-        .all()
-    )
-    patients = linked_patients
-    if not patients:
-        legacy_patients = (
-            db.query(models.Patient)
-            .filter(models.Patient.doctor_name.is_(None))
-            .all()
-        )
-        patients = legacy_patients
-
-    patient_ids = [patient.id for patient in patients]
-    patient_names = {
-        (patient.full_name or "").strip().lower(): patient.id
-        for patient in patients
-        if (patient.full_name or "").strip()
-    }
-
-    now = datetime.utcnow()
-    active_appointments = 0
-    if patient_names:
-        appointments = db.query(models.Appointment).all()
-        for appointment in appointments:
-            appointment_patient_name = (appointment.patient_name or "").strip().lower()
-            if appointment_patient_name not in patient_names:
-                continue
-
-            appointment_status = (appointment.status or "").strip().lower()
-            appointment_date = appointment.appointment_date
-            is_upcoming = appointment_date is not None and appointment_date >= now
-            is_pending = appointment_status in {"pending", "upcoming"}
-
-            if is_upcoming or is_pending:
-                active_appointments += 1
-
-    pending_balances = Decimal("0.00")
-    if patient_ids:
-        received_rows = (
-            db.query(
-                models.FinancialTransaction.patient_id,
-                func.coalesce(func.sum(models.FinancialTransaction.amount), 0).label("total_received"),
-            )
-            .filter(models.FinancialTransaction.patient_id.in_(patient_ids))
-            .filter(models.FinancialTransaction.type.in_(["income", "received"]))
-            .filter(models.FinancialTransaction.amount > 0)
-            .group_by(models.FinancialTransaction.patient_id)
-            .all()
-        )
-        received_by_patient_id = {
-            patient_id: Decimal(str(total_received or 0))
-            for patient_id, total_received in received_rows
-            if patient_id is not None
-        }
-
-        for patient in patients:
-            total_treatment_cost = Decimal(str(getattr(patient, "total_treatment_cost", 0) or 0))
-            if total_treatment_cost < 0:
-                total_treatment_cost = Decimal("0")
-
-            total_received = received_by_patient_id.get(patient.id, Decimal("0"))
-            if total_received < 0:
-                total_received = Decimal("0")
-
-            # Prevent overpayments or corrupted values from creating negative debt.
-            patient_net_debt = max(total_treatment_cost - total_received, Decimal("0"))
-            pending_balances += patient_net_debt
-
-    return {
-        "total_patients": len(patients),
-        "active_appointments": active_appointments,
-        "pending_balances": float(pending_balances),
-    }
-
-
 @app.get("/api/finance/patient/{patient_id}", response_model=List[FinancialTransactionResponse])
-def get_patient_financial_transactions(patient_id: int, db: Session = Depends(database.get_db)):
+def get_patient_financial_transactions(
+    patient_id: int,
+    db: Session = Depends(database.get_db),
+    _activation_gate: models.User = Depends(require_active_doctor_user),
+):
     return (
         db.query(models.FinancialTransaction)
         .filter(models.FinancialTransaction.patient_id == patient_id)
@@ -1304,6 +1514,7 @@ def update_financial_transaction(
     transaction_id: int,
     transaction_update: FinancialTransactionUpdate,
     db: Session = Depends(database.get_db),
+    _activation_gate: models.User = Depends(require_active_doctor_user),
 ):
     transaction = (
         db.query(models.FinancialTransaction)
@@ -1335,6 +1546,7 @@ def update_financial_transaction(
 def delete_financial_transaction(
     transaction_id: int,
     db: Session = Depends(database.get_db),
+    _activation_gate: models.User = Depends(require_active_doctor_user),
 ):
     transaction = (
         db.query(models.FinancialTransaction)
@@ -1360,7 +1572,7 @@ def export_finance_backup(
     authorization: str | None = Header(default=None, alias="Authorization"),
     db: Session = Depends(database.get_db),
 ):
-    user = get_current_doctor_user(db, doctor_email=doctor_email, authorization=authorization)
+    user = require_active_doctor_user(db=db, doctor_email=doctor_email, authorization=authorization)
     doctor_name = (user.doctor_name or "").strip()
     if not doctor_name:
         doctor_name = user.email
@@ -1488,7 +1700,11 @@ def export_finance_backup(
 
 
 @app.post("/api/prescriptions", response_model=PrescriptionResponse, status_code=201)
-def create_prescription(prescription: PrescriptionCreate, db: Session = Depends(database.get_db)):
+def create_prescription(
+    prescription: PrescriptionCreate,
+    db: Session = Depends(database.get_db),
+    _activation_gate: models.User = Depends(require_active_doctor_user),
+):
     patient = db.query(models.Patient).filter(models.Patient.id == prescription.patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -1514,7 +1730,11 @@ def create_prescription(prescription: PrescriptionCreate, db: Session = Depends(
 
 
 @app.get("/api/prescriptions/patient/{patient_id}", response_model=List[PrescriptionResponse])
-def get_patient_prescriptions(patient_id: int, db: Session = Depends(database.get_db)):
+def get_patient_prescriptions(
+    patient_id: int,
+    db: Session = Depends(database.get_db),
+    _activation_gate: models.User = Depends(require_active_doctor_user),
+):
     patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -1537,6 +1757,7 @@ def update_prescription(
     prescription_id: int,
     prescription_update: PrescriptionUpdate,
     db: Session = Depends(database.get_db),
+    _activation_gate: models.User = Depends(require_active_doctor_user),
 ):
     prescription = db.query(models.Prescription).filter(models.Prescription.id == prescription_id).first()
     if not prescription:
@@ -1569,7 +1790,11 @@ def update_prescription(
 
 
 @app.delete("/api/prescriptions/{prescription_id}", status_code=200)
-def delete_prescription(prescription_id: int, db: Session = Depends(database.get_db)):
+def delete_prescription(
+    prescription_id: int,
+    db: Session = Depends(database.get_db),
+    _activation_gate: models.User = Depends(require_active_doctor_user),
+):
     prescription = db.query(models.Prescription).filter(models.Prescription.id == prescription_id).first()
     if not prescription:
         raise HTTPException(status_code=404, detail="الوصفة الطبية غير موجودة")
@@ -1707,7 +1932,11 @@ def delete_inventory_item(
 
 
 @app.get("/api/patients/{patient_id}/treatments", response_model=List[TreatmentResponse])
-def get_patient_treatments(patient_id: int, db: Session = Depends(database.get_db)):
+def get_patient_treatments(
+    patient_id: int,
+    db: Session = Depends(database.get_db),
+    _activation_gate: models.User = Depends(require_active_doctor_user),
+):
     patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -1767,6 +1996,7 @@ async def upload_patient_archive(
     file: UploadFile = File(...),
     description: str = Form(""),
     db: Session = Depends(database.get_db),
+    _activation_gate: models.User = Depends(require_active_doctor_user),
 ):
     patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
     if not patient:
@@ -1810,7 +2040,11 @@ async def upload_patient_archive(
 
 @app.get("/api/patients/{patient_id}/archive", response_model=List[PatientXRayResponse])
 @app.get("/api/patients/{patient_id}/xrays", response_model=List[PatientXRayResponse])
-def get_patient_archive(patient_id: int, db: Session = Depends(database.get_db)):
+def get_patient_archive(
+    patient_id: int,
+    db: Session = Depends(database.get_db),
+    _activation_gate: models.User = Depends(require_active_doctor_user),
+):
     patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -1836,6 +2070,7 @@ def update_patient_archive(
     archive_id: int,
     archive_update: PatientArchiveUpdate,
     db: Session = Depends(database.get_db),
+    _activation_gate: models.User = Depends(require_active_doctor_user),
 ):
     record = (
         db.query(models.PatientXRay)
@@ -1859,7 +2094,12 @@ def update_patient_archive(
 
 @app.delete("/api/patients/{patient_id}/archive/{archive_id}", status_code=200)
 @app.delete("/api/patients/{patient_id}/xrays/{archive_id}", status_code=200)
-def delete_patient_archive(patient_id: int, archive_id: int, db: Session = Depends(database.get_db)):
+def delete_patient_archive(
+    patient_id: int,
+    archive_id: int,
+    db: Session = Depends(database.get_db),
+    _activation_gate: models.User = Depends(require_active_doctor_user),
+):
     record = (
         db.query(models.PatientXRay)
         .filter(models.PatientXRay.id == archive_id, models.PatientXRay.patient_id == patient_id)
@@ -1898,6 +2138,17 @@ class ActivationRequest(BaseModel):
 # ملاحظة هامة: أي مسار @app.* يجب أن يُعرَّف قبل app.mount("/", ...) بالأسفل،
 # لأن التركيب المثبت على "/" يلتقط كل الطلبات غير المطابقة لمسار سابق، فأي مسار
 # يُعرَّف بعده يصبح ميتاً تماماً ولا يتم الوصول إليه أبداً.
+#
+# مسار مزدوج الغرض (dual-purpose) بتصميم صريح: نفس هذا المسار يُستخدم لكلا
+# الحالتين التاليتين بلا أي فرع منطقي مختلف -- فالعملية الفعلية على قاعدة
+# البيانات متطابقة تماماً في الحالتين (ترقية عمود tier + تمديد
+# subscription_expires_at + تعليم الكود كمُستخدَم)، والفرق الوحيد هو رسالة
+# النجاح المعروضة للطبيب:
+#   1) "تفعيل أول مرة": حساب بحالة pending_activation (تسجيل Google جديد لم
+#      يفعّل بعد) أو حساب جديد من التسجيل اليدوي.
+#   2) "تجديد اشتراك": حساب بحالة expired_subscription (انتهت باقته الشهرية/
+#      السنوية) -- يعود فوراً إلى premium/standard دون فقدان أي بيانات إطلاقاً،
+#      لأن جدول users لم يُحذف منه أي صف قط طوال دورة الحياة هذه.
 @app.post("/api/activate")
 def activate_account(request: ActivationRequest, db: Session = Depends(database.get_db)):
     normalized_email = (request.email or "").strip().lower()
@@ -1915,20 +2166,33 @@ def activate_account(request: ActivationRequest, db: Session = Depends(database.
     if not activation_key or activation_key.is_used:
         raise HTTPException(status_code=400, detail="كود التفعيل خاطئ، منتهي، أو تم استخدامه مسبقاً!")
 
-    target_tier = (
-        "premium"
-        if (
-            activation_key.duration_days >= 365
-            or "PREMIUM" in activation_code.upper()
-            or "VIP" in activation_code.upper()
+    # نُفضّل عمود intended_tier الصريح إن وُجد (كل أكواد التجديد الشهرية
+    # الجديدة التي يولّدها /api/admin/renewal-keys/generate تضبطه دائماً) --
+    # ونلجأ فقط للتخمين النصي القديم كخط رجوع للأكواد الثابتة القديمة التي لا
+    # تملك هذا العمود. هذا يصلح خللاً كامناً حقيقياً: كود شهري بصيغة "PM-...."
+    # مدته 30 يوماً فقط، فكان سيُصنَّف خطأً كـ"standard" تحت الشرط القديم
+    # (duration_days >= 365) لولا هذا التفضيل.
+    explicit_tier = (getattr(activation_key, "intended_tier", None) or "").strip().lower()
+    if explicit_tier in ("premium", "standard"):
+        target_tier = explicit_tier
+    else:
+        target_tier = (
+            "premium"
+            if (
+                activation_key.duration_days >= 365
+                or "PREMIUM" in activation_code.upper()
+                or "VIP" in activation_code.upper()
+            )
+            else "standard"
         )
-        else "standard"
-    )
 
     # 2. البحث عن الطبيب المستهدف في جدول قاعدة البيانات لتعديل رتبته
     user = db.query(models.User).filter(models.User.email == normalized_email).first()
     if not user:
         raise HTTPException(status_code=404, detail="حساب الطبيب المستهدف غير موجود!")
+
+    previous_tier = (user.tier or "").strip().lower()
+    is_renewal = previous_tier == "expired_subscription"
 
     try:
         # 3. ترقية الحساب فعلياً مع ضبط تاريخ انتهاء الاشتراك وتفعيل الحساب،
@@ -1945,15 +2209,92 @@ def activate_account(request: ActivationRequest, db: Session = Depends(database.
 
         db.commit()
         db.refresh(user)
+
+        if is_renewal:
+            success_message = (
+                f"🎉 تم تجديد اشتراكك بنجاح والعودة فوراً إلى باقة ({target_tier})! "
+                "جميع سجلات مرضاك ومواعيدك ومخزون عيادتك كما تركتها تماماً."
+            )
+        else:
+            success_message = f"تم تفعيل عيادتك الرقمية بنجاح وترقيتها إلى باقة ({target_tier})!"
+
         return {
             "status": "success",
-            "message": f"تم تفعيل عيادتك الرقمية بنجاح وترقيتها إلى باقة ({target_tier})!",
+            "message": success_message,
+            "is_renewal": is_renewal,
             "user_tier": user.tier,
             "subscription_expires_at": user.subscription_expires_at.isoformat() if user.subscription_expires_at else None,
         }
     except Exception:
         db.rollback()
         raise HTTPException(status_code=500, detail="فشل تحديث قاعدة البيانات السحابية. حاول مرة أخرى.")
+
+
+class RenewalKeyGenerateRequest(BaseModel):
+    tier: Literal["premium", "standard"] = "premium"
+    duration_days: int = 30
+    count: int = 1
+
+
+@app.post("/api/admin/renewal-keys/generate")
+def generate_renewal_keys(
+    request: RenewalKeyGenerateRequest,
+    x_admin_secret: str | None = Header(default=None, alias="X-Admin-Secret"),
+    db: Session = Depends(database.get_db),
+):
+    # مسار إداري فقط لمطوّر المنصة (فارس) لتوليد أكواد تجديد شهرية جديدة عند
+    # الطلب، بدل الاعتماد على قائمة ثابتة في الكود يجب إعادة النشر لتحديثها.
+    # محمي بمفتاح سرّي في الهيدر -- **اضبط ADMIN_SECRET_KEY كمتغيّر بيئة حقيقي
+    # على Render قبل الاستخدام الفعلي**، القيمة الافتراضية معروفة وغير آمنة.
+    if not x_admin_secret or x_admin_secret != ADMIN_SECRET_KEY:
+        raise HTTPException(status_code=401, detail="مفتاح الإدارة السرّي مفقود أو غير صحيح.")
+
+    if request.count < 1 or request.count > 20:
+        raise HTTPException(status_code=400, detail="يمكن توليد بين 1 و20 كوداً في كل مرة.")
+    if request.duration_days < 1:
+        raise HTTPException(status_code=400, detail="مدة الكود يجب أن تكون يوماً واحداً على الأقل.")
+
+    generated_keys: list[str] = []
+    try:
+        for _ in range(request.count):
+            # إعادة المحاولة نادراً ما تلزم (فضاء الاحتمالات ~62^13) لكنها موجودة
+            # كحماية إضافية ضد أي تصادم عرضي مع كود موجود مسبقاً.
+            for _attempt in range(5):
+                candidate_code = generate_renewal_activation_code(request.tier)
+                exists = (
+                    db.query(models.ActivationKey)
+                    .filter(models.ActivationKey.key_code == candidate_code)
+                    .first()
+                )
+                if not exists:
+                    break
+            else:
+                raise HTTPException(status_code=500, detail="تعذر توليد كود فريد، حاول مرة أخرى.")
+
+            db.add(
+                models.ActivationKey(
+                    key_code=candidate_code,
+                    duration_days=request.duration_days,
+                    intended_tier=request.tier,
+                    is_used=False,
+                    used_by_email=None,
+                )
+            )
+            generated_keys.append(candidate_code)
+
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="تعذر حفظ الأكواد الجديدة في قاعدة البيانات.")
+
+    return {
+        "generated_keys": generated_keys,
+        "tier": request.tier,
+        "duration_days": request.duration_days,
+    }
 
 
 @app.get("/", include_in_schema=False)
