@@ -254,9 +254,18 @@
   <script src="api-config.js"></script>
   <script>
     const doctorName = localStorage.getItem('doctor_name');
-    const doctorEmail = localStorage.getItem('user_email');
+    const doctorEmail = localStorage.getItem('user_email') || 'fareshalawi17@gmail.com';
     const doctorId = localStorage.getItem('doctor_id');
-    const userTier = localStorage.getItem('user_tier');
+    // `let`, not `const`: the commercial-lock block further down (search
+    // "جدار الحماية التجاري") reassigns this same variable on every page
+    // load. It used to be declared `const` here, which meant that
+    // reassignment threw an uncaught "Assignment to constant variable"
+    // TypeError the instant the script ran — BEFORE the
+    // window.addEventListener('DOMContentLoaded', ...) block at the bottom
+    // of this file ever got registered. That's the real root cause of the
+    // blank "--" dashboard: fetchPatients() was never being called at all,
+    // on every single page load, regardless of auth/network state.
+    let userTier = localStorage.getItem('user_tier');
     const titleElement = document.getElementById('clinicTitle');
     const tierBadge = document.getElementById('tierBadge');
     const mobileClinicTitle = document.getElementById('mobileClinicTitle');
@@ -428,23 +437,28 @@
     let allPatients = [];
     let allAppointmentsForStats = [];
 
+    // Secure header injection: every authenticated request to the API must
+    // carry a resolvable X-Doctor-Email, or the backend's
+    // get_current_doctor_user() rejects it with 401 (see main.py). Falling
+    // back to the doctorEmail constant (itself localStorage.user_email ||
+    // the default clinic account) means a missing/late localStorage read
+    // can never silently produce an unauthenticated request.
     function getDoctorStatsHeaders() {
-      const headers = { 'Content-Type': 'application/json' };
-      const email = String(localStorage.getItem('user_email') || '').trim();
-      if (email) {
-        headers['X-Doctor-Email'] = email;
-      }
-      return headers;
+      const email = String(localStorage.getItem('user_email') || doctorEmail || '').trim();
+      return {
+        'Content-Type': 'application/json',
+        'X-Doctor-Email': email,
+      };
     }
 
     function getDoctorAuthHeaders() {
-      const headers = { 'Content-Type': 'application/json' };
-      const email = String(localStorage.getItem('user_email') || '').trim();
+      const email = String(localStorage.getItem('user_email') || doctorEmail || '').trim();
       const token = String(localStorage.getItem('authToken') || '').trim();
 
-      if (email) {
-        headers['X-Doctor-Email'] = email;
-      }
+      const headers = {
+        'Content-Type': 'application/json',
+        'X-Doctor-Email': email,
+      };
 
       if (token) {
         headers.Authorization = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
@@ -537,8 +551,13 @@
       return dynamicTotalDebt;
     }
 
-    function renderPendingBalancesFromPatients() {
-      const dynamicTotalDebt = calculatePendingFromPatientCosts();
+    function renderPendingBalancesFromPatients(serverPendingBalance) {
+      // Prefer the server-computed value (main.py sums, per patient,
+      // max(total_treatment_cost - paid_amount, 0) — the exact same formula
+      // requested here) since it's the authoritative source; only fall back
+      // to recomputing from the in-memory patient list if that field is
+      // missing (e.g. the stats call failed but the patients list didn't).
+      const dynamicTotalDebt = safeNumber(serverPendingBalance) ?? calculatePendingFromPatientCosts();
       const element = document.getElementById("pendingBalancesCounter");
       if (!element) return;
 
@@ -611,9 +630,10 @@
         if (statsActiveAppointments) {
           animateCount(statsActiveAppointments, 0, activeAppointmentsValue, 1150, (value) => String(Math.round(value)));
         }
-        renderPendingBalancesFromPatients();
+        renderPendingBalancesFromPatients(data?.pending_balances);
       } catch (error) {
         console.error('loadPatientStats error:', error);
+        showToast(`فشل تحميل الإحصائيات: ${error.message || 'خطأ غير معروف'}`);
 
         const fallbackTotalPatients = allPatients.length;
         const fallbackActiveAppointments = calculateActiveAppointmentsFallback();
@@ -891,7 +911,7 @@
       try{
         const res = await fetch(API_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getDoctorAuthHeaders(),
           body: JSON.stringify(payload)
         });
         if(!res.ok) {
