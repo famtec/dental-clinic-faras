@@ -5,7 +5,7 @@ buildscript {
         maven { url = uri("https://googleapis.com") }
     }
     dependencies {
-        classpath("com.android.tools.build:gradle:8.0.2")
+        classpath("com.android.tools.build:gradle:9.1.0")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.8.22")
     }
 }

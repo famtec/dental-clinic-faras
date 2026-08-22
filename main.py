@@ -1485,6 +1485,63 @@ def get_patient_prescriptions(patient_id: int, db: Session = Depends(database.ge
     )
 
 
+class PrescriptionUpdate(BaseModel):
+    medications: Optional[str] = None
+    instructions: Optional[str] = None
+
+
+@app.put("/api/prescriptions/{prescription_id}", response_model=PrescriptionResponse)
+def update_prescription(
+    prescription_id: int,
+    prescription_update: PrescriptionUpdate,
+    db: Session = Depends(database.get_db),
+):
+    prescription = db.query(models.Prescription).filter(models.Prescription.id == prescription_id).first()
+    if not prescription:
+        raise HTTPException(status_code=404, detail="الوصفة الطبية غير موجودة")
+
+    medications_value = None
+    if prescription_update.medications is not None:
+        medications_value = prescription_update.medications.strip()
+        if not medications_value:
+            raise HTTPException(status_code=400, detail="الأدوية مطلوبة")
+
+    instructions_value = None
+    if prescription_update.instructions is not None:
+        instructions_value = prescription_update.instructions.strip()
+        if not instructions_value:
+            raise HTTPException(status_code=400, detail="التعليمات مطلوبة")
+
+    try:
+        if medications_value is not None:
+            prescription.medications = medications_value
+        if instructions_value is not None:
+            prescription.instructions = instructions_value
+        db.commit()
+        db.refresh(prescription)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر تحديث الوصفة الطبية حالياً. حاول مرة أخرى.")
+
+    return prescription
+
+
+@app.delete("/api/prescriptions/{prescription_id}", status_code=200)
+def delete_prescription(prescription_id: int, db: Session = Depends(database.get_db)):
+    prescription = db.query(models.Prescription).filter(models.Prescription.id == prescription_id).first()
+    if not prescription:
+        raise HTTPException(status_code=404, detail="الوصفة الطبية غير موجودة")
+
+    try:
+        db.delete(prescription)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر حذف الوصفة الطبية حالياً. حاول مرة أخرى.")
+
+    return {"message": "تم حذف الوصفة الطبية بنجاح"}
+
+
 @app.post("/api/inventory", response_model=InventoryItemResponse, status_code=201)
 def create_inventory_item(
     item: InventoryItemCreate,
@@ -1530,6 +1587,81 @@ def get_inventory_items(
         .order_by(models.InventoryItem.updated_at.desc(), models.InventoryItem.id.desc())
         .all()
     )
+
+
+class InventoryItemUpdate(BaseModel):
+    item_name: Optional[str] = None
+    quantity: Optional[int] = None
+    min_alert_quantity: Optional[int] = None
+
+
+@app.put("/api/inventory/{item_id}", response_model=InventoryItemResponse)
+def update_inventory_item(
+    item_id: int,
+    item_update: InventoryItemUpdate,
+    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    db: Session = Depends(database.get_db),
+):
+    user = require_premium_user_by_email(db, doctor_email)
+
+    item = (
+        db.query(models.InventoryItem)
+        .filter(models.InventoryItem.id == item_id, models.InventoryItem.doctor_email == user.email)
+        .first()
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="مادة المستودع غير موجودة")
+
+    if item_update.item_name is not None:
+        item_name = item_update.item_name.strip()
+        if not item_name:
+            raise HTTPException(status_code=400, detail="اسم المادة مطلوب")
+        item.item_name = item_name
+
+    if item_update.quantity is not None:
+        if item_update.quantity < 0:
+            raise HTTPException(status_code=400, detail="الكمية يجب أن تكون صفراً أو أكثر")
+        item.quantity = item_update.quantity
+
+    if item_update.min_alert_quantity is not None:
+        if item_update.min_alert_quantity < 0:
+            raise HTTPException(status_code=400, detail="حد التنبيه الأدنى يجب أن يكون صفراً أو أكثر")
+        item.min_alert_quantity = item_update.min_alert_quantity
+
+    try:
+        db.commit()
+        db.refresh(item)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر تحديث مادة المستودع حالياً. حاول مرة أخرى.")
+
+    return item
+
+
+@app.delete("/api/inventory/{item_id}", status_code=200)
+def delete_inventory_item(
+    item_id: int,
+    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    db: Session = Depends(database.get_db),
+):
+    user = require_premium_user_by_email(db, doctor_email)
+
+    item = (
+        db.query(models.InventoryItem)
+        .filter(models.InventoryItem.id == item_id, models.InventoryItem.doctor_email == user.email)
+        .first()
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="مادة المستودع غير موجودة")
+
+    try:
+        db.delete(item)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر حذف مادة المستودع حالياً. حاول مرة أخرى.")
+
+    return {"message": "تم حذف مادة المستودع بنجاح"}
 
 
 @app.get("/api/patients/{patient_id}/treatments", response_model=List[TreatmentResponse])
@@ -1649,6 +1781,70 @@ def get_patient_archive(patient_id: int, db: Session = Depends(database.get_db))
     )
 
     return [normalize_archive_record(record) for record in archive_records]
+
+
+class PatientArchiveUpdate(BaseModel):
+    description: Optional[str] = None
+
+
+@app.put("/api/patients/{patient_id}/archive/{archive_id}", response_model=PatientXRayResponse)
+@app.put("/api/patients/{patient_id}/xrays/{archive_id}", response_model=PatientXRayResponse)
+def update_patient_archive(
+    patient_id: int,
+    archive_id: int,
+    archive_update: PatientArchiveUpdate,
+    db: Session = Depends(database.get_db),
+):
+    record = (
+        db.query(models.PatientXRay)
+        .filter(models.PatientXRay.id == archive_id, models.PatientXRay.patient_id == patient_id)
+        .first()
+    )
+    if not record:
+        raise HTTPException(status_code=404, detail="الملف الطبي غير موجود")
+
+    try:
+        if archive_update.description is not None:
+            record.description = archive_update.description.strip() or None
+        db.commit()
+        db.refresh(record)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر تحديث الملف الطبي حالياً. حاول مرة أخرى.")
+
+    return normalize_archive_record(record)
+
+
+@app.delete("/api/patients/{patient_id}/archive/{archive_id}", status_code=200)
+@app.delete("/api/patients/{patient_id}/xrays/{archive_id}", status_code=200)
+def delete_patient_archive(patient_id: int, archive_id: int, db: Session = Depends(database.get_db)):
+    record = (
+        db.query(models.PatientXRay)
+        .filter(models.PatientXRay.id == archive_id, models.PatientXRay.patient_id == patient_id)
+        .first()
+    )
+    if not record:
+        raise HTTPException(status_code=404, detail="الملف الطبي غير موجود")
+
+    file_url = (record.file_url or record.image_url or "").strip()
+
+    try:
+        db.delete(record)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر حذف الملف الطبي حالياً. حاول مرة أخرى.")
+
+    if file_url.startswith("/uploads/"):
+        physical_path = file_url[len("/uploads/"):]
+        full_path = os.path.join(UPLOADS_DIR, physical_path)
+        if os.path.exists(full_path):
+            try:
+                os.remove(full_path)
+            except OSError:
+                pass
+
+    return {"message": "تم حذف الملف الطبي بنجاح"}
 
 
 # المخطط البرمجي لاستقبال طلب التفعيل من الـ Frontend
