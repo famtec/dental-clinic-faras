@@ -137,4 +137,3 @@ class InventoryItem(Base):
     quantity = Column(Integer, nullable=False)
     min_alert_quantity = Column(Integer, default=5, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
