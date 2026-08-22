@@ -21,6 +21,9 @@ import models
 import database
 import os
 import uvicorn
+import asyncio
+import requests
+from zoneinfo import ZoneInfo
 from pydantic import BaseModel
 app = FastAPI(title="Dental Clinic API")
 
@@ -115,6 +118,45 @@ def on_startup() -> None:
     # Keep legacy SQLite-safe migration checks for existing local environments.
     database.init_db()
     seed_default_activation_key()
+
+
+# --- Keep-alive ping ضد سبات Render المجاني ---
+# Render المجاني يوقف الخدمة بعد 15 دقيقة بلا طلبات واردة، لكنه يمنحك 750 ساعة تشغيل
+# شهرياً فقط لكامل الحساب (الشهر الواحد فيه ~744 ساعة تقريباً!). لذلك إبقاء السيرفر
+# مستيقظاً 24/7 عبر بينغ دائم يستهلك كامل الرصيد الشهري تقريباً بمفرده، وأي تجاوز بسيط
+# يوقف كل خدماتك المجانية على Render حتى الشهر القادم. الحل: نرسل نبضة كل 10 دقائق
+# فقط خلال ساعات عمل العيادة، ونتركه ينام خارجها (عدّل الساعات والمنطقة الزمنية بالأسفل
+# حسب دوامك الفعلي).
+KEEP_ALIVE_URL = "https://dental-clinic-faras.onrender.com/health"
+KEEP_ALIVE_INTERVAL_SECONDS = 10 * 60  # أقل من مهلة السبات (15 دقيقة) عند Render
+KEEP_ALIVE_TIMEZONE = ZoneInfo("Asia/Damascus")
+KEEP_ALIVE_START_HOUR = 8   # 8:00 صباحاً بتوقيت العيادة — عدّل حسب دوامك
+KEEP_ALIVE_END_HOUR = 22    # 10:00 مساءً بتوقيت العيادة — عدّل حسب دوامك
+
+
+def _is_within_clinic_hours() -> bool:
+    current_hour = datetime.now(KEEP_ALIVE_TIMEZONE).hour
+    return KEEP_ALIVE_START_HOUR <= current_hour < KEEP_ALIVE_END_HOUR
+
+
+async def _keep_render_alive_loop() -> None:
+    while True:
+        await asyncio.sleep(KEEP_ALIVE_INTERVAL_SECONDS)
+        if not _is_within_clinic_hours():
+            continue
+        try:
+            # نستخدم asyncio.to_thread لأن requests.get متزامنة (blocking) ولا نريدها
+            # أن توقف حلقة الأحداث الرئيسية بينما تخدم طلبات أخرى في نفس اللحظة.
+            await asyncio.to_thread(requests.get, KEEP_ALIVE_URL, timeout=10)
+            print("⏰ [KEEP ALIVE] تم إرسال نبضة تنشيط بنجاح.")
+        except Exception as exc:
+            print(f"⚠️ [KEEP ALIVE] فشل إرسال النبضة: {exc}")
+
+
+@app.on_event("startup")
+async def _start_keep_alive_task() -> None:
+    asyncio.create_task(_keep_render_alive_loop())
+
 
 # 2. تفعيل نظام CORS للسماح لموقع الويب وتطبيق الأندرويد بالاتصال بالـ API دون قيود أمنية ومتصفح
 app.add_middleware(

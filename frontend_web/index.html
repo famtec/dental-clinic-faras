@@ -597,7 +597,8 @@
         });
 
         if (!response.ok) {
-          throw new Error('Failed to load patient stats');
+          const bodyText = await response.text().catch(() => '');
+          throw new Error(`HTTP ${response.status}${bodyText ? ' - ' + bodyText.slice(0, 200) : ''}`);
         }
 
         const data = await response.json();
@@ -612,6 +613,8 @@
         }
         renderPendingBalancesFromPatients();
       } catch (error) {
+        console.error('loadPatientStats error:', error);
+
         const fallbackTotalPatients = allPatients.length;
         const fallbackActiveAppointments = calculateActiveAppointmentsFallback();
 
@@ -627,27 +630,58 @@
       }
     }
 
-    // Fetch and render patients
-    async function fetchPatients(){
+    // Fetch and render patients.
+    // Render's free-tier server sleeps after inactivity and can take 20-40s to wake up,
+    // so the very first request after a refresh can fail (network error / 502/503) even
+    // though the backend and data are perfectly fine. We retry once after a short delay
+    // instead of silently showing an empty dashboard, and we surface the *real* failure
+    // reason (HTTP status / auth error / network error) so this is diagnosable next time.
+    async function fetchPatients(options){
+      const retryOnFailure = !options || options.retryOnFailure !== false;
+
       try{
         const res = await fetch(API_URL, {
           method: 'GET',
           headers: getDoctorAuthHeaders(),
         });
-        if (!res.ok) throw new Error('Network response not ok');
+
+        if (!res.ok) {
+          const bodyText = await res.text().catch(() => '');
+          const error = new Error(`HTTP ${res.status}${bodyText ? ' - ' + bodyText.slice(0, 200) : ''}`);
+          error.status = res.status;
+          throw error;
+        }
+
         const data = await res.json();
         allPatients = Array.isArray(data) ? data : [];
         renderPatients(allPatients, searchInput.value.trim());
         await loadAppointmentsForStats();
         await loadPatientStats();
       }catch(err){
-        console.error('fetchPatients error', err);
+        console.error('fetchPatients error:', err);
+
+        if (retryOnFailure) {
+          // Likely a cold-start (network error / 502 / 503) rather than a real auth failure.
+          // Give the server a moment to wake up, then try exactly once more.
+          if (err.status !== 401) {
+            showToast('السيرفر يستيقظ من وضع السكون (Render)، جاري إعادة المحاولة خلال لحظات...');
+          }
+          setTimeout(() => {
+            fetchPatients({ retryOnFailure: false });
+          }, 6000);
+          return;
+        }
+
         patientsTableBody.innerHTML = '';
         if (patientsMobileList) {
           patientsMobileList.innerHTML = '';
         }
         emptyFeedback.classList.remove('hidden');
-        emptyFeedback.textContent = 'حدث خطأ أثناء تحميل بيانات المرضى.';
+        const reason = err && err.status === 401
+          ? 'الجلسة غير صالحة، يرجى تسجيل الدخول من جديد.'
+          : `تعذّر الاتصال بالسيرفر (${err.message || 'خطأ غير معروف'}).`;
+        emptyFeedback.textContent = `حدث خطأ أثناء تحميل بيانات المرضى. ${reason}`;
+        showToast(`فشل تحميل بيانات المرضى: ${reason}`);
         await loadPatientStats();
       }
     }
