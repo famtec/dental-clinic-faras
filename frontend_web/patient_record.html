@@ -670,7 +670,7 @@
       crown: { label: 'تاج / تلبيسة', color: '#FFD700', metalness: 0.62, roughness: 0.22 },
       bridge: { label: 'جسر', color: '#FF8C00', metalness: 0.2, roughness: 0.3 },
     };
-    const DEFAULT_TOOTH_COLOR = '#f8fafc';
+    const DEFAULT_TOOTH_COLOR = '#fbfbf7';
     const PALMER_TOOTH_NAMES = {
       1: 'القاطع المركزي',
       2: 'القاطع الجانبي',
@@ -990,6 +990,7 @@
         code,
         label: `${toothName} ${quadrantMeta?.name || ''}`.trim(),
         symbolCode: `${quadrantMeta?.symbol || ''}${order}`,
+        order,
       };
     }
 
@@ -1007,8 +1008,8 @@
       const colorValue = palette?.color || resolveToothColor(stateValue) || DEFAULT_TOOTH_COLOR;
 
       mesh.material.color.set(colorValue);
-      mesh.material.metalness = palette?.metalness ?? 0.08;
-      mesh.material.roughness = palette?.roughness ?? 0.42;
+      mesh.material.metalness = palette?.metalness ?? 0.05;
+      mesh.material.roughness = palette?.roughness ?? 0.15;
       mesh.material.emissive.set('#000000');
       mesh.material.emissiveIntensity = statusKey === 'implant' ? 0.08 : 0.18;
     }
@@ -1097,22 +1098,165 @@
       return sprite;
     }
 
+    // ---------------------------------------------------------------------
+    // Anatomical tooth geometry
+    //
+    // Every tooth is still a single THREE.Mesh with a single BufferGeometry
+    // (never a Group of sub-meshes) so that everything downstream keeps
+    // working unmodified: raycaster.intersectObjects(dentalToothMeshes,
+    // false) needs one intersectable object per tooth, updateToothHoverState
+    // scales the mesh as a single rigid body, and setToothMeshColor tints a
+    // single material. Anterior/posterior shape differences and the
+    // "mesh.scale.set(...)" proportions requested are baked directly into
+    // the geometry's vertices (via geometry.scale()/.translate()) instead of
+    // Object3D.scale, because Object3D.scale is already driven by the hover
+    // effect (scale.setScalar(1.08) / scale.setScalar(1)) — baking anatomy
+    // into mesh.scale would fight that and reset on every hover in/out.
+    //
+    // The two shapes are built once and reused (shared BufferGeometry) across
+    // every matching tooth purely as a perf optimization; per-tooth identity
+    // (toothId/status/position) lives entirely in userData and mesh.position,
+    // which are still set per-instance below.
+    // ---------------------------------------------------------------------
+
+    function mergeBufferGeometries(geometries) {
+      const positions = [];
+      const normals = [];
+      let hasAllNormals = true;
+
+      geometries.forEach((sourceGeometry) => {
+        const geometry = sourceGeometry.index ? sourceGeometry.toNonIndexed() : sourceGeometry;
+        const positionAttribute = geometry.getAttribute('position');
+        const normalAttribute = geometry.getAttribute('normal');
+
+        if (!normalAttribute) hasAllNormals = false;
+
+        for (let i = 0; i < positionAttribute.count; i += 1) {
+          positions.push(positionAttribute.getX(i), positionAttribute.getY(i), positionAttribute.getZ(i));
+          if (normalAttribute) {
+            normals.push(normalAttribute.getX(i), normalAttribute.getY(i), normalAttribute.getZ(i));
+          }
+        }
+
+        if (geometry !== sourceGeometry) geometry.dispose();
+        sourceGeometry.dispose();
+      });
+
+      const mergedGeometry = new THREE.BufferGeometry();
+      mergedGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+
+      if (hasAllNormals) {
+        mergedGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+      } else {
+        mergedGeometry.computeVertexNormals();
+      }
+
+      mergedGeometry.computeBoundingSphere();
+      return mergedGeometry;
+    }
+
+    function createAnteriorToothGeometry() {
+      // Incisors & canines (Palmer order 1-3): a sleek, vertically elongated,
+      // flat-tapered crown. A Lathe profile gives the natural root -> neck ->
+      // crown-bulge -> incisal-edge taper; scaling it down heavily on Z turns
+      // the round cross-section into a flat chisel-like blade. First/last
+      // profile points are near-zero radius so the lathe closes cleanly at
+      // the root tip and incisal edge without needing separate end caps.
+      const profilePoints = [
+        new THREE.Vector2(0.015, -0.55), // root tip
+        new THREE.Vector2(0.09, -0.44),
+        new THREE.Vector2(0.15, -0.28), // root shoulder
+        new THREE.Vector2(0.13, -0.10), // cervical neck (narrowest)
+        new THREE.Vector2(0.2, 0.02), // crown bulge starts
+        new THREE.Vector2(0.24, 0.14), // widest point of the crown
+        new THREE.Vector2(0.19, 0.3),
+        new THREE.Vector2(0.11, 0.44), // incisal third taper
+        new THREE.Vector2(0.05, 0.54),
+        new THREE.Vector2(0.015, 0.58), // incisal edge
+      ];
+
+      const geometry = new THREE.LatheGeometry(profilePoints, 12);
+      // mesh.scale.set(1.1, 1.4, 0.6) equivalent, baked into the geometry
+      // itself (see note above) and tuned slightly tighter on X/Y so the
+      // footprint stays inside the ~0.97 unit tooth spacing used below.
+      geometry.scale(1.0, 1.15, 0.5);
+      geometry.computeBoundingSphere();
+      return geometry;
+    }
+
+    function createPosteriorToothGeometry() {
+      // Premolars & molars (Palmer order 4-8): a wider, robust compound
+      // crown built from a rounded octagonal crown body, a tapered root, and
+      // four occlusal cusps (mesiobuccal/distobuccal/mesiolingual/
+      // distolingual) surrounding a natural central fossa.
+      const crownHeight = 0.62;
+      const crownGeometry = new THREE.CylinderGeometry(0.3, 0.27, crownHeight, 8, 2);
+      crownGeometry.translate(0, 0.13, 0);
+
+      const rootHeight = 0.42;
+      const rootGeometry = new THREE.ConeGeometry(0.15, rootHeight, 8);
+      rootGeometry.rotateX(Math.PI); // point the root tip downward, away from the crown
+      rootGeometry.translate(0, -0.39, 0);
+
+      const cuspRadius = 0.115;
+      const cuspOffsets = [
+        [0.16, 0.4, 0.16],
+        [-0.16, 0.4, 0.16],
+        [0.16, 0.4, -0.16],
+        [-0.16, 0.4, -0.16],
+      ];
+      const cuspGeometries = cuspOffsets.map(([x, y, z]) => {
+        const cuspGeometry = new THREE.SphereGeometry(cuspRadius, 8, 6);
+        cuspGeometry.scale(1, 0.65, 1); // flatten into a rounded occlusal bump
+        cuspGeometry.translate(x, y, z);
+        return cuspGeometry;
+      });
+
+      // mesh.scale.set(1.4, 1.2, 1.4) equivalent, baked directly into the
+      // absolute crown/root/cusp dimensions above (wider and more robust
+      // than the anterior geometry) while staying under the ~0.97 unit
+      // tooth spacing so molars never intersect their neighbors.
+      return mergeBufferGeometries([crownGeometry, rootGeometry, ...cuspGeometries]);
+    }
+
+    let cachedAnteriorToothGeometry = null;
+    let cachedPosteriorToothGeometry = null;
+
+    function getAnteriorToothGeometry() {
+      if (!cachedAnteriorToothGeometry) {
+        cachedAnteriorToothGeometry = createAnteriorToothGeometry();
+      }
+      return cachedAnteriorToothGeometry;
+    }
+
+    function getPosteriorToothGeometry() {
+      if (!cachedPosteriorToothGeometry) {
+        cachedPosteriorToothGeometry = createPosteriorToothGeometry();
+      }
+      return cachedPosteriorToothGeometry;
+    }
+
     function createToothMesh(toothNumber, x, y, z) {
-      const geometry = new THREE.CylinderGeometry(0.34, 0.46, 1.18, 12, 1, false);
+      const palmerNotation = getPalmerNotationForTooth(toothNumber);
+      const isAnterior = (palmerNotation?.order || 0) >= 1 && (palmerNotation?.order || 0) <= 3;
+      const geometry = isAnterior ? getAnteriorToothGeometry() : getPosteriorToothGeometry();
+
+      // Premium dental enamel: pearl ivory, high-gloss, faint metallic depth.
       const material = new THREE.MeshStandardMaterial({
         color: DEFAULT_TOOTH_COLOR,
-        roughness: 0.42,
-        metalness: 0.08,
+        roughness: 0.15,
+        metalness: 0.05,
       });
+
       const mesh = new THREE.Mesh(geometry, material);
       mesh.position.set(x, y, z);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       mesh.userData.toothNumber = toothNumber;
-      const palmerNotation = getPalmerNotationForTooth(toothNumber);
       mesh.userData.palmerCode = palmerNotation?.code || String(toothNumber);
       mesh.userData.palmerLabel = palmerNotation?.label || `سن ${toothNumber}`;
       mesh.userData.palmerSymbolCode = palmerNotation?.symbolCode || String(toothNumber);
+      mesh.userData.anatomyType = isAnterior ? 'anterior' : 'posterior';
 
       const label = createToothNumberSprite(mesh.userData.palmerCode);
       if (label) {
