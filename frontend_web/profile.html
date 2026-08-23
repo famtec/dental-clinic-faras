@@ -207,8 +207,17 @@
 			return localStorage.getItem('user_email') || 'fareshalawi17@gmail.com';
 		}
 
+		function getSessionToken() {
+			return (localStorage.getItem('authToken') || '').trim();
+		}
+
 		function getDoctorAuthHeaders(extraHeaders = {}) {
-			return { 'X-Doctor-Email': getDoctorEmail(), ...extraHeaders };
+			const headers = { 'X-Doctor-Email': getDoctorEmail(), ...extraHeaders };
+			const token = getSessionToken();
+			if (token) {
+				headers.Authorization = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+			}
+			return headers;
 		}
 
 		const doctorName = localStorage.getItem('doctor_name') || localStorage.getItem('user_name');

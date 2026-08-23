@@ -798,8 +798,17 @@
       return (localStorage.getItem('user_email') || 'fareshalawi17@gmail.com').trim();
     }
 
+    function getSessionToken() {
+      return (localStorage.getItem('authToken') || '').trim();
+    }
+
     function getDoctorAuthHeaders(extraHeaders = {}) {
-      return { 'X-Doctor-Email': getDoctorEmail(), ...extraHeaders };
+      const headers = { 'X-Doctor-Email': getDoctorEmail(), ...extraHeaders };
+      const token = getSessionToken();
+      if (token) {
+        headers.Authorization = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+      }
+      return headers;
     }
     const XRAY_API_BASE_URL = 'https://dental-clinic-faras.onrender.com';
     const APPOINTMENT_UPDATE_BASE_URL = window.DENTAL_APP_CONFIG?.apiBaseUrl || 'https://dental-clinic-faras.onrender.com';
@@ -3503,9 +3512,7 @@
 
         fetch('https://dental-clinic-faras.onrender.com/api/finance/backup', {
           method: 'GET',
-          headers: {
-            'X-Doctor-Email': doctorEmail,
-          },
+          headers: getDoctorAuthHeaders(),
         })
           .then((response) => {
             if (!response.ok) {

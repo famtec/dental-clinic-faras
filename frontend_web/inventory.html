@@ -334,6 +334,15 @@
 		}
 		const doctorName = localStorage.getItem('doctor_name') || localStorage.getItem('user_name');
 		const doctorEmail = localStorage.getItem('user_email');
+
+		function getInventoryAuthHeaders(extraHeaders = {}) {
+			const token = (localStorage.getItem('authToken') || '').trim();
+			const headers = { 'X-Doctor-Email': doctorEmail, ...extraHeaders };
+			if (token) {
+				headers.Authorization = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+			}
+			return headers;
+		}
 		const UPGRADE_ENDPOINT = apiUrl('/api/auth/upgrade-tier');
 		const clinicTitle = document.getElementById('clinicTitle');
 		const tierBadge = document.getElementById('tierBadge');
@@ -549,9 +558,7 @@
 			try {
 				const response = await fetch(apiUrl('/api/inventory'), {
 					method: 'GET',
-					headers: {
-						'X-Doctor-Email': doctorEmail,
-					},
+					headers: getInventoryAuthHeaders(),
 				});
 
 				if (!response.ok) {
@@ -597,10 +604,7 @@
 			try {
 				const response = await fetch(apiUrl('/api/inventory'), {
 					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						'X-Doctor-Email': doctorEmail,
-					},
+					headers: getInventoryAuthHeaders({ 'Content-Type': 'application/json' }),
 					body: JSON.stringify({
 						item_name: itemName,
 						quantity,

@@ -242,6 +242,9 @@ async function loginUser(event) {
             const data = await response.json();
             localStorage.setItem("user_email", data.email || emailInput.value.trim());
             localStorage.setItem("user_tier", data.tier || "standard");
+            if (data.token) {
+                localStorage.setItem("authToken", data.token);
+            }
             alert("🎉 تم تسجيل الدخول الرقمي بنجاح باهر!");
             window.location.href = "index.html";
         } else {

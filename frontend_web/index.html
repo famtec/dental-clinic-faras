@@ -447,10 +447,15 @@
     // can never silently produce an unauthenticated request.
     function getDoctorStatsHeaders() {
       const email = String(localStorage.getItem('user_email') || doctorEmail || '').trim();
-      return {
+      const token = String(localStorage.getItem('authToken') || '').trim();
+      const headers = {
         'Content-Type': 'application/json',
         'X-Doctor-Email': email,
       };
+      if (token) {
+        headers.Authorization = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+      }
+      return headers;
     }
 
     function getDoctorAuthHeaders() {

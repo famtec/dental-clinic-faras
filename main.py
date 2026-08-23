@@ -25,6 +25,10 @@ import asyncio
 import requests
 import secrets
 import string
+import hmac
+import hashlib
+import base64
+import time
 from zoneinfo import ZoneInfo
 from pydantic import BaseModel
 app = FastAPI(title="Dental Clinic API")
@@ -36,6 +40,15 @@ GOOGLE_CLIENT_ID = "446271578356-qju6aml2tiqbd2v6p23utrfb7nosketm.apps.googleuse
 # فقط -- **يجب** ضبطه كمتغيّر بيئة حقيقي (ADMIN_SECRET_KEY) في إعدادات Render قبل
 # الإطلاق التجاري؛ القيمة الافتراضية بالأسفل معروفة للجميع ولا تصلح للإنتاج.
 ADMIN_SECRET_KEY = os.getenv("ADMIN_SECRET_KEY", "change-me-fares-admin-2026")
+
+# مفتاح توقيع جلسات الدخول (توكن شبيه بـ JWT، HMAC-SHA256، بلا أي اعتماد
+# خارجي) -- **يجب** ضبطه كمتغيّر بيئة حقيقي (SESSION_SECRET_KEY) في إعدادات
+# Render قبل الإطلاق التجاري؛ القيمة الافتراضية بالأسفل معروفة للجميع ولا
+# تصلح للإنتاج. أي تغيير لهذا المفتاح يُبطل فوراً كل جلسات الدخول الحالية
+# لكل الأطباء (يضطرون لإعادة تسجيل الدخول مرة واحدة فقط) -- هذا متوقع وآمن،
+# وليس خللاً (2026-08-23).
+SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "change-me-fares-session-2026")
+SESSION_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30  # صلاحية 30 يوماً لكل جلسة دخول
 
 # بيانات اعتماد Green API لإرسال تذكيرات واتساب تلقائية (اختياري -- إن تُركت
 # فارغة، محرك التذكيرات بالأسفل يتحقق من عدم وجودها ولا يحاول الإرسال، بلا أي
@@ -724,12 +737,112 @@ def ensure_user_subscription_is_active(user: models.User, db: Session | None = N
         )
 
 
-def require_premium_user_by_email(db: Session, doctor_email: str | None) -> models.User:
-    normalized_email = (doctor_email or "").strip().lower()
-    if not normalized_email:
-        raise HTTPException(status_code=401, detail="Doctor email header is required")
+# ============================================================================
+# تشفير كلمات السر + توكنات الجلسة الموقّعة (2026-08-23)
+# ============================================================================
+# مشكلة أمنية جوهرية كانت موجودة: كلمات السر تُخزَّن نصاً صريحاً (plaintext) في
+# users.hashed_password ويُقارَن معها مباشرة بـ ==، وهوية الطبيب في كل طلب لاحق
+# بعد تسجيل الدخول كانت تُستنتَج فقط من هيدر X-Doctor-Email أو من هيدر
+# Authorization المُعامَل حرفياً كأنه البريد الإلكتروني -- بلا أي تحقق تشفيري.
+# هذا يعني أن أي طرف يعرف بريد طبيب آخر (بدون معرفة كلمة سره) كان يقدر ينتحل
+# هويته بطلب مباشر للـ API (curl/Postman). الحل: تشفير حقيقي لكلمات السر
+# (PBKDF2-HMAC-SHA256 عبر مكتبة hashlib القياسية، بلا أي اعتماد خارجي جديد)،
+# وتوكن جلسة موقّع (بنية مطابقة لـ JWT: header.payload.signature بترميز
+# base64url، وتوقيع HMAC-SHA256 بمفتاح السيرفر السرّي) يُصدَر فقط عند تسجيل
+# دخول ناجح فعلياً، ويُتحقق من توقيعه وصلاحيته في كل طلب لاحق.
 
-    user = db.query(models.User).filter(models.User.email == normalized_email).first()
+PASSWORD_HASH_PREFIX = "pbkdf2_sha256"
+PASSWORD_HASH_ITERATIONS = 260_000
+
+
+def hash_password(plain_password: str) -> str:
+    salt = os.urandom(16)
+    derived_key = hashlib.pbkdf2_hmac(
+        "sha256", plain_password.encode("utf-8"), salt, PASSWORD_HASH_ITERATIONS
+    )
+    return (
+        f"{PASSWORD_HASH_PREFIX}${PASSWORD_HASH_ITERATIONS}$"
+        f"{base64.b64encode(salt).decode('ascii')}${base64.b64encode(derived_key).decode('ascii')}"
+    )
+
+
+def is_legacy_plaintext_hash(stored_value: str | None) -> bool:
+    # أي قيمة قديمة لا تطابق تنسيق الهاش الجديد تُعامَل كنص صريح قديم (من قبل
+    # 2026-08-23) -- يُتحقق منها بمقارنة مباشرة عند تسجيل الدخول فقط، ثم
+    # تُرقَّى شفافياً إلى هاش آمن فور نجاح التحقق (بلا أي تدخل من الطبيب).
+    return not (stored_value or "").startswith(f"{PASSWORD_HASH_PREFIX}$")
+
+
+def verify_password(plain_password: str, stored_hash: str) -> bool:
+    try:
+        prefix, iterations_str, salt_b64, hash_b64 = (stored_hash or "").split("$")
+        if prefix != PASSWORD_HASH_PREFIX:
+            return False
+        iterations = int(iterations_str)
+        salt = base64.b64decode(salt_b64)
+        expected_key = base64.b64decode(hash_b64)
+        actual_key = hashlib.pbkdf2_hmac("sha256", plain_password.encode("utf-8"), salt, iterations)
+        return hmac.compare_digest(actual_key, expected_key)
+    except Exception:
+        return False
+
+
+def _b64url_encode(raw_bytes: bytes) -> str:
+    return base64.urlsafe_b64encode(raw_bytes).rstrip(b"=").decode("ascii")
+
+
+def _b64url_decode(encoded_value: str) -> bytes:
+    padding_needed = (-len(encoded_value)) % 4
+    return base64.urlsafe_b64decode(encoded_value + ("=" * padding_needed))
+
+
+def create_session_token(email: str) -> str:
+    header = {"alg": "HS256", "typ": "JWT"}
+    issued_at = int(time.time())
+    payload = {
+        "sub": (email or "").strip().lower(),
+        "iat": issued_at,
+        "exp": issued_at + SESSION_TOKEN_TTL_SECONDS,
+    }
+    header_b64 = _b64url_encode(json.dumps(header, separators=(",", ":")).encode("utf-8"))
+    payload_b64 = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
+    signing_input = f"{header_b64}.{payload_b64}".encode("ascii")
+    signature = hmac.new(SESSION_SECRET_KEY.encode("utf-8"), signing_input, hashlib.sha256).digest()
+    return f"{header_b64}.{payload_b64}.{_b64url_encode(signature)}"
+
+
+def verify_session_token(token: str) -> str | None:
+    try:
+        header_b64, payload_b64, signature_b64 = (token or "").split(".")
+        signing_input = f"{header_b64}.{payload_b64}".encode("ascii")
+        expected_signature = hmac.new(SESSION_SECRET_KEY.encode("utf-8"), signing_input, hashlib.sha256).digest()
+        actual_signature = _b64url_decode(signature_b64)
+        if not hmac.compare_digest(expected_signature, actual_signature):
+            return None
+
+        payload = json.loads(_b64url_decode(payload_b64))
+        if int(payload.get("exp", 0)) < int(time.time()):
+            return None
+
+        verified_email = (payload.get("sub") or "").strip().lower()
+        return verified_email or None
+    except Exception:
+        return None
+
+
+def _extract_bearer_token(authorization: str | None) -> str:
+    value = (authorization or "").strip()
+    if value.lower().startswith("bearer "):
+        value = value[7:].strip()
+    return value
+
+
+def require_premium_user_by_email(db: Session, authorization: str | None) -> models.User:
+    verified_email = verify_session_token(_extract_bearer_token(authorization))
+    if not verified_email:
+        raise HTTPException(status_code=401, detail="جلستك غير صالحة أو منتهية. يرجى تسجيل الدخول مجدداً.")
+
+    user = db.query(models.User).filter(models.User.email == verified_email).first()
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
@@ -748,17 +861,16 @@ def get_current_doctor_user(
     doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
     authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> models.User:
-    normalized_email = (doctor_email or "").strip().lower()
-    if not normalized_email:
-        auth_value = (authorization or "").strip()
-        if auth_value.lower().startswith("bearer "):
-            auth_value = auth_value[7:].strip()
-        normalized_email = auth_value.lower()
+    # ملاحظة أمنية هامة (2026-08-23): الهوية تُستخرج الآن حصراً من توكن جلسة
+    # موقّع من السيرفر (عبر /api/auth/login أو /api/auth/register أو
+    # /api/auth/google)، وليس من هيدر X-Doctor-Email الخام -- ذاك الهيدر يبقى
+    # في التوقيع فقط للتوافق مع أي كود قديم يرسله، لكنه بلا أي أثر على تحديد
+    # الهوية بعد اليوم. لا يجوز إطلاقاً العودة للثقة بهذا الهيدر مباشرة.
+    verified_email = verify_session_token(_extract_bearer_token(authorization))
+    if not verified_email:
+        raise HTTPException(status_code=401, detail="جلستك غير صالحة أو منتهية. يرجى تسجيل الدخول مجدداً.")
 
-    if not normalized_email:
-        raise HTTPException(status_code=401, detail="Doctor email header is required")
-
-    user = db.query(models.User).filter(models.User.email == normalized_email).first()
+    user = db.query(models.User).filter(models.User.email == verified_email).first()
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
@@ -834,7 +946,7 @@ def register_user(register_request: RegisterRequest, db: Session = Depends(datab
         new_user = models.User(
             doctor_name=register_request.doctor_name,
             email=normalized_email,
-            hashed_password=register_request.password,
+            hashed_password=hash_password(register_request.password),
             tier=user_tier,
             subscription_expires_at=subscription_expires_at,
             is_active=True,
@@ -862,7 +974,7 @@ def register_user(register_request: RegisterRequest, db: Session = Depends(datab
             "doctor_name": new_user.doctor_name,
             "email": new_user.email,
             "tier": new_user.tier,
-            "token": "secure-session-token",
+            "token": create_session_token(new_user.email),
             "subscription_expires_at": subscription_expires_at.isoformat(),
         }
     except Exception:
@@ -886,11 +998,23 @@ def login_user(login_request: LoginRequest, db: Session = Depends(database.get_d
     user = db.query(models.User).filter(models.User.email == normalized_email).first()
     if not user:
         raise HTTPException(status_code=401, detail="البريد الإلكتروني أو كلمة المرور غير صحيحة!")
-        
-    # 3. التحقق الصارم من تطابق كلمة المرور (سواء كانت مشفرة أو نصية حسب نظامك الحالي)
-    # ملاحظة: إذا كنت تستخدم التشفير استبدل هذا بالدالة المعتمدة لديك، وإلا فالنص المباشر هو الحاسم:
-    if user.hashed_password != login_request.password:
-        raise HTTPException(status_code=401, detail="البريد الإلكتروني أو كلمة المرور غير صحيحة!")
+
+    # 3. تحقق حقيقي من كلمة المرور عبر الهاش الآمن (2026-08-23) -- مع دعم
+    # ترحيل شفاف للحسابات القديمة المخزّنة نصاً صريحاً (plaintext): إن كانت
+    # كلمة السر المخزّنة بالتنسيق القديم، تُقارَن مباشرة كما كانت، وفور نجاح
+    # المطابقة تُرقَّى فوراً إلى هاش PBKDF2 آمن ويُحفظ التغيير -- بلا أي تدخل
+    # مطلوب من الطبيب ودون أن يلاحظ أي فرق في تجربة الاستخدام.
+    if is_legacy_plaintext_hash(user.hashed_password):
+        if user.hashed_password != login_request.password:
+            raise HTTPException(status_code=401, detail="البريد الإلكتروني أو كلمة المرور غير صحيحة!")
+        try:
+            user.hashed_password = hash_password(login_request.password)
+            db.commit()
+        except Exception:
+            db.rollback()
+    else:
+        if not verify_password(login_request.password, user.hashed_password):
+            raise HTTPException(status_code=401, detail="البريد الإلكتروني أو كلمة المرور غير صحيحة!")
 
     # 3ب. نفس حارس الاشتراك المستخدم في مسار Google -- كان مسار تسجيل
     # الدخول اليدوي هذا يرجع نجاح لأي حساب مطابق كلمة المرور مهما كانت
@@ -899,11 +1023,15 @@ def login_user(login_request: LoginRequest, db: Session = Depends(database.get_d
     ensure_user_subscription_is_active(user, db)
 
     try:
-        # 4. العبور المحاسبي الآمن وإرجاع قاموس JSON صافي ومطابق 100% للـ Frontend
+        # 4. العبور المحاسبي الآمن وإرجاع قاموس JSON صافي ومطابق 100% للـ Frontend،
+        # مع توكن جلسة موقّع حقيقي (2026-08-23) يحل محل الاعتماد على البريد
+        # الإلكتروني الخام كإثبات هوية في كل طلب لاحق.
         return {
             "status": "success",
             "email": user.email,
-            "tier": user.tier or "pending_activation"
+            "tier": user.tier or "pending_activation",
+            "doctor_name": user.doctor_name,
+            "token": create_session_token(user.email),
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"خطأ في معالجة الجلسة السحابية: {e}")
@@ -979,7 +1107,7 @@ def google_login(google_request: GoogleLoginRequest, db: Session = Depends(datab
     ensure_user_subscription_is_active(user, db)
 
     return LoginResponse(
-        token="secure-session-token",
+        token=create_session_token(user.email),
         doctor_name=user.doctor_name,
         email=user.email,
         tier=user.tier or "pending_activation",
@@ -2215,10 +2343,10 @@ def delete_prescription(
 @app.post("/api/inventory", response_model=InventoryItemResponse, status_code=201)
 def create_inventory_item(
     item: InventoryItemCreate,
-    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
     db: Session = Depends(database.get_db),
 ):
-    user = require_premium_user_by_email(db, doctor_email)
+    user = require_premium_user_by_email(db, authorization)
 
     item_name = (item.item_name or "").strip()
     if not item_name:
@@ -2246,10 +2374,10 @@ def create_inventory_item(
 
 @app.get("/api/inventory", response_model=List[InventoryItemResponse])
 def get_inventory_items(
-    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
     db: Session = Depends(database.get_db),
 ):
-    user = require_premium_user_by_email(db, doctor_email)
+    user = require_premium_user_by_email(db, authorization)
 
     return (
         db.query(models.InventoryItem)
@@ -2269,10 +2397,10 @@ class InventoryItemUpdate(BaseModel):
 def update_inventory_item(
     item_id: int,
     item_update: InventoryItemUpdate,
-    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
     db: Session = Depends(database.get_db),
 ):
-    user = require_premium_user_by_email(db, doctor_email)
+    user = require_premium_user_by_email(db, authorization)
 
     item = (
         db.query(models.InventoryItem)
@@ -2311,10 +2439,10 @@ def update_inventory_item(
 @app.delete("/api/inventory/{item_id}", status_code=200)
 def delete_inventory_item(
     item_id: int,
-    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
     db: Session = Depends(database.get_db),
 ):
-    user = require_premium_user_by_email(db, doctor_email)
+    user = require_premium_user_by_email(db, authorization)
 
     item = (
         db.query(models.InventoryItem)
