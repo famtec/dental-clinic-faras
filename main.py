@@ -2868,8 +2868,14 @@ def generate_renewal_keys(
 
 
 @app.get("/", include_in_schema=False)
-def redirect_to_login():
-    return RedirectResponse(url="/login.html", status_code=302)
+def redirect_to_landing():
+    # الرابط الرئيسي للموقع (/) كان يُحوَّل مباشرة إلى شاشة تسجيل الدخول،
+    # متخطياً صفحة التسويق (landing.html) بالكامل رغم وجودها فعلياً على
+    # السيرفر -- لم يكن هناك أي رابط بأي صفحة يقود إليها، فكانت غير مرئية
+    # عملياً لأي زائر جديد يفتح الرابط الأساسي للمنصة (2026-08-23). الآن يرى
+    # كل زائر جديد صفحة التسويق أولاً، وفيها أزرار واضحة لكل من "تسجيل الدخول"
+    # (للأطباء المشتركين أصلاً) و"ابدأ الآن" (تسجيل حساب جديد عبر register.html).
+    return RedirectResponse(url="/landing.html", status_code=302)
 
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 app.mount("/", StaticFiles(directory="frontend_web", html=True), name="static")
