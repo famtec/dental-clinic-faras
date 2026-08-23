@@ -43,6 +43,11 @@ class Patient(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     doctor_name = Column(String, nullable=True)
+    # الحقل الرسمي (authoritative) لعزل بيانات كل طبيب عن غيره -- على عكس
+    # doctor_name (نص قابل للتكرار بين أطباء مختلفين)، هذا البريد فريد لكل
+    # حساب طبيب (users.email) ويُستخدم في كل استعلام قراءة/تعديل/حذف
+    # للتحقق أن هذا المريض يخص هذا الطبيب فعلاً قبل السماح بالوصول (2026-08-23).
+    doctor_email = Column(String, index=True, nullable=True)
     full_name = Column(String, index=True)
     phone = Column(String, nullable=False)
     birth_date = Column(Date, nullable=True)
@@ -60,12 +65,21 @@ class Appointment(Base):
     __tablename__ = "appointments"
 
     id = Column(Integer, primary_key=True, index=True)
+    # الحقل الرسمي لعزل مواعيد كل طبيب عن غيره (2026-08-23) -- انظر تعليق
+    # Patient.doctor_email أعلاه لنفس المنطق.
+    doctor_email = Column(String, index=True, nullable=True)
     patient_name = Column(String, nullable=False)
     appointment_date = Column(DateTime, nullable=True)
     appointment_time = Column(String, nullable=False)
     procedure_type = Column(String, nullable=False)
     notes = Column(String, nullable=True)
     status = Column(String, nullable=False, default="pending", server_default=text("'pending'"))
+    # حقلان أُضيفا 2026-08-23 لمحرك تذكيرات واتساب التلقائية: patient_id يربط
+    # الموعد بالمريض مباشرة (كان مفقوداً تماماً من قبل رغم أن create_appointment
+    # يستقبله في الطلب -- لم يكن يُخزَّن على الإطلاق)، وreminder_sent يمنع إرسال
+    # نفس تذكير الموعد أكثر من مرة واحدة.
+    patient_id = Column(Integer, ForeignKey("patients.id"), nullable=True)
+    reminder_sent = Column(Boolean, default=False, nullable=False, server_default=text("false"))
 
 
 class Visit(Base):
@@ -109,6 +123,9 @@ class FinancialTransaction(Base):
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=True)
     doctor_name = Column(String, nullable=True)
+    # الحقل الرسمي لعزل الحركات المالية لكل طبيب عن غيره (2026-08-23) -- انظر
+    # تعليق Patient.doctor_email أعلاه لنفس المنطق.
+    doctor_email = Column(String, index=True, nullable=True)
     amount = Column(Numeric(12, 2), nullable=False)
     type = Column(String, nullable=False, default="expense")
     description = Column(String, nullable=False)

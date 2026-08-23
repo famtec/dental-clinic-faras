@@ -37,6 +37,13 @@ GOOGLE_CLIENT_ID = "446271578356-qju6aml2tiqbd2v6p23utrfb7nosketm.apps.googleuse
 # الإطلاق التجاري؛ القيمة الافتراضية بالأسفل معروفة للجميع ولا تصلح للإنتاج.
 ADMIN_SECRET_KEY = os.getenv("ADMIN_SECRET_KEY", "change-me-fares-admin-2026")
 
+# بيانات اعتماد Green API لإرسال تذكيرات واتساب تلقائية (اختياري -- إن تُركت
+# فارغة، محرك التذكيرات بالأسفل يتحقق من عدم وجودها ولا يحاول الإرسال، بلا أي
+# خطأ). يجب ضبطهما كمتغيّري بيئة حقيقيين على Render بعد إنشاء instance على
+# green-api.com وربطه برقم واتساب العيادة عبر مسح رمز QR.
+GREEN_API_INSTANCE_ID = os.getenv("GREEN_API_INSTANCE_ID", "")
+GREEN_API_TOKEN = os.getenv("GREEN_API_TOKEN", "")
+
 UPLOADS_DIR = "uploads"
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 ARCHIVE_UPLOADS_DIR = os.path.join(UPLOADS_DIR, "patient_xrays")
@@ -237,6 +244,153 @@ async def _keep_render_alive_loop() -> None:
 @app.on_event("startup")
 async def _start_keep_alive_task() -> None:
     asyncio.create_task(_keep_render_alive_loop())
+
+
+# --- محرك تذكيرات واتساب التلقائية للمواعيد (أُضيف 2026-08-23) ---
+# يفحص دورياً المواعيد المستحقة خلال REMINDER_LEAD_HOURS ساعة تقريباً ولم يُرسَل
+# لها تذكير بعد، ويرسل رسالة واتساب تلقائية عبر Green API (green-api.com).
+# لا يعمل هذا المحرك فعلياً إلا بعد ضبط GREEN_API_INSTANCE_ID وGREEN_API_TOKEN
+# كمتغيّري بيئة حقيقيين على Render -- طالما هما فارغان، send_whatsapp_message_via_green_api
+# ترجع False بصمت دون أي محاولة اتصال أو خطأ.
+REMINDER_LEAD_HOURS = int(os.getenv("REMINDER_LEAD_HOURS", "24"))
+REMINDER_WINDOW_HOURS = 1  # نافذة التقاط بساعة على كل جهة، لتفادي تفويت موعد بسبب فارق توقيت التشغيل
+REMINDER_CHECK_INTERVAL_SECONDS = 30 * 60
+
+
+def normalize_whatsapp_phone(phone: str | None) -> str:
+    # نفس منطق normalizeWhatsappPhone المستخدم في frontend_web/patient_record.html
+    # (التذكير اليدوي الحالي) -- يُبقي الاثنين متطابقين بالسلوك.
+    raw = (phone or "").strip()
+    if not raw:
+        return ""
+
+    digits = re.sub(r"\D", "", raw)
+    if not digits:
+        return ""
+
+    if digits.startswith("00"):
+        digits = digits[2:]
+
+    if digits.startswith("0"):
+        digits = f"963{digits[1:]}"
+    elif not digits.startswith("963") and len(digits) == 9:
+        digits = f"963{digits}"
+
+    return digits
+
+
+def send_whatsapp_message_via_green_api(phone: str, message: str) -> bool:
+    if not GREEN_API_INSTANCE_ID or not GREEN_API_TOKEN:
+        return False
+
+    normalized_phone = normalize_whatsapp_phone(phone)
+    if not normalized_phone:
+        return False
+
+    url = f"https://api.green-api.com/waInstance{GREEN_API_INSTANCE_ID}/sendMessage/{GREEN_API_TOKEN}"
+    payload = {"chatId": f"{normalized_phone}@c.us", "message": message}
+
+    try:
+        response = requests.post(url, json=payload, timeout=15)
+        return response.status_code == 200
+    except Exception as exc:
+        print(f"⚠️ [WHATSAPP REMINDER] فشل إرسال الرسالة عبر Green API: {exc}")
+        return False
+
+
+def send_due_appointment_reminders() -> int:
+    db = database.SessionLocal()
+    sent_count = 0
+    try:
+        now = datetime.now(KEEP_ALIVE_TIMEZONE).replace(tzinfo=None)
+        window_start = now + timedelta(hours=REMINDER_LEAD_HOURS - REMINDER_WINDOW_HOURS)
+        window_end = now + timedelta(hours=REMINDER_LEAD_HOURS + REMINDER_WINDOW_HOURS)
+
+        due_appointments = (
+            db.query(models.Appointment)
+            .filter(
+                models.Appointment.reminder_sent.is_(False),
+                models.Appointment.appointment_date.isnot(None),
+                models.Appointment.appointment_date >= window_start,
+                models.Appointment.appointment_date <= window_end,
+                models.Appointment.status != "no_show",
+            )
+            .all()
+        )
+
+        for appointment in due_appointments:
+            patient = None
+            if appointment.patient_id:
+                # حماية إضافية (defense in depth): حتى لو كان patient_id محفوظاً،
+                # نتحقق أن doctor_email للمريض يطابق doctor_email الموعد قبل
+                # استخدامه -- لا يجوز إطلاقاً أن يصل تذكير عن مريض لا يخص نفس الطبيب.
+                patient = (
+                    db.query(models.Patient)
+                    .filter(
+                        models.Patient.id == appointment.patient_id,
+                        models.Patient.doctor_email == appointment.doctor_email,
+                    )
+                    .first()
+                )
+            if not patient and appointment.patient_name:
+                # مواعيد قديمة أُنشئت قبل إضافة patient_id -- مطابقة احتياطية بالاسم،
+                # ويجب أن تتطابق doctor_email أيضاً حتى لا يُرسَل تذكير لمريض بنفس
+                # الاسم يتبع لطبيب آخر تماماً (2026-08-23).
+                patient = (
+                    db.query(models.Patient)
+                    .filter(
+                        models.Patient.full_name == appointment.patient_name,
+                        models.Patient.doctor_email == appointment.doctor_email,
+                    )
+                    .first()
+                )
+
+            if not patient or not patient.phone:
+                continue
+
+            doctor_label = (patient.doctor_name or "").strip() or "عيادتك الرقمية"
+            appointment_date_label = appointment.appointment_date.strftime("%Y-%m-%d") if appointment.appointment_date else ""
+            appointment_time_label = appointment.appointment_time or ""
+            patient_label = (patient.full_name or appointment.patient_name or "المريض").strip()
+
+            message = (
+                f"مرحباً سيد/ة {patient_label}، نذكركم بموعدكم في عيادة {doctor_label} غداً "
+                f"بتاريخ {appointment_date_label} الساعة {appointment_time_label}. "
+                "نتمنى لكم دوام الصحة والعافية. 🦷✨"
+            )
+
+            was_sent = send_whatsapp_message_via_green_api(patient.phone, message)
+            if was_sent:
+                appointment.reminder_sent = True
+                sent_count += 1
+
+        if sent_count:
+            db.commit()
+    except Exception as exc:
+        db.rollback()
+        print(f"⚠️ [WHATSAPP REMINDER] فشل فحص المواعيد المستحقة: {exc}")
+    finally:
+        db.close()
+
+    return sent_count
+
+
+async def _appointment_reminder_loop() -> None:
+    while True:
+        await asyncio.sleep(REMINDER_CHECK_INTERVAL_SECONDS)
+        if not _is_within_clinic_hours():
+            continue
+        try:
+            sent_count = await asyncio.to_thread(send_due_appointment_reminders)
+            if sent_count:
+                print(f"📲 [WHATSAPP REMINDER] تم إرسال {sent_count} تذكير واتساب تلقائي.")
+        except Exception as exc:
+            print(f"⚠️ [WHATSAPP REMINDER] خطأ غير متوقع بحلقة التذكيرات: {exc}")
+
+
+@app.on_event("startup")
+async def _start_appointment_reminder_task() -> None:
+    asyncio.create_task(_appointment_reminder_loop())
 
 
 # 2. تفعيل نظام CORS للسماح لموقع الويب وتطبيق الأندرويد بالاتصال بالـ API دون قيود أمنية ومتصفح
@@ -1061,6 +1215,7 @@ def create_patient(
 
     db_patient = models.Patient(
         doctor_name=resolved_doctor_name or None,
+        doctor_email=current_user.email,
         full_name=patient.full_name,
         phone=patient.phone,
         birth_date=patient.birth_date if patient.birth_date else None,
@@ -1082,24 +1237,14 @@ def get_all_patients(
     db: Session = Depends(database.get_db),
 ):
     user = require_active_doctor_user(db=db, doctor_email=doctor_email, authorization=authorization)
-    doctor_name = (user.doctor_name or "").strip()
-    if not doctor_name:
-        doctor_name = user.email
 
-    doctor_identifiers = {doctor_name, user.email}
-
-    linked_patients = (
+    # عزل صارم حسب doctor_email فقط (الحقل الرسمي، غير قابل للتلاعب من العميل) --
+    # لا يوجد أي fallback لعرض مرضى بلا مالك أو مرضى طبيب آخر (2026-08-23).
+    patients = (
         db.query(models.Patient)
-        .filter(models.Patient.doctor_name.in_(doctor_identifiers))
+        .filter(models.Patient.doctor_email == user.email)
         .all()
     )
-    patients = linked_patients
-    if not patients:
-        patients = (
-            db.query(models.Patient)
-            .filter(models.Patient.doctor_name.is_(None))
-            .all()
-        )
 
     patient_ids = [patient.id for patient in patients]
     paid_amount_by_patient_id: dict[int, Decimal] = {}
@@ -1133,7 +1278,7 @@ def get_all_patients(
             {
                 "id": patient.id,
                 "doctor_name": patient.doctor_name,
-                "doctor_email": None,
+                "doctor_email": patient.doctor_email,
                 "full_name": patient.full_name,
                 "phone": patient.phone,
                 "birth_date": patient.birth_date,
@@ -1164,25 +1309,13 @@ def get_patient_stats(
     # -- which is exactly the "Patient Not Found" popup this route used to
     # trigger. Do not move this back below get_patient().
     user = require_active_doctor_user(db=db, doctor_email=doctor_email, authorization=authorization)
-    doctor_name = (user.doctor_name or "").strip()
-    if not doctor_name:
-        doctor_name = user.email
 
-    doctor_identifiers = {doctor_name, user.email}
-
-    linked_patients = (
+    # عزل صارم حسب doctor_email فقط، بلا أي fallback (2026-08-23).
+    patients = (
         db.query(models.Patient)
-        .filter(models.Patient.doctor_name.in_(doctor_identifiers))
+        .filter(models.Patient.doctor_email == user.email)
         .all()
     )
-    patients = linked_patients
-    if not patients:
-        legacy_patients = (
-            db.query(models.Patient)
-            .filter(models.Patient.doctor_name.is_(None))
-            .all()
-        )
-        patients = legacy_patients
 
     # Step 1: Safe patient ID extraction -- only IDs of patients that are
     # currently active and actually belong to this doctor (or are legacy
@@ -1201,7 +1334,11 @@ def get_patient_stats(
         now = datetime.utcnow()
         active_appointments = 0
         if patient_names:
-            appointments = db.query(models.Appointment).all()
+            appointments = (
+                db.query(models.Appointment)
+                .filter(models.Appointment.doctor_email == user.email)
+                .all()
+            )
             for appointment in appointments:
                 appointment_patient_name = (appointment.patient_name or "").strip().lower()
                 if appointment_patient_name not in patient_names:
@@ -1274,7 +1411,7 @@ def get_patient_stats(
 def get_patient(
     patient_id: str,
     db: Session = Depends(database.get_db),
-    _activation_gate: models.User = Depends(require_active_doctor_user),
+    current_user: models.User = Depends(require_active_doctor_user),
 ):
     try:
         patient_id_int = int(patient_id)
@@ -1282,7 +1419,11 @@ def get_patient(
         raise HTTPException(status_code=404, detail="المريض غير موجود")
 
     try:
-        patient = db.query(models.Patient).filter(models.Patient.id == patient_id_int).first()
+        patient = (
+            db.query(models.Patient)
+            .filter(models.Patient.id == patient_id_int, models.Patient.doctor_email == current_user.email)
+            .first()
+        )
     except Exception:
         raise HTTPException(status_code=404, detail="المريض غير موجود")
 
@@ -1296,9 +1437,13 @@ def get_patient(
 def delete_patient(
     patient_id: int,
     db: Session = Depends(database.get_db),
-    _activation_gate: models.User = Depends(require_active_doctor_user),
+    current_user: models.User = Depends(require_active_doctor_user),
 ):
-    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    patient = (
+        db.query(models.Patient)
+        .filter(models.Patient.id == patient_id, models.Patient.doctor_email == current_user.email)
+        .first()
+    )
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
@@ -1319,9 +1464,13 @@ def update_patient(
     patient_id: int,
     patient_update: PatientUpdate,
     db: Session = Depends(database.get_db),
-    _activation_gate: models.User = Depends(require_active_doctor_user),
+    current_user: models.User = Depends(require_active_doctor_user),
 ):
-    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    patient = (
+        db.query(models.Patient)
+        .filter(models.Patient.id == patient_id, models.Patient.doctor_email == current_user.email)
+        .first()
+    )
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
@@ -1351,9 +1500,13 @@ def update_patient_chart(
     patient_id: int,
     chart_update: PatientChartUpdate,
     db: Session = Depends(database.get_db),
-    _activation_gate: models.User = Depends(require_active_doctor_user),
+    current_user: models.User = Depends(require_active_doctor_user),
 ):
-    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    patient = (
+        db.query(models.Patient)
+        .filter(models.Patient.id == patient_id, models.Patient.doctor_email == current_user.email)
+        .first()
+    )
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
@@ -1376,9 +1529,13 @@ def update_patient_chart(
 def create_appointment(
     appointment: AppointmentCreate,
     db: Session = Depends(database.get_db),
-    _activation_gate: models.User = Depends(require_active_doctor_user),
+    current_user: models.User = Depends(require_active_doctor_user),
 ):
-    patient = db.query(models.Patient).filter(models.Patient.id == appointment.patient_id).first()
+    patient = (
+        db.query(models.Patient)
+        .filter(models.Patient.id == appointment.patient_id, models.Patient.doctor_email == current_user.email)
+        .first()
+    )
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
@@ -1406,6 +1563,8 @@ def create_appointment(
         raise HTTPException(status_code=400, detail="Invalid date/time format")
 
     db_appointment = models.Appointment(
+        patient_id=appointment.patient_id,
+        doctor_email=current_user.email,
         patient_name=patient.full_name or appointment.patient_name or "",
         appointment_date=appointment_date_time,
         appointment_time=normalized_time,
@@ -1439,9 +1598,13 @@ def update_appointment(
     appointment_id: int,
     appointment_update: AppointmentUpdate,
     db: Session = Depends(database.get_db),
-    _activation_gate: models.User = Depends(require_active_doctor_user),
+    current_user: models.User = Depends(require_active_doctor_user),
 ):
-    appointment = db.query(models.Appointment).filter(models.Appointment.id == appointment_id).first()
+    appointment = (
+        db.query(models.Appointment)
+        .filter(models.Appointment.id == appointment_id, models.Appointment.doctor_email == current_user.email)
+        .first()
+    )
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
 
@@ -1477,9 +1640,13 @@ def update_appointment_status(
     appointment_id: int,
     status_update: AppointmentStatusUpdate,
     db: Session = Depends(database.get_db),
-    _activation_gate: models.User = Depends(require_active_doctor_user),
+    current_user: models.User = Depends(require_active_doctor_user),
 ):
-    appointment = db.query(models.Appointment).filter(models.Appointment.id == appointment_id).first()
+    appointment = (
+        db.query(models.Appointment)
+        .filter(models.Appointment.id == appointment_id, models.Appointment.doctor_email == current_user.email)
+        .first()
+    )
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
 
@@ -1502,9 +1669,13 @@ def update_appointment_status(
 def delete_appointment(
     appointment_id: int,
     db: Session = Depends(database.get_db),
-    _activation_gate: models.User = Depends(require_active_doctor_user),
+    current_user: models.User = Depends(require_active_doctor_user),
 ):
-    appointment = db.query(models.Appointment).filter(models.Appointment.id == appointment_id).first()
+    appointment = (
+        db.query(models.Appointment)
+        .filter(models.Appointment.id == appointment_id, models.Appointment.doctor_email == current_user.email)
+        .first()
+    )
     if not appointment:
         raise HTTPException(status_code=404, detail="الموعد غير موجود")
 
@@ -1522,9 +1693,13 @@ def delete_appointment(
 @app.get("/api/appointments", response_model=List[AppointmentResponse])
 def get_all_appointments(
     db: Session = Depends(database.get_db),
-    _activation_gate: models.User = Depends(require_active_doctor_user),
+    current_user: models.User = Depends(require_active_doctor_user),
 ):
-    return db.query(models.Appointment).all()
+    return (
+        db.query(models.Appointment)
+        .filter(models.Appointment.doctor_email == current_user.email)
+        .all()
+    )
 
 
 # 8. مسار لتسجيل زيارة علاجية جديدة لمريض مع تفاصيل الأسنان [POST]
@@ -1532,9 +1707,13 @@ def get_all_appointments(
 def create_visit(
     visit: VisitCreate,
     db: Session = Depends(database.get_db),
-    _activation_gate: models.User = Depends(require_active_doctor_user),
+    current_user: models.User = Depends(require_active_doctor_user),
 ):
-    patient = db.query(models.Patient).filter(models.Patient.id == visit.patient_id).first()
+    patient = (
+        db.query(models.Patient)
+        .filter(models.Patient.id == visit.patient_id, models.Patient.doctor_email == current_user.email)
+        .first()
+    )
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
@@ -1586,9 +1765,13 @@ def create_visit(
 def create_treatment(
     treatment: TreatmentCreate,
     db: Session = Depends(database.get_db),
-    _activation_gate: models.User = Depends(require_active_doctor_user),
+    current_user: models.User = Depends(require_active_doctor_user),
 ):
-    patient = db.query(models.Patient).filter(models.Patient.id == treatment.patient_id).first()
+    patient = (
+        db.query(models.Patient)
+        .filter(models.Patient.id == treatment.patient_id, models.Patient.doctor_email == current_user.email)
+        .first()
+    )
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
@@ -1610,7 +1793,7 @@ def create_treatment(
 def create_expense(
     expense: ExpenseCreate,
     db: Session = Depends(database.get_db),
-    _activation_gate: models.User = Depends(require_active_doctor_user),
+    current_user: models.User = Depends(require_active_doctor_user),
 ):
     if expense.amount <= 0:
         raise HTTPException(status_code=400, detail="قيمة المصروف يجب أن تكون أكبر من صفر.")
@@ -1624,7 +1807,11 @@ def create_expense(
         raise HTTPException(status_code=400, detail="نوع العملية يجب أن يكون income أو expense.")
 
     if expense.patient_id is not None:
-        patient = db.query(models.Patient).filter(models.Patient.id == expense.patient_id).first()
+        patient = (
+            db.query(models.Patient)
+            .filter(models.Patient.id == expense.patient_id, models.Patient.doctor_email == current_user.email)
+            .first()
+        )
         if not patient:
             raise HTTPException(status_code=404, detail="Patient not found")
 
@@ -1632,6 +1819,7 @@ def create_expense(
         db_expense = models.FinancialTransaction(
             patient_id=expense.patient_id,
             doctor_name=expense.doctor_name,
+            doctor_email=current_user.email,
             amount=expense.amount,
             type=transaction_type,
             description=description,
@@ -1648,16 +1836,18 @@ def create_expense(
 @app.get("/api/finance/summary")
 def get_finance_summary(
     db: Session = Depends(database.get_db),
-    _activation_gate: models.User = Depends(require_active_doctor_user),
+    current_user: models.User = Depends(require_active_doctor_user),
 ):
     total_income = (
         db.query(func.coalesce(func.sum(models.FinancialTransaction.amount), 0))
         .filter(models.FinancialTransaction.type == "income")
+        .filter(models.FinancialTransaction.doctor_email == current_user.email)
         .scalar()
     )
     total_expenses = (
         db.query(func.coalesce(func.sum(models.FinancialTransaction.amount), 0))
         .filter(models.FinancialTransaction.type == "expense")
+        .filter(models.FinancialTransaction.doctor_email == current_user.email)
         .scalar()
     )
 
@@ -1677,12 +1867,21 @@ def get_finance_summary(
 def get_patient_financial_transactions(
     patient_id: int,
     db: Session = Depends(database.get_db),
-    _activation_gate: models.User = Depends(require_active_doctor_user),
+    current_user: models.User = Depends(require_active_doctor_user),
 ):
+    patient = (
+        db.query(models.Patient)
+        .filter(models.Patient.id == patient_id, models.Patient.doctor_email == current_user.email)
+        .first()
+    )
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
     return (
         db.query(models.FinancialTransaction)
         .filter(models.FinancialTransaction.patient_id == patient_id)
         .filter(models.FinancialTransaction.type == "income")
+        .filter(models.FinancialTransaction.doctor_email == current_user.email)
         .order_by(models.FinancialTransaction.created_at.desc())
         .all()
     )
@@ -1693,11 +1892,14 @@ def update_financial_transaction(
     transaction_id: int,
     transaction_update: FinancialTransactionUpdate,
     db: Session = Depends(database.get_db),
-    _activation_gate: models.User = Depends(require_active_doctor_user),
+    current_user: models.User = Depends(require_active_doctor_user),
 ):
     transaction = (
         db.query(models.FinancialTransaction)
-        .filter(models.FinancialTransaction.id == transaction_id)
+        .filter(
+            models.FinancialTransaction.id == transaction_id,
+            models.FinancialTransaction.doctor_email == current_user.email,
+        )
         .first()
     )
     if not transaction:
@@ -1725,11 +1927,14 @@ def update_financial_transaction(
 def delete_financial_transaction(
     transaction_id: int,
     db: Session = Depends(database.get_db),
-    _activation_gate: models.User = Depends(require_active_doctor_user),
+    current_user: models.User = Depends(require_active_doctor_user),
 ):
     transaction = (
         db.query(models.FinancialTransaction)
-        .filter(models.FinancialTransaction.id == transaction_id)
+        .filter(
+            models.FinancialTransaction.id == transaction_id,
+            models.FinancialTransaction.doctor_email == current_user.email,
+        )
         .first()
     )
     if not transaction:
@@ -1755,11 +1960,12 @@ def export_finance_backup(
     doctor_name = (user.doctor_name or "").strip()
     if not doctor_name:
         doctor_name = user.email
-    doctor_identifiers = {doctor_name, user.email}
 
+    # عزل صارم حسب doctor_email فقط (2026-08-23) بدل المطابقة النصية الهشة على
+    # doctor_name، والتي كانت عرضة لتصادم الأسماء بين طبيبين مختلفين.
     patients = (
         db.query(models.Patient)
-        .filter(models.Patient.doctor_name.in_(doctor_identifiers))
+        .filter(models.Patient.doctor_email == user.email)
         .order_by(models.Patient.id.asc())
         .all()
     )
@@ -1771,17 +1977,17 @@ def export_finance_backup(
 
     transactions = (
         db.query(models.FinancialTransaction)
-        .filter(models.FinancialTransaction.doctor_name.in_(doctor_identifiers))
+        .filter(models.FinancialTransaction.doctor_email == user.email)
         .order_by(models.FinancialTransaction.created_at.asc(), models.FinancialTransaction.id.asc())
         .all()
     )
 
-    appointments = db.query(models.Appointment).order_by(models.Appointment.id.asc()).all()
-    filtered_appointments = [
-        appointment
-        for appointment in appointments
-        if (appointment.patient_name or "").strip().lower() in patient_name_to_id
-    ]
+    filtered_appointments = (
+        db.query(models.Appointment)
+        .filter(models.Appointment.doctor_email == user.email)
+        .order_by(models.Appointment.id.asc())
+        .all()
+    )
 
     buffer = io.StringIO()
     writer = csv.writer(buffer)
@@ -1882,9 +2088,13 @@ def export_finance_backup(
 def create_prescription(
     prescription: PrescriptionCreate,
     db: Session = Depends(database.get_db),
-    _activation_gate: models.User = Depends(require_active_doctor_user),
+    current_user: models.User = Depends(require_active_doctor_user),
 ):
-    patient = db.query(models.Patient).filter(models.Patient.id == prescription.patient_id).first()
+    patient = (
+        db.query(models.Patient)
+        .filter(models.Patient.id == prescription.patient_id, models.Patient.doctor_email == current_user.email)
+        .first()
+    )
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
@@ -1912,9 +2122,13 @@ def create_prescription(
 def get_patient_prescriptions(
     patient_id: int,
     db: Session = Depends(database.get_db),
-    _activation_gate: models.User = Depends(require_active_doctor_user),
+    current_user: models.User = Depends(require_active_doctor_user),
 ):
-    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    patient = (
+        db.query(models.Patient)
+        .filter(models.Patient.id == patient_id, models.Patient.doctor_email == current_user.email)
+        .first()
+    )
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
@@ -1936,9 +2150,14 @@ def update_prescription(
     prescription_id: int,
     prescription_update: PrescriptionUpdate,
     db: Session = Depends(database.get_db),
-    _activation_gate: models.User = Depends(require_active_doctor_user),
+    current_user: models.User = Depends(require_active_doctor_user),
 ):
-    prescription = db.query(models.Prescription).filter(models.Prescription.id == prescription_id).first()
+    prescription = (
+        db.query(models.Prescription)
+        .join(models.Patient, models.Patient.id == models.Prescription.patient_id)
+        .filter(models.Prescription.id == prescription_id, models.Patient.doctor_email == current_user.email)
+        .first()
+    )
     if not prescription:
         raise HTTPException(status_code=404, detail="الوصفة الطبية غير موجودة")
 
@@ -1972,9 +2191,14 @@ def update_prescription(
 def delete_prescription(
     prescription_id: int,
     db: Session = Depends(database.get_db),
-    _activation_gate: models.User = Depends(require_active_doctor_user),
+    current_user: models.User = Depends(require_active_doctor_user),
 ):
-    prescription = db.query(models.Prescription).filter(models.Prescription.id == prescription_id).first()
+    prescription = (
+        db.query(models.Prescription)
+        .join(models.Patient, models.Patient.id == models.Prescription.patient_id)
+        .filter(models.Prescription.id == prescription_id, models.Patient.doctor_email == current_user.email)
+        .first()
+    )
     if not prescription:
         raise HTTPException(status_code=404, detail="الوصفة الطبية غير موجودة")
 
@@ -2114,9 +2338,13 @@ def delete_inventory_item(
 def get_patient_treatments(
     patient_id: int,
     db: Session = Depends(database.get_db),
-    _activation_gate: models.User = Depends(require_active_doctor_user),
+    current_user: models.User = Depends(require_active_doctor_user),
 ):
-    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    patient = (
+        db.query(models.Patient)
+        .filter(models.Patient.id == patient_id, models.Patient.doctor_email == current_user.email)
+        .first()
+    )
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
@@ -2175,9 +2403,13 @@ async def upload_patient_archive(
     file: UploadFile = File(...),
     description: str = Form(""),
     db: Session = Depends(database.get_db),
-    _activation_gate: models.User = Depends(require_active_doctor_user),
+    current_user: models.User = Depends(require_active_doctor_user),
 ):
-    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    patient = (
+        db.query(models.Patient)
+        .filter(models.Patient.id == patient_id, models.Patient.doctor_email == current_user.email)
+        .first()
+    )
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
@@ -2222,9 +2454,13 @@ async def upload_patient_archive(
 def get_patient_archive(
     patient_id: int,
     db: Session = Depends(database.get_db),
-    _activation_gate: models.User = Depends(require_active_doctor_user),
+    current_user: models.User = Depends(require_active_doctor_user),
 ):
-    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    patient = (
+        db.query(models.Patient)
+        .filter(models.Patient.id == patient_id, models.Patient.doctor_email == current_user.email)
+        .first()
+    )
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
@@ -2249,8 +2485,16 @@ def update_patient_archive(
     archive_id: int,
     archive_update: PatientArchiveUpdate,
     db: Session = Depends(database.get_db),
-    _activation_gate: models.User = Depends(require_active_doctor_user),
+    current_user: models.User = Depends(require_active_doctor_user),
 ):
+    owned_patient = (
+        db.query(models.Patient)
+        .filter(models.Patient.id == patient_id, models.Patient.doctor_email == current_user.email)
+        .first()
+    )
+    if not owned_patient:
+        raise HTTPException(status_code=404, detail="الملف الطبي غير موجود")
+
     record = (
         db.query(models.PatientXRay)
         .filter(models.PatientXRay.id == archive_id, models.PatientXRay.patient_id == patient_id)
@@ -2277,8 +2521,16 @@ def delete_patient_archive(
     patient_id: int,
     archive_id: int,
     db: Session = Depends(database.get_db),
-    _activation_gate: models.User = Depends(require_active_doctor_user),
+    current_user: models.User = Depends(require_active_doctor_user),
 ):
+    owned_patient = (
+        db.query(models.Patient)
+        .filter(models.Patient.id == patient_id, models.Patient.doctor_email == current_user.email)
+        .first()
+    )
+    if not owned_patient:
+        raise HTTPException(status_code=404, detail="الملف الطبي غير موجود")
+
     record = (
         db.query(models.PatientXRay)
         .filter(models.PatientXRay.id == archive_id, models.PatientXRay.patient_id == patient_id)

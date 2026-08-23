@@ -97,6 +97,79 @@ def init_db():
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE users ADD COLUMN avatar_url VARCHAR"))
 
+    # ترحيل أعمدة محرك تذكيرات واتساب التلقائية (2026-08-23) -- بلا شرط نوع
+    # قاعدة البيانات، لنفس السبب الموضح أعلاه لأعمدة "حسابي" (الإنتاج الحقيقي
+    # Postgres وليس SQLite). patient_id: يربط الموعد بسجل المريض مباشرة (كان
+    # الطلب يستقبله دائماً لكنه لم يكن يُخزَّن إطلاقاً). reminder_sent: يمنع
+    # إرسال نفس تذكير الموعد أكثر من مرة.
+    if "appointments" in inspector.get_table_names():
+        appointment_reminder_columns = {column["name"] for column in inspector.get_columns("appointments")}
+        if "patient_id" not in appointment_reminder_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE appointments ADD COLUMN patient_id INTEGER"))
+        if "reminder_sent" not in appointment_reminder_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE appointments ADD COLUMN reminder_sent BOOLEAN NOT NULL DEFAULT FALSE"))
+
+    # ====================================================================
+    # عزل بيانات الأطباء متعدد المستأجرين (multi-tenant isolation) -- 2026-08-23
+    # ====================================================================
+    # مشكلة أمنية جوهرية تم اكتشافها: جداول patients / appointments /
+    # financial_transactions لم يكن لديها أي عمود بريد إلكتروني موثوق لتحديد
+    # مالك السجل. كانت بعض المسارات تعتمد على doctor_name (نص حر قابل للتكرار
+    # بين طبيبين مختلفين، وقابل للتلاعب من العميل)، وبعضها الآخر (كل مسارات
+    # المواعيد المفردة، وملخص الحسابات المالية، ومعظم مسارات المرضى المفردة)
+    # لم يكن به أي فلترة إطلاقاً -- أي طبيب مسجّل دخول كان يستطيع قراءة أو
+    # تعديل أو حذف بيانات أي طبيب آخر بمجرد تخمين رقم المعرّف (IDOR). نضيف هنا
+    # عمود doctor_email الرسمي على الجداول الثلاثة (بنفس نمط
+    # InventoryItem.doctor_email الصحيح أصلاً)، ثم نُرحّل (backfill) الصفوف
+    # القديمة تلقائياً وبأمان فقط في حال وجود طبيب واحد مسجّل حتى الآن (الحالة
+    # الحقيقية الحالية للمشروع) -- إن وُجد أكثر من طبيب مسجّل، لا نخمّن أبداً
+    # لمن تعود هذه الصفوف القديمة، فتبقى doctor_email فيها NULL، والكود في
+    # main.py يعامل أي سجل بلا doctor_email مطابق كأنه غير موجود لأي طبيب
+    # (fail closed) بدلاً من عرضه لأول طبيب يستعلم -- وهذا أهم بكثير من
+    # استرجاع بيانات قديمة مبهمة الملكية.
+    if "patients" in inspector.get_table_names():
+        patient_columns = {column["name"] for column in inspector.get_columns("patients")}
+        if "doctor_email" not in patient_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE patients ADD COLUMN doctor_email VARCHAR"))
+
+    if "appointments" in inspector.get_table_names():
+        appointment_tenancy_columns = {column["name"] for column in inspector.get_columns("appointments")}
+        if "doctor_email" not in appointment_tenancy_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE appointments ADD COLUMN doctor_email VARCHAR"))
+
+    if "financial_transactions" in inspector.get_table_names():
+        finance_tenancy_columns = {column["name"] for column in inspector.get_columns("financial_transactions")}
+        if "doctor_email" not in finance_tenancy_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE financial_transactions ADD COLUMN doctor_email VARCHAR"))
+
+    # ترحيل آمن للصفوف القديمة بلا doctor_email: فقط إذا كان هناك طبيب واحد
+    # بالضبط مسجّلاً حتى الآن في جدول users، نُسند له كل الصفوف اليتيمة تلقائياً
+    # (لأنها بالضرورة تخصه، فهو المستخدم الوحيد الذي أنشأها). بمجرد أن يصبح
+    # هناك أكثر من طبيب، تتوقف هذه الخطوة تلقائياً ولا تُخمّن الملكية إطلاقاً.
+    if "users" in inspector.get_table_names():
+        with engine.begin() as connection:
+            user_count = connection.execute(text("SELECT COUNT(*) FROM users")).scalar() or 0
+            if user_count == 1:
+                sole_email = connection.execute(text("SELECT email FROM users LIMIT 1")).scalar()
+                if sole_email:
+                    connection.execute(
+                        text("UPDATE patients SET doctor_email = :email WHERE doctor_email IS NULL"),
+                        {"email": sole_email},
+                    )
+                    connection.execute(
+                        text("UPDATE appointments SET doctor_email = :email WHERE doctor_email IS NULL"),
+                        {"email": sole_email},
+                    )
+                    connection.execute(
+                        text("UPDATE financial_transactions SET doctor_email = :email WHERE doctor_email IS NULL"),
+                        {"email": sole_email},
+                    )
+
 
 def get_db():
     db = SessionLocal()
