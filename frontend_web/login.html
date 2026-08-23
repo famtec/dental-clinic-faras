@@ -161,6 +161,14 @@
       messageBox.innerHTML = '';
     }
 
+    if (togglePasswordBtn && passwordInput) {
+      togglePasswordBtn.addEventListener('click', () => {
+        const isHidden = passwordInput.type === 'password';
+        passwordInput.type = isHidden ? 'text' : 'password';
+        togglePasswordBtn.textContent = isHidden ? 'إخفاء' : 'إظهار';
+      });
+    }
+
     function setLoading(isLoading) {
       submitBtn.disabled = isLoading;
       submitBtn.textContent = isLoading ? 'جاري تسجيل الدخول...' : 'تسجيل الدخول الرقمي';
