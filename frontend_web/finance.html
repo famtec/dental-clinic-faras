@@ -353,6 +353,17 @@
 		const EXPENSE_POST_ENDPOINT = `${RENDER_BASE_URL}/api/finance/expenses`;
 		const UPGRADE_ENDPOINT = `${RENDER_BASE_URL}/api/auth/upgrade-tier`;
 
+		// /api/finance/summary and /api/finance/expenses require a doctor-identifying
+		// header, added server-side in the 2026-08-22 activation/paywall audit.
+		// /api/auth/upgrade-tier does NOT require it (used to resolve the doctor).
+		function getDoctorEmail() {
+			return (localStorage.getItem('user_email') || 'fareshalawi17@gmail.com').trim();
+		}
+
+		function getDoctorAuthHeaders(extraHeaders = {}) {
+			return { 'X-Doctor-Email': getDoctorEmail(), ...extraHeaders };
+		}
+
 		function formatCurrency(value) {
 			const numericValue = Number(value || 0);
 			return `${numericValue.toLocaleString('ar-SA', { maximumFractionDigits: 2 })} ل.س`;
@@ -446,7 +457,7 @@
 
 		async function fetchFinancialMetrics() {
 			try {
-				const response = await fetch(METRICS_ENDPOINT, { method: 'GET' });
+				const response = await fetch(METRICS_ENDPOINT, { method: 'GET', headers: getDoctorAuthHeaders() });
 				if (!response.ok) {
 					throw new Error('Failed to fetch metrics');
 				}
@@ -483,7 +494,7 @@
 			try {
 				const response = await fetch(EXPENSE_POST_ENDPOINT, {
 					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
+					headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
 					body: JSON.stringify({ amount, description })
 				});
 

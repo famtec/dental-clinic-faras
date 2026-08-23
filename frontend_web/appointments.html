@@ -385,6 +385,16 @@
 
         const API_URL = apiUrl('/api/appointments');
         const PATIENTS_API_URL = apiUrl('/api/patients');
+
+        // Every /api/* route below (except /api/activate) requires a doctor-identifying
+        // header, added server-side in the 2026-08-22 activation/paywall audit.
+        function getDoctorEmail() {
+            return (localStorage.getItem('user_email') || 'fareshalawi17@gmail.com').trim();
+        }
+
+        function getDoctorAuthHeaders(extraHeaders = {}) {
+            return { 'X-Doctor-Email': getDoctorEmail(), ...extraHeaders };
+        }
         const tableBody = document.getElementById('appointmentsTableBody');
         const modal = document.getElementById('appointmentModal');
         const form = document.getElementById('appointmentForm');
@@ -606,7 +616,7 @@
 
         async function loadPatientsForAppointmentForm() {
             try {
-                const response = await fetch(PATIENTS_API_URL);
+                const response = await fetch(PATIENTS_API_URL, { headers: getDoctorAuthHeaders() });
                 if (!response.ok) {
                     throw new Error('تعذر تحميل قائمة المرضى');
                 }
@@ -811,6 +821,7 @@
                     try {
                         const response = await fetch(`${API_URL}/${encodeURIComponent(String(appointmentId))}`, {
                             method: 'DELETE',
+                            headers: getDoctorAuthHeaders(),
                         });
 
                         if (!response.ok) {
@@ -847,9 +858,9 @@
         async function updateAppointmentStatus(appointmentId, status, triggerElement) {
             const response = await fetch(apiUrl(`/api/appointments/${encodeURIComponent(String(appointmentId))}/status`), {
                 method: 'PUT',
-                headers: {
+                headers: getDoctorAuthHeaders({
                     'Content-Type': 'application/json',
-                },
+                }),
                 body: JSON.stringify({ status }),
             });
 
@@ -901,7 +912,7 @@
 
         async function loadAppointments() {
             try {
-                const response = await fetch(API_URL);
+                const response = await fetch(API_URL, { headers: getDoctorAuthHeaders() });
                 if (!response.ok) {
                     throw new Error('فشل في جلب المواعيد');
                 }
@@ -972,7 +983,7 @@
 
                 const response = await fetch(endpoint, {
                     method,
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify(payload)
                 });
 

@@ -261,9 +261,9 @@ function handleCredentialResponse(response) {
         })
     })
     .then(async res => {
+        const data = await res.json().catch(() => ({}));
+
         if (res.ok) {
-            const data = await res.json();
-            
             // حفظ الجلسة المحاسبية والبروفايل داخل ذاكرة المتصفح المحلية
             // ملاحظة: استجابة /api/auth/google (LoginResponse) تُرجع email/tier وليس
             // user_email/user_tier -- استخدام الاسم الخاطئ هنا كان يخزّن السلسلة النصية
@@ -274,6 +274,12 @@ function handleCredentialResponse(response) {
 
             alert("🎉 تم التحقق والتوثيق عبر خوادم Google بنجاح باهر!");
             window.location.href = "index.html";
+        } else if (res.status === 402) {
+            // 402 = تم التحقق من حساب Google بنجاح لكن الحساب بانتظار التفعيل
+            // (حساب جديد كلياً، أو حساب قديم لم يدخل كود تفعيل حقيقياً من قبل).
+            // لا نمنحه أي دخول مجاني ولا نخزّن أي جلسة محلية هنا إطلاقاً --
+            // نعرض فقط رسالة الخادم الواضحة التي تشرح كيفية التفعيل.
+            alert(data.detail || "حسابك بانتظار التفعيل. يرجى إدخال كود تفعيل صالح للمتابعة.");
         } else {
             alert("فشل تسجيل الدخول عبر Google. (السيرفر رفض التوكن)");
         }

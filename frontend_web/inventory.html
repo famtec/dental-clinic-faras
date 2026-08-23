@@ -22,6 +22,11 @@
 			color: #e0e7ff;
 			box-shadow: 0 8px 22px rgba(67, 56, 202, 0.35);
 		}
+		.upgrade-card-hidden {
+			opacity: 0;
+			transform: translateY(-8px);
+			pointer-events: none;
+		}
 		.danger-stock {
 			background: #ef4444;
 			color: #ffffff;
@@ -92,18 +97,28 @@
 
 		<main class="min-w-0 flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8 xl:p-10">
 			<div id="inventoryLayoutWrapper" class="transition duration-300">
-				<section id="inventoryLockedOverlay" class="mb-6 hidden rounded-[30px] border border-amber-200 bg-gradient-to-br from-amber-50 via-yellow-50 to-amber-100 p-6 shadow-2xl shadow-amber-200/50 sm:p-7">
+				<section id="inventoryLockedOverlay" class="mb-6 hidden rounded-[28px] border border-indigo-200 bg-gradient-to-br from-indigo-800 via-indigo-700 to-violet-700 p-6 text-white shadow-2xl shadow-indigo-900/35 transition duration-300 sm:p-7">
 					<div class="mx-auto max-w-3xl text-center">
-						<div class="text-5xl">🔒</div>
-						<h2 class="mt-4 text-2xl font-extrabold text-amber-900 sm:text-3xl">ميزة حصرية للباقة الفخمة</h2>
-						<p class="mt-3 text-sm font-semibold leading-8 text-amber-900/90 sm:text-base">
-							إدارة المخزن والمستودع الطبي متاحة حصرياً لمشتركي الباقة الفخمة (Premium). يرجى التواصل مع المهندس فارس حلاوي لتفعيل الأرشفة المخزنية.
+						<div class="mb-3 inline-flex rounded-full border border-indigo-200/40 bg-white/10 px-3 py-1 text-xs font-bold tracking-[0.2em] text-indigo-100">PREMIUM PLAN</div>
+						<p class="text-lg font-bold leading-8 sm:text-xl">
+							إدارة المخزن والمستودع الطبي متاحة حصرياً لمشتركي الباقة الفخمة (Premium). أدخل كود الترقية لتفعيلها فوراً!
 						</p>
-						<a href="register.html" class="mt-5 inline-flex items-center justify-center rounded-2xl border border-amber-300 bg-gradient-to-r from-amber-300 via-yellow-300 to-amber-400 px-6 py-3 text-sm font-extrabold text-amber-950 shadow-xl shadow-amber-400/40 transition hover:-translate-y-0.5 hover:from-amber-200 hover:via-yellow-200 hover:to-amber-300">
-							ترقية الحساب إلى Premium الآن
-						</a>
+						<form id="upgradeForm" class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-center">
+							<input
+								id="upgradeCodeInput"
+								type="text"
+								required
+								placeholder="أدخل كود الترقية"
+								class="w-full rounded-2xl border border-indigo-200/30 bg-white/90 px-4 py-3 text-right text-sm font-semibold text-slate-800 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-200 sm:max-w-sm"
+							/>
+							<button id="upgradeSubmitBtn" type="submit" class="rounded-2xl border border-amber-200/70 bg-gradient-to-r from-amber-300 via-yellow-300 to-amber-400 px-5 py-3 text-sm font-extrabold text-amber-950 shadow-xl shadow-amber-500/30 transition hover:-translate-y-0.5 hover:from-amber-200 hover:to-yellow-300">
+								تفعيل الترقية الفورية
+							</button>
+						</form>
+						<p id="upgradeStatus" class="mt-3 text-sm font-semibold text-indigo-100">أدخل الكود ثم اضغط التفعيل.</p>
 					</div>
 				</section>
+
 
 				<div id="inventoryBoard" class="space-y-6">
 					<section class="panel-soft rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/70 sm:p-6">
@@ -181,7 +196,7 @@
 
 	<script src="api-config.js"></script>
 	<script>
-		const userTier = localStorage.getItem("user_tier");
+		let userTier = localStorage.getItem("user_tier");
 		// 🔒 حظر فوري ومتزامن قبل أي تسجيل لمستمع DOMContentLoaded أو أي طلب Fetch لبيانات محمية -- التوجيه وحده في نهاية الملف لم يكن كافياً.
 		if (userTier === 'pending_activation') {
 			window.location.replace('index.html');
@@ -317,6 +332,7 @@
 		}
 		const doctorName = localStorage.getItem('doctor_name') || localStorage.getItem('user_name');
 		const doctorEmail = localStorage.getItem('user_email');
+		const UPGRADE_ENDPOINT = apiUrl('/api/auth/upgrade-tier');
 		const clinicTitle = document.getElementById('clinicTitle');
 		const tierBadge = document.getElementById('tierBadge');
 		const mobileClinicTitle = document.getElementById('mobileClinicTitle');
@@ -328,6 +344,10 @@
 
 		const inventoryLayoutWrapper = document.getElementById('inventoryLayoutWrapper');
 		const inventoryLockedOverlay = document.getElementById('inventoryLockedOverlay');
+		const upgradeForm = document.getElementById('upgradeForm');
+		const upgradeCodeInput = document.getElementById('upgradeCodeInput');
+		const upgradeSubmitBtn = document.getElementById('upgradeSubmitBtn');
+		const upgradeStatus = document.getElementById('upgradeStatus');
 		const inventoryBoard = document.getElementById('inventoryBoard');
 		const inventoryForm = document.getElementById('inventoryForm');
 		const inventoryStatus = document.getElementById('inventoryStatus');
@@ -367,6 +387,18 @@
 			}
 		}
 
+		function setUpgradeStatus(message, type = 'normal') {
+			if (!upgradeStatus) return;
+			if (type === 'error') {
+				upgradeStatus.className = 'mt-3 text-sm font-semibold text-rose-100';
+			} else if (type === 'success') {
+				upgradeStatus.className = 'mt-3 text-sm font-semibold text-emerald-200';
+			} else {
+				upgradeStatus.className = 'mt-3 text-sm font-semibold text-indigo-100';
+			}
+			upgradeStatus.textContent = message;
+		}
+
 		function setInventoryGateState() {
 			const isPremium = userTier === 'premium';
 			if (isPremium) {
@@ -380,6 +412,69 @@
 				inventoryBoard.classList.add('pointer-events-none', 'select-none', 'blur-sm', 'opacity-50');
 			}
 			return false;
+		}
+
+		async function submitInventoryUpgradeCode(event) {
+			event.preventDefault();
+			const activationCode = String(upgradeCodeInput?.value || '').trim();
+
+			if (!activationCode) {
+				setUpgradeStatus('يرجى إدخال كود الترقية أولاً.', 'error');
+				return;
+			}
+
+			if (!upgradeSubmitBtn) return;
+			upgradeSubmitBtn.disabled = true;
+			upgradeSubmitBtn.textContent = 'جاري التحقق...';
+			setUpgradeStatus('يتم التحقق من الكود مع الخادم الآن...', 'normal');
+
+			try {
+				const storedEmail = String(localStorage.getItem('user_email') || '').trim().toLowerCase();
+				const storedDoctorName = String(localStorage.getItem('doctor_name') || '').trim();
+
+				const response = await fetch(UPGRADE_ENDPOINT, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						activation_code: activationCode,
+						email: storedEmail || null,
+						doctor_name: storedDoctorName || null
+					})
+				});
+
+				let data = null;
+				try {
+					data = await response.json();
+				} catch (error) {
+					data = null;
+				}
+
+				if (!response.ok) {
+					const safeMessage = data?.detail || data?.message || 'تعذر تفعيل الترقية حالياً. تأكد من الكود ثم أعد المحاولة.';
+					setUpgradeStatus(safeMessage, 'error');
+					return;
+				}
+
+				// لا نحذف أي بيانات مخزون هنا -- الترقية تُحدّث الصلاحية فقط، والبيانات
+				// المحفوظة مسبقاً (إن وجدت) تبقى كما هي وتُعرض فور تحديث حالة البوابة.
+				localStorage.setItem('user_tier', 'premium');
+				if (data?.email) {
+					localStorage.setItem('user_email', String(data.email).toLowerCase());
+				}
+				userTier = 'premium';
+				renderTierBadge();
+				setUpgradeStatus('تم تفعيل Premium بنجاح. يتم تحديث المخزون الآن...', 'success');
+
+				const canUseInventory = setInventoryGateState();
+				if (canUseInventory) {
+					await loadInventoryItems();
+				}
+			} catch (error) {
+				setUpgradeStatus('تعذر الاتصال بالخادم أثناء محاولة الترقية.', 'error');
+			} finally {
+				upgradeSubmitBtn.disabled = false;
+				upgradeSubmitBtn.textContent = 'تفعيل الترقية الفورية';
+			}
 		}
 
 		function escapeHtml(value) {
@@ -550,6 +645,10 @@
 
 		if (inventoryForm) {
 			inventoryForm.addEventListener('submit', handleInventorySubmit);
+		}
+
+		if (upgradeForm) {
+			upgradeForm.addEventListener('submit', submitInventoryUpgradeCode);
 		}
 
 		window.addEventListener('DOMContentLoaded', async () => {

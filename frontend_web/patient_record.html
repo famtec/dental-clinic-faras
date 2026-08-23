@@ -788,6 +788,17 @@
 
     let currentPatient = null;
     let isEditing = false;
+
+    // Every /api/* route in this app now requires a doctor-identifying header
+    // (added in the 2026-08-22 activation/paywall audit). These two helpers are
+    // the single source of truth for that header on this page.
+    function getDoctorEmail() {
+      return (localStorage.getItem('user_email') || 'fareshalawi17@gmail.com').trim();
+    }
+
+    function getDoctorAuthHeaders(extraHeaders = {}) {
+      return { 'X-Doctor-Email': getDoctorEmail(), ...extraHeaders };
+    }
     const XRAY_API_BASE_URL = 'https://dental-clinic-faras.onrender.com';
     const APPOINTMENT_UPDATE_BASE_URL = window.DENTAL_APP_CONFIG?.apiBaseUrl || 'https://dental-clinic-faras.onrender.com';
     const APPOINTMENT_DELETE_BASE_URL = 'https://dental-clinic-faras.onrender.com';
@@ -1844,7 +1855,7 @@
       if (!patientId) return;
 
       try {
-        const response = await fetch(getPatientPrescriptionsEndpoint(patientId));
+        const response = await fetch(getPatientPrescriptionsEndpoint(patientId), { headers: getDoctorAuthHeaders() });
         if (!response.ok) {
           throw new Error('Failed to load prescriptions');
         }
@@ -1879,7 +1890,7 @@
       try {
         const response = await fetch(getPrescriptionCreateEndpoint(), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({
             patient_id: Number(patientId),
             medications,
@@ -2126,7 +2137,7 @@
         const chartPayload = buildPalmerChartPayload(currentChartState);
         const response = await fetch(apiUrl(`/api/patients/${patientId}/chart`), {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({ chart_state: chartPayload }),
         });
 
@@ -2414,7 +2425,7 @@
       }
 
       try {
-        const response = await fetch(apiUrl('/api/appointments'));
+        const response = await fetch(apiUrl('/api/appointments'), { headers: getDoctorAuthHeaders() });
         if (!response.ok) {
           throw new Error('Failed to load appointments');
         }
@@ -2469,7 +2480,7 @@
       try {
         const response = await fetch(getAppointmentUpdateEndpoint(activeAppointment.id), {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({
             appointment_date: appointmentDateTime.toISOString(),
             appointment_time: selectedTime,
@@ -2536,7 +2547,7 @@
       try {
         const response = await fetch(getAppointmentCreateEndpoint(), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({
             patient_id: patientId,
             patient_name: currentPatient?.full_name || '',
@@ -2570,6 +2581,7 @@
     async function deleteAppointmentById(appointmentId) {
       const response = await fetch(getAppointmentDeleteEndpoint(appointmentId), {
         method: 'DELETE',
+        headers: getDoctorAuthHeaders(),
       });
 
       if (!response.ok) {
@@ -2597,6 +2609,7 @@
     async function deleteFinanceTransactionById(transactionId) {
       const response = await fetch(getFinanceTransactionDeleteEndpoint(transactionId), {
         method: 'DELETE',
+        headers: getDoctorAuthHeaders(),
       });
 
       if (!response.ok) {
@@ -2951,7 +2964,7 @@
       try {
         const response = await fetch(getFinanceTransactionUpdateEndpoint(activeFinanceTransaction.id), {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({
             amount: parsedAmount,
             description: descriptionValue,
@@ -3004,7 +3017,7 @@
       if (!patientId) return;
 
       try {
-        const response = await fetch(getFinanceLedgerEndpoint(patientId));
+        const response = await fetch(getFinanceLedgerEndpoint(patientId), { headers: getDoctorAuthHeaders() });
         if (!response.ok) {
           throw new Error('Failed to load finance ledger');
         }
@@ -3067,7 +3080,7 @@
       if (!patientId) return;
 
       try {
-        const response = await fetch(getArchiveEndpoint(patientId));
+        const response = await fetch(getArchiveEndpoint(patientId), { headers: getDoctorAuthHeaders() });
         if (!response.ok) {
           throw new Error('Failed to load xray gallery');
         }
@@ -3089,6 +3102,7 @@
 
       const response = await fetch(getArchiveEndpoint(patientId), {
         method: 'POST',
+        headers: getDoctorAuthHeaders(),
         body: uploadFormData,
       });
 
@@ -3145,7 +3159,7 @@
       try {
         const response = await fetch(getFinancePaymentEndpoint(), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify(payload)
         });
 
@@ -3298,7 +3312,7 @@
       try {
         const response = await fetch(apiUrl(`/api/patients/${patientId}`), {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify(payload)
         });
 
@@ -3359,7 +3373,7 @@
       }
 
       try {
-        const response = await fetch('/api/patients/' + patientId);
+        const response = await fetch(apiUrl('/api/patients/' + patientId), { headers: getDoctorAuthHeaders() });
         if (!response.ok) {
           const errorText = await response.text();
           let errorDetail = '';

@@ -506,6 +506,32 @@ class UpgradeTierRequest(BaseModel):
 
 def ensure_user_subscription_is_active(user: models.User, db: Session | None = None) -> None:
     now = datetime.utcnow()
+
+    # 🔒 سد ثغرة "الحساب الوهمي المفعّل": أي حساب تحمل قيمة tier فيه شكل
+    # باقة نشطة (standard/premium) لكن لم يمرّ إطلاقاً بمسار دفع حقيقي
+    # (كل مسارات الدفع الحقيقية -- /api/auth/register و /api/activate و
+    # /api/auth/upgrade-tier -- تضبط subscription_expires_at دائماً لتاريخ
+    # مستقبلي حقيقي) يُعامل كأنه لم يُفعّل إطلاقاً، بصرف النظر عن قيمة tier
+    # المخزّنة. هذا يغلق تلقائياً أي حساب قديم تسرّب بباقة مجانية قبل
+    # إصلاح هذه الثغرة (مثال: حسابات Google القديمة التي كانت تُنشأ قبل
+    # إجبار tier="pending_activation" على الحسابات الجديدة).
+    normalized_tier_check = (user.tier or "").strip().lower()
+    if normalized_tier_check in ("standard", "premium") and user.subscription_expires_at is None:
+        if (user.tier or "").strip().lower() != "pending_activation" or user.is_active:
+            user.tier = "pending_activation"
+            user.is_active = False
+            if db is not None:
+                try:
+                    db.commit()
+                    db.refresh(user)
+                except Exception:
+                    db.rollback()
+
+        raise HTTPException(
+            status_code=402,
+            detail="حسابك بانتظار التفعيل. يرجى إدخال كود تفعيل صالح عبر /api/activate قبل استخدام هذه الميزة.",
+        )
+
     subscription_expired = (
         user.subscription_expires_at is not None
         and user.subscription_expires_at < now
@@ -709,13 +735,19 @@ def login_user(login_request: LoginRequest, db: Session = Depends(database.get_d
     # ملاحظة: إذا كنت تستخدم التشفير استبدل هذا بالدالة المعتمدة لديك، وإلا فالنص المباشر هو الحاسم:
     if user.hashed_password != login_request.password:
         raise HTTPException(status_code=401, detail="البريد الإلكتروني أو كلمة المرور غير صحيحة!")
-        
+
+    # 3ب. نفس حارس الاشتراك المستخدم في مسار Google -- كان مسار تسجيل
+    # الدخول اليدوي هذا يرجع نجاح لأي حساب مطابق كلمة المرور مهما كانت
+    # حالة اشتراكه، مما كان يُمكّن أي حساب قديم/غير مفعّل من الدخول طالما
+    # يعرف كلمة المرور فقط.
+    ensure_user_subscription_is_active(user, db)
+
     try:
         # 4. العبور المحاسبي الآمن وإرجاع قاموس JSON صافي ومطابق 100% للـ Frontend
         return {
             "status": "success",
             "email": user.email,
-            "tier": user.tier or "standard"
+            "tier": user.tier or "pending_activation"
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"خطأ في معالجة الجلسة السحابية: {e}")
@@ -794,7 +826,7 @@ def google_login(google_request: GoogleLoginRequest, db: Session = Depends(datab
         token="secure-session-token",
         doctor_name=user.doctor_name,
         email=user.email,
-        tier=user.tier or "standard",
+        tier=user.tier or "pending_activation",
         subscription_active=True,
     )
 

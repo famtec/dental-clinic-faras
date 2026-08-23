@@ -11,7 +11,10 @@ class User(Base):
     doctor_name = Column(String, nullable=True)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
-    tier = Column(String, default="standard", nullable=False)
+    # افتراضي آمن: أي مستخدم يُنشأ دون تحديد صريح لقيمة tier (سواء في مسار حالي
+    # لم يمرّ عليه المراجعة، أو مسار جديد يُضاف لاحقاً وينسى تمرير tier=...) يجب أن
+    # يبدأ بلا أي صلاحية مدفوعة، وليس بباقة "standard" مجانية ضمنياً.
+    tier = Column(String, default="pending_activation", nullable=False)
     subscription_expires_at = Column(DateTime, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
 
