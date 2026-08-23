@@ -72,7 +72,7 @@
     <header class="fixed inset-x-0 top-0 z-50 w-full border-b border-white/15 bg-[#1e1b4b]/85 shadow-2xl shadow-indigo-950/35 backdrop-blur-2xl md:block hidden">
       <div class="mx-auto flex w-full max-w-none flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8 xl:px-10">
         <div class="flex items-center gap-3 text-white">
-          <img src="logo.png" alt="شعار العيادة" class="h-12 w-12 rounded-xl border border-white/10 bg-white/10 object-contain p-2 shadow-lg shadow-indigo-950/25" />
+          <img id="clinicLogoImg" src="logo.png" alt="شعار العيادة" class="h-12 w-12 rounded-xl border border-white/10 bg-white/10 object-contain p-2 shadow-lg shadow-indigo-950/25" />
           <div class="flex items-center gap-3">
             <p id="clinicTitle" class="text-lg font-extrabold tracking-tight text-white sm:text-xl">عيادة الطبيب</p>
             <span id="tierBadge" class="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Standard</span>
@@ -85,6 +85,7 @@
           <a href="finance.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]">📊 التقارير المالية</a>
           <a href="inventory.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]">📦 مخزن المواد</a>
           <a href="contact_developer.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]">🛠️ تواصل مع المطور</a>
+          <a href="profile.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]">👤 حسابي</a>
           <button id="backupBtn" type="button" class="rounded-2xl border border-cyan-300/30 bg-cyan-500/15 px-4 py-2 text-sm font-extrabold text-cyan-50 shadow-[0_0_24px_rgba(34,211,238,0.14)] transition hover:-translate-y-0.5 hover:border-cyan-200/50 hover:bg-cyan-400/20 hover:shadow-[0_0_28px_rgba(34,211,238,0.26)]">نسخة احتياطية 💾</button>
           <button id="logoutBtn" type="button" class="rounded-2xl border border-rose-300/30 bg-rose-500/15 px-4 py-2 text-sm font-bold text-rose-100 transition hover:-translate-y-0.5 hover:border-rose-200/50 hover:bg-rose-500/25 hover:shadow-[0_0_24px_rgba(244,63,94,0.18)]">⎋ تسجيل الخروج</button>
         </div>
@@ -94,7 +95,7 @@
     <div class="fixed inset-x-0 top-0 z-[60] border-b border-white/15 bg-[#1e1b4b]/90 shadow-2xl shadow-indigo-950/35 backdrop-blur-2xl md:hidden">
       <div class="relative mx-auto flex w-full max-w-none items-center justify-between gap-3 px-4 py-3 sm:px-6">
         <div class="flex min-w-0 items-center gap-3 text-white">
-          <img src="logo.png" alt="شعار العيادة" class="h-10 w-10 rounded-xl border border-white/10 bg-white/10 object-contain p-1.5 shadow-lg shadow-indigo-950/25" />
+          <img id="mobileClinicLogoImg" src="logo.png" alt="شعار العيادة" class="h-10 w-10 rounded-xl border border-white/10 bg-white/10 object-contain p-1.5 shadow-lg shadow-indigo-950/25" />
           <div class="min-w-0">
             <div class="flex min-w-0 items-center gap-2">
               <p id="mobileClinicTitle" class="truncate text-sm font-extrabold tracking-tight text-white">عيادة الطبيب</p>
@@ -118,6 +119,7 @@
             <a href="finance.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">📊 التقارير المالية</a>
             <a href="inventory.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">📦 مخزن المواد</a>
             <a href="contact_developer.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">🛠️ تواصل مع المطور</a>
+            <a href="profile.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">👤 حسابي</a>
             <button id="mobileLogoutBtn" type="button" class="rounded-2xl border border-rose-300/30 bg-rose-500/15 px-4 py-3 text-right text-sm font-bold text-rose-100 transition hover:bg-rose-500/25">⎋ تسجيل الخروج</button>
           </div>
         </div>
@@ -3568,6 +3570,19 @@
     // ملاحظة: تمت إزالة الفحص المكرر الذي كان هنا -- أصبح الحظر يحدث الآن
     // فوراً في أعلى هذا السكربت (انظر تعريف userTier بالأعلى).
 
-  </script>
+  
+  function applyDoctorAvatarToHeaderLogo() {
+    const avatarUrl = localStorage.getItem('user_avatar_url');
+    const logoTargets = [document.getElementById('clinicLogoImg'), document.getElementById('mobileClinicLogoImg')].filter(Boolean);
+    if (!avatarUrl) return;
+    logoTargets.forEach((img) => {
+      img.src = window.apiUrl ? apiUrl(avatarUrl) : avatarUrl;
+      img.classList.remove('object-contain', 'p-2', 'p-1.5', 'rounded-xl');
+      img.classList.add('object-cover', 'rounded-full');
+    });
+  }
+
+  applyDoctorAvatarToHeaderLogo();
+</script>
 </body>
 </html>

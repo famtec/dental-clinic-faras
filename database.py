@@ -78,6 +78,25 @@ def init_db():
                 with engine.begin() as connection:
                     connection.execute(text("ALTER TABLE patient_xrays ADD COLUMN file_type VARCHAR"))
 
+    # ترحيل أعمدة صفحة "حسابي" (بيانات الطبيب/العيادة) -- يُنفَّذ بلا شرط نوع
+    # قاعدة البيانات (خلافاً لكتلة SQLite أعلاه) لأن بيئة الإنتاج الحقيقية على
+    # Render تستخدم Supabase Postgres وليس SQLite، و create_all() وحدها لا تُضيف
+    # أعمدة لجدول users الموجود مسبقاً. صياغة ALTER TABLE ADD COLUMN مدعومة في
+    # كل من SQLite وPostgres، والفحص المسبق عبر inspector يجعل العملية آمنة
+    # للتكرار (idempotent) في كلتا الحالتين.
+    inspector = inspect(engine)
+    if "users" in inspector.get_table_names():
+        user_columns = {column["name"] for column in inspector.get_columns("users")}
+        if "clinic_name" not in user_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN clinic_name VARCHAR"))
+        if "clinic_address" not in user_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN clinic_address VARCHAR"))
+        if "avatar_url" not in user_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN avatar_url VARCHAR"))
+
 
 def get_db():
     db = SessionLocal()

@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>حسابي - عيادتي الرقمية</title>
+	<script src="https://cdn.tailwindcss.com"></script>
+	<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
+	<style>
+		body { font-family: 'Tajawal', sans-serif; }
+		.panel-soft {
+			background: rgba(255, 255, 255, 0.92);
+			backdrop-filter: blur(12px);
+		}
+		.badge-premium {
+			background: linear-gradient(130deg, #fef08a 0%, #f59e0b 45%, #fde68a 100%);
+			color: #5b3400;
+			box-shadow: 0 8px 28px rgba(245, 158, 11, 0.45);
+		}
+		.badge-standard {
+			background: linear-gradient(130deg, #4338ca 0%, #6366f1 100%);
+			color: #e0e7ff;
+			box-shadow: 0 8px 22px rgba(67, 56, 202, 0.35);
+		}
+		.avatar-edit-btn {
+			opacity: 0;
+			transform: scale(0.85);
+			transition: opacity 0.2s ease, transform 0.2s ease;
+		}
+		.avatar-shell:hover .avatar-edit-btn,
+		.avatar-shell:focus-within .avatar-edit-btn {
+			opacity: 1;
+			transform: scale(1);
+		}
+		/* الأجهزة التي لا تدعم hover (لمس) -- الرمز يبقى ظاهراً دوماً بدل انتظار تمرير لا يحدث أبداً */
+		@media (hover: none) {
+			.avatar-edit-btn {
+				opacity: 1;
+				transform: scale(1);
+			}
+		}
+		.eye-toggle-btn svg { pointer-events: none; }
+	</style>
+</head>
+<body class="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.22),_transparent_30%),linear-gradient(135deg,_#f8fafc_0%,_#eef2ff_45%,_#e0e7ff_100%)] text-slate-800 transition-opacity duration-300">
+	<div class="pointer-events-none absolute inset-0 overflow-hidden">
+		<div class="absolute right-[10%] top-16 h-40 w-40 rounded-full bg-indigo-200/30 blur-3xl"></div>
+		<div class="absolute left-[6%] top-[22%] h-56 w-56 rounded-full bg-violet-200/20 blur-3xl"></div>
+	</div>
+
+	<div id="profileApp" class="relative flex min-h-screen w-full flex-col overflow-x-hidden px-4 pt-24 pb-6 sm:px-6 sm:pt-32 md:pt-32 lg:px-8 lg:pt-32 xl:px-10">
+		<header class="fixed inset-x-0 top-0 z-50 hidden w-full border-b border-white/15 bg-[#1e1b4b]/85 shadow-2xl shadow-indigo-950/35 backdrop-blur-2xl md:block">
+			<div class="mx-auto flex w-full max-w-none flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8 xl:px-10">
+				<div class="flex items-center gap-3 text-white">
+					<img id="clinicLogoImg" src="logo.png" alt="شعار العيادة" class="h-12 w-12 rounded-xl border border-white/10 bg-white/10 object-contain p-2 shadow-lg shadow-indigo-950/25" />
+					<div class="flex items-center gap-3">
+						<h1 id="clinicTitle" class="text-lg font-extrabold tracking-tight text-white sm:text-xl">عيادة الطبيب</h1>
+						<span id="tierBadge" class="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Standard</span>
+					</div>
+				</div>
+
+				<div class="flex flex-wrap items-center gap-2 lg:flex-1 lg:justify-center">
+					<a href="index.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]">👥 لوحة المرضى</a>
+					<a href="appointments.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]">📅 المواعيد اليومية</a>
+					<a href="finance.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]">📊 التقارير المالية</a>
+					<a href="inventory.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]">📦 مخزن المواد</a>
+					<a href="contact_developer.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]">🛠️ تواصل مع المطور</a>
+					<a href="profile.html" class="rounded-2xl border border-cyan-300/30 bg-cyan-500/15 px-4 py-2 text-sm font-extrabold text-cyan-50 shadow-[0_0_24px_rgba(34,211,238,0.14)] transition hover:-translate-y-0.5 hover:border-cyan-200/50 hover:bg-cyan-400/20 hover:shadow-[0_0_28px_rgba(34,211,238,0.26)]">👤 حسابي</a>
+					<button id="logoutBtn" type="button" class="rounded-2xl border border-rose-300/30 bg-rose-500/15 px-4 py-2 text-sm font-bold text-rose-100 transition hover:-translate-y-0.5 hover:border-rose-200/50 hover:bg-rose-500/25 hover:shadow-[0_0_24px_rgba(244,63,94,0.18)]">⎋ تسجيل الخروج</button>
+				</div>
+			</div>
+		</header>
+
+		<div class="fixed inset-x-0 top-0 z-[60] border-b border-white/15 bg-[#1e1b4b]/90 shadow-2xl shadow-indigo-950/35 backdrop-blur-2xl md:hidden">
+			<div class="relative mx-auto flex w-full max-w-none items-center justify-between gap-3 px-4 py-3 sm:px-6">
+				<div class="flex min-w-0 items-center gap-3 text-white">
+					<img id="mobileClinicLogoImg" src="logo.png" alt="شعار العيادة" class="h-10 w-10 rounded-xl border border-white/10 bg-white/10 object-contain p-1.5 shadow-lg shadow-indigo-950/25" />
+					<div class="min-w-0">
+						<div class="flex min-w-0 items-center gap-2">
+							<p id="mobileClinicTitle" class="truncate text-sm font-extrabold tracking-tight text-white">عيادة الطبيب</p>
+							<span id="mobileTierBadge" class="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[11px] font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Standard</span>
+						</div>
+					</div>
+				</div>
+
+				<button id="mobileMenuToggle" type="button" class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white shadow-lg shadow-indigo-950/20 transition hover:bg-white/15" aria-expanded="false" aria-controls="mobileMenuDropdown">
+					<svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+						<path d="M4 7h16"></path>
+						<path d="M4 12h16"></path>
+						<path d="M4 17h16"></path>
+					</svg>
+				</button>
+
+				<div id="mobileMenuDropdown" class="absolute left-0 right-0 top-full hidden border-t border-white/10 bg-[#1e1b4b] px-4 py-3 shadow-2xl shadow-indigo-950/35 md:hidden">
+					<div class="mx-auto flex w-full max-w-none flex-col gap-2 sm:px-2">
+						<a href="index.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">👥 لوحة المرضى</a>
+						<a href="appointments.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">📅 المواعيد اليومية</a>
+						<a href="finance.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">📊 التقارير المالية</a>
+						<a href="inventory.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">📦 مخزن المواد</a>
+						<a href="contact_developer.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">🛠️ تواصل مع المطور</a>
+						<a href="profile.html" class="rounded-2xl border border-cyan-300/30 bg-cyan-500/15 px-4 py-3 text-sm font-extrabold text-cyan-50 shadow-[0_0_24px_rgba(34,211,238,0.16)] transition hover:bg-cyan-400/20">👤 حسابي</a>
+						<button id="mobileLogoutBtn" type="button" class="rounded-2xl border border-rose-300/30 bg-rose-500/15 px-4 py-3 text-right text-sm font-bold text-rose-100 transition hover:bg-rose-500/25">⎋ تسجيل الخروج</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<main class="min-w-0 flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8 xl:p-10">
+			<div class="mx-auto w-full max-w-4xl space-y-6">
+
+				<section class="panel-soft rounded-[28px] border border-white/70 p-6 shadow-xl shadow-slate-200/70 sm:p-8">
+					<div class="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-center sm:text-right">
+						<div class="avatar-shell group relative mx-auto h-28 w-28 shrink-0 sm:mx-0 sm:h-32 sm:w-32">
+							<div id="avatarCircle" class="flex h-full w-full cursor-pointer items-center justify-center overflow-hidden rounded-full border-4 border-white bg-gradient-to-br from-indigo-500 via-violet-500 to-cyan-500 text-5xl shadow-xl shadow-indigo-300/40 sm:text-6xl">
+								<img id="avatarImage" alt="صورة الحساب" class="hidden h-full w-full object-cover" />
+								<span id="avatarPlaceholder">🦷</span>
+							</div>
+							<button id="avatarEditBtn" type="button" title="تغيير صورة الحساب" class="avatar-edit-btn absolute -bottom-1 -left-1 inline-flex h-10 w-10 items-center justify-center rounded-full border-2 border-white bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-900/30 transition hover:from-indigo-700 hover:to-violet-700">
+								<svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<path d="M4 20h4l10.5-10.5a2.121 2.121 0 0 0-3-3L5 17v3Z"></path>
+									<path d="M13.5 6.5l3 3"></path>
+								</svg>
+							</button>
+							<input id="avatarFileInput" type="file" accept="image/png,image/jpeg,image/webp" class="hidden" />
+						</div>
+
+						<div class="min-w-0 flex-1">
+							<div class="inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-bold tracking-[0.22em] text-indigo-700">حسابي</div>
+							<h2 id="profileNameHeading" class="mt-3 truncate text-2xl font-extrabold text-slate-800 sm:text-3xl">د. الطبيب</h2>
+							<p id="profileEmailSub" class="mt-1 truncate text-sm text-slate-500">example@email.com</p>
+							<div class="mt-3 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+								<span id="statusBadgeInline" class="badge-standard rounded-full px-3 py-1 text-xs font-black tracking-wide">Standard</span>
+								<span id="statusDetailBadge" class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-500">جاري التحميل...</span>
+							</div>
+						</div>
+					</div>
+				</section>
+
+				<section class="panel-soft rounded-[28px] border border-white/70 bg-white/90 p-4 shadow-xl shadow-slate-200/70 sm:p-6">
+					<div class="mb-5">
+						<h3 class="text-xl font-bold text-indigo-900">بيانات الحساب والعيادة</h3>
+						<p class="mt-1 text-sm text-slate-500">عدّل بياناتك الشخصية وبيانات عيادتك، ثم احفظ التعديلات.</p>
+					</div>
+
+					<form id="profileForm" class="grid gap-4 md:grid-cols-2">
+						<label class="block md:col-span-1">
+							<span class="mb-2 block text-sm font-semibold text-slate-700">اسم الطبيب</span>
+							<div class="flex items-stretch overflow-hidden rounded-2xl border border-slate-300 bg-white transition focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-100">
+								<span class="flex items-center justify-center border-l border-slate-200 bg-indigo-50 px-4 text-sm font-extrabold text-indigo-700">د.</span>
+								<input id="doctorNameInput" type="text" required placeholder="اسم الطبيب" class="w-full bg-transparent px-4 py-3 text-sm outline-none" />
+							</div>
+						</label>
+
+						<label class="block md:col-span-1">
+							<span class="mb-2 block text-sm font-semibold text-slate-700">البريد الإلكتروني (حساب الدخول)</span>
+							<input id="emailInput" type="email" required placeholder="example@email.com" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
+						</label>
+
+						<label class="block md:col-span-1">
+							<span class="mb-2 block text-sm font-semibold text-slate-700">كلمة السر</span>
+							<div class="relative">
+								<input id="passwordInput" type="password" required placeholder="كلمة السر" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 pl-12 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
+								<button id="togglePasswordBtn" type="button" title="إظهار/إخفاء كلمة السر" class="eye-toggle-btn absolute inset-y-0 left-0 flex w-11 items-center justify-center text-slate-400 transition hover:text-indigo-600">
+									<svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<path d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12Z"></path>
+										<circle cx="12" cy="12" r="3"></circle>
+									</svg>
+								</button>
+							</div>
+						</label>
+
+						<label class="block md:col-span-1">
+							<span class="mb-2 block text-sm font-semibold text-slate-700">اسم العيادة</span>
+							<input id="clinicNameInput" type="text" placeholder="مثال: عيادة الابتسامة الرقمية" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
+						</label>
+
+						<label class="block md:col-span-2">
+							<span class="mb-2 block text-sm font-semibold text-slate-700">عنوان العيادة</span>
+							<input id="clinicAddressInput" type="text" placeholder="مثال: دمشق - المزة - شارع الجلاء" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
+						</label>
+
+						<div class="md:col-span-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+							<p id="profileStatusMsg" class="text-sm font-medium text-slate-500">جاري تحميل بيانات حسابك...</p>
+							<button id="saveProfileBtn" type="submit" class="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700">
+								حفظ التعديلات
+							</button>
+						</div>
+					</form>
+				</section>
+			</div>
+
+			<footer class="mt-8 text-center text-xs font-mono tracking-wide text-indigo-500/90">
+				تطوير وإدارة: المهندس فارس حلاوي © 2026
+			</footer>
+		</main>
+	</div>
+
+	<script src="api-config.js"></script>
+	<script>
+		let userTier = localStorage.getItem("user_tier");
+		if (userTier === 'pending_activation') {
+			// صفحة "حسابي" مستثناة عمداً من الحظر الفوري: حساب لم يُفعَّل بعد يجب أن
+			// يبقى قادراً على مراجعة/تعديل بريده وكلمة سره من هنا، بخلاف باقي الصفحات.
+		}
+
+		function getDoctorEmail() {
+			return localStorage.getItem('user_email') || 'fareshalawi17@gmail.com';
+		}
+
+		function getDoctorAuthHeaders(extraHeaders = {}) {
+			return { 'X-Doctor-Email': getDoctorEmail(), ...extraHeaders };
+		}
+
+		const doctorName = localStorage.getItem('doctor_name') || localStorage.getItem('user_name');
+		const titleElement = document.getElementById('clinicTitle');
+		const mobileTitleElement = document.getElementById('mobileClinicTitle');
+		const tierBadge = document.getElementById('tierBadge');
+		const mobileTierBadge = document.getElementById('mobileTierBadge');
+		const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+		const mobileMenuDropdown = document.getElementById('mobileMenuDropdown');
+		const mobileLogoutBtn = document.getElementById('mobileLogoutBtn');
+		const logoutBtn = document.getElementById('logoutBtn');
+
+		const avatarCircle = document.getElementById('avatarCircle');
+		const avatarImage = document.getElementById('avatarImage');
+		const avatarPlaceholder = document.getElementById('avatarPlaceholder');
+		const avatarEditBtn = document.getElementById('avatarEditBtn');
+		const avatarFileInput = document.getElementById('avatarFileInput');
+
+		const profileNameHeading = document.getElementById('profileNameHeading');
+		const profileEmailSub = document.getElementById('profileEmailSub');
+		const statusBadgeInline = document.getElementById('statusBadgeInline');
+		const statusDetailBadge = document.getElementById('statusDetailBadge');
+
+		const profileForm = document.getElementById('profileForm');
+		const doctorNameInput = document.getElementById('doctorNameInput');
+		const emailInput = document.getElementById('emailInput');
+		const passwordInput = document.getElementById('passwordInput');
+		const togglePasswordBtn = document.getElementById('togglePasswordBtn');
+		const clinicNameInput = document.getElementById('clinicNameInput');
+		const clinicAddressInput = document.getElementById('clinicAddressInput');
+		const profileStatusMsg = document.getElementById('profileStatusMsg');
+		const saveProfileBtn = document.getElementById('saveProfileBtn');
+
+		function showToast(message) {
+			const existingToast = document.getElementById('profileToast');
+			if (existingToast) existingToast.remove();
+
+			const toast = document.createElement('div');
+			toast.id = 'profileToast';
+			toast.className = 'fixed left-1/2 top-5 z-[70] -translate-x-1/2 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3 text-sm font-semibold text-white shadow-lg';
+			toast.textContent = message;
+			document.body.appendChild(toast);
+
+			setTimeout(() => toast.remove(), 2600);
+		}
+
+		function renderTierBadge(tier) {
+			const isPremium = (tier || '').toLowerCase() === 'premium';
+			const label = isPremium ? 'Premium 👑' : 'Standard';
+			const sharedClass = isPremium ? 'badge-premium' : 'badge-standard';
+
+			if (tierBadge) {
+				tierBadge.className = `${sharedClass} rounded-full px-3 py-1 text-xs font-extrabold tracking-wide`;
+				tierBadge.textContent = label;
+			}
+			if (mobileTierBadge) {
+				mobileTierBadge.className = `${sharedClass} shrink-0 rounded-full px-2 py-1 text-[11px] font-extrabold tracking-wide`;
+				mobileTierBadge.textContent = label;
+			}
+			if (statusBadgeInline) {
+				statusBadgeInline.className = `${sharedClass} rounded-full px-3 py-1 text-xs font-black tracking-wide`;
+				statusBadgeInline.textContent = label;
+			}
+		}
+
+		function renderStatusDetail(profile) {
+			if (!statusDetailBadge) return;
+
+			if (!profile.is_active) {
+				statusDetailBadge.textContent = 'الحساب غير مُفعَّل';
+				statusDetailBadge.className = 'rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600';
+				return;
+			}
+
+			if (!profile.subscription_active) {
+				statusDetailBadge.textContent = 'انتهت صلاحية الباقة';
+				statusDetailBadge.className = 'rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-600';
+				return;
+			}
+
+			if (profile.subscription_expires_at) {
+				const expiryDate = new Date(profile.subscription_expires_at);
+				const formatted = Number.isNaN(expiryDate.getTime()) ? '' : expiryDate.toLocaleDateString('ar-EG');
+				statusDetailBadge.textContent = formatted ? `الباقة سارية حتى ${formatted}` : 'الباقة سارية';
+			} else {
+				statusDetailBadge.textContent = 'الباقة سارية';
+			}
+			statusDetailBadge.className = 'rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600';
+		}
+
+		function renderAvatar(avatarUrl) {
+			if (avatarUrl && avatarImage) {
+				avatarImage.src = window.apiUrl ? apiUrl(avatarUrl) : avatarUrl;
+				avatarImage.classList.remove('hidden');
+				if (avatarPlaceholder) avatarPlaceholder.classList.add('hidden');
+			} else {
+				if (avatarImage) avatarImage.classList.add('hidden');
+				if (avatarPlaceholder) avatarPlaceholder.classList.remove('hidden');
+			}
+		}
+
+		function applyProfile(profile) {
+			const displayName = (profile.doctor_name || '').trim();
+			doctorNameInput.value = displayName;
+			emailInput.value = profile.email || '';
+			passwordInput.value = profile.password || '';
+			clinicNameInput.value = profile.clinic_name || '';
+			clinicAddressInput.value = profile.clinic_address || '';
+
+			profileNameHeading.textContent = displayName ? `د. ${displayName}` : 'د. الطبيب';
+			profileEmailSub.textContent = profile.email || '';
+
+			if (titleElement) titleElement.textContent = displayName ? `عيادة ${displayName}` : 'عيادة الطبيب المعتمد';
+			if (mobileTitleElement) mobileTitleElement.textContent = displayName ? `عيادة ${displayName}` : 'عيادة الطبيب المعتمد';
+
+			renderTierBadge(profile.tier);
+			renderStatusDetail(profile);
+			renderAvatar(profile.avatar_url);
+
+			localStorage.setItem('doctor_name', displayName);
+			localStorage.setItem('user_email', profile.email || getDoctorEmail());
+			localStorage.setItem('user_tier', profile.tier || 'standard');
+			if (profile.avatar_url) {
+				localStorage.setItem('user_avatar_url', profile.avatar_url);
+			} else {
+				localStorage.removeItem('user_avatar_url');
+			}
+			applyDoctorAvatarToHeaderLogo();
+		}
+
+		async function loadProfile() {
+			profileStatusMsg.textContent = 'جاري تحميل بيانات حسابك...';
+			try {
+				const response = await fetch(apiUrl('/api/auth/profile'), {
+					headers: getDoctorAuthHeaders(),
+				});
+				const data = await response.json().catch(() => ({}));
+
+				if (!response.ok) {
+					profileStatusMsg.textContent = `تعذر تحميل بيانات الحساب: ${data.detail || response.status}`;
+					return;
+				}
+
+				applyProfile(data);
+				profileStatusMsg.textContent = 'بياناتك محدّثة. عدّل ما تشاء ثم احفظ.';
+			} catch (error) {
+				profileStatusMsg.textContent = 'تعذر الاتصال بالخادم. تحقق من اتصالك بالإنترنت.';
+			}
+		}
+
+		profileForm.addEventListener('submit', async (event) => {
+			event.preventDefault();
+
+			const payload = {
+				doctor_name: doctorNameInput.value.trim(),
+				email: emailInput.value.trim(),
+				password: passwordInput.value,
+				clinic_name: clinicNameInput.value.trim(),
+				clinic_address: clinicAddressInput.value.trim(),
+			};
+
+			if (!payload.doctor_name || !payload.email || !payload.password) {
+				profileStatusMsg.textContent = 'اسم الطبيب والبريد الإلكتروني وكلمة السر حقول مطلوبة.';
+				return;
+			}
+
+			saveProfileBtn.disabled = true;
+			saveProfileBtn.classList.add('opacity-60');
+			profileStatusMsg.textContent = 'جاري حفظ التعديلات...';
+
+			try {
+				const response = await fetch(apiUrl('/api/auth/profile'), {
+					method: 'PUT',
+					headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
+					body: JSON.stringify(payload),
+				});
+				const data = await response.json().catch(() => ({}));
+
+				if (!response.ok) {
+					profileStatusMsg.textContent = `تعذر حفظ التعديلات: ${data.detail || response.status}`;
+					return;
+				}
+
+				applyProfile(data);
+				profileStatusMsg.textContent = 'تم حفظ التعديلات بنجاح.';
+				showToast('تم حفظ بيانات حسابك بنجاح ✅');
+			} catch (error) {
+				profileStatusMsg.textContent = 'تعذر الاتصال بالخادم. حاول مرة أخرى.';
+			} finally {
+				saveProfileBtn.disabled = false;
+				saveProfileBtn.classList.remove('opacity-60');
+			}
+		});
+
+		function openAvatarPicker() {
+			avatarFileInput.click();
+		}
+
+		if (avatarEditBtn) avatarEditBtn.addEventListener('click', openAvatarPicker);
+		if (avatarCircle) avatarCircle.addEventListener('click', openAvatarPicker);
+
+		avatarFileInput.addEventListener('change', async () => {
+			const file = avatarFileInput.files && avatarFileInput.files[0];
+			if (!file) return;
+
+			const formData = new FormData();
+			formData.append('file', file);
+
+			profileStatusMsg.textContent = 'جاري رفع صورة الحساب...';
+			try {
+				const response = await fetch(apiUrl('/api/auth/avatar'), {
+					method: 'POST',
+					headers: getDoctorAuthHeaders(),
+					body: formData,
+				});
+				const data = await response.json().catch(() => ({}));
+
+				if (!response.ok) {
+					profileStatusMsg.textContent = `تعذر رفع الصورة: ${data.detail || response.status}`;
+					return;
+				}
+
+				renderAvatar(data.avatar_url);
+				if (data.avatar_url) {
+					localStorage.setItem('user_avatar_url', data.avatar_url);
+				}
+				applyDoctorAvatarToHeaderLogo();
+				profileStatusMsg.textContent = 'تم تحديث صورة الحساب بنجاح.';
+				showToast('تم تحديث صورة الحساب 🦷');
+			} catch (error) {
+				profileStatusMsg.textContent = 'تعذر رفع الصورة. تحقق من اتصالك بالإنترنت.';
+			} finally {
+				avatarFileInput.value = '';
+			}
+		});
+
+		if (togglePasswordBtn) {
+			togglePasswordBtn.addEventListener('click', () => {
+				const isHidden = passwordInput.type === 'password';
+				passwordInput.type = isHidden ? 'text' : 'password';
+			});
+		}
+
+		function handleLogout() {
+			localStorage.clear();
+			window.location.href = 'login.html';
+		}
+
+		if (mobileMenuToggle && mobileMenuDropdown) {
+			mobileMenuToggle.addEventListener('click', () => {
+				const isHidden = mobileMenuDropdown.classList.contains('hidden');
+				mobileMenuDropdown.classList.toggle('hidden');
+				mobileMenuToggle.setAttribute('aria-expanded', String(isHidden));
+			});
+		}
+
+		if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
+		if (mobileLogoutBtn) mobileLogoutBtn.addEventListener('click', handleLogout);
+
+		if (titleElement) titleElement.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادة الطبيب المعتمد';
+		if (mobileTitleElement) mobileTitleElement.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادة الطبيب المعتمد';
+
+		loadProfile();
+	
+	function applyDoctorAvatarToHeaderLogo() {
+		const avatarUrl = localStorage.getItem('user_avatar_url');
+		const logoTargets = [document.getElementById('clinicLogoImg'), document.getElementById('mobileClinicLogoImg')].filter(Boolean);
+		if (!avatarUrl) return;
+		logoTargets.forEach((img) => {
+			img.src = window.apiUrl ? apiUrl(avatarUrl) : avatarUrl;
+			img.classList.remove('object-contain', 'p-2', 'p-1.5', 'rounded-xl');
+			img.classList.add('object-cover', 'rounded-full');
+		});
+	}
+
+	applyDoctorAvatarToHeaderLogo();
+</script>
+</body>
+</html>

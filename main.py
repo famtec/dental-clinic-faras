@@ -41,6 +41,8 @@ UPLOADS_DIR = "uploads"
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 ARCHIVE_UPLOADS_DIR = os.path.join(UPLOADS_DIR, "patient_xrays")
 os.makedirs(ARCHIVE_UPLOADS_DIR, exist_ok=True)
+AVATAR_UPLOADS_DIR = os.path.join(UPLOADS_DIR, "avatars")
+os.makedirs(AVATAR_UPLOADS_DIR, exist_ok=True)
 
 
 def seed_default_activation_key() -> None:
@@ -891,6 +893,151 @@ def upgrade_user_tier(upgrade_request: UpgradeTierRequest, db: Session = Depends
         "tier": user.tier,
         "subscription_expires_at": user.subscription_expires_at.isoformat() if user.subscription_expires_at else None,
     }
+
+
+class DoctorProfileUpdate(BaseModel):
+    doctor_name: Optional[str] = None
+    email: Optional[str] = None
+    clinic_name: Optional[str] = None
+    clinic_address: Optional[str] = None
+    password: Optional[str] = None
+
+
+def serialize_doctor_profile(user: models.User) -> dict:
+    subscription_active = (
+        user.subscription_expires_at is not None
+        and user.subscription_expires_at >= datetime.utcnow()
+    )
+    return {
+        "doctor_name": user.doctor_name,
+        "email": user.email,
+        "password": user.hashed_password,
+        "tier": user.tier,
+        "clinic_name": user.clinic_name,
+        "clinic_address": user.clinic_address,
+        "avatar_url": user.avatar_url,
+        "is_active": user.is_active,
+        "subscription_active": subscription_active,
+        "subscription_expires_at": user.subscription_expires_at.isoformat() if user.subscription_expires_at else None,
+    }
+
+
+# صفحة "حسابي" (profile.html): تُستخدم get_current_doctor_user وليس
+# require_active_doctor_user عمداً في مساري GET/PUT التاليين -- حساب الطبيب
+# المعلَّق (pending_activation) أو المنتهي الاشتراك (expired_subscription) يجب
+# أن يبقى قادراً على عرض/تعديل بياناته الأساسية (مثل كلمة السر أو اسم العيادة)
+# حتى وهو محظور عن باقي ميزات النظام، بدل أن يُقفَل خارج حسابه بالكامل.
+@app.get("/api/auth/profile")
+def get_doctor_profile(
+    db: Session = Depends(database.get_db),
+    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+):
+    user = get_current_doctor_user(db, doctor_email=doctor_email, authorization=authorization)
+    return serialize_doctor_profile(user)
+
+
+@app.put("/api/auth/profile")
+def update_doctor_profile(
+    profile_update: DoctorProfileUpdate,
+    db: Session = Depends(database.get_db),
+    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+):
+    user = get_current_doctor_user(db, doctor_email=doctor_email, authorization=authorization)
+
+    if profile_update.doctor_name is not None:
+        trimmed_name = profile_update.doctor_name.strip()
+        if not trimmed_name:
+            raise HTTPException(status_code=400, detail="اسم الطبيب لا يمكن أن يكون فارغاً.")
+        user.doctor_name = trimmed_name
+
+    if profile_update.email is not None:
+        normalized_new_email = profile_update.email.strip().lower()
+        if not normalized_new_email:
+            raise HTTPException(status_code=400, detail="البريد الإلكتروني لا يمكن أن يكون فارغاً.")
+        if normalized_new_email != user.email:
+            existing_user = (
+                db.query(models.User)
+                .filter(models.User.email == normalized_new_email, models.User.id != user.id)
+                .first()
+            )
+            if existing_user:
+                raise HTTPException(status_code=400, detail="هذا البريد الإلكتروني مُستخدَم من حساب آخر.")
+            user.email = normalized_new_email
+
+    if profile_update.clinic_name is not None:
+        user.clinic_name = profile_update.clinic_name.strip() or None
+
+    if profile_update.clinic_address is not None:
+        user.clinic_address = profile_update.clinic_address.strip() or None
+
+    if profile_update.password is not None:
+        trimmed_password = profile_update.password.strip()
+        if not trimmed_password:
+            raise HTTPException(status_code=400, detail="كلمة السر لا يمكن أن تكون فارغة.")
+        user.hashed_password = trimmed_password
+
+    try:
+        db.commit()
+        db.refresh(user)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر حفظ التعديلات. حاول مرة أخرى.")
+
+    return serialize_doctor_profile(user)
+
+
+def validate_avatar_file(file: UploadFile) -> str:
+    original_name = file.filename or "avatar"
+    _, ext = os.path.splitext(original_name)
+    ext = ext.lower()
+
+    allowed_extensions = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
+    if ext not in allowed_extensions:
+        raise HTTPException(status_code=400, detail="صيغة الصورة غير مدعومة. يرجى استخدام PNG أو JPG أو WEBP.")
+
+    expected_mime = allowed_extensions[ext]
+    actual_mime = (file.content_type or "").lower().strip()
+    if actual_mime and actual_mime not in {expected_mime, "application/octet-stream"}:
+        raise HTTPException(status_code=400, detail="صيغة الملف غير صالحة. يرجى رفع صورة فقط.")
+
+    return ext
+
+
+@app.post("/api/auth/avatar")
+async def upload_doctor_avatar(
+    file: UploadFile = File(...),
+    db: Session = Depends(database.get_db),
+    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+):
+    user = get_current_doctor_user(db, doctor_email=doctor_email, authorization=authorization)
+
+    ext = validate_avatar_file(file)
+    unique_filename = f"avatar_{user.id}_{uuid4().hex}{ext}"
+    saved_path = os.path.join(AVATAR_UPLOADS_DIR, unique_filename)
+    avatar_url = f"/uploads/avatars/{unique_filename}"
+
+    try:
+        content = await file.read()
+        with open(saved_path, "wb") as output_file:
+            output_file.write(content)
+
+        user.avatar_url = avatar_url
+        db.commit()
+        db.refresh(user)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر رفع صورة الحساب. حاول مرة أخرى.")
+
+    return {"message": "تم تحديث صورة الحساب بنجاح.", "avatar_url": user.avatar_url}
 
 
 # 4. مسار إرسال (حفظ) مريض جديد في النظام [POST]

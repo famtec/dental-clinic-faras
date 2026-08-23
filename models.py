@@ -17,6 +17,10 @@ class User(Base):
     tier = Column(String, default="pending_activation", nullable=False)
     subscription_expires_at = Column(DateTime, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
+    # حقول بيانات حساب الطبيب/العيادة لصفحة "حسابي" (أُضيفت 2026-08-23):
+    clinic_name = Column(String, nullable=True)
+    clinic_address = Column(String, nullable=True)
+    avatar_url = Column(String, nullable=True)
 
 
 class ActivationKey(Base):
