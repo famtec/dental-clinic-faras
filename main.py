@@ -3075,6 +3075,53 @@ def generate_renewal_keys(
     }
 
 
+class AdminPasswordResetRequest(BaseModel):
+    email: str
+    new_password: str
+
+
+@app.post("/api/admin/reset-password")
+def admin_reset_password(
+    request: AdminPasswordResetRequest,
+    x_admin_secret: str | None = Header(default=None, alias="X-Admin-Secret"),
+    db: Session = Depends(database.get_db),
+):
+    # مسار إداري فقط لمطوّر المنصة (فارس) لإعادة تعيين كلمة مرور طبيب يدوياً عند
+    # تعطّل حسابه عن الدخول -- الحالة الأشيع: حساب قديم أُنشئ عبر زر "الدخول
+    # بـ Google" (قبل إزالته من login.html) وكانت كلمة مروره المخزّنة قيمة
+    # عشوائية غير معروفة لأحد (google-oauth-{uuid4().hex})، فلا توجد أي كلمة
+    # مرور حقيقية يمكن للطبيب استرجاعها أو تذكّرها. محمي بنفس مفتاح الإدارة
+    # السرّي المستخدم في /api/admin/renewal-keys/generate. الكلمة الجديدة تُخزَّن
+    # مباشرة بصيغة الهاش الآمن PBKDF2 (وليس نصاً صريحاً قديماً).
+    if not x_admin_secret or x_admin_secret != ADMIN_SECRET_KEY:
+        raise HTTPException(status_code=401, detail="مفتاح الإدارة السرّي مفقود أو غير صحيح.")
+
+    normalized_email = (request.email or "").strip().lower()
+    new_password = request.new_password or ""
+
+    if not normalized_email:
+        raise HTTPException(status_code=400, detail="يرجى إدخال البريد الإلكتروني.")
+    if len(new_password) < 6:
+        raise HTTPException(status_code=400, detail="كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل.")
+
+    user = db.query(models.User).filter(models.User.email == normalized_email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="لا يوجد حساب طبيب بهذا البريد الإلكتروني.")
+
+    try:
+        user.hashed_password = hash_password(new_password)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="تعذر تحديث كلمة المرور في قاعدة البيانات.")
+
+    return {
+        "status": "success",
+        "message": f"تم تعيين كلمة مرور جديدة للحساب {normalized_email} بنجاح.",
+        "email": normalized_email,
+    }
+
+
 
 # ====================================================================
 # مسارات صفحة الحجز العامة (public booking page) -- بلا مصادقة إطلاقاً --
