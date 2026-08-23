@@ -204,6 +204,10 @@
     <script>
         const doctorName = localStorage.getItem('doctor_name') || localStorage.getItem('user_name');
         const userTier = localStorage.getItem('user_tier');
+        // 🔒 حظر فوري ومتزامن لأي زائر لم يسجّل الدخول إطلاقاً -- بدون هذا الفحص كان أي زائر مجهول (وصل مثلاً عبر قائمة تنقل صفحة عامة مثل contact_developer.html) يتجاوز الحماية لأن userTier الفارغ (null) لا يساوي 'pending_activation'، والأخطر أن دوال جلب البيانات في هذا الملف تسقط على بريد الطبيب الاحتياطي الحقيقي عند غياب تسجيل الدخول فتعرض بياناته الفعلية لأي زائر.
+        if (!localStorage.getItem('user_email')) {
+            window.location.replace('login.html');
+        }
         // 🔒 حظر فوري ومتزامن قبل أي تسجيل لمستمع DOMContentLoaded أو أي طلب Fetch لبيانات محمية -- التوجيه وحده في نهاية الملف لم يكن كافياً لأن السكربت الحالي يستمر بالتنفيذ حتى بعد استدعاء window.location، فكان بإمكان استدعاءات جلب البيانات أن تُنفَّذ وتُعرض قبل اكتمال التنقل الفعلي.
         if (userTier === 'pending_activation') {
             window.location.replace('index.html');

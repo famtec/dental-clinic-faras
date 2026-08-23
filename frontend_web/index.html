@@ -268,6 +268,10 @@
     // blank "--" dashboard: fetchPatients() was never being called at all,
     // on every single page load, regardless of auth/network state.
     let userTier = localStorage.getItem('user_tier');
+    // 🔒 حظر فوري ومتزامن لأي زائر لم يسجّل الدخول إطلاقاً -- بدون هذا الفحص كان أي زائر مجهول (وصل مثلاً عبر قائمة تنقل صفحة عامة مثل contact_developer.html) يصل لهذه الصفحة مباشرة، والأخطر أن doctorEmail الاحتياطي بالأعلى كان سيُحمّل بيانات الطبيب الحقيقية لأي زائر مجهول.
+    if (!localStorage.getItem('user_email')) {
+        window.location.replace('login.html');
+    }
     const titleElement = document.getElementById('clinicTitle');
     const tierBadge = document.getElementById('tierBadge');
     const mobileClinicTitle = document.getElementById('mobileClinicTitle');

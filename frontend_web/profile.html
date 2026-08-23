@@ -310,6 +310,10 @@
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 	<script>
 		let userTier = localStorage.getItem("user_tier");
+		// 🔒 حظر فوري ومتزامن لأي زائر لم يسجّل الدخول إطلاقاً -- بدون هذا الفحص كان أي زائر مجهول (وصل مثلاً عبر قائمة تنقل صفحة عامة مثل contact_developer.html) يصل لهذه الصفحة، والأخطر أن getDoctorEmail() بالأسفل كانت تعيد بريد الطبيب الحقيقي الاحتياطي فيتيح عرض/تعديل حسابه الفعلي (بما فيه كلمة السر) لزائر مجهول. لا يُستثنى هنا pending_activation عمداً (خلافاً للفحص التالي) لأن غياب تسجيل الدخول كلياً غير حالة "الحساب قيد التفعيل".
+		if (!localStorage.getItem('user_email')) {
+			window.location.replace('login.html');
+		}
 		if (userTier === 'pending_activation') {
 			// صفحة "حسابي" مستثناة عمداً من الحظر الفوري: حساب لم يُفعَّل بعد يجب أن
 			// يبقى قادراً على مراجعة/تعديل بريده وكلمة سره من هنا، بخلاف باقي الصفحات.

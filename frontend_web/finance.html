@@ -182,6 +182,10 @@
 		// Feature gate at the very top of page load.
 		const currentTier = localStorage.getItem("user_tier");
 		let activeTier = currentTier === 'premium' ? 'premium' : 'standard';
+		// 🔒 حظر فوري ومتزامن لأي زائر لم يسجّل الدخول إطلاقاً -- بدون هذا الفحص كان أي زائر مجهول (وصل مثلاً عبر قائمة تنقل صفحة عامة مثل contact_developer.html) يتجاوز الحماية لأن currentTier الفارغ (null) لا يساوي 'pending_activation'، والأخطر أن دوال جلب البيانات المالية هنا تسقط على بريد الطبيب الاحتياطي الحقيقي عند غياب تسجيل الدخول فتعرض بياناته المالية الفعلية لأي زائر.
+		if (!localStorage.getItem('user_email')) {
+			window.location.replace('login.html');
+		}
 		// 🔒 حظر فوري ومتزامن قبل أي تنفيذ لبقية السكربت -- هذا الملف لا يستخدم DOMContentLoaded إطلاقاً، فكل الكود بالأسفل (بما فيه renderTierExperience() التي تجلب بيانات مالية عند تفعيل الحساب) كان يُنفَّذ فوراً عند تحليل السكربت، والتوجيه القديم في آخر الملف كان يأتي بعد كل ذلك، لا قبله.
 		if (currentTier === 'pending_activation') {
 			window.location.replace('index.html');

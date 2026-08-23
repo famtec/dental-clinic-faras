@@ -576,6 +576,10 @@
     const mobileClinicTitle = document.getElementById('mobileClinicTitle');
     const doctorName = localStorage.getItem('doctor_name') || localStorage.getItem('user_name');
     const userTier = (localStorage.getItem('user_tier') || 'standard').toString().toLowerCase();
+    // 🔒 حظر فوري ومتزامن لأي زائر لم يسجّل الدخول إطلاقاً -- بدون هذا الفحص كان أي زائر مجهول (وصل مثلاً عبر قائمة تنقل صفحة عامة مثل contact_developer.html) يتجاوز الحماية لأن userTier يعود 'standard' افتراضياً عند غياب user_tier، والأخطر أن دوال جلب البيانات هنا تسقط على بريد الطبيب الاحتياطي الحقيقي عند غياب تسجيل الدخول فتعرض السجل الطبي/المالي الفعلي لأي زائر.
+    if (!localStorage.getItem('user_email')) {
+        window.location.replace('login.html');
+    }
     // 🔒 حظر فوري ومتزامن قبل أي تسجيل لمستمع DOMContentLoaded أو أي طلب Fetch لبيانات محمية (السجل الطبي/المالي/الأشعة) -- التوجيه وحده في نهاية الملف لم يكن كافياً لأن السكربت يستمر بالتنفيذ حتى بعد استدعاء window.location.
     if (userTier === 'pending_activation') {
         window.location.replace('index.html');

@@ -199,6 +199,10 @@
 	<script src="api-config.js"></script>
 	<script>
 		let userTier = localStorage.getItem("user_tier");
+		// 🔒 حظر فوري ومتزامن لأي زائر لم يسجّل الدخول إطلاقاً -- بدون هذا الفحص كان أي زائر مجهول (وصل مثلاً عبر قائمة تنقل صفحة عامة مثل contact_developer.html) يتجاوز الحماية لأن userTier الفارغ (null) لا يساوي 'pending_activation'، والأخطر أن دوال جلب بيانات المخزن هنا تسقط على بريد الطبيب الاحتياطي الحقيقي عند غياب تسجيل الدخول.
+		if (!localStorage.getItem('user_email')) {
+			window.location.replace('login.html');
+		}
 		// 🔒 حظر فوري ومتزامن قبل أي تسجيل لمستمع DOMContentLoaded أو أي طلب Fetch لبيانات محمية -- التوجيه وحده في نهاية الملف لم يكن كافياً.
 		if (userTier === 'pending_activation') {
 			window.location.replace('index.html');
