@@ -1,6 +1,6 @@
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Header
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Header, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy import func
@@ -513,6 +513,8 @@ class AppointmentResponse(BaseModel):
     notes: Optional[str] = None
     status: str
     patient_id: Optional[int] = None
+    # هاتف صاحب طلب الحجز العام (2026-08-23) -- يظهر فقط لطلبات booking.html
+    patient_phone: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -1191,6 +1193,7 @@ class DoctorProfileUpdate(BaseModel):
     email: Optional[str] = None
     clinic_name: Optional[str] = None
     clinic_address: Optional[str] = None
+    clinic_phone: Optional[str] = None
     password: Optional[str] = None
 
 
@@ -1202,10 +1205,15 @@ def serialize_doctor_profile(user: models.User) -> dict:
     return {
         "doctor_name": user.doctor_name,
         "email": user.email,
-        "password": user.hashed_password,
+        # ثغرة أُصلحت (2026-08-23): كان هذا الحقل يرجع user.hashed_password
+        # (قيمة الهاش PBKDF2 الفعلية) للواجهة الأمامية باسم "password"، فكانت
+        # صفحة "حسابي" تعرضها كأنها كلمة السر الحقيقية القابلة للقراءة -- لم تعد
+        # كلمة السر تُرجَع للواجهة إطلاقاً بعد اليوم، بل مؤشر بسيط فقط.
+        "has_password": bool(user.hashed_password),
         "tier": user.tier,
         "clinic_name": user.clinic_name,
         "clinic_address": user.clinic_address,
+        "clinic_phone": user.clinic_phone,
         "avatar_url": user.avatar_url,
         "is_active": user.is_active,
         "subscription_active": subscription_active,
@@ -1263,11 +1271,18 @@ def update_doctor_profile(
     if profile_update.clinic_address is not None:
         user.clinic_address = profile_update.clinic_address.strip() or None
 
+    if profile_update.clinic_phone is not None:
+        user.clinic_phone = profile_update.clinic_phone.strip() or None
+
     if profile_update.password is not None:
         trimmed_password = profile_update.password.strip()
         if not trimmed_password:
             raise HTTPException(status_code=400, detail="كلمة السر لا يمكن أن تكون فارغة.")
-        user.hashed_password = trimmed_password
+        # ثغرة أُصلحت (2026-08-23): كان هذا المسار يخزّن كلمة السر الجديدة كنص
+        # صريح مباشرة (يتجاوز hash_password تماماً)، ما يفرغ نظام الهاش المطبَّق
+        # على /api/auth/login و/api/auth/register من أي قيمة أمنية بمجرد أن يغيّر
+        # الطبيب كلمة سره ولو مرة واحدة من صفحة "حسابي".
+        user.hashed_password = hash_password(trimmed_password)
 
     try:
         db.commit()
@@ -1280,6 +1295,140 @@ def update_doctor_profile(
         raise HTTPException(status_code=400, detail="تعذر حفظ التعديلات. حاول مرة أخرى.")
 
     return serialize_doctor_profile(user)
+
+
+
+# ====================================================================
+# إعدادات صفحة الحجز العامة (public booking page) -- 2026-08-23
+# كل طبيب يقدر يفعّل رابطاً عاماً خاصاً فيه (site.com/d/<booking_slug>) يسمح
+# لأي مريض بحجز موعد مباشرة بلا تسجيل دخول ولا اتصال هاتفي. هذا القسم يضبط
+# إعدادات ذاك الرابط فقط -- المسارات العامة نفسها (بلا مصادقة) موجودة بالأسفل
+# قرب نهاية الملف قبل app.mount.
+# ====================================================================
+BOOKING_SLUG_PATTERN = re.compile(r"^[a-z][a-z0-9-]{2,39}$")
+VALID_WORK_DAYS = set(range(7))  # Monday=0 .. Sunday=6 (نفس ترميز date.weekday())
+
+
+def slugify_booking_candidate(raw_value: str) -> str:
+    # يحوّل أي نص يُدخله الطبيب إلى صيغة صالحة كرابط عام (أحرف إنكليزية صغيرة،
+    # أرقام، وشرطات فقط) -- لا يترجم النص العربي، بل يستخرج الأجزاء الصالحة منه.
+    lowered = (raw_value or "").strip().lower()
+    slug = re.sub(r"[^a-z0-9]+", "-", lowered).strip("-")
+    return slug[:40]
+
+
+class BookingSettingsUpdate(BaseModel):
+    booking_slug: Optional[str] = None
+    public_booking_enabled: Optional[bool] = None
+    work_days: Optional[List[int]] = None
+    work_start_time: Optional[str] = None
+    work_end_time: Optional[str] = None
+    slot_duration_minutes: Optional[int] = None
+    clinic_phone: Optional[str] = None
+
+
+def serialize_booking_settings(user: models.User) -> dict:
+    work_days_list: list[int] = []
+    if user.work_days:
+        for part in user.work_days.split(","):
+            part = part.strip()
+            if part.isdigit() and int(part) in VALID_WORK_DAYS:
+                work_days_list.append(int(part))
+    return {
+        "booking_slug": user.booking_slug,
+        "public_booking_enabled": bool(user.public_booking_enabled),
+        "work_days": sorted(work_days_list),
+        "work_start_time": user.work_start_time,
+        "work_end_time": user.work_end_time,
+        "slot_duration_minutes": user.slot_duration_minutes,
+        "clinic_phone": user.clinic_phone,
+        "booking_url_path": f"/d/{user.booking_slug}" if user.booking_slug else None,
+    }
+
+
+@app.get("/api/auth/booking-settings")
+def get_booking_settings(
+    db: Session = Depends(database.get_db),
+    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+):
+    user = get_current_doctor_user(db, doctor_email=doctor_email, authorization=authorization)
+    return serialize_booking_settings(user)
+
+
+@app.put("/api/auth/booking-settings")
+def update_booking_settings(
+    settings_update: BookingSettingsUpdate,
+    db: Session = Depends(database.get_db),
+    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+):
+    user = get_current_doctor_user(db, doctor_email=doctor_email, authorization=authorization)
+
+    if settings_update.booking_slug is not None:
+        candidate_slug = slugify_booking_candidate(settings_update.booking_slug)
+        if not candidate_slug or not BOOKING_SLUG_PATTERN.fullmatch(candidate_slug):
+            raise HTTPException(
+                status_code=400,
+                detail="الرابط يجب أن يبدأ بحرف إنكليزي، ويتكوّن من 3-40 حرفاً/رقماً/شرطة فقط (مثال: dr-fares).",
+            )
+        existing_owner = (
+            db.query(models.User)
+            .filter(models.User.booking_slug == candidate_slug, models.User.id != user.id)
+            .first()
+        )
+        if existing_owner:
+            raise HTTPException(status_code=400, detail="هذا الرابط مُستخدَم من طبيب آخر، يرجى اختيار رابط مختلف.")
+        user.booking_slug = candidate_slug
+
+    if settings_update.work_days is not None:
+        cleaned_days = sorted({day for day in settings_update.work_days if day in VALID_WORK_DAYS})
+        user.work_days = ",".join(str(day) for day in cleaned_days) if cleaned_days else None
+
+    if settings_update.work_start_time is not None:
+        trimmed_start = settings_update.work_start_time.strip()
+        if trimmed_start and (len(trimmed_start) != 5 or trimmed_start[2] != ":"):
+            raise HTTPException(status_code=400, detail="صيغة وقت البدء غير صالحة. المتوقع HH:MM")
+        user.work_start_time = trimmed_start or None
+
+    if settings_update.work_end_time is not None:
+        trimmed_end = settings_update.work_end_time.strip()
+        if trimmed_end and (len(trimmed_end) != 5 or trimmed_end[2] != ":"):
+            raise HTTPException(status_code=400, detail="صيغة وقت الانتهاء غير صالحة. المتوقع HH:MM")
+        user.work_end_time = trimmed_end or None
+
+    if settings_update.slot_duration_minutes is not None:
+        if settings_update.slot_duration_minutes < 5 or settings_update.slot_duration_minutes > 240:
+            raise HTTPException(status_code=400, detail="مدة الموعد يجب أن تكون بين 5 و240 دقيقة.")
+        user.slot_duration_minutes = settings_update.slot_duration_minutes
+
+    if settings_update.clinic_phone is not None:
+        user.clinic_phone = settings_update.clinic_phone.strip() or None
+
+    if settings_update.public_booking_enabled is not None:
+        if settings_update.public_booking_enabled:
+            # لا يجوز تفعيل الرابط العام قبل ضبط الحد الأدنى من الإعدادات
+            # الضرورية لحساب مواعيد متاحة فعلية -- رابط بلا إعدادات كاملة
+            # سيعرض للمريض صفحة بلا أي وقت متاح إطلاقاً.
+            if not user.booking_slug:
+                raise HTTPException(status_code=400, detail="يجب اختيار رابط عام (Slug) قبل تفعيل صفحة الحجز.")
+            if not user.work_days:
+                raise HTTPException(status_code=400, detail="يجب تحديد أيام العمل قبل تفعيل صفحة الحجز.")
+            if not user.work_start_time or not user.work_end_time:
+                raise HTTPException(status_code=400, detail="يجب تحديد وقت بدء وانتهاء الدوام قبل تفعيل صفحة الحجز.")
+        user.public_booking_enabled = bool(settings_update.public_booking_enabled)
+
+    try:
+        db.commit()
+        db.refresh(user)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر حفظ إعدادات الحجز. حاول مرة أخرى.")
+
+    return serialize_booking_settings(user)
 
 
 def validate_avatar_file(file: UploadFile) -> str:
@@ -1797,6 +1946,65 @@ def update_appointment_status(
 
     return {
         "message": "Appointment status updated successfully",
+        "appointment_id": appointment.id,
+        "status": appointment.status,
+    }
+
+
+class AppointmentRespondRequest(BaseModel):
+    decision: Literal["accept", "reject"]
+
+
+# مسار قبول/رفض طلب حجز وارد من صفحة الحجز العامة (booking.html) -- 2026-08-23.
+# لا يُستخدَم إطلاقاً لتعديل حالة المواعيد العادية (لهذا مسار /status أعلاه)،
+# بل فقط للردّ على طلبات بحالة "pending_confirmation" تحديداً.
+@app.put("/api/appointments/{appointment_id}/respond", status_code=200)
+def respond_to_booking_request(
+    appointment_id: int,
+    respond_request: AppointmentRespondRequest,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_active_doctor_user),
+):
+    appointment = (
+        db.query(models.Appointment)
+        .filter(models.Appointment.id == appointment_id, models.Appointment.doctor_email == current_user.email)
+        .first()
+    )
+    if not appointment:
+        raise HTTPException(status_code=404, detail="طلب الحجز غير موجود")
+
+    if appointment.status != "pending_confirmation":
+        raise HTTPException(status_code=400, detail="تم الرد على هذا الطلب مسبقاً.")
+
+    new_status = "pending" if respond_request.decision == "accept" else "rejected"
+
+    try:
+        appointment.status = new_status
+        db.commit()
+        db.refresh(appointment)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر تحديث حالة الطلب حالياً. حاول مرة أخرى.")
+
+    # إشعار المريض عبر واتساب بقرار الطبيب (best-effort -- لا يوقف الرد لو فشل الإرسال)
+    if appointment.patient_phone:
+        doctor_label = (current_user.doctor_name or "").strip() or "العيادة"
+        appointment_date_label = appointment.appointment_date.strftime("%Y-%m-%d") if appointment.appointment_date else ""
+        if new_status == "pending":
+            patient_message = (
+                f"مرحباً {appointment.patient_name}، تم قبول طلب حجزكم لدى {doctor_label} "
+                f"بتاريخ {appointment_date_label} الساعة {appointment.appointment_time}. بانتظاركم! 🦷✨"
+            )
+        else:
+            patient_message = (
+                f"مرحباً {appointment.patient_name}، نأسف لإبلاغكم أن {doctor_label} لم يتمكن من "
+                f"تأكيد موعدكم بتاريخ {appointment_date_label} الساعة {appointment.appointment_time}. "
+                "يرجى التواصل مع العيادة أو تجربة موعد آخر عبر رابط الحجز."
+            )
+        send_whatsapp_message_via_green_api(appointment.patient_phone, patient_message)
+
+    return {
+        "message": "تم إرسال الرد بنجاح.",
         "appointment_id": appointment.id,
         "status": appointment.status,
     }
@@ -2865,6 +3073,206 @@ def generate_renewal_keys(
         "tier": request.tier,
         "duration_days": request.duration_days,
     }
+
+
+
+# ====================================================================
+# مسارات صفحة الحجز العامة (public booking page) -- بلا مصادقة إطلاقاً --
+# 2026-08-23. هذه المسارات يستدعيها booking.html مباشرة من متصفح أي زائر/مريض
+# مجهول الهوية تماماً، لذا يجب ألا تُرجع أي بيانات حساسة عن الطبيب (لا بريده،
+# لا كلمة سره، لا أي مريض آخر) -- فقط الحد الأدنى اللازم لعرض صفحة الحجز.
+# ====================================================================
+def compute_available_slots_for_date(db: Session, doctor: models.User, target_date: date) -> List[str]:
+    if not doctor.work_days or not doctor.work_start_time or not doctor.work_end_time:
+        return []
+
+    allowed_weekdays = set()
+    for part in doctor.work_days.split(","):
+        part = part.strip()
+        if part.isdigit():
+            allowed_weekdays.add(int(part))
+
+    if target_date.weekday() not in allowed_weekdays:
+        return []
+
+    try:
+        start_hour, start_minute = (int(piece) for piece in doctor.work_start_time.split(":"))
+        end_hour, end_minute = (int(piece) for piece in doctor.work_end_time.split(":"))
+    except (ValueError, AttributeError):
+        return []
+
+    slot_minutes = doctor.slot_duration_minutes or 30
+    day_start = datetime.combine(target_date, datetime.min.time()).replace(hour=start_hour, minute=start_minute)
+    day_end = datetime.combine(target_date, datetime.min.time()).replace(hour=end_hour, minute=end_minute)
+
+    if day_end <= day_start:
+        return []
+
+    now_local = datetime.now(KEEP_ALIVE_TIMEZONE).replace(tzinfo=None)
+
+    # أي حالة موعد "تشغل" الوقت وتمنع حجزه من جديد: بانتظار (pending)، بانتظار
+    # قبول الطبيب (pending_confirmation)، أو تم تسجيل الحضور فعلاً (checked_in).
+    # الحالة "rejected" أو "no_show" لا تشغل الوقت، فيعود متاحاً للحجز مجدداً.
+    taken_times = {
+        appointment.appointment_time
+        for appointment in (
+            db.query(models.Appointment)
+            .filter(
+                models.Appointment.doctor_email == doctor.email,
+                models.Appointment.appointment_date >= day_start,
+                models.Appointment.appointment_date < day_start + timedelta(days=1),
+                models.Appointment.status.in_(["pending", "pending_confirmation", "checked_in"]),
+            )
+            .all()
+        )
+    }
+
+    available_slots: List[str] = []
+    cursor = day_start
+    while cursor + timedelta(minutes=slot_minutes) <= day_end:
+        if target_date == now_local.date() and cursor <= now_local:
+            cursor += timedelta(minutes=slot_minutes)
+            continue
+        slot_label = cursor.strftime("%H:%M")
+        if slot_label not in taken_times:
+            available_slots.append(slot_label)
+        cursor += timedelta(minutes=slot_minutes)
+
+    return available_slots
+
+
+def get_public_doctor_or_404(db: Session, slug: str) -> models.User:
+    normalized_slug = (slug or "").strip().lower()
+    doctor = (
+        db.query(models.User)
+        .filter(models.User.booking_slug == normalized_slug, models.User.public_booking_enabled.is_(True))
+        .first()
+    )
+    if not doctor:
+        raise HTTPException(status_code=404, detail="صفحة الحجز غير موجودة أو غير مُفعَّلة حالياً.")
+    return doctor
+
+
+@app.get("/api/public/doctor/{slug}")
+def get_public_doctor_info(slug: str, db: Session = Depends(database.get_db)):
+    doctor = get_public_doctor_or_404(db, slug)
+    return {
+        "doctor_name": doctor.doctor_name,
+        "clinic_name": doctor.clinic_name,
+        "clinic_address": doctor.clinic_address,
+        "avatar_url": doctor.avatar_url,
+        "slot_duration_minutes": doctor.slot_duration_minutes,
+    }
+
+
+@app.get("/api/public/doctor/{slug}/available-slots")
+def get_public_available_slots(
+    slug: str,
+    target_date: str = Query(..., alias="date"),
+    db: Session = Depends(database.get_db),
+):
+    doctor = get_public_doctor_or_404(db, slug)
+    try:
+        parsed_date = date.fromisoformat(target_date.strip())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="صيغة التاريخ غير صالحة. المتوقع YYYY-MM-DD")
+
+    today_local = datetime.now(KEEP_ALIVE_TIMEZONE).date()
+    if parsed_date < today_local:
+        raise HTTPException(status_code=400, detail="لا يمكن حجز موعد في تاريخ ماضٍ.")
+    if parsed_date > today_local + timedelta(days=90):
+        raise HTTPException(status_code=400, detail="الحجز متاح خلال 90 يوماً القادمة فقط.")
+
+    return {
+        "date": parsed_date.isoformat(),
+        "available_slots": compute_available_slots_for_date(db, doctor, parsed_date),
+    }
+
+
+class PublicBookingRequest(BaseModel):
+    date: str
+    time: str
+    patient_name: str
+    patient_phone: str
+    notes: Optional[str] = None
+
+
+@app.post("/api/public/doctor/{slug}/book", status_code=201)
+def create_public_booking_request(
+    slug: str,
+    booking: PublicBookingRequest,
+    db: Session = Depends(database.get_db),
+):
+    doctor = get_public_doctor_or_404(db, slug)
+
+    trimmed_name = (booking.patient_name or "").strip()
+    trimmed_phone = (booking.patient_phone or "").strip()
+    if not trimmed_name or not trimmed_phone:
+        raise HTTPException(status_code=400, detail="الاسم ورقم الهاتف مطلوبان.")
+
+    try:
+        parsed_date = date.fromisoformat((booking.date or "").strip())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="صيغة التاريخ غير صالحة.")
+
+    trimmed_time = (booking.time or "").strip()
+    if len(trimmed_time) != 5 or trimmed_time[2] != ":":
+        raise HTTPException(status_code=400, detail="صيغة الوقت غير صالحة.")
+
+    # إعادة التحقق من توفر الموعد على السيرفر (وليس فقط الاعتماد على القائمة
+    # التي عرضها الفرونت إند سابقاً للمريض) -- يمنع سباقاً (race condition) بين
+    # مريضين يحاولان حجز نفس الموعد في نفس اللحظة تقريباً.
+    available_slots = compute_available_slots_for_date(db, doctor, parsed_date)
+    if trimmed_time not in available_slots:
+        raise HTTPException(status_code=409, detail="عذراً، هذا الموعد لم يعد متاحاً. يرجى اختيار موعد آخر.")
+
+    try:
+        appointment_date_time = datetime.combine(parsed_date, datetime.min.time()).replace(
+            hour=int(trimmed_time[:2]), minute=int(trimmed_time[3:])
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="صيغة الوقت غير صالحة.")
+
+    db_appointment = models.Appointment(
+        doctor_email=doctor.email,
+        patient_name=trimmed_name,
+        patient_phone=trimmed_phone,
+        appointment_date=appointment_date_time,
+        appointment_time=trimmed_time,
+        procedure_type=(booking.notes or "").strip() or "حجز عبر صفحة الحجز العامة",
+        notes=(booking.notes or "").strip() or None,
+        status="pending_confirmation",
+    )
+
+    try:
+        db.add(db_appointment)
+        db.commit()
+        db.refresh(db_appointment)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر إرسال طلب الحجز. حاول مرة أخرى.")
+
+    # إشعار الطبيب عبر واتساب بطلب حجز جديد (best-effort، لا يوقف الطلب لو فشل الإرسال)
+    if doctor.clinic_phone:
+        doctor_message = (
+            f"📅 طلب حجز جديد من {trimmed_name} ({trimmed_phone}) "
+            f"بتاريخ {parsed_date.isoformat()} الساعة {trimmed_time}. "
+            "يرجى مراجعة صفحة المواعيد للقبول أو الرفض."
+        )
+        send_whatsapp_message_via_green_api(doctor.clinic_phone, doctor_message)
+
+    return {
+        "message": "تم إرسال طلب الحجز بنجاح، سيصلك إشعار عند رد الطبيب.",
+        "appointment_id": db_appointment.id,
+    }
+
+
+@app.get("/d/{slug}", include_in_schema=False)
+def serve_public_booking_page(slug: str):
+    # يخدم محتوى booking.html مباشرة (FileResponse وليس إعادة توجيه) حتى يبقى
+    # شريط عنوان المتصفح عارضاً الرابط النظيف /d/<slug> نفسه الذي يشاركه الطبيب
+    # مع مرضاه -- الصفحة نفسها تقرأ الـ slug من location.pathname بجافاسكربت.
+    return FileResponse(os.path.join("frontend_web", "booking.html"))
 
 
 @app.get("/", include_in_schema=False)

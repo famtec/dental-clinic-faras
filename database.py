@@ -170,6 +170,56 @@ def init_db():
                         {"email": sole_email},
                     )
 
+    # ====================================================================
+    # صفحة الحجز العامة (public booking page) -- 2026-08-23
+    # ====================================================================
+    # كل طبيب يقدر يفعّل رابطاً عاماً خاصاً فيه (site.com/d/<booking_slug>)
+    # يسمح لأي مريض بحجز موعد مباشرة بلا تسجيل دخول. الأعمدة الجديدة كلها
+    # nullable/بقيمة افتراضية آمنة، فلا تؤثر على أي طبيب لم يفعّل الميزة بعد.
+    if "users" in inspector.get_table_names():
+        booking_columns = {column["name"] for column in inspector.get_columns("users")}
+        if "clinic_phone" not in booking_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN clinic_phone VARCHAR"))
+        if "booking_slug" not in booking_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN booking_slug VARCHAR"))
+        if "public_booking_enabled" not in booking_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN public_booking_enabled BOOLEAN NOT NULL DEFAULT FALSE"))
+        if "work_days" not in booking_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN work_days VARCHAR"))
+        if "work_start_time" not in booking_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN work_start_time VARCHAR"))
+        if "work_end_time" not in booking_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN work_end_time VARCHAR"))
+        if "slot_duration_minutes" not in booking_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN slot_duration_minutes INTEGER NOT NULL DEFAULT 30"))
+
+    if "appointments" in inspector.get_table_names():
+        appointment_booking_columns = {column["name"] for column in inspector.get_columns("appointments")}
+        if "patient_phone" not in appointment_booking_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE appointments ADD COLUMN patient_phone VARCHAR"))
+
+    # فهرس فريد جزئي (Postgres) لعمود booking_slug: نسمح لعدة صفوف بقيمة NULL
+    # (أطباء لم يختاروا رابطاً بعد) لكن نمنع تكرار أي slug فعلي بين طبيبين.
+    # SQLite المحلي يتجاهل شرط UNIQUE على عمود NULL تلقائياً فلا حاجة لفهرس
+    # منفصل هناك؛ Postgres يحتاج فهرساً جزئياً صريحاً لتحقيق نفس السلوك لأن
+    # قيد UNIQUE العادي على العمود لا يُنشأ تلقائياً عبر ALTER TABLE ADD COLUMN.
+    if not SQLALCHEMY_DATABASE_URL.startswith("sqlite") and "users" in inspector.get_table_names():
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_booking_slug_unique "
+                    "ON users (booking_slug) WHERE booking_slug IS NOT NULL"
+                )
+            )
+
 
 def get_db():
     db = SessionLocal()

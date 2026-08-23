@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>حجز موعد - عيادتي الرقمية</title>
+	<meta name="description" content="احجز موعدك مباشرة لدى طبيبك عبر هذا الرابط، بلا تسجيل دخول ولا اتصال هاتفي." />
+	<script src="https://cdn.tailwindcss.com"></script>
+	<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
+	<style>
+		body { font-family: 'Tajawal', sans-serif; }
+		.panel-soft {
+			background: rgba(255, 255, 255, 0.92);
+			backdrop-filter: blur(12px);
+		}
+		.slot-btn {
+			transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+		}
+		.slot-btn:hover { transform: translateY(-2px); }
+		@keyframes toothFloat {
+			0%, 100% { transform: translateY(0px); }
+			50% { transform: translateY(-10px); }
+		}
+		.tooth-float { animation: toothFloat 6s ease-in-out infinite; }
+		.step-hidden { display: none !important; }
+	</style>
+</head>
+<body class="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.22),_transparent_30%),linear-gradient(135deg,_#f8fafc_0%,_#eef2ff_45%,_#e0e7ff_100%)] text-slate-800">
+	<div class="pointer-events-none fixed inset-0 overflow-hidden">
+		<div class="absolute right-[10%] top-16 h-40 w-40 rounded-full bg-indigo-200/30 blur-3xl"></div>
+		<div class="absolute left-[6%] top-[22%] h-56 w-56 rounded-full bg-violet-200/20 blur-3xl"></div>
+	</div>
+
+	<main class="relative z-10 mx-auto w-full max-w-2xl px-4 py-10 sm:px-6 sm:py-14">
+
+		<!-- حالة التحميل الأولى -->
+		<div id="loadingState" class="panel-soft rounded-[28px] border border-white/70 p-10 text-center shadow-xl shadow-slate-200/70">
+			<div class="tooth-float mx-auto mb-4 inline-flex h-16 w-16 items-center justify-center rounded-3xl border border-indigo-200 bg-white text-4xl shadow-lg shadow-indigo-200/50">🦷</div>
+			<p class="text-sm font-semibold text-slate-500">جاري تحميل صفحة الحجز...</p>
+		</div>
+
+		<!-- حالة الخطأ: رابط غير صالح أو غير مُفعَّل -->
+		<div id="errorState" class="step-hidden panel-soft rounded-[28px] border border-white/70 p-8 text-center shadow-xl shadow-slate-200/70">
+			<div class="mx-auto mb-4 inline-flex h-16 w-16 items-center justify-center rounded-3xl border border-rose-200 bg-rose-50 text-4xl">😕</div>
+			<h1 class="text-xl font-extrabold text-slate-800">عذراً، هذا الرابط غير متاح</h1>
+			<p id="errorStateMsg" class="mt-2 text-sm leading-6 text-slate-500">صفحة الحجز هذه غير موجودة، أو أن الطبيب لم يُفعّلها بعد. يرجى التأكد من الرابط والمحاولة مرة أخرى.</p>
+		</div>
+
+		<!-- المحتوى الرئيسي لصفحة الحجز -->
+		<div id="bookingApp" class="step-hidden space-y-6">
+
+			<section class="panel-soft rounded-[28px] border border-white/70 p-6 text-center shadow-xl shadow-slate-200/70 sm:p-8">
+				<div id="doctorAvatarCircle" class="mx-auto mb-4 flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-gradient-to-br from-indigo-500 via-violet-500 to-cyan-500 text-4xl shadow-xl shadow-indigo-300/40">
+					<img id="doctorAvatarImage" alt="صورة الطبيب" class="hidden h-full w-full object-cover" />
+					<span id="doctorAvatarPlaceholder">🦷</span>
+				</div>
+				<div class="mx-auto mb-2 inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-4 py-1.5 text-xs font-bold tracking-[0.2em] text-indigo-700">حجز موعد أونلاين</div>
+				<h1 id="doctorNameHeading" class="text-2xl font-black text-indigo-950 sm:text-3xl">د. الطبيب</h1>
+				<p id="doctorClinicName" class="mt-1 text-sm font-semibold text-slate-500"></p>
+				<p id="doctorClinicAddress" class="mt-1 text-xs text-slate-400"></p>
+			</section>
+
+			<!-- الخطوة 1: اختيار التاريخ والوقت -->
+			<section id="slotPickerSection" class="panel-soft rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/70 sm:p-6">
+				<h2 class="text-lg font-extrabold text-indigo-900">1) اختر التاريخ والوقت المناسبين</h2>
+
+				<label class="mt-4 block">
+					<span class="mb-2 block text-sm font-semibold text-slate-700">التاريخ</span>
+					<input id="bookingDateInput" type="date" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
+				</label>
+
+				<div class="mt-4">
+					<p id="slotsStatusMsg" class="mb-3 text-sm font-medium text-slate-500">اختر تاريخاً لعرض الأوقات المتاحة.</p>
+					<div id="slotsGrid" class="grid grid-cols-3 gap-2 sm:grid-cols-4"></div>
+				</div>
+			</section>
+
+			<!-- الخطوة 2: بيانات المريض -->
+			<section id="patientFormSection" class="step-hidden panel-soft rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/70 sm:p-6">
+				<h2 class="text-lg font-extrabold text-indigo-900">2) بياناتك للتواصل معك</h2>
+				<p class="mt-1 text-sm text-slate-500">موعدك المختار: <span id="selectedSlotLabel" class="font-bold text-indigo-700"></span></p>
+
+				<form id="bookingForm" class="mt-4 space-y-4">
+					<label class="block">
+						<span class="mb-2 block text-sm font-semibold text-slate-700">الاسم الكامل</span>
+						<input id="patientNameInput" type="text" required placeholder="اكتب اسمك الكامل" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
+					</label>
+
+					<label class="block">
+						<span class="mb-2 block text-sm font-semibold text-slate-700">رقم الهاتف (واتساب)</span>
+						<input id="patientPhoneInput" type="tel" required placeholder="0987654321" dir="ltr" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
+						<span class="mt-1 block text-xs text-slate-400">سيصلك إشعار على هذا الرقم فور رد الطبيب على طلبك.</span>
+					</label>
+
+					<label class="block">
+						<span class="mb-2 block text-sm font-semibold text-slate-700">سبب الزيارة (اختياري)</span>
+						<textarea id="patientNotesInput" rows="3" placeholder="مثال: ألم في الضرس، تنظيف دوري، استشارة تقويم..." class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"></textarea>
+					</label>
+
+					<div class="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center sm:justify-between">
+						<button id="changeSlotBtn" type="button" class="rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50 sm:order-1">تغيير الموعد</button>
+						<button id="submitBookingBtn" type="submit" class="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700 sm:order-2">
+							إرسال طلب الحجز
+						</button>
+					</div>
+					<p id="bookingFormStatusMsg" class="text-sm font-medium text-slate-500"></p>
+				</form>
+			</section>
+		</div>
+
+		<!-- حالة النجاح -->
+		<div id="successState" class="step-hidden panel-soft rounded-[28px] border border-white/70 p-8 text-center shadow-xl shadow-slate-200/70">
+			<div class="mx-auto mb-4 inline-flex h-16 w-16 items-center justify-center rounded-3xl border border-emerald-200 bg-emerald-50 text-4xl">✅</div>
+			<h1 class="text-xl font-extrabold text-slate-800">تم إرسال طلب حجزك بنجاح!</h1>
+			<p class="mt-2 text-sm leading-6 text-slate-500">سيراجع الطبيب طلبك قريباً، وسيصلك إشعار على واتساب فور قبول أو رفض الموعد.</p>
+		</div>
+
+		<footer class="mt-8 text-center text-xs font-mono tracking-wide text-indigo-500/70">
+			مبني بواسطة عيادتي الرقمية 🦷
+		</footer>
+	</main>
+
+	<script src="api-config.js"></script>
+	<script>
+		function resolveBookingSlug() {
+			const pathParts = window.location.pathname.split('/').filter(Boolean);
+			if (pathParts.length >= 2 && pathParts[pathParts.length - 2] === 'd') {
+				return decodeURIComponent(pathParts[pathParts.length - 1]);
+			}
+			const queryParams = new URLSearchParams(window.location.search);
+			return (queryParams.get('slug') || '').trim();
+		}
+
+		const bookingSlug = resolveBookingSlug();
+
+		const loadingState = document.getElementById('loadingState');
+		const errorState = document.getElementById('errorState');
+		const errorStateMsg = document.getElementById('errorStateMsg');
+		const bookingApp = document.getElementById('bookingApp');
+		const successState = document.getElementById('successState');
+
+		const doctorAvatarImage = document.getElementById('doctorAvatarImage');
+		const doctorAvatarPlaceholder = document.getElementById('doctorAvatarPlaceholder');
+		const doctorNameHeading = document.getElementById('doctorNameHeading');
+		const doctorClinicName = document.getElementById('doctorClinicName');
+		const doctorClinicAddress = document.getElementById('doctorClinicAddress');
+
+		const bookingDateInput = document.getElementById('bookingDateInput');
+		const slotsStatusMsg = document.getElementById('slotsStatusMsg');
+		const slotsGrid = document.getElementById('slotsGrid');
+
+		const slotPickerSection = document.getElementById('slotPickerSection');
+		const patientFormSection = document.getElementById('patientFormSection');
+		const selectedSlotLabel = document.getElementById('selectedSlotLabel');
+		const changeSlotBtn = document.getElementById('changeSlotBtn');
+		const bookingForm = document.getElementById('bookingForm');
+		const patientNameInput = document.getElementById('patientNameInput');
+		const patientPhoneInput = document.getElementById('patientPhoneInput');
+		const patientNotesInput = document.getElementById('patientNotesInput');
+		const submitBookingBtn = document.getElementById('submitBookingBtn');
+		const bookingFormStatusMsg = document.getElementById('bookingFormStatusMsg');
+
+		let selectedDate = '';
+		let selectedTime = '';
+
+		function showOnly(element) {
+			[loadingState, errorState, bookingApp, successState].forEach((el) => {
+				if (el) el.classList.add('step-hidden');
+			});
+			if (element) element.classList.remove('step-hidden');
+		}
+
+		function showError(message) {
+			if (errorStateMsg && message) errorStateMsg.textContent = message;
+			showOnly(errorState);
+		}
+
+		function formatDateForInput(date) {
+			return date.toISOString().slice(0, 10);
+		}
+
+		function initDateBounds() {
+			const today = new Date();
+			const maxDate = new Date();
+			maxDate.setDate(maxDate.getDate() + 90);
+			bookingDateInput.min = formatDateForInput(today);
+			bookingDateInput.max = formatDateForInput(maxDate);
+			bookingDateInput.value = formatDateForInput(today);
+		}
+
+		async function loadDoctorInfo() {
+			try {
+				const response = await fetch(apiUrl(`/api/public/doctor/${encodeURIComponent(bookingSlug)}`));
+				if (!response.ok) {
+					showError('صفحة الحجز هذه غير موجودة، أو أن الطبيب لم يُفعّلها بعد.');
+					return;
+				}
+				const doctor = await response.json();
+
+				doctorNameHeading.textContent = doctor.doctor_name ? `د. ${doctor.doctor_name}` : 'عيادة طبية';
+				doctorClinicName.textContent = doctor.clinic_name || '';
+				doctorClinicAddress.textContent = doctor.clinic_address || '';
+
+				if (doctor.avatar_url) {
+					doctorAvatarImage.src = apiUrl(doctor.avatar_url);
+					doctorAvatarImage.classList.remove('hidden');
+					doctorAvatarPlaceholder.classList.add('hidden');
+				}
+
+				showOnly(bookingApp);
+				initDateBounds();
+				loadAvailableSlots();
+			} catch (error) {
+				showError('تعذر الاتصال بالخادم. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.');
+			}
+		}
+
+		function renderSlots(slots) {
+			slotsGrid.innerHTML = '';
+
+			if (!Array.isArray(slots) || !slots.length) {
+				slotsStatusMsg.textContent = 'لا توجد أوقات متاحة في هذا اليوم، جرّب تاريخاً آخر.';
+				return;
+			}
+
+			slotsStatusMsg.textContent = 'اختر الوقت المناسب لك:';
+			slots.forEach((slot) => {
+				const button = document.createElement('button');
+				button.type = 'button';
+				button.textContent = slot;
+				button.className = 'slot-btn rounded-2xl border border-indigo-200 bg-white px-3 py-2.5 text-sm font-bold text-indigo-700 shadow-sm hover:border-indigo-400 hover:bg-indigo-50';
+				button.addEventListener('click', () => selectSlot(slot));
+				slotsGrid.appendChild(button);
+			});
+		}
+
+		async function loadAvailableSlots() {
+			selectedDate = bookingDateInput.value;
+			if (!selectedDate) return;
+
+			slotsStatusMsg.textContent = 'جاري تحميل الأوقات المتاحة...';
+			slotsGrid.innerHTML = '';
+
+			try {
+				const response = await fetch(
+					apiUrl(`/api/public/doctor/${encodeURIComponent(bookingSlug)}/available-slots?date=${encodeURIComponent(selectedDate)}`)
+				);
+				const data = await response.json().catch(() => ({}));
+
+				if (!response.ok) {
+					slotsStatusMsg.textContent = data.detail || 'تعذر تحميل الأوقات المتاحة.';
+					return;
+				}
+
+				renderSlots(data.available_slots || []);
+			} catch (error) {
+				slotsStatusMsg.textContent = 'تعذر الاتصال بالخادم. حاول مرة أخرى.';
+			}
+		}
+
+		function selectSlot(time) {
+			selectedTime = time;
+			const dateObj = new Date(`${selectedDate}T00:00:00`);
+			const dateLabel = Number.isNaN(dateObj.getTime())
+				? selectedDate
+				: dateObj.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+
+			selectedSlotLabel.textContent = `${dateLabel} — ${time}`;
+			bookingFormStatusMsg.textContent = '';
+			slotPickerSection.classList.add('step-hidden');
+			patientFormSection.classList.remove('step-hidden');
+			patientNameInput.focus();
+		}
+
+		if (changeSlotBtn) {
+			changeSlotBtn.addEventListener('click', () => {
+				patientFormSection.classList.add('step-hidden');
+				slotPickerSection.classList.remove('step-hidden');
+			});
+		}
+
+		if (bookingDateInput) {
+			bookingDateInput.addEventListener('change', loadAvailableSlots);
+		}
+
+		if (bookingForm) {
+			bookingForm.addEventListener('submit', async (event) => {
+				event.preventDefault();
+
+				const trimmedName = patientNameInput.value.trim();
+				const trimmedPhone = patientPhoneInput.value.trim();
+				if (!trimmedName || !trimmedPhone) {
+					bookingFormStatusMsg.textContent = 'الاسم ورقم الهاتف حقلان مطلوبان.';
+					return;
+				}
+
+				submitBookingBtn.disabled = true;
+				submitBookingBtn.classList.add('opacity-60');
+				bookingFormStatusMsg.textContent = 'جاري إرسال طلب الحجز...';
+
+				try {
+					const response = await fetch(apiUrl(`/api/public/doctor/${encodeURIComponent(bookingSlug)}/book`), {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							date: selectedDate,
+							time: selectedTime,
+							patient_name: trimmedName,
+							patient_phone: trimmedPhone,
+							notes: patientNotesInput.value.trim(),
+						}),
+					});
+					const data = await response.json().catch(() => ({}));
+
+					if (!response.ok) {
+						// عذراً هذا الموعد لم يعد متاحاً (409) -- على الأغلب حجزه مريض آخر
+						// للتو، فنعيد عرض قائمة الأوقات المحدَّثة بدل ترك المستخدم عالقاً.
+						bookingFormStatusMsg.textContent = data.detail || 'تعذر إرسال طلب الحجز. حاول مرة أخرى.';
+						if (response.status === 409) {
+							patientFormSection.classList.add('step-hidden');
+							slotPickerSection.classList.remove('step-hidden');
+							loadAvailableSlots();
+						}
+						return;
+					}
+
+					showOnly(successState);
+				} catch (error) {
+					bookingFormStatusMsg.textContent = 'تعذر الاتصال بالخادم. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.';
+				} finally {
+					submitBookingBtn.disabled = false;
+					submitBookingBtn.classList.remove('opacity-60');
+				}
+			});
+		}
+
+		if (!bookingSlug) {
+			showError('رابط الحجز غير مكتمل. يرجى استخدام الرابط الكامل الذي شاركه الطبيب معك.');
+		} else {
+			loadDoctorInfo();
+		}
+	</script>
+</body>
+</html>

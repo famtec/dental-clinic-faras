@@ -21,6 +21,16 @@ class User(Base):
     clinic_name = Column(String, nullable=True)
     clinic_address = Column(String, nullable=True)
     avatar_url = Column(String, nullable=True)
+    # حقول صفحة الحجز العامة (public booking page) -- أُضيفت 2026-08-23:
+    # كل طبيب يقدر يفعّل رابطاً عاماً خاصاً فيه (site.com/d/<booking_slug>)
+    # يسمح لأي مريض بحجز موعد مباشرة بلا تسجيل دخول ولا اتصال هاتفي.
+    clinic_phone = Column(String, nullable=True)  # رقم واتساب العيادة لاستقبال إشعارات الطلبات الجديدة
+    booking_slug = Column(String, unique=True, index=True, nullable=True)
+    public_booking_enabled = Column(Boolean, default=False, nullable=False, server_default=text("false"))
+    work_days = Column(String, nullable=True)  # قائمة أرقام مفصولة بفواصل، Monday=0..Sunday=6 (نفس ترميز date.weekday())
+    work_start_time = Column(String, nullable=True)  # "HH:MM"
+    work_end_time = Column(String, nullable=True)  # "HH:MM"
+    slot_duration_minutes = Column(Integer, nullable=False, default=30, server_default=text("30"))
 
 
 class ActivationKey(Base):
@@ -80,6 +90,10 @@ class Appointment(Base):
     # نفس تذكير الموعد أكثر من مرة واحدة.
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=True)
     reminder_sent = Column(Boolean, default=False, nullable=False, server_default=text("false"))
+    # رقم هاتف صاحب طلب الحجز العام (2026-08-23) -- يُملأ فقط للمواعيد الناتجة
+    # عن صفحة الحجز العامة (booking.html) قبل أي ربط بسجل مريض فعلي في النظام،
+    # ويُستخدم لإرسال إشعار واتساب بقرار الطبيب (قبول/رفض) لهذا الطلب تحديداً.
+    patient_phone = Column(String, nullable=True)
 
 
 class Visit(Base):
