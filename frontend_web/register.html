@@ -272,7 +272,11 @@
     });
 
     activationCodeInput.addEventListener('input', () => {
-      activationCodeInput.value = activationCodeInput.value.toUpperCase().replace(/\s+/g, '');
+      // لا نحوّل الكود تلقائياً لأحرف كبيرة (2026-08-23): أكواد التفعيل
+      // الحقيقية المولَّدة من السيرفر تحتوي أحرفاً كبيرة وصغيرة معاً، وتحويلها
+      // هنا كان يُفسد أي كود يحوي حرفاً صغيراً قبل إرساله للسيرفر أصلاً --
+      // الآن فقط نزيل المسافات الزائدة ونترك الأحرف كما وصلت (لصقاً أو كتابة).
+      activationCodeInput.value = activationCodeInput.value.replace(/\s+/g, '');
       updateRegisterInsights();
     });
 

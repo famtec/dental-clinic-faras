@@ -913,9 +913,16 @@ def register_user(register_request: RegisterRequest, db: Session = Depends(datab
         if not normalized_email:
             raise HTTPException(status_code=400, detail="البريد الإلكتروني مطلوب.")
 
+        # مطابقة غير حساسة لحالة الأحرف (2026-08-23): الأكواد المولَّدة عبر
+        # generate_renewal_activation_code() تحتوي أحرفاً كبيرة وصغيرة معاً
+        # (string.ascii_letters)، وكانت المطابقة السابقة حساسة لحالة الأحرف
+        # (==) بينما حقل الإدخال في register.html يحوّل كل شيء تلقائياً إلى
+        # أحرف كبيرة (toUpperCase) فور الكتابة/اللصق -- مما كان يرفض أي كود
+        # حقيقي يحتوي حرفاً صغيراً واحداً على الأقل (وهذا يشمل تقريباً كل
+        # الأكواد الفعلية). المطابقة الآن تتجاهل حالة الأحرف بالكامل.
         activation_key = (
             db.query(models.ActivationKey)
-            .filter(models.ActivationKey.key_code == activation_code)
+            .filter(func.lower(models.ActivationKey.key_code) == activation_code.lower())
             .first()
         )
 
@@ -1124,9 +1131,11 @@ def upgrade_user_tier(upgrade_request: UpgradeTierRequest, db: Session = Depends
     if not activation_code:
         raise HTTPException(status_code=400, detail="كود الترقية مطلوب.")
 
+    # مطابقة غير حساسة لحالة الأحرف (2026-08-23) -- انظر نفس الملاحظة في
+    # register_user أعلاه.
     activation_key = (
         db.query(models.ActivationKey)
-        .filter(models.ActivationKey.key_code == activation_code)
+        .filter(func.lower(models.ActivationKey.key_code) == activation_code.lower())
         .first()
     )
 
@@ -2717,9 +2726,11 @@ def activate_account(request: ActivationRequest, db: Session = Depends(database.
         raise HTTPException(status_code=400, detail="البريد الإلكتروني وكود التفعيل مطلوبان.")
 
     # 1. البحث عن كود التفعيل الحقيقي في قاعدة البيانات (بدلاً من قائمة مكررة ومليئة بأخطاء إملائية)
+    # مطابقة غير حساسة لحالة الأحرف (2026-08-23) -- انظر نفس الملاحظة في
+    # register_user أعلاه.
     activation_key = (
         db.query(models.ActivationKey)
-        .filter(models.ActivationKey.key_code == activation_code)
+        .filter(func.lower(models.ActivationKey.key_code) == activation_code.lower())
         .first()
     )
     if not activation_key or activation_key.is_used:
@@ -2822,7 +2833,7 @@ def generate_renewal_keys(
                 candidate_code = generate_renewal_activation_code(request.tier)
                 exists = (
                     db.query(models.ActivationKey)
-                    .filter(models.ActivationKey.key_code == candidate_code)
+                    .filter(func.lower(models.ActivationKey.key_code) == candidate_code.lower())
                     .first()
                 )
                 if not exists:
