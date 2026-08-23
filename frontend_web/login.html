@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>عيادتي الرقمية - تسجيل الدخول</title>
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
   <style>
@@ -115,18 +114,6 @@
             </button>
           </form>
 
-          <div class="my-5 flex items-center gap-3 text-xs text-slate-400">
-            <span class="h-px flex-1 bg-slate-200"></span>
-            <span>أو</span>
-            <span class="h-px flex-1 bg-slate-200"></span>
-          </div>
-
-          <div class="rounded-2xl border border-slate-200 bg-white px-4 py-4">
-            <p class="mb-3 text-center text-xs font-semibold text-slate-600">الدخول السريع باستخدام Google</p>
-            <div id="googleBtnContainer" class="flex justify-center"></div>
-            <p id="googleStatusHint" class="mt-3 hidden text-center text-xs font-medium text-slate-500"></p>
-          </div>
-
           <div class="mt-5 flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
             <span>لا تملك حسابًا بعد؟</span>
             <a href="register.html" class="font-bold text-indigo-700 transition hover:text-indigo-800">فعّل عيادتك الآن</a>
@@ -157,8 +144,6 @@
     const loginHint = document.getElementById('loginHint');
     const emailPreview = document.getElementById('emailPreview');
     const capsLockHint = document.getElementById('capsLockHint');
-    const googleStatusHint = document.getElementById('googleStatusHint');
-    const googleBtnContainer = document.getElementById('googleBtnContainer');
 
     function showMessage(text, type = 'error') {
       const baseClasses = 'rounded-2xl border px-4 py-3 text-sm font-medium shadow-sm';
@@ -179,26 +164,6 @@
     function setLoading(isLoading) {
       submitBtn.disabled = isLoading;
       submitBtn.textContent = isLoading ? 'جاري تسجيل الدخول...' : 'تسجيل الدخول الرقمي';
-    }
-
-    function setGoogleHint(text = '', type = 'normal') {
-      if (!text) {
-        googleStatusHint.classList.add('hidden');
-        googleStatusHint.textContent = '';
-        return;
-      }
-
-      const baseClass = 'mt-3 text-center text-xs font-medium';
-      if (type === 'error') {
-        googleStatusHint.className = `${baseClass} text-rose-600`;
-      } else if (type === 'success') {
-        googleStatusHint.className = `${baseClass} text-emerald-700`;
-      } else {
-        googleStatusHint.className = `${baseClass} text-slate-500`;
-      }
-
-      googleStatusHint.textContent = text;
-      googleStatusHint.classList.remove('hidden');
     }
 
     function persistLoginSession(data, fallbackEmail = '') {
@@ -242,79 +207,6 @@
       });
     }
 
-  // 1. دالة الاستجابة والتقاط التوكن السحابي وضخه في بايثون
-function handleCredentialResponse(response) {
-    if (!response.credential) {
-        alert("فشل التقاط رمز التوثيق من جوجل!");
-        return;
-    }
-
-    // إرسال التوكن مباشرة لنطاقك الرسمي المعتمد حصرياً
-    fetch('/api/auth/google', {
-
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ 
-            credential: response.credential 
-        })
-    })
-    .then(async res => {
-        const data = await res.json().catch(() => ({}));
-
-        if (res.ok) {
-            // حفظ الجلسة المحاسبية والبروفايل داخل ذاكرة المتصفح المحلية
-            // ملاحظة: استجابة /api/auth/google (LoginResponse) تُرجع email/tier وليس
-            // user_email/user_tier -- استخدام الاسم الخاطئ هنا كان يخزّن السلسلة النصية
-            // "undefined" فعلياً، مما يعطّل جدار الحماية التجاري وكل طلبات الـ API اللاحقة.
-            localStorage.setItem("user_email", data.email);
-            localStorage.setItem("user_tier", data.tier); // سيخزن pending_activation أو premium
-            localStorage.setItem("doctor_name", data.doctor_name || "");
-
-            alert("🎉 تم التحقق والتوثيق عبر خوادم Google بنجاح باهر!");
-            window.location.href = "index.html";
-        } else if (res.status === 402) {
-            // 402 = تم التحقق من حساب Google بنجاح لكن الحساب بانتظار التفعيل
-            // (حساب جديد كلياً، أو حساب قديم لم يدخل كود تفعيل حقيقياً من قبل).
-            // لا نمنحه أي دخول مجاني ولا نخزّن أي جلسة محلية هنا إطلاقاً --
-            // نعرض فقط رسالة الخادم الواضحة التي تشرح كيفية التفعيل.
-            alert(data.detail || "حسابك بانتظار التفعيل. يرجى إدخال كود تفعيل صالح للمتابعة.");
-        } else {
-            alert("فشل تسجيل الدخول عبر Google. (السيرفر رفض التوكن)");
-        }
-    })
-    .catch(err => {
-        console.error("خطأ في شبكة الاتصال السحابية:", err);
-        alert("فشل تسجيل الدخول عبر Google. تأكد من استقرار السيرفر أونلاين.");
-    });
-}
-
-// 2. دالة إجبارية لبناء وإظهار زر جوجل بقوة القانون البرمجي فور تحميل الصفحة
-window.addEventListener('load', () => {
-    setTimeout(() => {
-        if (typeof google !== 'undefined' && google.accounts) {
-            // تفريغ الحاوية أولاً لضمان عدم التكرار أو التداخل
-            const btnContainer = document.getElementById("googleBtnContainer");
-            if (btnContainer) {
-                btnContainer.innerHTML = ""; 
-                
-                google.accounts.id.initialize({
-    client_id: "446271578356-qju6aml2tiqbd2v6p23utrfb7nosketm.apps.googleusercontent.com", // 👈 تأكد من لصقه هنا
-    callback: handleCredentialResponse
-});
-
-                
-                google.accounts.id.renderButton(
-                    btnContainer,
-                    { theme: "outline", size: "large", text: "signin_with", width: "100%" }
-                );
-            }
-        } else {
-            console.error("تنبيه: مكتبة Google SDK تستغرق وقتاً للتحميل، جاري المحاولة مجدداً...");
-        }
-    }, 300); // تأخير ناعم بمقدار 300ms لضمان اكتمال سحب الـ SDK السحابي من خوادم جوجل
-});
 // 🔐 دالة تسجيل الدخول التقليدي الصارمة والمعصومة من إعادة التحميل قواعدياً
 async function loginUser(event) {
     if (event) event.preventDefault();
