@@ -518,6 +518,16 @@
         <button type="button" data-tooth-status="implant" class="rounded-2xl border border-pink-200 bg-pink-50 px-4 py-4 text-sm font-bold text-pink-700 transition hover:-translate-y-0.5 hover:bg-pink-100">زراعة</button>
         <button type="button" data-tooth-status="extracted" class="rounded-2xl border border-slate-300 bg-slate-100 px-4 py-4 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:bg-slate-200">مقلوع</button>
       </div>
+
+      <div class="mt-5 border-t border-slate-100 pt-4">
+        <p class="mb-2 text-xs font-bold text-slate-600">أو أضف حالة مخصصة باسم ولون من اختيارك</p>
+        <input id="customToothStatusInput" type="text" maxlength="40" placeholder="مثال: كسر، تنظيف، تلميع..." class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
+        <div id="customToothColorSwatches" class="mt-3 flex flex-wrap gap-2"></div>
+        <button id="saveCustomToothStatusBtn" type="button" class="mt-3 w-full rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3 text-sm font-extrabold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700">
+          حفظ الحالة المخصصة
+        </button>
+      </div>
+
       <p id="toothStatusSavingHint" class="mt-4 text-xs font-semibold text-slate-500">لن يتم حفظ التعديل حتى يتم اختيار الحالة.</p>
     </div>
   </div>
@@ -1170,15 +1180,68 @@
       return textValue || 'decay';
     }
 
+    // ---------------------------------------------------------------------
+    // Doctor-authored custom status (free-text label + a color picked from
+    // the same base palette as the fixed presets — see the "أضف حالة
+    // مخصصة" section of the tooth-status modal). The backend's
+    // PatientChartUpdate model only accepts `dict[str, str]` and its
+    // normalize_palmer_chart_state() coerces every value through Python's
+    // str(...) — a nested {label, color} object would either fail
+    // validation outright or come back mangled as a Python repr string. So
+    // a custom status is encoded as a single plain string the existing
+    // string-only pipeline (parseChartState / buildPalmerChartPayload /
+    // the PUT endpoint) already round-trips untouched, no backend change
+    // needed: "custom:<url-encoded label>|<hex color>".
+    // ---------------------------------------------------------------------
+    const CUSTOM_STATUS_PREFIX = 'custom:';
+
+    function encodeCustomStatusValue(label, color) {
+      return `${CUSTOM_STATUS_PREFIX}${encodeURIComponent(label)}|${color}`;
+    }
+
+    function decodeCustomStatusValue(value) {
+      if (typeof value !== 'string' || !value.startsWith(CUSTOM_STATUS_PREFIX)) return null;
+      const rest = value.slice(CUSTOM_STATUS_PREFIX.length);
+      const separatorIndex = rest.lastIndexOf('|');
+      if (separatorIndex === -1) return null;
+
+      const color = rest.slice(separatorIndex + 1).trim();
+      let label = '';
+      try {
+        label = decodeURIComponent(rest.slice(0, separatorIndex));
+      } catch (error) {
+        label = rest.slice(0, separatorIndex);
+      }
+      label = label.trim();
+
+      if (!label || !color) return null;
+      return { label, color };
+    }
+
     function resolveToothColor(value) {
       const statusKey = resolveStatusKey(value);
       if (statusKey && TOOTH_STATUS_OPTIONS[statusKey]) {
         return TOOTH_STATUS_OPTIONS[statusKey].color;
       }
 
+      const customEntry = decodeCustomStatusValue(value);
+      if (customEntry) return customEntry.color;
+
       const textValue = String(value || '').trim();
       if (!textValue) return DEFAULT_TOOTH_COLOR;
       return textValue;
+    }
+
+    function getToothStatusLabel(rawValue) {
+      if (!rawValue) return null;
+      const statusKey = resolveStatusKey(rawValue);
+      if (statusKey && TOOTH_STATUS_OPTIONS[statusKey]) return TOOTH_STATUS_OPTIONS[statusKey].label;
+
+      const customEntry = decodeCustomStatusValue(rawValue);
+      if (customEntry) return customEntry.label;
+
+      if (typeof rawValue === 'string' && rawValue.trim()) return rawValue.trim();
+      return 'حالة مخصصة';
     }
 
     function getPalmerNotationForTooth(toothNumber) {
@@ -1224,8 +1287,7 @@
       const tooltip = document.getElementById('toothPalmerTooltip');
       if (!tooltip || !tooth) return;
 
-      const statusKey = resolveStatusKey(currentChartState[tooth.palmerCode]);
-      const statusLabel = statusKey ? TOOTH_STATUS_OPTIONS[statusKey].label : 'سليم';
+      const statusLabel = getToothStatusLabel(currentChartState[tooth.palmerCode]) || 'سليم';
 
       tooltip.innerHTML = `
         <div class="text-[11px] font-extrabold tracking-wide text-cyan-100">السن ${escapeHtml(String(tooth.fdi))} · ${escapeHtml(tooth.palmerCode)}</div>
@@ -1436,8 +1498,10 @@
         button.classList.add('tooth-missing');
         crownPath.style.fill = '';
         rootPaths.forEach((rootPath) => { rootPath.style.fill = ''; });
-      } else if (statusKey && TOOTH_STATUS_OPTIONS[statusKey]) {
-        const color = TOOTH_STATUS_OPTIONS[statusKey].color;
+      } else if (rawValue) {
+        // resolveToothColor covers both a fixed preset key and a
+        // doctor-authored custom {custom, label, color} entry.
+        const color = resolveToothColor(rawValue);
         crownPath.style.fill = color;
         rootPaths.forEach((rootPath) => { rootPath.style.fill = color; });
       } else {
@@ -1447,8 +1511,8 @@
 
       const dot = button.querySelector('.tooth-dot');
       if (dot) {
-        if (statusKey && TOOTH_STATUS_OPTIONS[statusKey]) {
-          dot.style.background = TOOTH_STATUS_OPTIONS[statusKey].color;
+        if (rawValue && statusKey !== 'extracted') {
+          dot.style.background = resolveToothColor(rawValue);
           button.setAttribute('data-has-status', '1');
         } else {
           dot.style.background = '';
@@ -1973,6 +2037,34 @@
       refreshChartFromState();
     }
 
+    // The base palette a doctor can pick from for a custom status — reuses
+    // the exact same colors already used by the fixed presets, per the
+    // user's request, rather than introducing a separate color set.
+    const CUSTOM_STATUS_COLOR_PALETTE = Object.values(TOOTH_STATUS_OPTIONS).map((option) => option.color);
+    let selectedCustomColor = null;
+
+    function renderCustomColorSwatches() {
+      const container = document.getElementById('customToothColorSwatches');
+      if (!container) return;
+      container.innerHTML = '';
+      CUSTOM_STATUS_COLOR_PALETTE.forEach((color) => {
+        const swatch = document.createElement('button');
+        swatch.type = 'button';
+        swatch.setAttribute('aria-label', color);
+        swatch.className = 'h-8 w-8 rounded-full border-2 transition hover:scale-110';
+        swatch.style.background = color;
+        swatch.style.borderColor = selectedCustomColor === color ? '#312e81' : '#ffffff';
+        swatch.style.boxShadow = selectedCustomColor === color
+          ? '0 0 0 2px rgba(49,46,129,0.35)'
+          : '0 1px 3px rgba(15,23,42,0.25)';
+        swatch.addEventListener('click', () => {
+          selectedCustomColor = color;
+          renderCustomColorSwatches();
+        });
+        container.appendChild(swatch);
+      });
+    }
+
     function openToothStatusModal(tooth) {
       if (!tooth) return;
 
@@ -1980,6 +2072,7 @@
       const toothNumberElement = document.getElementById('toothStatusNumber');
       const modal = document.getElementById('toothStatusModal');
       const hint = document.getElementById('toothStatusSavingHint');
+      const customInput = document.getElementById('customToothStatusInput');
 
       if (toothNumberElement) {
         toothNumberElement.textContent = String(tooth.fdi);
@@ -1988,6 +2081,18 @@
       if (hint) {
         hint.textContent = 'اختر الحالة المناسبة وسيتم حفظها مباشرة على الملف السحابي.';
       }
+
+      // Pre-fill the custom-status fields from the tooth's existing entry
+      // (if it already carries a custom label/color) so re-opening the
+      // modal on a customized tooth lets the doctor see/tweak it rather
+      // than starting from a blank field every time.
+      const rawValue = currentChartState[tooth.palmerCode];
+      const customEntry = decodeCustomStatusValue(rawValue);
+      if (customInput) {
+        customInput.value = customEntry ? customEntry.label : '';
+      }
+      selectedCustomColor = customEntry ? customEntry.color : null;
+      renderCustomColorSwatches();
 
       if (modal) {
         modal.classList.remove('hidden');
@@ -2005,7 +2110,7 @@
       hidePalmerTooltip();
     }
 
-    async function saveToothStatus(statusKey) {
+    async function persistToothStatusValue(value, toastLabel) {
       if (!activeTooth) return;
 
       const patientId = getPatientIdFromUrl();
@@ -2013,11 +2118,8 @@
 
       const palmerCode = activeTooth.palmerCode;
       const previousChartState = { ...currentChartState };
-      const selectedConfig = TOOTH_STATUS_OPTIONS[statusKey];
 
-      if (!selectedConfig) return;
-
-      currentChartState[palmerCode] = statusKey;
+      currentChartState[palmerCode] = value;
       currentChartState = buildPalmerChartPayload(currentChartState);
       refreshChartFromState();
 
@@ -2039,13 +2141,37 @@
         const updatedPatient = await response.json();
         currentPatient = updatedPatient;
         setPatientChartState(updatedPatient.chart_state || currentChartState);
-        createMedicalToast(`تم تحديث السن ${activeTooth.fdi} إلى ${selectedConfig.label}`);
+        createMedicalToast(`تم تحديث السن ${activeTooth.fdi} إلى ${toastLabel}`);
         closeToothStatusModal();
       } catch (error) {
         currentChartState = previousChartState;
         refreshChartFromState();
         if (hint) hint.textContent = 'تعذر الحفظ الآن. أعد المحاولة بعد قليل.';
       }
+    }
+
+    async function saveToothStatus(statusKey) {
+      const selectedConfig = TOOTH_STATUS_OPTIONS[statusKey];
+      if (!selectedConfig) return;
+      await persistToothStatusValue(statusKey, selectedConfig.label);
+    }
+
+    async function saveCustomToothStatus() {
+      const hint = document.getElementById('toothStatusSavingHint');
+      const customInput = document.getElementById('customToothStatusInput');
+      const label = String(customInput?.value || '').trim();
+
+      if (!label) {
+        if (hint) hint.textContent = 'يرجى إدخال اسم الحالة أولاً.';
+        customInput?.focus();
+        return;
+      }
+      if (!selectedCustomColor) {
+        if (hint) hint.textContent = 'يرجى اختيار لون للحالة المخصصة.';
+        return;
+      }
+
+      await persistToothStatusValue(encodeCustomStatusValue(label, selectedCustomColor), label);
     }
 
     function updatePatientAppointmentsCount(count) {
@@ -3251,6 +3377,7 @@
     document.querySelectorAll('[data-tooth-status]').forEach((button) => {
       button.addEventListener('click', () => saveToothStatus(button.getAttribute('data-tooth-status')));
     });
+    document.getElementById('saveCustomToothStatusBtn')?.addEventListener('click', saveCustomToothStatus);
     document.getElementById('closeAppointmentEditModalBtn').addEventListener('click', closeAppointmentModal);
     document.getElementById('cancelAppointmentEditBtn').addEventListener('click', closeAppointmentModal);
     document.getElementById('appointmentEditModal').addEventListener('click', (event) => {
