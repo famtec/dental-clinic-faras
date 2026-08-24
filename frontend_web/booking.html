@@ -196,7 +196,15 @@
 			return new Promise((resolve) => setTimeout(resolve, ms));
 		}
 
-		async function loadDoctorInfo(isRetry) {
+		// خطة Render المجانية "تُسبِّت" السيرفر بعد فترة خمول، وإيقاظه من الصفر
+		// قد يأخذ حتى 30-40 ثانية (موثّق في مذكرات المشروع) -- محاولة إعادة
+		// واحدة بعد 6 ثوانٍ فقط لا تكفي لتغطية هذا السيناريو، فصار عندنا
+		// محاولتان إضافيتان بفواصل متزايدة (5 ثوانٍ ثم 15 ثانية) قبل الاستسلام
+		// وعرض زر إعادة المحاولة اليدوي للمريض.
+		const RETRY_DELAYS_MS = [5000, 15000];
+
+		async function loadDoctorInfo(attempt) {
+			const currentAttempt = attempt || 0;
 			try {
 				const response = await fetch(apiUrl(`/api/public/doctor/${encodeURIComponent(bookingSlug)}`));
 				if (!response.ok) {
@@ -219,15 +227,15 @@
 				initDateBounds();
 				loadAvailableSlots();
 			} catch (error) {
-				// أول محاولة تفشل بسبب انقطاع مؤقت في الشبكة أو "استيقاظ" سيرفر
-				// الاستضافة (خطة Render المجانية تُسبِّت السيرفر بعد فترة خمول)
-				// لا تعني أن الرابط فعلياً معطوب -- نعيد المحاولة تلقائياً مرة
-				// واحدة بعد مهلة قصيرة قبل عرض رسالة الخطأ النهائية للمريض.
-				if (!isRetry) {
-					loadingState.querySelector('p').textContent = 'الاتصال بالسيرفر بطيء، جاري إعادة المحاولة...';
+				// فشل الطلب على مستوى الشبكة (وليس رد 404/500 من السيرفر) لا يعني
+				// بالضرورة أن الرابط فعلياً معطوب -- غالباً انقطاع مؤقت بالشبكة أو
+				// سيرفر لسا يستيقظ من "السبات". نعيد المحاولة تلقائياً بفواصل
+				// متزايدة قبل عرض رسالة الخطأ النهائية للمريض.
+				if (currentAttempt < RETRY_DELAYS_MS.length) {
+					loadingState.querySelector('p').textContent = 'الاتصال بالسيرفر بطيء، جاري إعادة المحاولة... قد يستغرق الأمر حتى نصف دقيقة في أول زيارة.';
 					showOnly(loadingState);
-					await wait(6000);
-					loadDoctorInfo(true);
+					await wait(RETRY_DELAYS_MS[currentAttempt]);
+					loadDoctorInfo(currentAttempt + 1);
 					return;
 				}
 				showError('تعذر الاتصال بالخادم. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.', { showRetry: true });
@@ -354,13 +362,13 @@
 		}
 
 		if (retryBookingBtn) {
-			retryBookingBtn.addEventListener('click', () => loadDoctorInfo(false));
+			retryBookingBtn.addEventListener('click', () => loadDoctorInfo(0));
 		}
 
 		if (!bookingSlug) {
 			showError('رابط الحجز غير مكتمل. يرجى استخدام الرابط الكامل الذي شاركه الطبيب معك.');
 		} else {
-			loadDoctorInfo(false);
+			loadDoctorInfo(0);
 		}
 	</script>
 </body>
