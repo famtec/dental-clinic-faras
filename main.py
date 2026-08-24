@@ -1733,14 +1733,50 @@ def delete_patient(
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
+    # لا بد من تفريغ/فك ربط كل الصفوف في الجداول الأخرى التي تحمل مفتاحاً
+    # خارجياً (FK) نحو patients.id ولا تملك علاقة cascade في نموذج Patient
+    # (models.py) -- وإلا يرفض Postgres حذف صف patients بانتهاك قيد الـ FK
+    # (IntegrityError)، وهذا هو السبب الفعلي وراء فشل حذف بعض المرضى برسالة
+    # "تعذر حذف المريض. يرجى المحاولة لاحقاً" لأي مريض لديه صور شعاعية/ملفات
+    # أرشيف، أو حركات مالية، أو مواعيد مرتبطة به عبر Appointment.patient_id
+    # (هذا الربط أُضيف 2026-08-23 لمحرك تذكيرات واتساب ولم يكن موجوداً من قبل).
+    xray_records = (
+        db.query(models.PatientXRay)
+        .filter(models.PatientXRay.patient_id == patient_id)
+        .all()
+    )
+    xray_file_urls = [
+        (record.file_url or record.image_url or "").strip() for record in xray_records
+    ]
+
     try:
         db.query(models.Visit).filter(models.Visit.patient_id == patient_id).delete(synchronize_session=False)
         db.query(models.Treatment).filter(models.Treatment.patient_id == patient_id).delete(synchronize_session=False)
+        db.query(models.PatientXRay).filter(models.PatientXRay.patient_id == patient_id).delete(synchronize_session=False)
+        db.query(models.FinancialTransaction).filter(models.FinancialTransaction.patient_id == patient_id).delete(synchronize_session=False)
+        # لا نحذف المواعيد نفسها (قد تكون سجلاً تاريخياً يريد الطبيب الاحتفاظ
+        # به) -- فقط نفك ربطها بهذا المريض المحذوف، لأن Appointment.patient_name
+        # حقل نصي مستقل أصلاً ولا يعتمد على وجود صف patients ليبقى مقروءاً.
+        db.query(models.Appointment).filter(models.Appointment.patient_id == patient_id).update(
+            {models.Appointment.patient_id: None}, synchronize_session=False
+        )
         db.delete(patient)
         db.commit()
     except Exception:
         db.rollback()
         raise
+
+    # حذف الملفات الفعلية للصور الشعاعية بعد نجاح حذف الصفوف من قاعدة
+    # البيانات فقط (نفس نمط delete_patient_archive أعلاه).
+    for file_url in xray_file_urls:
+        if file_url.startswith("/uploads/"):
+            physical_path = file_url[len("/uploads/"):]
+            full_path = os.path.join(UPLOADS_DIR, physical_path)
+            if os.path.exists(full_path):
+                try:
+                    os.remove(full_path)
+                except OSError:
+                    pass
 
     return {"message": "Patient deleted successfully"}
 
@@ -2178,23 +2214,62 @@ def create_expense(
         raise HTTPException(status_code=400, detail="تعذر حفظ المصروف حالياً. حاول مرة أخرى.")
 
 
+def _damascus_now():
+    return datetime.now(KEEP_ALIVE_TIMEZONE).replace(tzinfo=None)
+
+
+def _month_bounds(year: int, month: int):
+    start = datetime(year, month, 1)
+    if month == 12:
+        end = datetime(year + 1, 1, 1)
+    else:
+        end = datetime(year, month + 1, 1)
+    return start, end
+
+
 @app.get("/api/finance/summary")
 def get_finance_summary(
+    year: Optional[int] = Query(None),
+    month: Optional[int] = Query(None),
+    all_time: bool = Query(False),
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(require_active_doctor_user),
 ):
-    total_income = (
+    # 2026-08-24: التقارير المالية أصبحت شهرية افتراضياً بدل مجموع تراكمي منذ
+    # بداية الاستخدام -- إن لم يُرسل year/month يُستخدم الشهر الحالي بتوقيت
+    # KEEP_ALIVE_TIMEZONE (نفس منطقة "اليوم/الآن" المعتمدة في باقي الملف)،
+    # وإن أُرسل all_time=true يعود السلوك القديم (إجمالي كل الحركات).
+    income_query = (
         db.query(func.coalesce(func.sum(models.FinancialTransaction.amount), 0))
         .filter(models.FinancialTransaction.type == "income")
         .filter(models.FinancialTransaction.doctor_email == current_user.email)
-        .scalar()
     )
-    total_expenses = (
+    expense_query = (
         db.query(func.coalesce(func.sum(models.FinancialTransaction.amount), 0))
         .filter(models.FinancialTransaction.type == "expense")
         .filter(models.FinancialTransaction.doctor_email == current_user.email)
-        .scalar()
     )
+
+    resolved_year = None
+    resolved_month = None
+    if not all_time:
+        now_local = _damascus_now()
+        resolved_year = year if year is not None else now_local.year
+        resolved_month = month if month is not None else now_local.month
+        if resolved_month < 1 or resolved_month > 12:
+            raise HTTPException(status_code=400, detail="الشهر يجب أن يكون رقماً بين 1 و 12.")
+        month_start, month_end = _month_bounds(resolved_year, resolved_month)
+        income_query = income_query.filter(
+            models.FinancialTransaction.created_at >= month_start,
+            models.FinancialTransaction.created_at < month_end,
+        )
+        expense_query = expense_query.filter(
+            models.FinancialTransaction.created_at >= month_start,
+            models.FinancialTransaction.created_at < month_end,
+        )
+
+    total_income = income_query.scalar()
+    total_expenses = expense_query.scalar()
 
     income_value = Decimal(total_income or 0)
     expenses_value = Decimal(total_expenses or 0)
@@ -2205,7 +2280,37 @@ def get_finance_summary(
         "total_expenses": float(expenses_value),
         "net_profit": float(net_profit),
         "total_revenue": float(income_value),
+        "all_time": all_time,
+        "year": resolved_year,
+        "month": resolved_month,
     }
+
+
+@app.get("/api/finance/available-months")
+def get_finance_available_months(
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_active_doctor_user),
+):
+    # قائمة الأشهر (سنة/شهر) التي فيها حركات مالية فعلية لهذا الطبيب، لبناء
+    # قائمة اختيار الأشهر في صفحة finance.html -- الشهر الحالي يُضاف دائماً
+    # حتى لو لم تُسجَّل فيه أي حركة بعد، ليبقى قابلاً للاختيار دوماً.
+    timestamps = (
+        db.query(models.FinancialTransaction.created_at)
+        .filter(models.FinancialTransaction.doctor_email == current_user.email)
+        .all()
+    )
+
+    seen = set()
+    for (created_at,) in timestamps:
+        if created_at is not None:
+            seen.add((created_at.year, created_at.month))
+
+    now_local = _damascus_now()
+    seen.add((now_local.year, now_local.month))
+
+    months = [{"year": y, "month": m} for (y, m) in sorted(seen, reverse=True)]
+
+    return {"months": months}
 
 
 @app.get("/api/finance/patient/{patient_id}", response_model=List[FinancialTransactionResponse])
