@@ -30,10 +30,39 @@
 		.tooth-float { animation: toothFloat 6s ease-in-out infinite; }
 		.feature-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
 		.feature-card:hover { transform: translateY(-4px); }
+		.text-gradient {
+			background: linear-gradient(115deg, #4338ca 0%, #7c3aed 50%, #4338ca 100%);
+			-webkit-background-clip: text;
+			background-clip: text;
+			color: transparent;
+			-webkit-text-fill-color: transparent;
+		}
+		.grid-texture {
+			background-image: radial-gradient(rgba(79, 70, 229, 0.16) 1px, transparent 1px);
+			background-size: 28px 28px;
+			-webkit-mask-image: radial-gradient(ellipse 60% 50% at 50% 0%, black 0%, transparent 75%);
+			mask-image: radial-gradient(ellipse 60% 50% at 50% 0%, black 0%, transparent 75%);
+		}
+		.icon-badge {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			border-radius: 1rem;
+		}
+		.reveal-up {
+			opacity: 0;
+			transform: translateY(18px);
+			transition: opacity 0.7s ease, transform 0.7s ease;
+		}
+		.reveal-up.is-visible {
+			opacity: 1;
+			transform: translateY(0);
+		}
 	</style>
 </head>
 <body class="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.22),_transparent_30%),linear-gradient(135deg,_#f8fafc_0%,_#eef2ff_45%,_#e0e7ff_100%)] text-slate-800">
 	<div class="pointer-events-none fixed inset-0 overflow-hidden">
+		<div class="grid-texture absolute inset-x-0 top-0 h-[560px]"></div>
 		<div class="absolute right-[10%] top-16 h-40 w-40 rounded-full bg-indigo-200/30 blur-3xl"></div>
 		<div class="absolute left-[6%] top-[22%] h-56 w-56 rounded-full bg-violet-200/20 blur-3xl"></div>
 		<div class="absolute bottom-0 right-[20%] h-48 w-48 rounded-full bg-indigo-300/15 blur-3xl"></div>
@@ -42,7 +71,7 @@
 	<header class="relative z-10 border-b border-white/60 bg-white/70 backdrop-blur-xl">
 		<div class="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8">
 			<div class="flex items-center gap-3">
-				<span class="flex h-11 w-11 items-center justify-center rounded-2xl border border-indigo-200 bg-indigo-50 text-2xl shadow-sm">🦷</span>
+				<span class="icon-badge h-11 w-11 bg-gradient-to-br from-indigo-500 to-violet-600 text-2xl text-white shadow-lg shadow-indigo-500/25">🦷</span>
 				<span class="text-lg font-extrabold tracking-tight text-indigo-950">عيادتي الرقمية</span>
 			</div>
 			<nav class="flex flex-wrap items-center gap-2">
@@ -54,31 +83,34 @@
 
 	<main class="relative z-10">
 		<section class="mx-auto w-full max-w-6xl px-4 pb-10 pt-14 text-center sm:px-6 sm:pt-20 lg:px-8">
-			<div class="tooth-float mx-auto mb-6 inline-flex h-20 w-20 items-center justify-center rounded-3xl border border-indigo-200 bg-white text-5xl shadow-xl shadow-indigo-200/50">🦷</div>
+			<div class="relative mx-auto mb-6 h-20 w-20">
+				<div class="absolute inset-0 -z-10 rounded-full bg-indigo-400/30 blur-2xl"></div>
+				<div class="tooth-float flex h-20 w-20 items-center justify-center rounded-3xl border border-indigo-200 bg-white text-5xl shadow-xl shadow-indigo-200/50">🦷</div>
+			</div>
 			<div class="mx-auto mb-4 inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-4 py-1.5 text-xs font-bold tracking-[0.2em] text-indigo-700">نظام إدارة عيادات الأسنان</div>
-			<h1 class="mx-auto max-w-3xl text-3xl font-black leading-tight text-indigo-950 sm:text-4xl lg:text-5xl">عيادتك كاملة، مُنظّمة بمكان واحد</h1>
+			<h1 class="mx-auto max-w-3xl text-3xl font-black leading-tight sm:text-4xl lg:text-5xl"><span class="text-indigo-950">عيادتك كاملة، </span><span class="text-gradient">مُنظّمة بمكان واحد</span></h1>
 			<p class="mx-auto mt-5 max-w-2xl text-base leading-8 text-slate-600 sm:text-lg">سجلات المرضى، المواعيد اليومية، التقارير المالية، الوصفات، وأرشيف الأشعة - كل ما تحتاجه لإدارة عيادتك إلكترونياً، بواجهة عربية بالكامل وبدون تعقيد.</p>
 			<div class="mt-8 flex flex-wrap items-center justify-center gap-3">
-				<a href="register.html" class="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-3.5 text-sm font-bold text-white shadow-xl shadow-indigo-300/40 transition hover:-translate-y-0.5 hover:from-indigo-700 hover:to-violet-700 sm:text-base">ابدأ استخدام المنصة</a>
-				<a href="contact_developer.html" class="rounded-2xl border border-indigo-200 bg-white px-6 py-3.5 text-sm font-bold text-indigo-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-indigo-50 sm:text-base">تواصل معنا للاشتراك</a>
+				<a href="register.html" class="glow-btn rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-3.5 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:scale-[1.02] hover:from-indigo-700 hover:to-violet-700 sm:text-base">ابدأ استخدام المنصة</a>
+				<a href="contact_developer.html" class="rounded-2xl border border-indigo-200 bg-white px-6 py-3.5 text-sm font-bold text-indigo-700 shadow-sm transition hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-indigo-50 sm:text-base">تواصل معنا للاشتراك</a>
 			</div>
 			<p class="mt-4 text-xs font-medium text-slate-400">لديك حساب بالفعل؟ <a href="login.html" class="font-bold text-indigo-600 hover:text-indigo-700">سجّل دخولك من هنا</a></p>
 		</section>
 
 		<section class="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
 			<div class="grid gap-4 sm:grid-cols-3">
-				<div class="panel-soft rounded-[24px] border border-white/70 p-5 text-center shadow-lg shadow-slate-200/60">
-					<div class="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 text-2xl">⏱️</div>
+				<div class="reveal-up panel-soft rounded-[24px] border border-white/70 p-5 text-center shadow-lg shadow-slate-200/60 transition hover:-translate-y-1">
+					<div class="icon-badge mx-auto mb-3 h-12 w-12 bg-gradient-to-br from-emerald-400 to-emerald-600 text-2xl text-white shadow-lg shadow-emerald-500/25">⏱️</div>
 					<h3 class="font-extrabold text-slate-800">توفير وقتك</h3>
 					<p class="mt-2 text-sm leading-6 text-slate-500">إدارة المرضى والمواعيد والمالية من مكان واحد، بدل دفاتر وملفات متفرقة.</p>
 				</div>
-				<div class="panel-soft rounded-[24px] border border-white/70 p-5 text-center shadow-lg shadow-slate-200/60">
-					<div class="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-indigo-200 bg-indigo-50 text-2xl">🔒</div>
+				<div class="reveal-up panel-soft rounded-[24px] border border-white/70 p-5 text-center shadow-lg shadow-slate-200/60 transition hover:-translate-y-1">
+					<div class="icon-badge mx-auto mb-3 h-12 w-12 bg-gradient-to-br from-indigo-500 to-indigo-700 text-2xl text-white shadow-lg shadow-indigo-500/25">🔒</div>
 					<h3 class="font-extrabold text-slate-800">بياناتك بأمان دائم</h3>
 					<p class="mt-2 text-sm leading-6 text-slate-500">كل سجلات مرضاك محفوظة بشكل آمن على السحابة، ولا تضيع مهما حصل.</p>
 				</div>
-				<div class="panel-soft rounded-[24px] border border-white/70 p-5 text-center shadow-lg shadow-slate-200/60">
-					<div class="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-violet-200 bg-violet-50 text-2xl">🇸🇾</div>
+				<div class="reveal-up panel-soft rounded-[24px] border border-white/70 p-5 text-center shadow-lg shadow-slate-200/60 transition hover:-translate-y-1">
+					<div class="icon-badge mx-auto mb-3 h-12 w-12 bg-gradient-to-br from-violet-500 to-violet-700 text-2xl text-white shadow-lg shadow-violet-500/25">🇸🇾</div>
 					<h3 class="font-extrabold text-slate-800">مصمم لعيادتك</h3>
 					<p class="mt-2 text-sm leading-6 text-slate-500">واجهة عربية بالكامل، ودعم فني مباشر من مطور المنصة عند أي استفسار.</p>
 				</div>
@@ -91,33 +123,33 @@
 				<h2 class="text-2xl font-extrabold text-slate-800 sm:text-3xl">كل ما تحتاجه عيادتك</h2>
 			</div>
 			<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-				<div class="feature-card panel-soft rounded-[24px] border border-white/70 p-5 shadow-lg shadow-slate-200/60">
-					<div class="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-indigo-200 bg-indigo-50 text-2xl">👥</div>
+				<div class="feature-card reveal-up panel-soft rounded-[24px] border border-white/70 p-5 shadow-lg shadow-slate-200/60">
+					<div class="icon-badge mb-3 h-12 w-12 bg-gradient-to-br from-indigo-400 to-indigo-600 text-2xl text-white shadow-lg shadow-indigo-500/25">👥</div>
 					<h3 class="font-extrabold text-slate-800">سجلات المرضى</h3>
 					<p class="mt-2 text-sm leading-6 text-slate-500">ملف طبي كامل لكل مريض: التاريخ المرضي، مخطط الأسنان، والعلاجات السابقة.</p>
 				</div>
-				<div class="feature-card panel-soft rounded-[24px] border border-white/70 p-5 shadow-lg shadow-slate-200/60">
-					<div class="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-200 bg-cyan-50 text-2xl">📅</div>
+				<div class="feature-card reveal-up panel-soft rounded-[24px] border border-white/70 p-5 shadow-lg shadow-slate-200/60">
+					<div class="icon-badge mb-3 h-12 w-12 bg-gradient-to-br from-cyan-400 to-cyan-600 text-2xl text-white shadow-lg shadow-cyan-500/25">📅</div>
 					<h3 class="font-extrabold text-slate-800">المواعيد اليومية</h3>
 					<p class="mt-2 text-sm leading-6 text-slate-500">جدولة وتتبّع مواعيد مرضاك بسهولة، مع إمكانية إرسال تذكير واتساب لكل موعد.</p>
 				</div>
-				<div class="feature-card panel-soft rounded-[24px] border border-white/70 p-5 shadow-lg shadow-slate-200/60">
-					<div class="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 text-2xl">📊</div>
+				<div class="feature-card reveal-up panel-soft rounded-[24px] border border-white/70 p-5 shadow-lg shadow-slate-200/60">
+					<div class="icon-badge mb-3 h-12 w-12 bg-gradient-to-br from-emerald-400 to-emerald-600 text-2xl text-white shadow-lg shadow-emerald-500/25">📊</div>
 					<h3 class="font-extrabold text-slate-800">التقارير المالية</h3>
 					<p class="mt-2 text-sm leading-6 text-slate-500">متابعة دخل العيادة، المصاريف، والمبالغ المستحقة على المرضى أولاً بأول.</p>
 				</div>
-				<div class="feature-card panel-soft rounded-[24px] border border-white/70 p-5 shadow-lg shadow-slate-200/60">
-					<div class="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-violet-200 bg-violet-50 text-2xl">💊</div>
+				<div class="feature-card reveal-up panel-soft rounded-[24px] border border-white/70 p-5 shadow-lg shadow-slate-200/60">
+					<div class="icon-badge mb-3 h-12 w-12 bg-gradient-to-br from-violet-400 to-violet-600 text-2xl text-white shadow-lg shadow-violet-500/25">💊</div>
 					<h3 class="font-extrabold text-slate-800">الوصفات الطبية</h3>
 					<p class="mt-2 text-sm leading-6 text-slate-500">إنشاء وطباعة وصفات طبية احترافية باسم عيادتك خلال ثوانٍ.</p>
 				</div>
-				<div class="feature-card panel-soft rounded-[24px] border border-white/70 p-5 shadow-lg shadow-slate-200/60">
-					<div class="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-rose-200 bg-rose-50 text-2xl">🩻</div>
+				<div class="feature-card reveal-up panel-soft rounded-[24px] border border-white/70 p-5 shadow-lg shadow-slate-200/60">
+					<div class="icon-badge mb-3 h-12 w-12 bg-gradient-to-br from-rose-400 to-rose-600 text-2xl text-white shadow-lg shadow-rose-500/25">🩻</div>
 					<h3 class="font-extrabold text-slate-800">أرشيف الأشعة والصور</h3>
 					<p class="mt-2 text-sm leading-6 text-slate-500">احفظ صور الأشعة والملفات الطبية لكل مريض في مكان واحد منظّم.</p>
 				</div>
-				<div class="feature-card panel-soft rounded-[24px] border border-white/70 p-5 shadow-lg shadow-slate-200/60">
-					<div class="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 text-2xl">📦</div>
+				<div class="feature-card reveal-up panel-soft rounded-[24px] border border-white/70 p-5 shadow-lg shadow-slate-200/60">
+					<div class="icon-badge mb-3 h-12 w-12 bg-gradient-to-br from-amber-400 to-amber-600 text-2xl text-white shadow-lg shadow-amber-500/25">📦</div>
 					<h3 class="font-extrabold text-slate-800">إدارة المخزون (Premium)</h3>
 					<p class="mt-2 text-sm leading-6 text-slate-500">تتبّع مواد العيادة وتنبيهات النقص قبل نفاد المستلزمات.</p>
 				</div>
@@ -131,7 +163,8 @@
 				<p class="mx-auto mt-2 max-w-xl text-sm text-slate-500">تواصل معنا مباشرة لمعرفة تفاصيل الأسعار والحصول على كود التفعيل.</p>
 			</div>
 			<div class="grid gap-6 lg:grid-cols-2">
-				<div class="panel-soft rounded-[28px] border border-white/70 p-6 shadow-xl shadow-slate-200/70 sm:p-8">
+				<div class="reveal-up panel-soft relative overflow-hidden rounded-[28px] border border-white/70 p-6 shadow-xl shadow-slate-200/70 sm:p-8">
+					<div class="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-indigo-500 to-violet-600"></div>
 					<span class="badge-standard inline-flex rounded-full px-4 py-1.5 text-sm font-black tracking-wide">Standard</span>
 					<p class="mt-3 text-sm text-slate-500">كل ما تحتاجه عيادة الطبيب المستقل لإدارة عملها يومياً.</p>
 					<ul class="mt-5 space-y-3 text-sm text-slate-700">
@@ -142,7 +175,8 @@
 					</ul>
 					<a href="contact_developer.html" class="mt-6 block rounded-2xl border border-indigo-200 bg-white px-5 py-3 text-center text-sm font-bold text-indigo-700 shadow-sm transition hover:bg-indigo-50">تواصل معنا للاشتراك</a>
 				</div>
-				<div class="panel-soft relative overflow-hidden rounded-[28px] border-2 border-amber-300/60 p-6 shadow-xl shadow-amber-200/40 sm:p-8">
+				<div class="reveal-up panel-soft relative overflow-hidden rounded-[28px] border-2 border-amber-300/60 p-6 shadow-xl shadow-amber-200/40 sm:p-8">
+					<div class="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500"></div>
 					<div class="absolute -left-10 -top-10 h-32 w-32 rounded-full bg-amber-200/40 blur-2xl"></div>
 					<span class="badge-premium relative inline-flex rounded-full px-4 py-1.5 text-sm font-black tracking-wide">Premium 👑</span>
 					<p class="relative mt-3 text-sm text-slate-500">كل ميزات Standard، بالإضافة لإدارة مخزون العيادة - مناسبة للعيادات الأكثر نشاطاً.</p>
@@ -163,18 +197,18 @@
 				<h2 class="text-2xl font-extrabold text-slate-800 sm:text-3xl">3 خطوات بسيطة</h2>
 			</div>
 			<div class="grid gap-4 sm:grid-cols-3">
-				<div class="panel-soft rounded-[24px] border border-white/70 p-5 text-center shadow-lg shadow-slate-200/60">
-					<div class="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-indigo-600 text-lg font-extrabold text-white">١</div>
+				<div class="reveal-up panel-soft rounded-[24px] border border-white/70 p-5 text-center shadow-lg shadow-slate-200/60">
+					<div class="icon-badge mx-auto mb-3 h-12 w-12 bg-gradient-to-br from-indigo-500 to-violet-600 text-lg font-extrabold text-white shadow-lg shadow-indigo-500/25">١</div>
 					<h3 class="font-extrabold text-slate-800">تواصل معنا</h3>
 					<p class="mt-2 text-sm leading-6 text-slate-500">راسلنا لاختيار الباقة المناسبة والحصول على كود التفعيل.</p>
 				</div>
-				<div class="panel-soft rounded-[24px] border border-white/70 p-5 text-center shadow-lg shadow-slate-200/60">
-					<div class="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-indigo-600 text-lg font-extrabold text-white">٢</div>
+				<div class="reveal-up panel-soft rounded-[24px] border border-white/70 p-5 text-center shadow-lg shadow-slate-200/60">
+					<div class="icon-badge mx-auto mb-3 h-12 w-12 bg-gradient-to-br from-indigo-500 to-violet-600 text-lg font-extrabold text-white shadow-lg shadow-indigo-500/25">٢</div>
 					<h3 class="font-extrabold text-slate-800">أنشئ حسابك</h3>
 					<p class="mt-2 text-sm leading-6 text-slate-500">سجّل بيانات عيادتك وفعّل حسابك بكود التفعيل خلال دقيقة.</p>
 				</div>
-				<div class="panel-soft rounded-[24px] border border-white/70 p-5 text-center shadow-lg shadow-slate-200/60">
-					<div class="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-indigo-600 text-lg font-extrabold text-white">٣</div>
+				<div class="reveal-up panel-soft rounded-[24px] border border-white/70 p-5 text-center shadow-lg shadow-slate-200/60">
+					<div class="icon-badge mx-auto mb-3 h-12 w-12 bg-gradient-to-br from-indigo-500 to-violet-600 text-lg font-extrabold text-white shadow-lg shadow-indigo-500/25">٣</div>
 					<h3 class="font-extrabold text-slate-800">ابدأ العمل فوراً</h3>
 					<p class="mt-2 text-sm leading-6 text-slate-500">أضف مرضاك ومواعيدك وابدأ إدارة عيادتك إلكترونياً من أي جهاز.</p>
 				</div>
@@ -182,21 +216,22 @@
 		</section>
 
 		<section id="contact" class="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
-			<div class="panel-soft rounded-[28px] border border-white/70 p-6 text-center shadow-xl shadow-slate-200/70 sm:p-10">
+			<div class="reveal-up panel-soft rounded-[28px] border border-white/70 p-6 text-center shadow-xl shadow-slate-200/70 sm:p-10">
 				<h2 class="text-2xl font-extrabold text-slate-800 sm:text-3xl">جاهز تنقل عيادتك للعصر الرقمي؟</h2>
 				<p class="mx-auto mt-3 max-w-xl text-sm leading-7 text-slate-500">تواصل معنا الآن عبر أي وسيلة تناسبك، وسنساعدك بكل خطوة.</p>
 				<div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-					<a href="tel:0956907698" class="rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-bold text-cyan-800 transition hover:-translate-y-0.5 hover:bg-cyan-100">📞 اتصال هاتفي</a>
-					<a href="https://t.me/fareshalawi17" target="_blank" rel="noopener noreferrer" class="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-bold text-sky-800 transition hover:-translate-y-0.5 hover:bg-sky-100">💬 تيليغرام</a>
-					<a href="https://wa.me/963956907698?text=%D9%85%D8%B1%D8%AD%D8%A8%D8%A7%D9%8B%D8%8C%20%D8%A3%D8%B1%D9%8A%D8%AF%20%D8%A7%D9%84%D8%A7%D8%B4%D8%AA%D8%B1%D8%A7%D9%83%20%D8%A8%D9%86%D8%B8%D8%A7%D9%85%20%D8%B9%D9%8A%D8%A7%D8%AF%D8%AA%D9%8A%20%D8%A7%D9%84%D8%B1%D9%82%D9%85%D9%8A%D8%A9" target="_blank" rel="noopener noreferrer" class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800 transition hover:-translate-y-0.5 hover:bg-emerald-100">🟢 واتساب</a>
-					<a href="mailto:fareshalawi17@gmail.com" class="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-bold text-violet-800 transition hover:-translate-y-0.5 hover:bg-violet-100">✉️ بريد إلكتروني</a>
+					<a href="tel:0956907698" class="rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-bold text-cyan-800 shadow-sm transition hover:-translate-y-1 hover:bg-cyan-100 hover:shadow-lg hover:shadow-cyan-200/60">📞 اتصال هاتفي</a>
+					<a href="https://t.me/fareshalawi17" target="_blank" rel="noopener noreferrer" class="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-bold text-sky-800 shadow-sm transition hover:-translate-y-1 hover:bg-sky-100 hover:shadow-lg hover:shadow-sky-200/60">💬 تيليغرام</a>
+					<a href="https://wa.me/963956907698?text=%D9%85%D8%B1%D8%AD%D8%A8%D8%A7%D9%8B%D8%8C%20%D8%A3%D8%B1%D9%8A%D8%AF%20%D8%A7%D9%84%D8%A7%D8%B4%D8%AA%D8%B1%D8%A7%D9%83%20%D8%A8%D9%86%D8%B8%D8%A7%D9%85%20%D8%B9%D9%8A%D8%A7%D8%AF%D8%AA%D9%8A%20%D8%A7%D9%84%D8%B1%D9%82%D9%85%D9%8A%D8%A9" target="_blank" rel="noopener noreferrer" class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800 shadow-sm transition hover:-translate-y-1 hover:bg-emerald-100 hover:shadow-lg hover:shadow-emerald-200/60">🟢 واتساب</a>
+					<a href="mailto:fareshalawi17@gmail.com" class="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-bold text-violet-800 shadow-sm transition hover:-translate-y-1 hover:bg-violet-100 hover:shadow-lg hover:shadow-violet-200/60">✉️ بريد إلكتروني</a>
 				</div>
 				<p class="mt-5 text-xs text-slate-400">أو تفضّل بزيارة <a href="contact_developer.html" class="font-bold text-indigo-600 hover:text-indigo-700">صفحة التواصل الكاملة</a></p>
 			</div>
 		</section>
 	</main>
 
-	<footer class="relative z-10 border-t border-white/60 bg-white/70 py-6 text-center backdrop-blur-xl">
+	<div class="relative z-10 mx-auto h-px w-full max-w-4xl bg-gradient-to-r from-transparent via-indigo-300/70 to-transparent"></div>
+	<footer class="relative z-10 bg-white/70 py-6 text-center backdrop-blur-xl">
 		<div class="mx-auto flex w-full max-w-6xl flex-col items-center gap-2 px-4 sm:flex-row sm:justify-between sm:px-6 lg:px-8">
 			<p class="text-xs font-mono tracking-wide text-indigo-500/90">تطوير وإدارة: المهندس فارس حلاوي © 2026</p>
 			<div class="flex items-center gap-4 text-xs font-semibold text-slate-500">
@@ -206,5 +241,24 @@
 			</div>
 		</div>
 	</footer>
+	<script>
+		(function () {
+			var items = document.querySelectorAll('.reveal-up');
+			if (!items.length) return;
+			if (!('IntersectionObserver' in window)) {
+				items.forEach(function (el) { el.classList.add('is-visible'); });
+				return;
+			}
+			var observer = new IntersectionObserver(function (entries) {
+				entries.forEach(function (entry) {
+					if (entry.isIntersecting) {
+						entry.target.classList.add('is-visible');
+						observer.unobserve(entry.target);
+					}
+				});
+			}, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+			items.forEach(function (el) { observer.observe(el); });
+		})();
+	</script>
 </body>
 </html>

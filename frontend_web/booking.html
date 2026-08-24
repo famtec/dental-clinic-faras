@@ -208,7 +208,9 @@
 			try {
 				const response = await fetch(apiUrl(`/api/public/doctor/${encodeURIComponent(bookingSlug)}`));
 				if (!response.ok) {
-					showError('صفحة الحجز هذه غير موجودة، أو أن الطبيب لم يُفعّلها بعد.');
+					const errorBody = await response.json().catch(() => ({}));
+					const detail = errorBody.detail ? ` — ${errorBody.detail}` : '';
+					showError(`صفحة الحجز هذه غير موجودة، أو أن الطبيب لم يُفعّلها بعد. (رمز الخطأ: ${response.status}${detail})`);
 					return;
 				}
 				const doctor = await response.json();
@@ -238,7 +240,9 @@
 					loadDoctorInfo(currentAttempt + 1);
 					return;
 				}
-				showError('تعذر الاتصال بالخادم. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.', { showRetry: true });
+				const innerDetail = `${error && error.name || ''} ${error && error.message || ''}`.trim();
+				const technicalDetail = innerDetail ? ` (تفاصيل تقنية: ${innerDetail})` : '';
+				showError(`تعذر الاتصال بالخادم. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.${technicalDetail}`, { showRetry: true });
 			}
 		}
 
