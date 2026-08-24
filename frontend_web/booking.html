@@ -44,6 +44,7 @@
 			<div class="mx-auto mb-4 inline-flex h-16 w-16 items-center justify-center rounded-3xl border border-rose-200 bg-rose-50 text-4xl">😕</div>
 			<h1 class="text-xl font-extrabold text-slate-800">عذراً، هذا الرابط غير متاح</h1>
 			<p id="errorStateMsg" class="mt-2 text-sm leading-6 text-slate-500">صفحة الحجز هذه غير موجودة، أو أن الطبيب لم يُفعّلها بعد. يرجى التأكد من الرابط والمحاولة مرة أخرى.</p>
+			<button id="retryBookingBtn" type="button" class="step-hidden mt-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700">إعادة المحاولة</button>
 		</div>
 
 		<!-- المحتوى الرئيسي لصفحة الحجز -->
@@ -136,6 +137,7 @@
 		const loadingState = document.getElementById('loadingState');
 		const errorState = document.getElementById('errorState');
 		const errorStateMsg = document.getElementById('errorStateMsg');
+		const retryBookingBtn = document.getElementById('retryBookingBtn');
 		const bookingApp = document.getElementById('bookingApp');
 		const successState = document.getElementById('successState');
 
@@ -170,8 +172,10 @@
 			if (element) element.classList.remove('step-hidden');
 		}
 
-		function showError(message) {
+		function showError(message, options) {
+			const showRetry = Boolean(options && options.showRetry);
 			if (errorStateMsg && message) errorStateMsg.textContent = message;
+			if (retryBookingBtn) retryBookingBtn.classList.toggle('step-hidden', !showRetry);
 			showOnly(errorState);
 		}
 
@@ -188,7 +192,11 @@
 			bookingDateInput.value = formatDateForInput(today);
 		}
 
-		async function loadDoctorInfo() {
+		function wait(ms) {
+			return new Promise((resolve) => setTimeout(resolve, ms));
+		}
+
+		async function loadDoctorInfo(isRetry) {
 			try {
 				const response = await fetch(apiUrl(`/api/public/doctor/${encodeURIComponent(bookingSlug)}`));
 				if (!response.ok) {
@@ -211,7 +219,18 @@
 				initDateBounds();
 				loadAvailableSlots();
 			} catch (error) {
-				showError('تعذر الاتصال بالخادم. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.');
+				// أول محاولة تفشل بسبب انقطاع مؤقت في الشبكة أو "استيقاظ" سيرفر
+				// الاستضافة (خطة Render المجانية تُسبِّت السيرفر بعد فترة خمول)
+				// لا تعني أن الرابط فعلياً معطوب -- نعيد المحاولة تلقائياً مرة
+				// واحدة بعد مهلة قصيرة قبل عرض رسالة الخطأ النهائية للمريض.
+				if (!isRetry) {
+					loadingState.querySelector('p').textContent = 'الاتصال بالسيرفر بطيء، جاري إعادة المحاولة...';
+					showOnly(loadingState);
+					await wait(6000);
+					loadDoctorInfo(true);
+					return;
+				}
+				showError('تعذر الاتصال بالخادم. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.', { showRetry: true });
 			}
 		}
 
@@ -334,10 +353,14 @@
 			});
 		}
 
+		if (retryBookingBtn) {
+			retryBookingBtn.addEventListener('click', () => loadDoctorInfo(false));
+		}
+
 		if (!bookingSlug) {
 			showError('رابط الحجز غير مكتمل. يرجى استخدام الرابط الكامل الذي شاركه الطبيب معك.');
 		} else {
-			loadDoctorInfo();
+			loadDoctorInfo(false);
 		}
 	</script>
 </body>
