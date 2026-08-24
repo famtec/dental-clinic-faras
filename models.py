@@ -31,6 +31,12 @@ class User(Base):
     work_start_time = Column(String, nullable=True)  # "HH:MM"
     work_end_time = Column(String, nullable=True)  # "HH:MM"
     slot_duration_minutes = Column(Integer, nullable=False, default=30, server_default=text("30"))
+    # رمز جهاز Firebase Cloud Messaging لتطبيق الطبيب على أندرويد (أُضيف 2026-08-24)
+    # -- يُخزَّن هنا آخر توكن FCM سجّله تطبيق الطبيب بعد تسجيل الدخول (جهاز واحد
+    # لكل طبيب حالياً، يُستبدل بالأحدث عند كل POST /api/auth/register-device)،
+    # ويُستخدَم لإرسال إشعار Push فوري عند وصول طلب حجز جديد عبر صفحة الحجز
+    # العامة. قيمة NULL تعني ببساطة أن التطبيق لم يُثبّت/يُفعّل بعد لهذا الطبيب.
+    fcm_token = Column(String, nullable=True)
 
 
 class ActivationKey(Base):

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1048631773699",
+    "project_id": "dental-clinic-faras-fc591",
+    "storage_bucket": "dental-clinic-faras-fc591.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1048631773699:android:4012d46bd8a76ee9015c36",
+        "android_client_info": {
+          "package_name": "com.mydigitalclinic.doctor"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBCqkX1x3FTroNWRkLrcT156MzAA5pE7BI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

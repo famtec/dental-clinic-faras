@@ -1,14 +1,84 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'dart:developer' as developer;
+
+import 'screens/home_screen.dart';
+import 'screens/login_screen.dart';
+import 'screens/today_schedule_screen.dart';
+import 'services/api_service.dart';
+import 'services/auth_storage.dart';
+import 'services/push_notification_service.dart';
 
 void main() {
-  runApp(const DentalApp());
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const DentalDoctorApp());
 }
 
-class DentalApp extends StatelessWidget {
-  const DentalApp({super.key});
+/// جذر التطبيق -- يدير الجلسة (مسجّل دخول أم لا)، ويهيّئ إشعارات Push بعد
+/// نجاح تسجيل الدخول فقط (لا حاجة لطلب إذن الإشعارات قبل أن يصبح للطبيب
+/// جلسة فعلية يُسجَّل عليها الجهاز).
+class DentalDoctorApp extends StatefulWidget {
+  const DentalDoctorApp({super.key});
+
+  @override
+  State<DentalDoctorApp> createState() => _DentalDoctorAppState();
+}
+
+class _DentalDoctorAppState extends State<DentalDoctorApp> {
+  final AuthStorage _authStorage = AuthStorage();
+  late final ApiService _apiService = ApiService(_authStorage);
+  late final PushNotificationService _pushService =
+      PushNotificationService(_apiService);
+
+  final GlobalKey<HomeScreenState> _homeScreenKey = GlobalKey<HomeScreenState>();
+  final GlobalKey<TodayScheduleScreenState> _todayScheduleKey =
+      GlobalKey<TodayScheduleScreenState>();
+
+  bool _checkingSession = true;
+  bool _isLoggedIn = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    final token = await _authStorage.getToken();
+    final loggedIn = token != null && token.isNotEmpty;
+    if (!mounted) return;
+    setState(() {
+      _isLoggedIn = loggedIn;
+      _checkingSession = false;
+    });
+    if (loggedIn) {
+      await _initPush();
+    }
+  }
+
+  Future<void> _initPush() async {
+    _pushService.onNotificationTap = (data) {
+      // أي إشعار حالياً هو طلب حجز جديد -- نوجّه الطبيب لتبويب جدول اليوم
+      // ونحدّث القائمة فوراً حتى يظهر الحجز الجديد بلا حاجة لسحب يدوي.
+      _homeScreenKey.currentState?.showTodayTab();
+      _todayScheduleKey.currentState?.refresh();
+    };
+    try {
+      await _pushService.initialize();
+    } catch (_) {
+      // فشل تهيئة الإشعارات (مثلاً: google-services.json غير مضبوط بعد) لا
+      // يجب أن يمنع الطبيب من استخدام باقي التطبيق إطلاقاً.
+    }
+  }
+
+  Future<void> _handleLoginSuccess() async {
+    setState(() => _isLoggedIn = true);
+    await _initPush();
+  }
+
+  Future<void> _handleLogout() async {
+    await _authStorage.clear();
+    if (!mounted) return;
+    setState(() => _isLoggedIn = false);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -19,84 +89,24 @@ class DentalApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
       ),
-      home: const PatientListScreen(),
-    );
-  }
-}
-
-class PatientListScreen extends StatefulWidget {
-  const PatientListScreen({super.key});
-
-  @override
-  State<PatientListScreen> createState() => _PatientListScreenState();
-}
-
-class _PatientListScreenState extends State<PatientListScreen> {
-  final String apiUrl = "http://127.0.0";
-  List patients = [];
-  bool isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    fetchPatients();
-  }
-
-  void fetchPatients() async {
-    try {
-      final response = await http.get(Uri.parse(apiUrl));
-      if (response.statusCode == 200) {
-        setState(() {
-          patients = json.decode(response.body);
-          isLoading = false;
-        });
-      } else {
-        setState(() { isLoading = false; });
-      }
-    } catch (e) {
-      setState(() { isLoading = false; });
-      developer.log('خطأ في الاتصال بالواجهة الخلفية: $e', name: 'patient_fetch');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('قائمة المرضى الرقمية', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.indigo,
-        foregroundColor: Colors.white,
-        centerTitle: true,
-      ),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : patients.isEmpty
-              ? const Center(child: Text('لا يوجد مرضى مسجلين حالياً'))
-              : Directionality(
-                  textDirection: TextDirection.rtl,
-                  child: ListView.builder(
-                    itemCount: patients.length,
-                    padding: const EdgeInsets.all(12),
-                    itemBuilder: (context, index) {
-                      final patient = patients[index];
-                      return Card(
-                        elevation: 2,
-                        margin: const EdgeInsets.symmetric(vertical: 8),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: Colors.indigo.shade100,
-                            child: const Icon(Icons.person, color: Colors.indigo),
-                          ),
-                          title: Text(
-                            patient['full_name'],
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                          ),
-                          subtitle: Text('الهاتف: ${patient['phone']}'),
-                          trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-                        ),
-                      );
-                    },
-                  ),
+      // كل واجهات التطبيق بالعربي، والتخطيط من اليمين لليسار بالكامل -- بلا
+      // حاجة لحزمة flutter_localizations الإضافية لأن كل النصوص هنا مكتوبة
+      // يدوياً بالعربي أصلاً وليست نصوص إطار عمل مترجَمة تلقائياً.
+      builder: (context, child) =>
+          Directionality(textDirection: TextDirection.rtl, child: child!),
+      home: _checkingSession
+          ? const Scaffold(body: Center(child: CircularProgressIndicator()))
+          : _isLoggedIn
+              ? HomeScreen(
+                  key: _homeScreenKey,
+                  apiService: _apiService,
+                  onLogout: _handleLogout,
+                  todayScheduleKey: _todayScheduleKey,
+                )
+              : LoginScreen(
+                  apiService: _apiService,
+                  authStorage: _authStorage,
+                  onLoginSuccess: _handleLoginSuccess,
                 ),
     );
   }

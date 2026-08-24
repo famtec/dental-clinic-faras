@@ -220,6 +220,18 @@ def init_db():
                 )
             )
 
+    # ====================================================================
+    # رمز جهاز Firebase Push لتطبيق الطبيب على أندرويد -- 2026-08-24
+    # ====================================================================
+    # بلا شرط نوع قاعدة البيانات (خلافاً لكتلة SQLite بالأعلى)، لأن الإنتاج
+    # الحقيقي على Render يستخدم Supabase Postgres وليس SQLite -- نفس السبب
+    # الموثّق أعلاه لأعمدة "حسابي" وصفحة الحجز العامة.
+    if "users" in inspector.get_table_names():
+        push_columns = {column["name"] for column in inspector.get_columns("users")}
+        if "fcm_token" not in push_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN fcm_token VARCHAR"))
+
 
 def get_db():
     db = SessionLocal()

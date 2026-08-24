@@ -450,6 +450,8 @@
         let currentBookingRequests = [];
         let activeAppointment = null;
         let toastTimer = null;
+        let isAppointmentActionInProgress = false;
+        let appointmentsAutoRefreshTimer = null;
 
         const APPOINTMENT_STATUS_OPTIONS = {
             pending: {
@@ -1039,6 +1041,7 @@
 
                     select.disabled = true;
                     select.setAttribute('data-previous-status', previousStatus);
+                    isAppointmentActionInProgress = true;
 
                     try {
                         await updateAppointmentStatus(appointmentId, nextStatus, select);
@@ -1055,6 +1058,7 @@
                         showToast('تعذر تحديث حالة الموعد. حاول مرة أخرى.', 'error');
                     } finally {
                         select.disabled = false;
+                        isAppointmentActionInProgress = false;
                     }
                 });
             });
@@ -1092,6 +1096,33 @@
                 `;
             }
         }
+
+        // تحديث تلقائي لجدول المواعيد اليومية كل 30 ثانية، حتى يرى الطبيب
+        // مواعيد/طلبات حجز جديدة دون الحاجة لتحديث الصفحة يدوياً. يتوقف
+        // مؤقتاً أثناء تعديل الحالة، الرد على طلب حجز، أو فتح نافذة
+        // إضافة/تعديل موعد، ويتوقف كلياً عندما تكون الصفحة غير ظاهرة
+        // (تبويب آخر مفتوح) لتوفير الطلبات على الخادم.
+        const APPOINTMENTS_AUTO_REFRESH_MS = 30000;
+
+        function refreshAppointmentsIfIdle() {
+            if (document.visibilityState !== 'visible') return;
+            if (isAppointmentActionInProgress) return;
+            if (modal && !modal.classList.contains('hidden')) return;
+            loadAppointments();
+        }
+
+        function startAppointmentsAutoRefresh() {
+            if (appointmentsAutoRefreshTimer) {
+                clearInterval(appointmentsAutoRefreshTimer);
+            }
+            appointmentsAutoRefreshTimer = setInterval(refreshAppointmentsIfIdle, APPOINTMENTS_AUTO_REFRESH_MS);
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                refreshAppointmentsIfIdle();
+            }
+        });
 
         function formatBookingRequestDate(appointment) {
             const rawDate = appointment?.appointment_date;
@@ -1149,39 +1180,44 @@
         async function respondToBookingRequest(requestId, decision, triggerButton) {
             if (!requestId) return;
 
-            const confirmMessage = decision === 'accept' ? 'تأكيد قبول طلب الحجز هذا؟' : 'تأكيد رفض طلب الحجز هذا؟';
-            const confirmed = await showConfirm(confirmMessage, {
-                title: decision === 'accept' ? 'قبول طلب الحجز' : 'رفض طلب الحجز',
-                tone: decision === 'accept' ? 'success' : 'danger',
-                confirmText: decision === 'accept' ? 'قبول' : 'رفض',
-                cancelText: 'إلغاء',
-            });
-            if (!confirmed) return;
-
-            const wrapper = triggerButton?.closest('[data-booking-request-id]');
-            if (wrapper) {
-                wrapper.querySelectorAll('button').forEach((btn) => { btn.disabled = true; });
-            }
-
+            isAppointmentActionInProgress = true;
             try {
-                const response = await fetch(apiUrl(`/api/appointments/${encodeURIComponent(String(requestId))}/respond`), {
-                    method: 'PUT',
-                    headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
-                    body: JSON.stringify({ decision }),
+                const confirmMessage = decision === 'accept' ? 'تأكيد قبول طلب الحجز هذا؟' : 'تأكيد رفض طلب الحجز هذا؟';
+                const confirmed = await showConfirm(confirmMessage, {
+                    title: decision === 'accept' ? 'قبول طلب الحجز' : 'رفض طلب الحجز',
+                    tone: decision === 'accept' ? 'success' : 'danger',
+                    confirmText: decision === 'accept' ? 'قبول' : 'رفض',
+                    cancelText: 'إلغاء',
                 });
-                const data = await response.json().catch(() => ({}));
+                if (!confirmed) return;
 
-                if (!response.ok) {
-                    throw new Error(data.detail || 'تعذر إرسال الرد على الطلب.');
-                }
-
-                showToast(decision === 'accept' ? 'تم قبول طلب الحجز بنجاح ✅' : 'تم رفض طلب الحجز.', decision === 'accept' ? 'success' : 'info');
-                await loadAppointments();
-            } catch (error) {
-                showToast(error.message || 'تعذر إرسال الرد على الطلب.', 'error');
+                const wrapper = triggerButton?.closest('[data-booking-request-id]');
                 if (wrapper) {
-                    wrapper.querySelectorAll('button').forEach((btn) => { btn.disabled = false; });
+                    wrapper.querySelectorAll('button').forEach((btn) => { btn.disabled = true; });
                 }
+
+                try {
+                    const response = await fetch(apiUrl(`/api/appointments/${encodeURIComponent(String(requestId))}/respond`), {
+                        method: 'PUT',
+                        headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
+                        body: JSON.stringify({ decision }),
+                    });
+                    const data = await response.json().catch(() => ({}));
+
+                    if (!response.ok) {
+                        throw new Error(data.detail || 'تعذر إرسال الرد على الطلب.');
+                    }
+
+                    showToast(decision === 'accept' ? 'تم قبول طلب الحجز بنجاح ✅' : 'تم رفض طلب الحجز.', decision === 'accept' ? 'success' : 'info');
+                    await loadAppointments();
+                } catch (error) {
+                    showToast(error.message || 'تعذر إرسال الرد على الطلب.', 'error');
+                    if (wrapper) {
+                        wrapper.querySelectorAll('button').forEach((btn) => { btn.disabled = false; });
+                    }
+                }
+            } finally {
+                isAppointmentActionInProgress = false;
             }
         }
 
@@ -1286,6 +1322,7 @@
                 return;
             }
             await Promise.all([loadAppointments(), loadPatientsForAppointmentForm()]);
+            startAppointmentsAutoRefresh();
         });
         // ملاحظة: تمت إزالة الفحص المكرر الذي كان هنا -- أصبح الحظر يحدث
         // الآن فوراً في أعلى هذا السكربت (انظر تعريف userTier بالأعلى)، قبل
