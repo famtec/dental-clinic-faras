@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
   <title>الملف الطبي الشامل للمريض</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
@@ -23,11 +22,6 @@
     .xray-toast {
       animation: financeToastIn 280ms ease-out;
     }
-    .dental-canvas-stage canvas {
-      display: block;
-      width: 100%;
-      height: 100%;
-    }
     @keyframes mobileSwipeHintFade {
       0% { opacity: 0; transform: translateY(6px); }
       10% { opacity: 0.96; transform: translateY(0); }
@@ -36,6 +30,102 @@
     }
     .mobile-swipe-hint {
       animation: mobileSwipeHintFade 5.6s ease-out forwards;
+    }
+    /* ---- 2D dental chart (تبسم-style) ---- */
+    .tooth-row {
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      gap: 2px;
+    }
+    .tooth-number-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+    }
+    .tooth-number-cell {
+      flex: 1 1 0;
+      min-width: 34px;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 800;
+      color: #94a3b8;
+    }
+    @media (min-width: 640px) {
+      .tooth-number-cell { font-size: 12px; }
+    }
+    .tooth-midline-gap { margin-inline-start: 12px; }
+    .tooth-btn {
+      position: relative;
+      display: flex;
+      flex: 1 1 0;
+      min-width: 34px;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      padding: 2px 0;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.15s ease;
+    }
+    .tooth-btn:hover,
+    .tooth-btn:focus-visible {
+      transform: translateY(-3px);
+      outline: none;
+    }
+    .tooth-svg {
+      width: 100%;
+      height: 52px;
+      overflow: visible;
+      display: block;
+    }
+    @media (min-width: 640px) {
+      .tooth-svg { height: 62px; }
+    }
+    .tooth-flip { transform: scaleY(-1); }
+    .tooth-root {
+      fill: #f4ead8;
+      stroke: #dfc196;
+      stroke-width: 1.4;
+      opacity: 0.62;
+      transition: fill 0.2s ease, opacity 0.2s ease;
+    }
+    .tooth-crown {
+      fill: #fffbf2;
+      stroke: #e7c894;
+      stroke-width: 1.6;
+      transition: fill 0.2s ease;
+    }
+    .tooth-btn:hover .tooth-crown { filter: brightness(1.04); }
+    .tooth-btn.tooth-missing .tooth-crown,
+    .tooth-btn.tooth-missing .tooth-root {
+      fill: none;
+      stroke: #94a3b8;
+      stroke-dasharray: 3 3;
+      opacity: 0.55;
+    }
+    .tooth-dot {
+      position: absolute;
+      top: -2px;
+      inset-inline-end: 2px;
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      border: 1.5px solid #ffffff;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25);
+      display: none;
+    }
+    @media (min-width: 640px) {
+      .tooth-dot { width: 9px; height: 9px; }
+    }
+    .tooth-btn[data-has-status="1"] .tooth-dot { display: block; }
+    .tooth-gumline {
+      height: 1px;
+      margin: 2px 0;
+      background: linear-gradient(to right, transparent, rgba(244, 63, 94, 0.28), transparent);
     }
     .modal-pop {
       animation: financeToastIn 220ms ease-out;
@@ -128,39 +218,23 @@
 
     <main class="grid min-w-0 flex-1 gap-6 overflow-x-hidden lg:grid-cols-[1.2fr_0.8fr]">
       <section class="panel-soft min-w-0 rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/80">
-        <div class="mb-4 flex items-center justify-between">
-          <h2 class="text-xl font-extrabold text-indigo-900">المخطط السني التفاعلي</h2>
-          <span class="rounded-full bg-indigo-50 px-3 py-1 text-sm font-medium text-indigo-700">تحديث مباشر</span>
+        <div class="mb-1 flex items-center justify-between gap-3">
+          <h2 class="flex items-center gap-2 text-xl font-extrabold text-indigo-900">🦷 مخطط الأسنان</h2>
+          <span class="rounded-full border border-sky-100 bg-sky-50 px-3 py-1 text-xs font-extrabold tracking-wide text-sky-700">FDI</span>
         </div>
-        <div class="rounded-[24px] border border-slate-100 bg-slate-950/95 p-3 shadow-inner shadow-slate-900/20">
-          <div class="relative overflow-hidden rounded-[22px] border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(99,102,241,0.32),_transparent_35%),linear-gradient(160deg,_rgba(15,23,42,0.96),_rgba(30,41,59,0.98))]">
-            <div class="w-full overflow-x-auto scrollbar-thin select-none md:overflow-visible">
-              <div id="dentalChartStage" class="dental-canvas-stage h-[500px] w-full min-w-[700px] md:min-w-0"></div>
-            </div>
-            <div class="pointer-events-none absolute inset-x-4 top-4 flex flex-wrap items-center justify-between gap-3">
-              <div class="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold tracking-[0.18em] text-white/90 backdrop-blur">3D DENTAL ATLAS</div>
-              <div id="chartSceneHint" class="rounded-full border border-cyan-300/20 bg-cyan-400/15 px-3 py-1 text-xs font-semibold text-cyan-100 backdrop-blur">انقر على أي سن لتعديل حالته</div>
-            </div>
-            <div class="mobile-swipe-hint pointer-events-none absolute bottom-3 left-3 rounded-full border border-indigo-200/25 bg-slate-900/70 px-3 py-1 text-[11px] font-semibold text-indigo-100/90 shadow-lg shadow-slate-950/40 md:hidden">
-              ↔️ اسحب لليمين أو اليسار لاستعراض كامل الأسنان
-            </div>
-            <div class="pointer-events-none absolute right-4 top-4 z-10">
-              <div class="inline-flex flex-wrap items-center gap-2 rounded-full border border-white/10 bg-slate-950/55 px-3 py-2 text-white shadow-[0_0_24px_rgba(15,23,42,0.22)] backdrop-blur-md">
-                <span class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-white/90">
-                  <span class="h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_12px_rgba(239,68,68,0.7)]"></span>
-                  تسوس
-                </span>
-                <span class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-white/90">
-                  <span class="h-2.5 w-2.5 rounded-full bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.7)]"></span>
-                  حشوة تجميلية
-                </span>
-                <span class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-white/90">
-                  <span class="h-2.5 w-2.5 rounded-full bg-slate-400 shadow-[0_0_10px_rgba(148,163,184,0.7)]"></span>
-                  مخلوع / زراعة
-                </span>
-              </div>
-            </div>
+        <p class="mb-4 text-sm text-slate-500">اضغط أي سن لتسجيل حالته العلاجية أو تحديثها — يتم حفظ كل تغيير مباشرة على الملف السحابي.</p>
+        <div id="chartSceneHint" class="mb-4 inline-flex items-center gap-2 rounded-full border border-sky-100 bg-sky-50 px-4 py-2 text-xs font-extrabold text-sky-700">
+          🦷 جاهز الآن — اضغط أي سن
+        </div>
+
+        <div class="rounded-[24px] border border-slate-100 bg-gradient-to-b from-slate-50 to-white p-3 shadow-inner shadow-slate-100 sm:p-5">
+          <div class="w-full overflow-x-auto scrollbar-thin select-none">
+            <div id="dentalChartStage" dir="ltr" class="mx-auto min-w-[640px] max-w-[860px] md:min-w-0"></div>
           </div>
+          <p class="mobile-swipe-hint mt-2 text-center text-[11px] font-semibold text-slate-400 md:hidden">
+            ↔️ اسحب لليمين أو اليسار لاستعراض كامل الأسنان
+          </p>
+          <div id="chartLegend" class="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-slate-100 pt-4"></div>
         </div>
 
         <div class="mt-6 rounded-[28px] border border-violet-100 bg-violet-50/70 p-4 sm:p-5">
@@ -437,11 +511,12 @@
       <div class="mt-5 grid gap-3 sm:grid-cols-3">
         <button type="button" data-tooth-status="decay" class="rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm font-bold text-red-700 transition hover:-translate-y-0.5 hover:bg-red-100">تسوس</button>
         <button type="button" data-tooth-status="filling" class="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4 text-sm font-bold text-blue-700 transition hover:-translate-y-0.5 hover:bg-blue-100">حشوة</button>
-        <button type="button" data-tooth-status="extracted" class="rounded-2xl border border-slate-300 bg-slate-100 px-4 py-4 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:bg-slate-200">مخلوع</button>
-        <button type="button" data-tooth-status="endo" class="rounded-2xl border border-red-900/30 bg-red-900/10 px-4 py-4 text-sm font-bold text-red-900 transition hover:-translate-y-0.5 hover:bg-red-900/20">استئصال عصب</button>
-        <button type="button" data-tooth-status="implant" class="rounded-2xl border border-slate-300 bg-slate-100 px-4 py-4 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:bg-slate-200">زراعة</button>
+        <button type="button" data-tooth-status="veneer" class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm font-bold text-emerald-700 transition hover:-translate-y-0.5 hover:bg-emerald-100">فينير</button>
         <button type="button" data-tooth-status="crown" class="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-4 text-sm font-bold text-amber-700 transition hover:-translate-y-0.5 hover:bg-amber-100">تاج / تلبيسة</button>
+        <button type="button" data-tooth-status="endo" class="rounded-2xl border border-purple-200 bg-purple-50 px-4 py-4 text-sm font-bold text-purple-700 transition hover:-translate-y-0.5 hover:bg-purple-100">لبية (عصب)</button>
         <button type="button" data-tooth-status="bridge" class="rounded-2xl border border-orange-300 bg-orange-50 px-4 py-4 text-sm font-bold text-orange-700 transition hover:-translate-y-0.5 hover:bg-orange-100">جسر</button>
+        <button type="button" data-tooth-status="implant" class="rounded-2xl border border-pink-200 bg-pink-50 px-4 py-4 text-sm font-bold text-pink-700 transition hover:-translate-y-0.5 hover:bg-pink-100">زراعة</button>
+        <button type="button" data-tooth-status="extracted" class="rounded-2xl border border-slate-300 bg-slate-100 px-4 py-4 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:bg-slate-200">مقلوع</button>
       </div>
       <p id="toothStatusSavingHint" class="mt-4 text-xs font-semibold text-slate-500">لن يتم حفظ التعديل حتى يتم اختيار الحالة.</p>
     </div>
@@ -821,13 +896,14 @@
     const FINANCE_UPDATE_BASE_URL = 'https://dental-clinic-faras.onrender.com';
     const PRESCRIPTION_BASE_URL = window.DENTAL_APP_CONFIG?.apiBaseUrl || 'https://dental-clinic-faras.onrender.com';
     const TOOTH_STATUS_OPTIONS = {
-      decay: { label: 'تسوس', color: '#ef4444', metalness: 0.08, roughness: 0.42 },
-      filling: { label: 'حشوة', color: '#3b82f6', metalness: 0.12, roughness: 0.36 },
-      extracted: { label: 'مخلوع', color: '#475569', metalness: 0.05, roughness: 0.52 },
-      endo: { label: 'استئصال عصب', color: '#8B0000', metalness: 0.1, roughness: 0.38 },
-      implant: { label: 'زراعة', color: '#C0C0C0', metalness: 0.95, roughness: 0.18 },
-      crown: { label: 'تاج / تلبيسة', color: '#FFD700', metalness: 0.62, roughness: 0.22 },
-      bridge: { label: 'جسر', color: '#FF8C00', metalness: 0.2, roughness: 0.3 },
+      decay: { label: 'تسوس', color: '#ef4444' },
+      filling: { label: 'حشوة', color: '#3b82f6' },
+      veneer: { label: 'فينير', color: '#10b981' },
+      crown: { label: 'تاج / تلبيسة', color: '#eab308' },
+      endo: { label: 'لبية (عصب)', color: '#a855f7' },
+      bridge: { label: 'جسر', color: '#f97316' },
+      implant: { label: 'زراعة', color: '#ec4899' },
+      extracted: { label: 'مقلوع', color: '#64748b' },
     };
     const DEFAULT_TOOTH_COLOR = '#fbfbf7';
     const PALMER_TOOTH_NAMES = {
@@ -849,15 +925,8 @@
     const PALMER_KEY_REGEX = /^(UR|UL|LR|LL)[1-8]$/;
 
     let currentChartState = {};
-    let dentalChartScene = null;
-    let dentalChartCamera = null;
-    let dentalChartRenderer = null;
-    let dentalChartRaycaster = null;
-    let dentalChartPointer = null;
-    let dentalChartAnimationFrame = null;
-    let dentalToothMeshes = [];
-    let hoveredToothMesh = null;
-    let activeToothMesh = null;
+    let toothElements = {};
+    let activeTooth = null;
     let currentAppointments = [];
     let activeAppointment = null;
     let appointmentModalCloseTimer = null;
@@ -868,8 +937,6 @@
     let deleteConfirmModalCloseTimer = null;
     let pendingDeleteAction = null;
     let currentPrescriptions = [];
-    let tooltipHoverMesh = null;
-    let dentalPointerDownState = null;
 
     function getAppointmentUpdateEndpoint(appointmentId) {
       return `${APPOINTMENT_UPDATE_BASE_URL}/api/appointments/${encodeURIComponent(String(appointmentId))}`;
@@ -1153,48 +1220,16 @@
       };
     }
 
-    function getToothMaterialColor(mesh) {
-      const palmerCode = String(mesh?.userData?.palmerCode || '');
-      const toothNumber = String(mesh?.userData?.toothNumber || '');
-      return currentChartState[palmerCode] || currentChartState[toothNumber] || DEFAULT_TOOTH_COLOR;
-    }
-
-    function setToothMeshColor(mesh, stateValue) {
-      if (!mesh || !mesh.material) return;
-
-      const statusKey = resolveStatusKey(stateValue);
-      const palette = statusKey ? TOOTH_STATUS_OPTIONS[statusKey] : null;
-      const colorValue = palette?.color || resolveToothColor(stateValue) || DEFAULT_TOOTH_COLOR;
-
-      mesh.material.color.set(colorValue);
-      mesh.material.metalness = palette?.metalness ?? 0.05;
-      mesh.material.roughness = palette?.roughness ?? 0.15;
-      mesh.material.emissive.set('#000000');
-      mesh.material.emissiveIntensity = statusKey === 'implant' ? 0.08 : 0.18;
-    }
-
-    function updateToothHoverState(mesh) {
-      if (hoveredToothMesh && hoveredToothMesh !== mesh) {
-        hoveredToothMesh.scale.setScalar(1);
-      }
-
-      hoveredToothMesh = mesh;
-      if (hoveredToothMesh) {
-        hoveredToothMesh.scale.setScalar(1.08);
-      }
-    }
-
-    function showPalmerTooltip(mesh, clientX, clientY) {
+    function showPalmerTooltip(tooth, clientX, clientY) {
       const tooltip = document.getElementById('toothPalmerTooltip');
-      if (!tooltip || !mesh) return;
+      if (!tooltip || !tooth) return;
 
-      const palmerCode = String(mesh.userData?.palmerCode || '');
-      const palmerLabel = String(mesh.userData?.palmerLabel || '');
-      const palmerSymbolCode = String(mesh.userData?.palmerSymbolCode || '');
+      const statusKey = resolveStatusKey(currentChartState[tooth.palmerCode]);
+      const statusLabel = statusKey ? TOOTH_STATUS_OPTIONS[statusKey].label : 'سليم';
 
       tooltip.innerHTML = `
-        <div class="text-[11px] font-extrabold tracking-wide text-cyan-100">${escapeHtml(palmerCode)}</div>
-        <div class="mt-0.5 text-[11px] text-cyan-200/90">${escapeHtml(`${palmerLabel} ${palmerSymbolCode}`)}</div>
+        <div class="text-[11px] font-extrabold tracking-wide text-cyan-100">السن ${escapeHtml(String(tooth.fdi))} · ${escapeHtml(tooth.palmerCode)}</div>
+        <div class="mt-0.5 text-[11px] text-cyan-200/90">${escapeHtml(tooth.palmerLabel)} — ${escapeHtml(statusLabel)}</div>
       `;
 
       tooltip.classList.remove('hidden');
@@ -1208,223 +1243,221 @@
       tooltip.classList.add('hidden');
     }
 
-    function formatToothNumberLabel(labelValue) {
-      return String(labelValue || '').trim().toUpperCase();
-    }
-
-    function createToothNumberSprite(labelValue) {
-      const canvas = document.createElement('canvas');
-      canvas.width = 192;
-      canvas.height = 192;
-      const context = canvas.getContext('2d');
-      if (!context) return null;
-
-      context.clearRect(0, 0, canvas.width, canvas.height);
-      context.fillStyle = 'rgba(15, 23, 42, 0.72)';
-      context.strokeStyle = 'rgba(255, 255, 255, 0.18)';
-      context.lineWidth = 3;
-      const radius = 24;
-      const width = 132;
-      const height = 38;
-      const x = (canvas.width - width) / 2;
-      const y = (canvas.height - height) / 2;
-      context.beginPath();
-      context.moveTo(x + radius, y);
-      context.lineTo(x + width - radius, y);
-      context.quadraticCurveTo(x + width, y, x + width, y + radius);
-      context.lineTo(x + width, y + height - radius);
-      context.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-      context.lineTo(x + radius, y + height);
-      context.quadraticCurveTo(x, y + height, x, y + height - radius);
-      context.lineTo(x, y + radius);
-      context.quadraticCurveTo(x, y, x + radius, y);
-      context.closePath();
-      context.fill();
-      context.stroke();
-      context.fillStyle = '#ffffff';
-      context.font = '700 28px Tajawal, sans-serif';
-      context.textAlign = 'center';
-      context.textBaseline = 'middle';
-      context.fillText(formatToothNumberLabel(labelValue), canvas.width / 2, canvas.height / 2 + 1);
-
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.needsUpdate = true;
-      const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
-      const sprite = new THREE.Sprite(material);
-      sprite.scale.set(0.5, 0.18, 1);
-      sprite.renderOrder = 999;
-      sprite.position.set(0, 0, 0.25);
-      return sprite;
-    }
-
     // ---------------------------------------------------------------------
-    // Anatomical tooth geometry
-    //
-    // Every tooth is still a single THREE.Mesh with a single BufferGeometry
-    // (never a Group of sub-meshes) so that everything downstream keeps
-    // working unmodified: raycaster.intersectObjects(dentalToothMeshes,
-    // false) needs one intersectable object per tooth, updateToothHoverState
-    // scales the mesh as a single rigid body, and setToothMeshColor tints a
-    // single material. Anterior/posterior shape differences and the
-    // "mesh.scale.set(...)" proportions requested are baked directly into
-    // the geometry's vertices (via geometry.scale()/.translate()) instead of
-    // Object3D.scale, because Object3D.scale is already driven by the hover
-    // effect (scale.setScalar(1.08) / scale.setScalar(1)) — baking anatomy
-    // into mesh.scale would fight that and reset on every hover in/out.
-    //
-    // The two shapes are built once and reused (shared BufferGeometry) across
-    // every matching tooth purely as a perf optimization; per-tooth identity
-    // (toothId/status/position) lives entirely in userData and mesh.position,
-    // which are still set per-instance below.
+    // Flat 2D dental chart (FDI notation), rendered as inline SVG icons —
+    // no WebGL, so it scales cleanly and stays fully responsive on every
+    // screen size, including mobile (with horizontal scroll for the full
+    // arch). Each tooth is a small SVG button split into a "crown" path and
+    // one or two "root" paths so a treatment status can tint them
+    // independently. Upper-arch teeth are drawn root-up/crown-down; the
+    // exact same shapes are reused for the lower arch via a vertical CSS
+    // flip (scaleY(-1)), which naturally produces the mirrored
+    // root-down/crown-up anatomy without needing separate path data.
     // ---------------------------------------------------------------------
 
-    function mergeBufferGeometries(geometries) {
-      const positions = [];
-      const normals = [];
-      let hasAllNormals = true;
+    const TOOTH_SHAPES = {
+      incisor: {
+        crown: 'M13,40 Q13,70 22,74 Q31,70 31,40 Q22,34 13,40 Z',
+        roots: ['M18,2 Q22,-2 26,2 L24.5,40 Q22,45 19.5,40 Z'],
+      },
+      canine: {
+        crown: 'M12,42 Q12,52 16,60 Q22,76 28,60 Q32,52 32,42 Q22,35 12,42 Z',
+        roots: ['M17,2 Q22,-2 27,2 L25,42 Q22,48 19,42 Z'],
+      },
+      premolar: {
+        crown: 'M8,44 Q8,68 22,72 Q36,68 36,44 Q22,34 8,44 Z',
+        roots: ['M18,3 Q22,-1 26,3 L24.5,42 Q22,47 19.5,42 Z'],
+      },
+      molar: {
+        crown: 'M5,42 Q5,68 22,73 Q39,68 39,42 Q22,32 5,42 Z',
+        roots: [
+          'M8,3 Q12,-1 16,3 L14.5,40 Q12,45 9.5,40 Z',
+          'M28,3 Q32,-1 36,3 L34.5,40 Q32,45 29.5,40 Z',
+        ],
+      },
+    };
 
-      geometries.forEach((sourceGeometry) => {
-        const geometry = sourceGeometry.index ? sourceGeometry.toNonIndexed() : sourceGeometry;
-        const positionAttribute = geometry.getAttribute('position');
-        const normalAttribute = geometry.getAttribute('normal');
+    function getToothShapeKey(order) {
+      if (order <= 2) return 'incisor';
+      if (order === 3) return 'canine';
+      if (order <= 5) return 'premolar';
+      return 'molar';
+    }
 
-        if (!normalAttribute) hasAllNormals = false;
+    // FDI quadrant digit -> internal Palmer quadrant code used by the
+    // chart_state payload (kept identical to the pre-existing storage
+    // format so no backend/data-model change is required).
+    const FDI_QUADRANT_TO_PALMER = { 1: 'UR', 2: 'UL', 3: 'LL', 4: 'LR' };
 
-        for (let i = 0; i < positionAttribute.count; i += 1) {
-          positions.push(positionAttribute.getX(i), positionAttribute.getY(i), positionAttribute.getZ(i));
-          if (normalAttribute) {
-            normals.push(normalAttribute.getX(i), normalAttribute.getY(i), normalAttribute.getZ(i));
-          }
-        }
+    function buildToothInfo(fdiNumber) {
+      const quadrantDigit = Math.floor(fdiNumber / 10);
+      const order = fdiNumber % 10;
+      const palmerQuadrant = FDI_QUADRANT_TO_PALMER[quadrantDigit];
+      const palmerCode = `${palmerQuadrant}${order}`;
+      const quadrantMeta = PALMER_QUADRANT_META[palmerQuadrant];
+      const toothName = PALMER_TOOTH_NAMES[order] || 'سن';
+      const isLower = quadrantDigit === 3 || quadrantDigit === 4;
+      return {
+        fdi: fdiNumber,
+        palmerCode,
+        palmerLabel: `${toothName} ${quadrantMeta?.name || ''}`.trim(),
+        shapeKey: getToothShapeKey(order),
+        isLower,
+      };
+    }
 
-        if (geometry !== sourceGeometry) geometry.dispose();
-        sourceGeometry.dispose();
+    function createToothSvg(shapeKey, isLower) {
+      const svgNS = 'http://www.w3.org/2000/svg';
+      const shape = TOOTH_SHAPES[shapeKey];
+      const svg = document.createElementNS(svgNS, 'svg');
+      svg.setAttribute('viewBox', '0 0 44 78');
+      svg.setAttribute('class', `tooth-svg${isLower ? ' tooth-flip' : ''}`);
+      svg.setAttribute('aria-hidden', 'true');
+
+      const rootGroup = document.createElementNS(svgNS, 'g');
+      shape.roots.forEach((d) => {
+        const rootPath = document.createElementNS(svgNS, 'path');
+        rootPath.setAttribute('d', d);
+        rootPath.setAttribute('class', 'tooth-root');
+        rootGroup.appendChild(rootPath);
       });
 
-      const mergedGeometry = new THREE.BufferGeometry();
-      mergedGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      const crownPath = document.createElementNS(svgNS, 'path');
+      crownPath.setAttribute('d', shape.crown);
+      crownPath.setAttribute('class', 'tooth-crown');
 
-      if (hasAllNormals) {
-        mergedGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+      svg.appendChild(rootGroup);
+      svg.appendChild(crownPath);
+
+      return { svg, crownPath, rootPaths: Array.from(rootGroup.children) };
+    }
+
+    function createToothButton(fdiNumber) {
+      const tooth = buildToothInfo(fdiNumber);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'tooth-btn';
+      button.dataset.fdi = String(tooth.fdi);
+      button.dataset.palmer = tooth.palmerCode;
+      button.setAttribute('aria-label', `السن ${tooth.fdi} — ${tooth.palmerLabel}`);
+
+      const { svg, crownPath, rootPaths } = createToothSvg(tooth.shapeKey, tooth.isLower);
+      const dot = document.createElement('span');
+      dot.className = 'tooth-dot';
+      button.appendChild(svg);
+      button.appendChild(dot);
+
+      button.addEventListener('click', () => {
+        hidePalmerTooltip();
+        openToothStatusModal(tooth);
+      });
+      button.addEventListener('pointerenter', (event) => {
+        if (event.pointerType === 'touch') return;
+        showPalmerTooltip(tooth, event.clientX, event.clientY);
+      });
+      button.addEventListener('pointermove', (event) => {
+        if (event.pointerType === 'touch') return;
+        showPalmerTooltip(tooth, event.clientX, event.clientY);
+      });
+      button.addEventListener('pointerleave', hidePalmerTooltip);
+
+      toothElements[tooth.palmerCode] = { button, crownPath, rootPaths, tooth };
+      return button;
+    }
+
+    function buildNumberRow(fdiList) {
+      const row = document.createElement('div');
+      row.className = 'tooth-number-row';
+      fdiList.forEach((fdiNumber, index) => {
+        const cell = document.createElement('span');
+        cell.className = `tooth-number-cell${index === 8 ? ' tooth-midline-gap' : ''}`;
+        cell.textContent = String(fdiNumber);
+        row.appendChild(cell);
+      });
+      return row;
+    }
+
+    function buildTeethRow(fdiList) {
+      const row = document.createElement('div');
+      row.className = 'tooth-row';
+      fdiList.forEach((fdiNumber, index) => {
+        const button = createToothButton(fdiNumber);
+        if (index === 8) button.classList.add('tooth-midline-gap');
+        row.appendChild(button);
+      });
+      return row;
+    }
+
+    function renderDentalChart() {
+      const stage = document.getElementById('dentalChartStage');
+      if (!stage) return;
+
+      stage.innerHTML = '';
+      toothElements = {};
+
+      const upperFDI = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
+      const lowerFDI = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38];
+
+      const gumline = document.createElement('div');
+      gumline.className = 'tooth-gumline';
+
+      stage.appendChild(buildNumberRow(upperFDI));
+      stage.appendChild(buildTeethRow(upperFDI));
+      stage.appendChild(gumline);
+      stage.appendChild(buildTeethRow(lowerFDI));
+      stage.appendChild(buildNumberRow(lowerFDI));
+
+      renderChartLegend();
+      refreshChartFromState();
+    }
+
+    function renderChartLegend() {
+      const legend = document.getElementById('chartLegend');
+      if (!legend) return;
+      legend.innerHTML = '';
+      Object.values(TOOTH_STATUS_OPTIONS).forEach((option) => {
+        const chip = document.createElement('span');
+        chip.className = 'inline-flex items-center gap-1.5 text-xs font-bold text-slate-600';
+        chip.innerHTML = `<span class="inline-block h-2.5 w-2.5 rounded-full" style="background:${option.color}"></span>${escapeHtml(option.label)}`;
+        legend.appendChild(chip);
+      });
+    }
+
+    function applyToothVisual(entry) {
+      if (!entry) return;
+      const { button, crownPath, rootPaths, tooth } = entry;
+      const rawValue = currentChartState[tooth.palmerCode];
+      const statusKey = rawValue ? resolveStatusKey(rawValue) : null;
+
+      button.classList.remove('tooth-missing');
+      button.removeAttribute('data-has-status');
+
+      if (statusKey === 'extracted') {
+        button.classList.add('tooth-missing');
+        crownPath.style.fill = '';
+        rootPaths.forEach((rootPath) => { rootPath.style.fill = ''; });
+      } else if (statusKey && TOOTH_STATUS_OPTIONS[statusKey]) {
+        const color = TOOTH_STATUS_OPTIONS[statusKey].color;
+        crownPath.style.fill = color;
+        rootPaths.forEach((rootPath) => { rootPath.style.fill = color; });
       } else {
-        mergedGeometry.computeVertexNormals();
+        crownPath.style.fill = '';
+        rootPaths.forEach((rootPath) => { rootPath.style.fill = ''; });
       }
 
-      mergedGeometry.computeBoundingSphere();
-      return mergedGeometry;
-    }
-
-    function createAnteriorToothGeometry() {
-      // Incisors & canines (Palmer order 1-3): a sleek, vertically elongated,
-      // flat-tapered crown. A Lathe profile gives the natural root -> neck ->
-      // crown-bulge -> incisal-edge taper; scaling it down heavily on Z turns
-      // the round cross-section into a flat chisel-like blade. First/last
-      // profile points are near-zero radius so the lathe closes cleanly at
-      // the root tip and incisal edge without needing separate end caps.
-      const profilePoints = [
-        new THREE.Vector2(0.015, -0.55), // root tip
-        new THREE.Vector2(0.09, -0.44),
-        new THREE.Vector2(0.15, -0.28), // root shoulder
-        new THREE.Vector2(0.13, -0.10), // cervical neck (narrowest)
-        new THREE.Vector2(0.2, 0.02), // crown bulge starts
-        new THREE.Vector2(0.24, 0.14), // widest point of the crown
-        new THREE.Vector2(0.19, 0.3),
-        new THREE.Vector2(0.11, 0.44), // incisal third taper
-        new THREE.Vector2(0.05, 0.54),
-        new THREE.Vector2(0.015, 0.58), // incisal edge
-      ];
-
-      const geometry = new THREE.LatheGeometry(profilePoints, 12);
-      // mesh.scale.set(1.1, 1.4, 0.6) equivalent, baked into the geometry
-      // itself (see note above) and tuned slightly tighter on X/Y so the
-      // footprint stays inside the ~0.97 unit tooth spacing used below.
-      geometry.scale(1.0, 1.15, 0.5);
-      geometry.computeBoundingSphere();
-      return geometry;
-    }
-
-    function createPosteriorToothGeometry() {
-      // Premolars & molars (Palmer order 4-8): a wider, robust compound
-      // crown built from a rounded octagonal crown body, a tapered root, and
-      // four occlusal cusps (mesiobuccal/distobuccal/mesiolingual/
-      // distolingual) surrounding a natural central fossa.
-      const crownHeight = 0.62;
-      const crownGeometry = new THREE.CylinderGeometry(0.3, 0.27, crownHeight, 8, 2);
-      crownGeometry.translate(0, 0.13, 0);
-
-      const rootHeight = 0.42;
-      const rootGeometry = new THREE.ConeGeometry(0.15, rootHeight, 8);
-      rootGeometry.rotateX(Math.PI); // point the root tip downward, away from the crown
-      rootGeometry.translate(0, -0.39, 0);
-
-      const cuspRadius = 0.115;
-      const cuspOffsets = [
-        [0.16, 0.4, 0.16],
-        [-0.16, 0.4, 0.16],
-        [0.16, 0.4, -0.16],
-        [-0.16, 0.4, -0.16],
-      ];
-      const cuspGeometries = cuspOffsets.map(([x, y, z]) => {
-        const cuspGeometry = new THREE.SphereGeometry(cuspRadius, 8, 6);
-        cuspGeometry.scale(1, 0.65, 1); // flatten into a rounded occlusal bump
-        cuspGeometry.translate(x, y, z);
-        return cuspGeometry;
-      });
-
-      // mesh.scale.set(1.4, 1.2, 1.4) equivalent, baked directly into the
-      // absolute crown/root/cusp dimensions above (wider and more robust
-      // than the anterior geometry) while staying under the ~0.97 unit
-      // tooth spacing so molars never intersect their neighbors.
-      return mergeBufferGeometries([crownGeometry, rootGeometry, ...cuspGeometries]);
-    }
-
-    let cachedAnteriorToothGeometry = null;
-    let cachedPosteriorToothGeometry = null;
-
-    function getAnteriorToothGeometry() {
-      if (!cachedAnteriorToothGeometry) {
-        cachedAnteriorToothGeometry = createAnteriorToothGeometry();
+      const dot = button.querySelector('.tooth-dot');
+      if (dot) {
+        if (statusKey && TOOTH_STATUS_OPTIONS[statusKey]) {
+          dot.style.background = TOOTH_STATUS_OPTIONS[statusKey].color;
+          button.setAttribute('data-has-status', '1');
+        } else {
+          dot.style.background = '';
+        }
       }
-      return cachedAnteriorToothGeometry;
     }
 
-    function getPosteriorToothGeometry() {
-      if (!cachedPosteriorToothGeometry) {
-        cachedPosteriorToothGeometry = createPosteriorToothGeometry();
-      }
-      return cachedPosteriorToothGeometry;
-    }
-
-    function createToothMesh(toothNumber, x, y, z) {
-      const palmerNotation = getPalmerNotationForTooth(toothNumber);
-      const isAnterior = (palmerNotation?.order || 0) >= 1 && (palmerNotation?.order || 0) <= 3;
-      const geometry = isAnterior ? getAnteriorToothGeometry() : getPosteriorToothGeometry();
-
-      // Premium dental enamel: pearl ivory, high-gloss, faint metallic depth.
-      const material = new THREE.MeshStandardMaterial({
-        color: DEFAULT_TOOTH_COLOR,
-        roughness: 0.15,
-        metalness: 0.05,
-      });
-
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.position.set(x, y, z);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      mesh.userData.toothNumber = toothNumber;
-      mesh.userData.palmerCode = palmerNotation?.code || String(toothNumber);
-      mesh.userData.palmerLabel = palmerNotation?.label || `سن ${toothNumber}`;
-      mesh.userData.palmerSymbolCode = palmerNotation?.symbolCode || String(toothNumber);
-      mesh.userData.anatomyType = isAnterior ? 'anterior' : 'posterior';
-
-      const label = createToothNumberSprite(mesh.userData.palmerCode);
-      if (label) {
-        const isUpperArch = toothNumber <= 16;
-        label.position.set(0, isUpperArch ? 1.42 : -1.42, 0.25);
-        mesh.add(label);
-      }
-
-      return mesh;
+    function refreshChartFromState() {
+      Object.values(toothElements).forEach(applyToothVisual);
     }
 
     function getPatientAppointmentDateValue(appointment) {
@@ -1932,180 +1965,24 @@
     }
 
     function initDentalChart() {
-      const container = document.getElementById('dentalChartStage');
-      if (!container || !window.THREE) return;
-
-      container.innerHTML = '';
-      dentalToothMeshes = [];
-      hoveredToothMesh = null;
-
-      dentalChartScene = new THREE.Scene();
-      dentalChartScene.background = new THREE.Color(0x0f172a);
-      dentalChartScene.fog = new THREE.Fog(0x0f172a, 12, 34);
-
-      const width = container.clientWidth || 600;
-      const height = container.clientHeight || 500;
-
-      dentalChartCamera = new THREE.PerspectiveCamera(35, width / height, 0.1, 100);
-      dentalChartCamera.position.set(0, 0.6, 16.5);
-
-      dentalChartRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
-      dentalChartRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-      dentalChartRenderer.setSize(width, height, false);
-      dentalChartRenderer.shadowMap.enabled = true;
-      dentalChartRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
-      container.appendChild(dentalChartRenderer.domElement);
-
-      dentalChartRaycaster = new THREE.Raycaster();
-      dentalChartPointer = new THREE.Vector2();
-
-      const ambientLight = new THREE.AmbientLight(0xffffff, 1.35);
-      dentalChartScene.add(ambientLight);
-
-      const topLight = new THREE.DirectionalLight(0xffffff, 2.4);
-      topLight.position.set(8, 14, 10);
-      topLight.castShadow = true;
-      topLight.shadow.mapSize.width = 2048;
-      topLight.shadow.mapSize.height = 2048;
-      dentalChartScene.add(topLight);
-
-      const fillLight = new THREE.PointLight(0x38bdf8, 1.7, 40);
-      fillLight.position.set(-6, 1, 10);
-      dentalChartScene.add(fillLight);
-
-      const glowLight = new THREE.PointLight(0xa855f7, 1.2, 40);
-      glowLight.position.set(7, -1, 12);
-      dentalChartScene.add(glowLight);
-
-      const jawMaterial = new THREE.MeshStandardMaterial({
-        color: 0x1e293b,
-        roughness: 0.9,
-        metalness: 0.05,
-        transparent: true,
-        opacity: 0.55,
-      });
-
-      const upperJaw = new THREE.Mesh(new THREE.BoxGeometry(18.5, 0.9, 2.2), jawMaterial);
-      upperJaw.position.set(0, 4.0, -0.9);
-      upperJaw.receiveShadow = true;
-      dentalChartScene.add(upperJaw);
-
-      const lowerJaw = new THREE.Mesh(new THREE.BoxGeometry(18.5, 0.9, 2.2), jawMaterial);
-      lowerJaw.position.set(0, -4.0, -0.9);
-      lowerJaw.receiveShadow = true;
-      dentalChartScene.add(lowerJaw);
-
-      const upperTeethGroup = new THREE.Group();
-      const lowerTeethGroup = new THREE.Group();
-
-      for (let index = 0; index < 16; index += 1) {
-        const toothNumber = index + 1;
-        const progress = index / 15;
-        const x = -7.3 + (progress * 14.6);
-        const archOffset = Math.sin(progress * Math.PI) * 1.65;
-        const z = Math.cos(progress * Math.PI) * 0.6;
-        const tooth = createToothMesh(toothNumber, x, 4.1 + archOffset * 0.08, z);
-        upperTeethGroup.add(tooth);
-        dentalToothMeshes.push(tooth);
-      }
-
-      for (let index = 0; index < 16; index += 1) {
-        const toothNumber = index + 17;
-        const progress = index / 15;
-        const x = 7.3 - (progress * 14.6);
-        const archOffset = Math.sin(progress * Math.PI) * 1.65;
-        const z = Math.cos(progress * Math.PI) * -0.6;
-        const tooth = createToothMesh(toothNumber, x, -4.1 - archOffset * 0.08, z);
-        lowerTeethGroup.add(tooth);
-        dentalToothMeshes.push(tooth);
-      }
-
-      dentalChartScene.add(upperTeethGroup);
-      dentalChartScene.add(lowerTeethGroup);
-
-      const floor = new THREE.Mesh(
-        new THREE.PlaneGeometry(30, 18),
-        new THREE.MeshStandardMaterial({ color: 0x020617, transparent: true, opacity: 0.55 })
-      );
-      floor.rotation.x = -Math.PI / 2;
-      floor.position.y = -7.1;
-      floor.receiveShadow = true;
-      dentalChartScene.add(floor);
-
-      container.style.cursor = 'grab';
-      container.addEventListener('pointerdown', handleDentalChartPointerDown);
-      container.addEventListener('pointermove', handleDentalChartPointerMove);
-      container.addEventListener('pointerup', handleDentalChartPointerUp);
-      container.addEventListener('pointercancel', handleDentalChartPointerCancel);
-      container.addEventListener('pointerleave', () => {
-        container.style.cursor = 'grab';
-        updateToothHoverState(null);
-        tooltipHoverMesh = null;
-        dentalPointerDownState = null;
-        hidePalmerTooltip();
-      });
-
-      window.addEventListener('resize', resizeDentalChart);
-      resizeDentalChart();
-      animateDentalChart();
-    }
-
-    function animateDentalChart() {
-      if (!dentalChartRenderer || !dentalChartScene || !dentalChartCamera) return;
-
-      if (dentalChartAnimationFrame) {
-        cancelAnimationFrame(dentalChartAnimationFrame);
-      }
-
-      const renderFrame = () => {
-        dentalChartAnimationFrame = window.requestAnimationFrame(renderFrame);
-        if (dentalToothMeshes.length > 0) {
-          dentalToothMeshes.forEach((mesh) => {
-            const baseColor = getToothMaterialColor(mesh);
-            setToothMeshColor(mesh, baseColor);
-          });
-        }
-        dentalChartRenderer.render(dentalChartScene, dentalChartCamera);
-      };
-
-      renderFrame();
-    }
-
-    function resizeDentalChart() {
-      const container = document.getElementById('dentalChartStage');
-      if (!container || !dentalChartRenderer || !dentalChartCamera) return;
-
-      const width = container.clientWidth || 600;
-      const height = container.clientHeight || 500;
-      dentalChartCamera.aspect = width / height;
-      dentalChartCamera.updateProjectionMatrix();
-      dentalChartRenderer.setSize(width, height, false);
-    }
-
-    function refreshDentalChartFromState() {
-      dentalToothMeshes.forEach((mesh) => {
-        const palmerCode = String(mesh.userData.palmerCode || '');
-        const toothNumber = String(mesh.userData.toothNumber || '');
-        const colorValue = currentChartState[palmerCode] || currentChartState[toothNumber] || DEFAULT_TOOTH_COLOR;
-        setToothMeshColor(mesh, colorValue);
-      });
+      renderDentalChart();
     }
 
     function setPatientChartState(rawState) {
       currentChartState = parseChartState(rawState);
-      refreshDentalChartFromState();
+      refreshChartFromState();
     }
 
-    function openToothStatusModal(mesh) {
-      if (!mesh) return;
+    function openToothStatusModal(tooth) {
+      if (!tooth) return;
 
-      activeToothMesh = mesh;
+      activeTooth = tooth;
       const toothNumberElement = document.getElementById('toothStatusNumber');
       const modal = document.getElementById('toothStatusModal');
       const hint = document.getElementById('toothStatusSavingHint');
 
       if (toothNumberElement) {
-        toothNumberElement.textContent = mesh.userData.palmerCode || mesh.userData.toothNumber;
+        toothNumberElement.textContent = String(tooth.fdi);
       }
 
       if (hint) {
@@ -2119,7 +1996,7 @@
     }
 
     function closeToothStatusModal() {
-      activeToothMesh = null;
+      activeTooth = null;
       const modal = document.getElementById('toothStatusModal');
       if (modal) {
         modal.classList.add('hidden');
@@ -2129,13 +2006,12 @@
     }
 
     async function saveToothStatus(statusKey) {
-      if (!activeToothMesh) return;
+      if (!activeTooth) return;
 
       const patientId = getPatientIdFromUrl();
       if (!patientId) return;
 
-      const toothNumber = String(activeToothMesh.userData.toothNumber);
-      const palmerCode = String(activeToothMesh.userData.palmerCode || toothNumber);
+      const palmerCode = activeTooth.palmerCode;
       const previousChartState = { ...currentChartState };
       const selectedConfig = TOOTH_STATUS_OPTIONS[statusKey];
 
@@ -2143,7 +2019,7 @@
 
       currentChartState[palmerCode] = statusKey;
       currentChartState = buildPalmerChartPayload(currentChartState);
-      refreshDentalChartFromState();
+      refreshChartFromState();
 
       const hint = document.getElementById('toothStatusSavingHint');
       if (hint) hint.textContent = 'جاري حفظ التحديث...';
@@ -2163,94 +2039,13 @@
         const updatedPatient = await response.json();
         currentPatient = updatedPatient;
         setPatientChartState(updatedPatient.chart_state || currentChartState);
-        createMedicalToast(`تم تحديث السن ${palmerCode} إلى ${selectedConfig.label}`);
+        createMedicalToast(`تم تحديث السن ${activeTooth.fdi} إلى ${selectedConfig.label}`);
         closeToothStatusModal();
       } catch (error) {
         currentChartState = previousChartState;
-        refreshDentalChartFromState();
+        refreshChartFromState();
         if (hint) hint.textContent = 'تعذر الحفظ الآن. أعد المحاولة بعد قليل.';
       }
-    }
-
-    function handleDentalChartPointerMove(event) {
-      const container = event.currentTarget;
-      if (!container || !dentalChartRaycaster || !dentalChartCamera) return;
-
-      if (dentalPointerDownState) {
-        const deltaX = Math.abs(event.clientX - dentalPointerDownState.startX);
-        const deltaY = Math.abs(event.clientY - dentalPointerDownState.startY);
-        if (deltaX > 10 || deltaY > 10) {
-          dentalPointerDownState.hasMoved = true;
-        }
-      }
-
-      // Hover effects are disabled for touch to avoid accidental state changes while swiping.
-      if (event.pointerType === 'touch') {
-        return;
-      }
-
-      const rectangle = container.getBoundingClientRect();
-      dentalChartPointer.x = ((event.clientX - rectangle.left) / rectangle.width) * 2 - 1;
-      dentalChartPointer.y = -((event.clientY - rectangle.top) / rectangle.height) * 2 + 1;
-
-      dentalChartRaycaster.setFromCamera(dentalChartPointer, dentalChartCamera);
-      const intersections = dentalChartRaycaster.intersectObjects(dentalToothMeshes, false);
-      const hovered = intersections.length > 0 ? intersections[0].object : null;
-
-      container.style.cursor = hovered ? 'pointer' : 'grab';
-      updateToothHoverState(hovered);
-      if (hovered) {
-        tooltipHoverMesh = hovered;
-        showPalmerTooltip(hovered, event.clientX, event.clientY);
-      } else {
-        tooltipHoverMesh = null;
-        hidePalmerTooltip();
-      }
-    }
-
-    function handleDentalChartPointerDown(event) {
-      const container = event.currentTarget;
-      if (!container || !dentalChartRaycaster || !dentalChartCamera) return;
-
-      dentalPointerDownState = {
-        startX: event.clientX,
-        startY: event.clientY,
-        hasMoved: false,
-      };
-
-      if (event.pointerType === 'touch') {
-        // Prevent synthetic click propagation that can auto-close or auto-select modal actions on mobile.
-        event.preventDefault();
-      }
-    }
-
-    function handleDentalChartPointerUp(event) {
-      const container = event.currentTarget;
-      if (!container || !dentalChartRaycaster || !dentalChartCamera) return;
-
-      const pointerState = dentalPointerDownState;
-      dentalPointerDownState = null;
-
-      // Treat only tap as selection; swipe/drag should just pan the wrapper.
-      if (pointerState?.hasMoved) {
-        return;
-      }
-
-      const rectangle = container.getBoundingClientRect();
-      dentalChartPointer.x = ((event.clientX - rectangle.left) / rectangle.width) * 2 - 1;
-      dentalChartPointer.y = -((event.clientY - rectangle.top) / rectangle.height) * 2 + 1;
-
-      dentalChartRaycaster.setFromCamera(dentalChartPointer, dentalChartCamera);
-      const intersections = dentalChartRaycaster.intersectObjects(dentalToothMeshes, false);
-      if (intersections.length > 0) {
-        const selectedMesh = intersections[0].object;
-        showPalmerTooltip(selectedMesh, event.clientX, event.clientY);
-        openToothStatusModal(selectedMesh);
-      }
-    }
-
-    function handleDentalChartPointerCancel() {
-      dentalPointerDownState = null;
     }
 
     function updatePatientAppointmentsCount(count) {
