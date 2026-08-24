@@ -3319,7 +3319,18 @@ def serve_public_booking_page(slug: str):
     # يخدم محتوى booking.html مباشرة (FileResponse وليس إعادة توجيه) حتى يبقى
     # شريط عنوان المتصفح عارضاً الرابط النظيف /d/<slug> نفسه الذي يشاركه الطبيب
     # مع مرضاه -- الصفحة نفسها تقرأ الـ slug من location.pathname بجافاسكربت.
-    return FileResponse(os.path.join("frontend_web", "booking.html"))
+    #
+    # Cache-Control صريح ومقصود (اكتُشفت الحاجة له 2026-08-24): هذه الصفحة
+    # عرضة للتعديل والإصلاح بمرور الوقت بينما رابطها (/d/<slug>) يبقى ثابتاً --
+    # بدون هذا الهيدر يعتمد المتصفح على تخمين افتراضي (heuristic caching) وقد
+    # يستمر بعرض نسخة قديمة مكسورة من booking.html لمريض فتح الرابط أكثر من
+    # مرة، حتى بعد إصلاح الخلل ونشره فعلياً على السيرفر -- وهذا بالضبط ما صعّب
+    # تشخيص عطل "الرابط غير متاح" (كان الخلل الفعلي مُصلَحاً على السيرفر، لكن
+    # متصفح المريض استمر بعرض النسخة القديمة المخزّنة من قبل الإصلاح).
+    return FileResponse(
+        os.path.join("frontend_web", "booking.html"),
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
 
 
 @app.get("/", include_in_schema=False)
