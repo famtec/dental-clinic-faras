@@ -121,7 +121,14 @@
 		</footer>
 	</main>
 
-	<script src="api-config.js"></script>
+	<!-- مسار مطلق (يبدأ بـ /) مقصود وليس صدفة: هذه الصفحة تُخدَّم عبر مسار
+	     /d/<slug> (مسارين بالعمق)، فأي مسار نسبي كـ "api-config.js" كان
+	     المتصفح يحلّه بالنسبة لـ "/d/" بدل جذر الموقع، فيطلب "/d/api-config.js"
+	     غير الموجود -- هذا كان يسبب "ReferenceError: apiUrl is not defined"
+	     عند كل محاولة حجز، بغض النظر عن جودة الاتصال أو حالة السيرفر (السبب
+	     الحقيقي وراء "هذا الرابط غير متاح"، اكتُشف 2026-08-24 عبر رسالة الخطأ
+	     التفصيلية المضافة بالتعديل السابق). -->
+	<script src="/api-config.js"></script>
 	<script>
 		function resolveBookingSlug() {
 			const pathParts = window.location.pathname.split('/').filter(Boolean);
