@@ -3592,6 +3592,59 @@ def create_public_booking_request(
     }
 
 
+# يتحقق المريض من حالة آخر طلب حجز أرسله عبر صفحة الحجز العامة (booking.html)
+# باستخدام رقم هاتفه فقط -- لا حاجة لتسجيل دخول أو رابط خاص. أُضيف 2026-08-24
+# لأن قناة واتساب (Green API) غير مُفعَّلة بعد، فكانت هذه الوسيلة الوحيدة الممكنة
+# لإعلام المريض برفض طلبه ودفعه لاختيار موعد آخر بدل بقائه بلا أي إشعار على الإطلاق.
+@app.get("/api/public/doctor/{slug}/booking-status")
+def get_public_booking_status(
+    slug: str,
+    phone: str = Query(..., min_length=1),
+    db: Session = Depends(database.get_db),
+):
+    doctor = get_public_doctor_or_404(db, slug)
+
+    normalized_phone = normalize_whatsapp_phone(phone)
+    if not normalized_phone:
+        raise HTTPException(status_code=400, detail="رقم الهاتف غير صالح.")
+
+    # لا يوجد عمود مُطبَّع لرقم الهاتف بقاعدة البيانات، والمقارنة النصية المباشرة
+    # غير موثوقة لاختلاف صيغ الإدخال (00963.. / 0.. / بدون رمز الدولة..) -- لذا
+    # نجلب مواعيد هذا الطبيب فقط (معزولة أصلاً بـ doctor_email) ونطبّع كل رقم
+    # بايثونياً بنفس الدالة المستخدمة لإرسال واتساب، لضمان تطابق حقيقي.
+    candidate_appointments = (
+        db.query(models.Appointment)
+        .filter(
+            models.Appointment.doctor_email == doctor.email,
+            models.Appointment.patient_phone.isnot(None),
+        )
+        .order_by(models.Appointment.id.desc())
+        .all()
+    )
+    appointment = next(
+        (
+            candidate
+            for candidate in candidate_appointments
+            if normalize_whatsapp_phone(candidate.patient_phone) == normalized_phone
+        ),
+        None,
+    )
+
+    if not appointment:
+        raise HTTPException(
+            status_code=404,
+            detail="لم يتم العثور على طلب حجز مرتبط بهذا الرقم لدى هذا الطبيب.",
+        )
+
+    return {
+        "appointment_id": appointment.id,
+        "status": appointment.status,
+        "patient_name": appointment.patient_name,
+        "appointment_date": appointment.appointment_date.strftime("%Y-%m-%d") if appointment.appointment_date else None,
+        "appointment_time": appointment.appointment_time,
+    }
+
+
 @app.get("/d/{slug}", include_in_schema=False)
 def serve_public_booking_page(slug: str):
     # يخدم محتوى booking.html مباشرة (FileResponse وليس إعادة توجيه) حتى يبقى
