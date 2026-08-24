@@ -78,34 +78,35 @@
     }
     .tooth-svg {
       width: 100%;
-      height: 52px;
+      height: 58px;
       overflow: visible;
       display: block;
     }
     @media (min-width: 640px) {
-      .tooth-svg { height: 62px; }
+      .tooth-svg { height: 70px; }
     }
     .tooth-flip { transform: scaleY(-1); }
     .tooth-root {
-      fill: #f4ead8;
-      stroke: #dfc196;
-      stroke-width: 1.4;
-      opacity: 0.62;
-      transition: fill 0.2s ease, opacity 0.2s ease;
-    }
-    .tooth-crown {
-      fill: #fffbf2;
-      stroke: #e7c894;
-      stroke-width: 1.6;
+      fill: url(#toothRootGradient);
+      stroke: #fb7185;
+      stroke-width: 1.5;
+      stroke-linejoin: round;
       transition: fill 0.2s ease;
     }
-    .tooth-btn:hover .tooth-crown { filter: brightness(1.04); }
+    .tooth-crown {
+      fill: url(#toothCrownGradient);
+      stroke: #94a3b8;
+      stroke-width: 1.4;
+      stroke-linejoin: round;
+      transition: fill 0.2s ease;
+    }
+    .tooth-btn:hover .tooth-crown { filter: brightness(1.05); }
     .tooth-btn.tooth-missing .tooth-crown,
     .tooth-btn.tooth-missing .tooth-root {
       fill: none;
       stroke: #94a3b8;
       stroke-dasharray: 3 3;
-      opacity: 0.55;
+      opacity: 0.5;
     }
     .tooth-dot {
       position: absolute;
@@ -228,6 +229,19 @@
         </div>
 
         <div class="rounded-[24px] border border-slate-100 bg-gradient-to-b from-slate-50 to-white p-3 shadow-inner shadow-slate-100 sm:p-5">
+          <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+            <defs>
+              <linearGradient id="toothRootGradient" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#fbeec3" />
+                <stop offset="45%" stop-color="#f3d189" />
+                <stop offset="100%" stop-color="#e0aa5a" />
+              </linearGradient>
+              <linearGradient id="toothCrownGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#ffffff" />
+                <stop offset="100%" stop-color="#dbe4f3" />
+              </linearGradient>
+            </defs>
+          </svg>
           <div class="w-full overflow-x-auto scrollbar-thin select-none">
             <div id="dentalChartStage" dir="ltr" class="mx-auto min-w-[640px] max-w-[860px] md:min-w-0"></div>
           </div>
@@ -1257,22 +1271,22 @@
 
     const TOOTH_SHAPES = {
       incisor: {
-        crown: 'M13,40 Q13,70 22,74 Q31,70 31,40 Q22,34 13,40 Z',
-        roots: ['M18,2 Q22,-2 26,2 L24.5,40 Q22,45 19.5,40 Z'],
+        crown: 'M13,35 Q13,31 16,30 Q19,28 22,30 Q25,28 28,30 Q31,31 31,35 L31,64 Q31,73 22,75 Q13,73 13,64 Z',
+        roots: ['M22,3 C25.5,3 27.3,11 26.7,19 C26.3,25 24.6,29.5 22,31 C19.4,29.5 17.7,25 17.3,19 C16.7,11 18.5,3 22,3 Z'],
       },
       canine: {
-        crown: 'M12,42 Q12,52 16,60 Q22,76 28,60 Q32,52 32,42 Q22,35 12,42 Z',
-        roots: ['M17,2 Q22,-2 27,2 L25,42 Q22,48 19,42 Z'],
+        crown: 'M13,37 Q13,32 17,31 Q22,21 27,31 Q31,32 31,37 L31,64 Q31,73 22,75 Q13,73 13,64 Z',
+        roots: ['M22,-6 C26,-4 28,7 27,18 C26.5,25 24.7,31 22,33 C19.3,31 17.5,25 17,18 C16,7 18,-4 22,-6 Z'],
       },
       premolar: {
-        crown: 'M8,44 Q8,68 22,72 Q36,68 36,44 Q22,34 8,44 Z',
-        roots: ['M18,3 Q22,-1 26,3 L24.5,42 Q22,47 19.5,42 Z'],
+        crown: 'M9,36 Q9,32 13,31 Q17.5,27 22,30 Q26.5,27 31,31 Q35,32 35,36 L35,62 Q35,71 22,73 Q9,71 9,62 Z',
+        roots: ['M22,5 C25.3,5 27,12 26.5,19 C26.1,25 24.5,29.5 22,31 C19.5,29.5 17.9,25 17.5,19 C17,12 18.7,5 22,5 Z'],
       },
       molar: {
-        crown: 'M5,42 Q5,68 22,73 Q39,68 39,42 Q22,32 5,42 Z',
+        crown: 'M5,34 Q5,30 9,29 Q13,25.5 17,28.2 Q22,24.5 27,28.2 Q31,25.5 35,29 Q39,30 39,34 L39,60 Q39,70 22,72 Q5,70 5,60 Z',
         roots: [
-          'M8,3 Q12,-1 16,3 L14.5,40 Q12,45 9.5,40 Z',
-          'M28,3 Q32,-1 36,3 L34.5,40 Q32,45 29.5,40 Z',
+          'M9.5,6 C12.8,3.5 15.5,8.5 15,17 C14.7,23.5 12.9,28.5 10.7,30.5 C8.8,28.5 7,23.5 6.7,17 C6.3,8.5 6.5,8.5 9.5,6 Z',
+          'M34.5,6 C31.2,3.5 28.5,8.5 29,17 C29.3,23.5 31.1,28.5 33.3,30.5 C35.2,28.5 37,23.5 37.3,17 C37.7,8.5 37.5,8.5 34.5,6 Z',
         ],
       },
     };
@@ -1310,7 +1324,7 @@
       const svgNS = 'http://www.w3.org/2000/svg';
       const shape = TOOTH_SHAPES[shapeKey];
       const svg = document.createElementNS(svgNS, 'svg');
-      svg.setAttribute('viewBox', '0 0 44 78');
+      svg.setAttribute('viewBox', '0 0 44 84');
       svg.setAttribute('class', `tooth-svg${isLower ? ' tooth-flip' : ''}`);
       svg.setAttribute('aria-hidden', 'true');
 
@@ -1432,18 +1446,18 @@
       button.classList.remove('tooth-missing');
       button.removeAttribute('data-has-status');
 
+      // Only the crown (the visible enamel surface) is tinted with the
+      // treatment color — the root keeps its natural ivory/gold gradient,
+      // matching how real dental-chart software marks a treated tooth.
       if (statusKey === 'extracted') {
         button.classList.add('tooth-missing');
         crownPath.style.fill = '';
-        rootPaths.forEach((rootPath) => { rootPath.style.fill = ''; });
       } else if (statusKey && TOOTH_STATUS_OPTIONS[statusKey]) {
-        const color = TOOTH_STATUS_OPTIONS[statusKey].color;
-        crownPath.style.fill = color;
-        rootPaths.forEach((rootPath) => { rootPath.style.fill = color; });
+        crownPath.style.fill = TOOTH_STATUS_OPTIONS[statusKey].color;
       } else {
         crownPath.style.fill = '';
-        rootPaths.forEach((rootPath) => { rootPath.style.fill = ''; });
       }
+      rootPaths.forEach((rootPath) => { rootPath.style.fill = ''; });
 
       const dot = button.querySelector('.tooth-dot');
       if (dot) {
