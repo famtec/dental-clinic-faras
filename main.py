@@ -16,7 +16,7 @@ from decimal import Decimal
 import os
 from uuid import uuid4
 from google.auth.transport import requests as google_requests
-from google.oauth2 import id_token
+from google.oauth2 import id_token, service_account
 import models
 import database
 import os
@@ -56,6 +56,13 @@ SESSION_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30  # صلاحية 30 يوماً لك
 # green-api.com وربطه برقم واتساب العيادة عبر مسح رمز QR.
 GREEN_API_INSTANCE_ID = os.getenv("GREEN_API_INSTANCE_ID", "")
 GREEN_API_TOKEN = os.getenv("GREEN_API_TOKEN", "")
+
+# بيانات اعتماد Firebase Cloud Messaging لإرسال إشعارات Push لتطبيق الطبيب على
+# أندرويد (اختياري -- إن تُركت فارغة، send_push_notification_to_doctor ترجع بصمت
+# دون أي محاولة اتصال أو خطأ). FIREBASE_SERVICE_ACCOUNT_JSON هو محتوى ملف
+# JSON الكامل لحساب خدمة Firebase (Service Account) كنص واحد، وليس مساراً لملف.
+FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID", "")
+FIREBASE_SERVICE_ACCOUNT_JSON = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON", "")
 
 UPLOADS_DIR = "uploads"
 os.makedirs(UPLOADS_DIR, exist_ok=True)
@@ -311,6 +318,64 @@ def send_whatsapp_message_via_green_api(phone: str, message: str) -> bool:
         return False
 
 
+_firebase_credentials_cache: dict = {"credentials": None}
+
+
+def _get_firebase_access_token() -> str | None:
+    if not FIREBASE_SERVICE_ACCOUNT_JSON:
+        return None
+    try:
+        if _firebase_credentials_cache["credentials"] is None:
+            service_account_info = json.loads(FIREBASE_SERVICE_ACCOUNT_JSON)
+            _firebase_credentials_cache["credentials"] = service_account.Credentials.from_service_account_info(
+                service_account_info,
+                scopes=["https://www.googleapis.com/auth/firebase.messaging"],
+            )
+        credentials = _firebase_credentials_cache["credentials"]
+        credentials.refresh(google_requests.Request())
+        return credentials.token
+    except Exception as exc:
+        print(f"⚠️ [PUSH NOTIFICATION] فشل تجهيز رمز الدخول لـ Firebase: {exc}")
+        return None
+
+
+def send_push_notification_to_doctor(doctor, title: str, body: str, data: dict | None = None) -> bool:
+    # إشعار Push فوري لتطبيق الطبيب على أندرويد عند وصول حجز جديد (أُضيف
+    # 2026-08-24) -- best-effort بالكامل مثل send_whatsapp_message_via_green_api
+    # تماماً: لا يُطلق أي استثناء ولا يوقف أي عملية حجز لو فشل الإرسال أو لم
+    # تُضبط بيانات Firebase أو لم يسجّل الطبيب جهازه بعد.
+    if not doctor or not getattr(doctor, "fcm_token", None):
+        return False
+    if not FIREBASE_PROJECT_ID or not FIREBASE_SERVICE_ACCOUNT_JSON:
+        return False
+
+    access_token = _get_firebase_access_token()
+    if not access_token:
+        return False
+
+    url = f"https://fcm.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}/messages:send"
+    payload = {
+        "message": {
+            "token": doctor.fcm_token,
+            "notification": {"title": title, "body": body},
+            "data": {str(key): str(value) for key, value in (data or {}).items()},
+            "android": {"priority": "high"},
+        }
+    }
+
+    try:
+        response = requests.post(
+            url,
+            json=payload,
+            headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+            timeout=10,
+        )
+        return response.status_code == 200
+    except Exception as exc:
+        print(f"⚠️ [PUSH NOTIFICATION] فشل إرسال إشعار Push: {exc}")
+        return False
+
+
 def send_due_appointment_reminders() -> int:
     db = database.SessionLocal()
     sent_count = 0
@@ -542,6 +607,11 @@ class ExpenseCreate(BaseModel):
     type: str = "expense"
     patient_id: Optional[int] = None
     doctor_name: Optional[str] = None
+    # 2026-08-24: ربط تلقائي اختياري بين مصروف "شراء مادة" ومخزن المواد --
+    # انظر create_expense() ومذكرة dental_project_finance_inventory_link.
+    add_to_inventory: bool = False
+    inventory_item_name: Optional[str] = None
+    inventory_quantity: Optional[int] = None
 
 
 class ExpenseResponse(BaseModel):
@@ -552,6 +622,9 @@ class ExpenseResponse(BaseModel):
     description: str
     doctor_name: Optional[str] = None
     created_at: datetime
+    inventory_synced: bool = False
+    inventory_item_id: Optional[int] = None
+    inventory_action: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -1480,6 +1553,37 @@ async def upload_doctor_avatar(
     return {"message": "تم تحديث صورة الحساب بنجاح.", "avatar_url": user.avatar_url}
 
 
+class DeviceTokenRequest(BaseModel):
+    fcm_token: str
+
+
+# تسجيل رمز جهاز Firebase Cloud Messaging لتطبيق الطبيب على أندرويد (أُضيف
+# 2026-08-24) -- يُستدعى مرة بعد كل تسجيل دخول ناجح في التطبيق. نستخدم
+# get_current_doctor_user (وليس require_active_doctor_user) على غرار مسارات
+# الحساب/الأفاتار، حتى يقدر طبيب بانتظار التفعيل يسجّل جهازه أيضاً.
+@app.post("/api/auth/register-device")
+def register_device_token(
+    payload: DeviceTokenRequest,
+    db: Session = Depends(database.get_db),
+    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+):
+    user = get_current_doctor_user(db, doctor_email=doctor_email, authorization=authorization)
+
+    token_value = (payload.fcm_token or "").strip()
+    if not token_value:
+        raise HTTPException(status_code=400, detail="fcm_token مطلوب.")
+
+    try:
+        user.fcm_token = token_value
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر حفظ رمز الجهاز حالياً.")
+
+    return {"message": "تم تسجيل الجهاز لاستقبال الإشعارات بنجاح."}
+
+
 # 4. مسار إرسال (حفظ) مريض جديد في النظام [POST]
 @app.post("/api/patients", response_model=PatientResponse)
 def create_patient(
@@ -2196,6 +2300,23 @@ def create_expense(
         if not patient:
             raise HTTPException(status_code=404, detail="Patient not found")
 
+    # 2026-08-24: ربط تلقائي اختياري -- عند تسجيل مصروف لشراء مادة، يمكن للطبيب
+    # طلب إضافتها/تحديث كميتها في مخزن المواد بنفس العملية، بدل الانتقال يدوياً إلى
+    # inventory.html وإدخالها هناك من جديد. الربط متاح فقط لمصروفات (type=expense)
+    # ولحسابات الباقة premium فقط -- نفس تسقيف صفحة المخزن نفسها (require_premium_user_by_email)
+    # -- وإن طُلب الربط من حساب standard لا نفشل حفظ المصروف، فقط نتجاهل الربط بصمت.
+    sync_to_inventory = bool(expense.add_to_inventory) and transaction_type == "expense" and current_user.tier == "premium"
+
+    inventory_item_name = None
+    inventory_quantity_to_add = None
+    if sync_to_inventory:
+        inventory_item_name = (expense.inventory_item_name or "").strip()
+        if not inventory_item_name:
+            raise HTTPException(status_code=400, detail="اسم المادة مطلوب لإضافتها إلى مخزن المواد.")
+        if expense.inventory_quantity is None or expense.inventory_quantity <= 0:
+            raise HTTPException(status_code=400, detail="الكمية المضافة إلى المخزن يجب أن تكون أكبر من صفر.")
+        inventory_quantity_to_add = expense.inventory_quantity
+
     try:
         db_expense = models.FinancialTransaction(
             patient_id=expense.patient_id,
@@ -2206,9 +2327,52 @@ def create_expense(
             description=description,
         )
         db.add(db_expense)
+
+        inventory_item = None
+        inventory_action = None
+        if sync_to_inventory:
+            inventory_item = (
+                db.query(models.InventoryItem)
+                .filter(
+                    models.InventoryItem.doctor_email == current_user.email,
+                    func.lower(models.InventoryItem.item_name) == inventory_item_name.lower(),
+                )
+                .first()
+            )
+            if inventory_item:
+                inventory_item.quantity = inventory_item.quantity + inventory_quantity_to_add
+                inventory_item.updated_at = datetime.utcnow()
+                inventory_action = "updated"
+            else:
+                inventory_item = models.InventoryItem(
+                    doctor_email=current_user.email,
+                    item_name=inventory_item_name,
+                    quantity=inventory_quantity_to_add,
+                    min_alert_quantity=5,
+                )
+                db.add(inventory_item)
+                inventory_action = "created"
+
         db.commit()
         db.refresh(db_expense)
-        return db_expense
+        if sync_to_inventory and inventory_item is not None:
+            db.refresh(inventory_item)
+
+        return ExpenseResponse(
+            id=db_expense.id,
+            amount=db_expense.amount,
+            type=db_expense.type,
+            patient_id=db_expense.patient_id,
+            description=db_expense.description,
+            doctor_name=db_expense.doctor_name,
+            created_at=db_expense.created_at,
+            inventory_synced=sync_to_inventory and inventory_item is not None,
+            inventory_item_id=(inventory_item.id if inventory_item is not None else None),
+            inventory_action=inventory_action,
+        )
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception:
         db.rollback()
         raise HTTPException(status_code=400, detail="تعذر حفظ المصروف حالياً. حاول مرة أخرى.")
@@ -3412,6 +3576,15 @@ def create_public_booking_request(
             "يرجى مراجعة صفحة المواعيد للقبول أو الرفض."
         )
         send_whatsapp_message_via_green_api(doctor.clinic_phone, doctor_message)
+
+    # إشعار Push فوري لتطبيق الطبيب على أندرويد (best-effort مثل واتساب أعلاه
+    # تماماً -- مستقل عنه، يعمل حتى لو واتساب غير مضبوط أو فشل إرساله)
+    send_push_notification_to_doctor(
+        doctor,
+        title="📅 طلب حجز جديد",
+        body=f"{trimmed_name} حجز موعداً بتاريخ {parsed_date.isoformat()} الساعة {trimmed_time}",
+        data={"type": "new_booking", "appointment_id": str(db_appointment.id)},
+    )
 
     return {
         "message": "تم إرسال طلب الحجز بنجاح، سيصلك إشعار عند رد الطبيب.",

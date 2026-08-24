@@ -171,6 +171,24 @@
 							<input id="expenseDescription" name="description" type="text" required class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" placeholder="شراء مواد حشو وتجهيزات" />
 						</label>
 
+						<div class="md:col-span-3 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
+							<label class="flex cursor-pointer items-center gap-3 text-sm font-semibold text-indigo-900">
+								<input id="addToInventoryToggle" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400" />
+								📦 هذا المصروف لشراء مادة جديدة — أضفها تلقائياً إلى مخزن المواد
+							</label>
+							<div id="inventoryLinkFields" class="mt-4 hidden grid gap-4 sm:grid-cols-2">
+								<label class="block">
+									<span class="mb-2 block text-sm font-semibold text-slate-700">اسم المادة</span>
+									<input id="inventoryItemNameInput" name="inventory_item_name" type="text" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" placeholder="مثال: قفازات طبية" />
+								</label>
+								<label class="block">
+									<span class="mb-2 block text-sm font-semibold text-slate-700">الكمية المضافة</span>
+									<input id="inventoryQuantityInput" name="inventory_quantity" type="number" min="1" step="1" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" placeholder="10" />
+								</label>
+							</div>
+							<p class="mt-2 text-xs text-slate-500">إن وجدت مادة بنفس الاسم في المخزن سيتم زيادة كميتها تلقائياً، وإلا سيتم إنشاء مادة جديدة.</p>
+						</div>
+
 						<div class="md:col-span-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 							<p id="expenseStatus" class="text-sm font-medium text-slate-500">جاهز لإرسال العملية.</p>
 							<button id="expenseSubmitBtn" type="submit" class="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700">
@@ -359,6 +377,17 @@
 		const expenseForm = document.getElementById('expenseForm');
 		const expenseStatus = document.getElementById('expenseStatus');
 		const expenseSubmitBtn = document.getElementById('expenseSubmitBtn');
+		const addToInventoryToggle = document.getElementById('addToInventoryToggle');
+		const inventoryLinkFields = document.getElementById('inventoryLinkFields');
+		const inventoryItemNameInput = document.getElementById('inventoryItemNameInput');
+		const inventoryQuantityInput = document.getElementById('inventoryQuantityInput');
+
+		// 2026-08-24: إظهار/إخفاء حقلي اسم المادة + الكمية حسب حالة المفتاح.
+		if (addToInventoryToggle && inventoryLinkFields) {
+			addToInventoryToggle.addEventListener('change', () => {
+				inventoryLinkFields.classList.toggle('hidden', !addToInventoryToggle.checked);
+			});
+		}
 
 		function handleLogout() {
 			localStorage.removeItem('doctor_name');
@@ -607,6 +636,24 @@
 				return;
 			}
 
+			// 2026-08-24: ربط اختياري بمخزن المواد -- يُرسل فقط عند تفعيل المفتاح.
+			const addToInventory = Boolean(addToInventoryToggle && addToInventoryToggle.checked);
+			const inventoryItemName = String(formData.get('inventory_item_name') || '').trim();
+			const inventoryQuantityRaw = formData.get('inventory_quantity');
+			const inventoryQuantity = inventoryQuantityRaw ? Number(inventoryQuantityRaw) : null;
+
+			if (addToInventory && (!inventoryItemName || !inventoryQuantity || inventoryQuantity <= 0)) {
+				setExpenseStatus('يرجى إدخال اسم المادة وكمية صحيحة أكبر من صفر لإضافتها إلى المخزن.', 'error');
+				return;
+			}
+
+			const payload = { amount, description };
+			if (addToInventory) {
+				payload.add_to_inventory = true;
+				payload.inventory_item_name = inventoryItemName;
+				payload.inventory_quantity = inventoryQuantity;
+			}
+
 			expenseSubmitBtn.disabled = true;
 			expenseSubmitBtn.textContent = 'جاري الحفظ...';
 			setExpenseStatus('يتم إرسال العملية المالية...', 'normal');
@@ -615,15 +662,34 @@
 				const response = await fetch(EXPENSE_POST_ENDPOINT, {
 					method: 'POST',
 					headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
-					body: JSON.stringify({ amount, description })
+					body: JSON.stringify(payload)
 				});
 
 				if (!response.ok) {
 					throw new Error('Failed to save expense');
 				}
 
+				let savedExpense = null;
+				try {
+					savedExpense = await response.json();
+				} catch (parseError) {
+					savedExpense = null;
+				}
+
 				expenseForm.reset();
-				setExpenseStatus('تم حفظ المصروف بنجاح.', 'success');
+				if (inventoryLinkFields) {
+					inventoryLinkFields.classList.add('hidden');
+				}
+
+				if (savedExpense && savedExpense.inventory_synced) {
+					const actionText = savedExpense.inventory_action === 'created'
+						? 'تمت إضافتها كمادة جديدة'
+						: 'تم تحديث كميتها';
+					setExpenseStatus(`تم حفظ المصروف بنجاح، و${actionText} في مخزن المواد.`, 'success');
+				} else {
+					setExpenseStatus('تم حفظ المصروف بنجاح.', 'success');
+				}
+
 				await populateMonthSelect();
 			} catch (error) {
 				setExpenseStatus('تعذر حفظ المصروف الآن. حاول مرة أخرى لاحقاً.', 'error');
