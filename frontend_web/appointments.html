@@ -140,6 +140,18 @@
     <div id="toast" class="pointer-events-none fixed left-1/2 top-6 z-[70] hidden w-[min(92vw,28rem)] -translate-x-1/2 rounded-3xl border border-white/20 bg-[linear-gradient(160deg,_rgba(15,23,42,0.96),_rgba(49,46,129,0.95),_rgba(67,56,202,0.94))] px-4 py-3 text-sm font-semibold text-white shadow-2xl shadow-indigo-950/40 backdrop-blur-xl opacity-0">
     </div>
 
+    <div id="confirmModal" class="fixed inset-0 z-[75] hidden items-center justify-center bg-slate-950/80 p-4 opacity-0 backdrop-blur-sm transition-opacity duration-200">
+        <div class="w-full max-w-sm scale-95 rounded-3xl border border-violet-300/25 bg-[#2e1065] p-6 text-center text-violet-50 shadow-2xl shadow-indigo-950/70 transition-transform duration-200">
+            <div id="confirmModalIcon" class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-violet-300/40 bg-violet-500/15 text-2xl text-violet-100">❓</div>
+            <h3 id="confirmModalTitle" class="text-lg font-extrabold text-white">تأكيد العملية</h3>
+            <p id="confirmModalMessage" class="mt-2 text-sm leading-relaxed text-violet-200/90"></p>
+            <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-center">
+                <button id="confirmModalCancelBtn" type="button" class="w-full rounded-2xl border border-slate-300/45 bg-slate-200/20 px-5 py-3 text-sm font-semibold text-slate-100 transition hover:bg-slate-200/30 sm:w-auto">إلغاء</button>
+                <button id="confirmModalConfirmBtn" type="button" class="w-full rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-3 text-sm font-bold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700 sm:w-auto">تأكيد</button>
+            </div>
+        </div>
+    </div>
+
     <div id="appointmentModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 p-4 opacity-0 backdrop-blur-sm transition-opacity duration-200">
         <div class="w-full max-w-2xl scale-95 rounded-3xl border border-violet-300/25 bg-[#2e1065] p-5 text-violet-50 shadow-2xl shadow-indigo-950/70 transition-transform duration-200 sm:p-6">
             <div class="mb-5 flex items-start justify-between gap-4">
@@ -321,10 +333,10 @@
                                     statusEl.textContent = '🎉 تم التجديد بنجاح!';
                                     statusEl.className = 'text-xs min-h-[1rem] text-emerald-400';
                                 }
-                                // رسالة تهنئة منبثقة فورية حسب الطلب، ثم إعادة تحميل الصفحة مباشرة
+                                // رسالة تهنئة منبثقة فورية حسب الطلب، ثم إعادة تحميل الصفحة
                                 // لإظهار كامل عناصر لوحة التحكم بعد استعادة الصلاحيات.
-                                alert('🎉 تم تجديد اشتراكك بنجاح! سيتم تحديث الصفحة الآن لإظهار كامل صلاحيات لوحة التحكم.');
-                                window.location.reload();
+                                showToast('🎉 تم تجديد اشتراكك بنجاح! سيتم تحديث الصفحة الآن لإظهار كامل صلاحيات لوحة التحكم.', 'success');
+                                window.setTimeout(() => window.location.reload(), 1800);
                         })
                         .catch(() => {
                                 if (statusEl) {
@@ -513,6 +525,110 @@
             }, 2400);
         }
 
+        const confirmModal = document.getElementById('confirmModal');
+        const confirmModalIcon = document.getElementById('confirmModalIcon');
+        const confirmModalTitle = document.getElementById('confirmModalTitle');
+        const confirmModalMessage = document.getElementById('confirmModalMessage');
+        const confirmModalCancelBtn = document.getElementById('confirmModalCancelBtn');
+        const confirmModalConfirmBtn = document.getElementById('confirmModalConfirmBtn');
+        let confirmModalCloseTimer = null;
+        let confirmModalResolver = null;
+
+        const CONFIRM_TONE_STYLES = {
+            danger: {
+                icon: '🗑️',
+                iconClass: 'border-rose-300/40 bg-rose-500/15 text-rose-100',
+                confirmClass: 'bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700',
+            },
+            success: {
+                icon: '✅',
+                iconClass: 'border-emerald-300/40 bg-emerald-500/15 text-emerald-100',
+                confirmClass: 'bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700',
+            },
+            default: {
+                icon: '❓',
+                iconClass: 'border-violet-300/40 bg-violet-500/15 text-violet-100',
+                confirmClass: 'bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700',
+            },
+        };
+
+        function closeConfirmModal(result) {
+            if (!confirmModal) return;
+
+            confirmModal.classList.add('opacity-0');
+            const panel = confirmModal.firstElementChild;
+            if (panel) {
+                panel.classList.add('scale-95');
+            }
+
+            if (confirmModalCloseTimer) {
+                window.clearTimeout(confirmModalCloseTimer);
+            }
+            confirmModalCloseTimer = window.setTimeout(() => {
+                confirmModal.classList.add('hidden');
+                confirmModal.classList.remove('flex');
+                confirmModalCloseTimer = null;
+            }, 180);
+
+            if (confirmModalResolver) {
+                const resolve = confirmModalResolver;
+                confirmModalResolver = null;
+                resolve(result);
+            }
+        }
+
+        function showConfirm(message, options = {}) {
+            const tone = CONFIRM_TONE_STYLES[options.tone] || CONFIRM_TONE_STYLES.default;
+
+            return new Promise((resolve) => {
+                if (!confirmModal) {
+                    resolve(window.confirm(message));
+                    return;
+                }
+
+                if (confirmModalResolver) {
+                    closeConfirmModal(false);
+                }
+                confirmModalResolver = resolve;
+
+                confirmModalTitle.textContent = options.title || 'تأكيد العملية';
+                confirmModalMessage.textContent = message;
+                confirmModalIcon.textContent = options.icon || tone.icon;
+                confirmModalIcon.className = `mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border text-2xl ${tone.iconClass}`;
+                confirmModalConfirmBtn.textContent = options.confirmText || 'تأكيد';
+                confirmModalConfirmBtn.className = `w-full rounded-full px-6 py-3 text-sm font-bold text-white shadow-lg transition sm:w-auto ${tone.confirmClass}`;
+                confirmModalCancelBtn.textContent = options.cancelText || 'إلغاء';
+
+                if (confirmModalCloseTimer) {
+                    window.clearTimeout(confirmModalCloseTimer);
+                    confirmModalCloseTimer = null;
+                }
+
+                confirmModal.classList.remove('hidden');
+                confirmModal.classList.add('flex');
+                requestAnimationFrame(() => {
+                    confirmModal.classList.remove('opacity-0');
+                    const panel = confirmModal.firstElementChild;
+                    if (panel) {
+                        panel.classList.remove('scale-95');
+                    }
+                });
+            });
+        }
+
+        confirmModalCancelBtn?.addEventListener('click', () => closeConfirmModal(false));
+        confirmModalConfirmBtn?.addEventListener('click', () => closeConfirmModal(true));
+        confirmModal?.addEventListener('click', (event) => {
+            if (event.target === confirmModal) {
+                closeConfirmModal(false);
+            }
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && confirmModal && !confirmModal.classList.contains('hidden')) {
+                closeConfirmModal(false);
+            }
+        });
+
         function normalizeText(value) {
             return String(value || '').trim().toLowerCase();
         }
@@ -630,7 +746,7 @@
             const patientRecord = getPatientByAppointment(appointment);
             const patientPhone = normalizeWhatsappPhone(patientRecord?.phone || appointment?.phone || appointment?.patient_phone);
             if (!patientPhone) {
-                alert('تعذر إرسال التذكير: رقم هاتف المريض غير متوفر أو غير صالح.');
+                showToast('تعذر إرسال التذكير: رقم هاتف المريض غير متوفر أو غير صالح.', 'error');
                 return;
             }
 
@@ -840,7 +956,12 @@
                     const appointmentId = button.getAttribute('data-delete-appointment-id');
                     if (!appointmentId) return;
 
-                    const confirmed = window.confirm('هل أنت متأكد من حذف هذا الموعد نهائياً؟');
+                    const confirmed = await showConfirm('هل أنت متأكد من حذف هذا الموعد نهائياً؟', {
+                        title: 'حذف الموعد',
+                        tone: 'danger',
+                        confirmText: 'حذف',
+                        cancelText: 'إلغاء',
+                    });
                     if (!confirmed) return;
 
                     const previousText = button.textContent;
@@ -858,9 +979,9 @@
                         }
 
                         await loadAppointments();
-                        alert('تم حذف الموعد بنجاح');
+                        showToast('تم حذف الموعد بنجاح', 'success');
                     } catch (error) {
-                        alert('تعذر حذف الموعد الآن. يرجى المحاولة لاحقاً.');
+                        showToast('تعذر حذف الموعد الآن. يرجى المحاولة لاحقاً.', 'error');
                     } finally {
                         button.disabled = false;
                         button.textContent = previousText || '🗑️ حذف';
@@ -875,7 +996,7 @@
 
                     const appointment = currentAppointments.find((item) => String(item.id) === String(appointmentId));
                     if (!appointment) {
-                        alert('تعذر العثور على بيانات الموعد لإرسال التذكير.');
+                        showToast('تعذر العثور على بيانات الموعد لإرسال التذكير.', 'error');
                         return;
                     }
 
@@ -1029,7 +1150,13 @@
             if (!requestId) return;
 
             const confirmMessage = decision === 'accept' ? 'تأكيد قبول طلب الحجز هذا؟' : 'تأكيد رفض طلب الحجز هذا؟';
-            if (!window.confirm(confirmMessage)) return;
+            const confirmed = await showConfirm(confirmMessage, {
+                title: decision === 'accept' ? 'قبول طلب الحجز' : 'رفض طلب الحجز',
+                tone: decision === 'accept' ? 'success' : 'danger',
+                confirmText: decision === 'accept' ? 'قبول' : 'رفض',
+                cancelText: 'إلغاء',
+            });
+            if (!confirmed) return;
 
             const wrapper = triggerButton?.closest('[data-booking-request-id]');
             if (wrapper) {
@@ -1072,7 +1199,7 @@
 
             const selectedPatient = resolveSelectedPatient();
             if (!selectedPatient) {
-                alert('يرجى اختيار مريض موجود من القائمة قبل حفظ الموعد.');
+                showToast('يرجى اختيار مريض موجود من القائمة قبل حفظ الموعد.', 'error');
                 return;
             }
 
@@ -1081,13 +1208,13 @@
             const description = document.getElementById('appointmentDescription').value.trim();
 
             if (!selectedDate || !selectedTime || !description) {
-                alert('يرجى تعبئة جميع حقول الموعد قبل الحفظ.');
+                showToast('يرجى تعبئة جميع حقول الموعد قبل الحفظ.', 'error');
                 return;
             }
 
             const appointmentDateTime = new Date(`${selectedDate}T${selectedTime}:00`);
             if (Number.isNaN(appointmentDateTime.getTime())) {
-                alert('صيغة التاريخ أو الوقت غير صحيحة.');
+                showToast('صيغة التاريخ أو الوقت غير صحيحة.', 'error');
                 return;
             }
 
