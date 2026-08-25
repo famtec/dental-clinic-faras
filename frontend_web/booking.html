@@ -335,7 +335,7 @@
 			const dateObj = new Date(`${selectedDate}T00:00:00`);
 			const dateLabel = Number.isNaN(dateObj.getTime())
 				? selectedDate
-				: dateObj.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+				: dateObj.toLocaleDateString('ar-EG-u-nu-latn', { year: 'numeric', month: 'long', day: 'numeric' });
 
 			selectedSlotLabel.textContent = `${dateLabel} — ${time}`;
 			bookingFormStatusMsg.textContent = '';
@@ -433,7 +433,7 @@
 			const dateObj = new Date(`${isoDate}T00:00:00`);
 			return Number.isNaN(dateObj.getTime())
 				? isoDate
-				: dateObj.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+				: dateObj.toLocaleDateString('ar-EG-u-nu-latn', { year: 'numeric', month: 'long', day: 'numeric' });
 		}
 
 		function showStatusCheckResult(tone, message, options) {

@@ -506,7 +506,7 @@
 			if (!value) return '—';
 			const dt = new Date(value);
 			if (Number.isNaN(dt.getTime())) return '—';
-			return dt.toLocaleString('ar-EG', {
+			return dt.toLocaleString('ar-EG-u-nu-latn', {
 				year: 'numeric',
 				month: 'long',
 				day: 'numeric',

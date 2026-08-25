@@ -543,7 +543,7 @@
       const safeDuration = Math.max(1000, Math.min(Number(duration) || 1200, 1500));
       const formatValue = typeof formatter === 'function'
         ? formatter
-        : (value) => Number(value).toLocaleString('ar-SY');
+        : (value) => Number(value).toLocaleString('ar-SY-u-nu-latn');
 
       const startTime = performance.now();
       const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
@@ -611,7 +611,7 @@
         0,
         dynamicTotalDebt,
         1250,
-        (value) => `${Number(value).toLocaleString('ar-SY')} ل.س`
+        (value) => `${Number(value).toLocaleString('ar-SY-u-nu-latn')} ل.س`
       );
     }
 

@@ -639,6 +639,10 @@
           <span class="mb-1 block text-xs font-semibold text-indigo-100">الوصف</span>
           <textarea id="financeEditDescription" rows="4" required class="w-full rounded-2xl border border-indigo-200/30 bg-white/10 px-4 py-3 text-sm text-white outline-none transition placeholder:text-indigo-200/60 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-300/25" placeholder="اكتب وصف الدفعة..."></textarea>
         </label>
+        <label class="flex items-center gap-2 text-xs font-semibold text-indigo-100">
+          <input id="financeEditOpeningBalance" type="checkbox" class="h-4 w-4 rounded border-indigo-300/40 bg-white/10 text-indigo-500 focus:ring-indigo-400" />
+          🕰️ هذه تسوية رصيد قديم/سابق (تُستبعد من تقرير أي شهر محدد، وتبقى ضمن الإجمالي الكلي)
+        </label>
         <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
           <button id="cancelFinanceEditBtn" type="button" class="rounded-2xl border border-indigo-200/35 bg-white/10 px-5 py-3 text-sm font-semibold text-indigo-50 transition hover:bg-white/20">إلغاء</button>
           <button id="saveFinanceEditBtn" type="submit" class="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700">حفظ التعديل المالي</button>
@@ -1582,7 +1586,7 @@
       const dateValue = new Date(value);
       if (Number.isNaN(dateValue.getTime())) return '—';
 
-      return dateValue.toLocaleString('ar-EG', {
+      return dateValue.toLocaleString('ar-EG-u-nu-latn', {
         weekday: 'long',
         year: 'numeric',
         month: 'long',
@@ -1599,7 +1603,7 @@
       if (!dateValue) return '—';
       const parsed = new Date(dateValue);
       if (Number.isNaN(parsed.getTime())) return '—';
-      return parsed.toLocaleTimeString('ar-EG', {
+      return parsed.toLocaleTimeString('ar-EG-u-nu-latn', {
         hour: 'numeric',
         minute: '2-digit',
         hour12: false,
@@ -1637,7 +1641,7 @@
       const parsed = new Date(rawDate);
       if (Number.isNaN(parsed.getTime())) return 'غير محدد';
 
-      return parsed.toLocaleDateString('ar-EG', {
+      return parsed.toLocaleDateString('ar-EG-u-nu-latn', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
@@ -1800,7 +1804,7 @@
       if (!value) return 'تاريخ غير متاح';
       const dt = new Date(value);
       if (Number.isNaN(dt.getTime())) return 'تاريخ غير متاح';
-      return dt.toLocaleString('ar-SA');
+      return dt.toLocaleString('ar-SA-u-nu-latn');
     }
 
     function formatFinanceLedgerDate(value) {
@@ -1808,7 +1812,7 @@
       const dt = new Date(value);
       if (Number.isNaN(dt.getTime())) return 'تاريخ غير متاح';
 
-      return dt.toLocaleString('ar-EG', {
+      return dt.toLocaleString('ar-EG-u-nu-latn', {
         weekday: 'long',
         year: 'numeric',
         month: 'long',
@@ -1822,7 +1826,7 @@
     function formatFinanceAmount(value) {
       const amount = Number(value);
       if (Number.isNaN(amount)) return '—';
-      return new Intl.NumberFormat('ar-EG', {
+      return new Intl.NumberFormat('ar-EG-u-nu-latn', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       }).format(amount);
@@ -1885,9 +1889,13 @@
     function createInvoicePaymentRow(payment) {
       const row = document.createElement('div');
       row.className = 'flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-1 py-2 text-xs last:border-b-0';
+      const openingBalanceBadge = payment?.is_opening_balance
+        ? '<span class="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700" title="رصيد قديم/سابق -- غير محتسب ضمن دخل أي شهر محدد">🕰️ رصيد سابق</span>'
+        : '';
       row.innerHTML = `
         <span class="text-slate-400">${escapeHtml(formatFinanceLedgerDate(payment?.created_at))}</span>
         <span class="flex-1 px-2 text-slate-600">${escapeHtml(String(payment?.description || '—'))}</span>
+        ${openingBalanceBadge}
         <span class="font-bold text-emerald-700">${formatFinanceAmount(payment?.amount)} ل.س</span>
         <span class="flex items-center gap-1">
           <button type="button" data-invoice-payment-edit-id="${String(payment?.id ?? '')}" class="invoice-payment-edit-btn rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700 transition hover:bg-indigo-100">تعديل</button>
@@ -1956,6 +1964,10 @@
         <form data-invoice-payment-form="${invoice.id}" class="mt-3 flex flex-wrap items-center gap-2">
           <input type="text" inputmode="decimal" placeholder="مبلغ الدفعة الجديدة (ل.س)" class="min-w-[160px] flex-1 rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100" />
           <button type="submit" class="whitespace-nowrap rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5 text-xs font-extrabold text-white shadow-sm transition hover:from-indigo-700 hover:to-violet-700">تسجيل دفعة على هذه الفاتورة</button>
+          <label class="flex w-full items-center gap-2 pt-1 text-[11px] font-semibold text-slate-500">
+            <input type="checkbox" data-invoice-payment-opening-balance="1" class="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400" />
+            🕰️ هذه تسوية رصيد قديم/سابق (لن تُحتسب ضمن دخل الشهر الحالي في التقارير)
+          </label>
         </form>
       `;
 
@@ -1971,8 +1983,9 @@
       if (form) {
         form.addEventListener('submit', (event) => {
           event.preventDefault();
-          const input = form.querySelector('input');
-          submitInvoicePayment(invoice.id, input);
+          const input = form.querySelector('input[inputmode="decimal"]');
+          const openingBalanceCheckbox = form.querySelector('[data-invoice-payment-opening-balance="1"]');
+          submitInvoicePayment(invoice.id, input, openingBalanceCheckbox);
         });
       }
 
@@ -2139,7 +2152,7 @@
       }
     }
 
-    async function submitInvoicePayment(invoiceId, inputEl) {
+    async function submitInvoicePayment(invoiceId, inputEl, openingBalanceCheckboxEl) {
       const patientId = getPatientIdFromUrl();
       if (!patientId || !invoiceId) return;
 
@@ -2149,11 +2162,15 @@
         return;
       }
 
+      // 2026-08-25: تُستبعد هذه الدفعة من تقرير أي شهر محدد في finance.html إن
+      // كانت تسوية رصيد قديم -- انظر شرح كامل عند get_finance_summary() في main.py.
+      const isOpeningBalance = Boolean(openingBalanceCheckboxEl && openingBalanceCheckboxEl.checked);
+
       try {
         const response = await fetch(getInvoicePaymentEndpoint(patientId, invoiceId), {
           method: 'POST',
           headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({ amount }),
+          body: JSON.stringify({ amount, is_opening_balance: isOpeningBalance }),
         });
 
         if (!response.ok) {
@@ -2161,6 +2178,7 @@
         }
 
         if (inputEl) inputEl.value = '';
+        if (openingBalanceCheckboxEl) openingBalanceCheckboxEl.checked = false;
         await loadPatientInvoices();
         await loadFinanceLedger();
         showFinanceSuccessAlert('تم تسجيل الدفعة على فاتورة العلاج بنجاح');
@@ -2192,7 +2210,7 @@
       if (!value) return 'تاريخ غير متاح';
       const dt = new Date(value);
       if (Number.isNaN(dt.getTime())) return 'تاريخ غير متاح';
-      return dt.toLocaleString('ar-EG', {
+      return dt.toLocaleString('ar-EG-u-nu-latn', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
@@ -3063,11 +3081,14 @@
       const createdAt = formatFinanceLedgerDate(record?.created_at);
       const amount = formatFinanceAmount(record?.amount);
       const description = (record?.description || '—').toString();
+      const openingBalanceBadge = record?.is_opening_balance
+        ? '<span class="ml-2 inline-block rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700" title="رصيد قديم/سابق -- غير محتسب ضمن دخل أي شهر محدد">🕰️ رصيد سابق</span>'
+        : '';
 
       row.innerHTML = `
         <td class="px-4 py-3 align-top text-slate-600">${createdAt}</td>
         <td class="finance-amount-cell px-4 py-3 align-top font-bold text-emerald-700">${amount} ل.س</td>
-        <td class="finance-description-cell px-4 py-3 align-top leading-7 text-slate-700">${description}</td>
+        <td class="finance-description-cell px-4 py-3 align-top leading-7 text-slate-700">${description}${openingBalanceBadge}</td>
         <td class="px-4 py-3 align-top">
           <div class="flex flex-wrap items-center gap-2">
             <button
@@ -3156,6 +3177,10 @@
       if (descriptionInput) {
         descriptionInput.value = String(record.description || '').trim();
       }
+      const openingBalanceInput = document.getElementById('financeEditOpeningBalance');
+      if (openingBalanceInput) {
+        openingBalanceInput.checked = Boolean(record.is_opening_balance);
+      }
 
       if (!modal) return;
       if (financeEditModalCloseTimer) {
@@ -3188,11 +3213,11 @@
       }, 180);
     }
 
-    function applyFinanceRowUpdate(transactionId, nextAmount, nextDescription) {
+    function applyFinanceRowUpdate(transactionId, nextAmount, nextDescription, nextIsOpeningBalance) {
       const transactionIdValue = String(transactionId);
       currentFinanceLedger = currentFinanceLedger.map((record) => (
         String(record.id) === transactionIdValue
-          ? { ...record, amount: nextAmount, description: nextDescription }
+          ? { ...record, amount: nextAmount, description: nextDescription, is_opening_balance: nextIsOpeningBalance }
           : record
       ));
 
@@ -3206,7 +3231,10 @@
         amountCell.textContent = `${formatFinanceAmount(nextAmount)} ل.س`;
       }
       if (descriptionCell) {
-        descriptionCell.textContent = String(nextDescription || '—');
+        const openingBalanceBadge = nextIsOpeningBalance
+          ? '<span class="ml-2 inline-block rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700" title="رصيد قديم/سابق -- غير محتسب ضمن دخل أي شهر محدد">🕰️ رصيد سابق</span>'
+          : '';
+        descriptionCell.innerHTML = `${String(nextDescription || '—')}${openingBalanceBadge}`;
       }
 
       row.style.transition = 'background-color 220ms ease';
@@ -3224,11 +3252,13 @@
 
       const amountInput = document.getElementById('financeEditAmount');
       const descriptionInput = document.getElementById('financeEditDescription');
+      const openingBalanceInput = document.getElementById('financeEditOpeningBalance');
       const saveButton = document.getElementById('saveFinanceEditBtn');
 
       const amountValue = amountInput ? amountInput.value.trim() : '';
       const descriptionValue = descriptionInput ? descriptionInput.value.trim() : '';
       const parsedAmount = parseFloat(amountValue);
+      const isOpeningBalance = Boolean(openingBalanceInput && openingBalanceInput.checked);
 
       if (!descriptionValue || Number.isNaN(parsedAmount) || parsedAmount <= 0) {
         alert('يرجى إدخال مبلغ صحيح ووصف واضح قبل الحفظ.');
@@ -3247,6 +3277,7 @@
           body: JSON.stringify({
             amount: parsedAmount,
             description: descriptionValue,
+            is_opening_balance: isOpeningBalance,
           }),
         });
 
@@ -3254,7 +3285,7 @@
           throw new Error('تعذر تحديث الدفعة المالية.');
         }
 
-        applyFinanceRowUpdate(activeFinanceTransaction.id, parsedAmount, descriptionValue);
+        applyFinanceRowUpdate(activeFinanceTransaction.id, parsedAmount, descriptionValue, isOpeningBalance);
         // 2026-08-25: نفس السبب أعلاه -- تعديل مبلغ دفعة قد يغيّر المتبقي على
         // فاتورة العلاج التي تنتمي إليها.
         await loadPatientInvoices();

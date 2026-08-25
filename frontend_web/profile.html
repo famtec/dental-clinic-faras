@@ -416,7 +416,7 @@
 
 			if (profile.subscription_expires_at) {
 				const expiryDate = new Date(profile.subscription_expires_at);
-				const formatted = Number.isNaN(expiryDate.getTime()) ? '' : expiryDate.toLocaleDateString('ar-EG');
+				const formatted = Number.isNaN(expiryDate.getTime()) ? '' : expiryDate.toLocaleDateString('ar-EG-u-nu-latn');
 				statusDetailBadge.textContent = formatted ? `الباقة سارية حتى ${formatted}` : 'الباقة سارية';
 			} else {
 				statusDetailBadge.textContent = 'الباقة سارية';

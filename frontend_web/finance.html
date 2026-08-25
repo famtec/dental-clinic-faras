@@ -133,6 +133,7 @@
 						<div>
 							<h3 class="text-sm font-bold text-indigo-900">عرض التقرير المالي لشهر</h3>
 							<p id="periodHint" class="mt-1 text-xs text-slate-500">التقرير يتجدد تلقائياً كل شهر، مع الاحتفاظ الكامل بتقارير كل الأشهر السابقة.</p>
+						<p id="openingBalanceHint" class="mt-2 hidden rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700"></p>
 						</div>
 						<select id="monthSelect" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 sm:w-64">
 							<option value="">جاري تحميل الأشهر...</option>
@@ -374,6 +375,7 @@
 		const lastSync = document.getElementById('lastSync');
 		const monthSelect = document.getElementById('monthSelect');
 		const periodHint = document.getElementById('periodHint');
+		const openingBalanceHint = document.getElementById('openingBalanceHint');
 
 		const expenseForm = document.getElementById('expenseForm');
 		const expenseStatus = document.getElementById('expenseStatus');
@@ -426,7 +428,7 @@
 
 		function formatCurrency(value) {
 			const numericValue = Number(value || 0);
-			return `${numericValue.toLocaleString('ar-SA', { maximumFractionDigits: 2 })} ل.س`;
+			return `${numericValue.toLocaleString('ar-SA-u-nu-latn', { maximumFractionDigits: 2 })} ل.س`;
 		}
 
 		const ARABIC_MONTH_NAMES = [
@@ -468,6 +470,20 @@
 				return;
 			}
 			periodHint.textContent = 'التقرير يتجدد تلقائياً كل شهر، مع الاحتفاظ الكامل بتقارير كل الأشهر السابقة.';
+		}
+
+		// 2026-08-25: رصيد افتتاحي/سابق -- انظر شرح كامل عند get_finance_summary()
+		// في main.py. يُعرض دوماً كرقم توضيحي منفصل تماماً عن دخل الشهر المختار،
+		// ولا يدخل إطلاقاً في حساب صافي الأرباح أعلاه.
+		function updateOpeningBalanceHint(data) {
+			if (!openingBalanceHint) return;
+			const openingBalance = Number(data?.opening_balance_income || 0);
+			if (openingBalance > 0) {
+				openingBalanceHint.textContent = `🕰️ توجد أيضاً ${formatCurrency(openingBalance)} كأرصدة قديمة/سابقة مُرحّلة إلى النظام — غير محتسبة ضمن دخل أي شهر محدد أعلاه، لكنها محسوبة ضمن "كل الوقت".`;
+				openingBalanceHint.classList.remove('hidden');
+			} else {
+				openingBalanceHint.classList.add('hidden');
+			}
 		}
 
 		function setMetrics(totalIncome, totalExpenses, netProfit) {
@@ -571,7 +587,8 @@
 
 				setMetrics(totalIncome, totalExpenses, netProfit);
 				updatePeriodHint(data);
-				lastSync.textContent = `آخر تحديث: ${new Date().toLocaleString('ar-SA')}`;
+				updateOpeningBalanceHint(data);
+				lastSync.textContent = `آخر تحديث: ${new Date().toLocaleString('ar-SA-u-nu-latn')}`;
 			} catch (error) {
 				setMetrics(0, 0, 0);
 				lastSync.textContent = 'آخر تحديث: تعذر جلب البيانات الآن';

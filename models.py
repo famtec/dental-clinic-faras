@@ -187,6 +187,13 @@ class FinancialTransaction(Base):
     # ترحيل بيانات database.py.init_db() الذي يربطها بفاتورة "تاريخية" واحدة
     # لكل مريض كان لديه تكلفة/دفعات سابقة، فلا يُفقد أي سجل تاريخي.
     invoice_id = Column(Integer, ForeignKey("treatment_invoices.id"), index=True, nullable=True)
+    # يُميّز الحركة كـ"رصيد افتتاحي/سابق" مُرحّل إلى النظام بدل دخل حقيقي لهذه
+    # الفترة الزمنية تحديداً (2026-08-25) -- انظر شرح كامل عند get_finance_summary()
+    # في main.py. تُستبعد أي حركة is_opening_balance=True من أي تقرير شهري محدد،
+    # لكنها تبقى محسوبة ضمن الإجمالي التراكمي الكلي (all_time=true) لأنها تمثل
+    # أموالاً حقيقية تم تحصيلها فعلاً، فقط بتاريخ غير معروف بدقة كافية لتحديد
+    # شهرها الصحيح.
+    is_opening_balance = Column(Boolean, nullable=False, default=False, server_default=text("false"))
 
     invoice = relationship("TreatmentInvoice", back_populates="payments")
 

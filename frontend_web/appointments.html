@@ -738,7 +738,7 @@
 
             const parsed = new Date(rawDate);
             if (Number.isNaN(parsed.getTime())) return 'غير محدد';
-            return parsed.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+            return parsed.toLocaleDateString('ar-EG-u-nu-latn', { year: 'numeric', month: 'long', day: 'numeric' });
         }
 
         function normalizeWhatsappPhone(phone) {
@@ -1156,7 +1156,7 @@
             if (!rawDate) return '—';
             const parsed = new Date(rawDate);
             if (Number.isNaN(parsed.getTime())) return '—';
-            return parsed.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+            return parsed.toLocaleDateString('ar-EG-u-nu-latn', { year: 'numeric', month: 'long', day: 'numeric' });
         }
 
         function renderBookingRequests(requests) {

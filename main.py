@@ -626,6 +626,11 @@ class ExpenseCreate(BaseModel):
     # أدناه)، لضمان أن كل دفعة مرتبطة دائماً بفاتورة مستقلة ولا تتكرر مشكلة
     # تداخل الحسابات القديمة.
     invoice_id: Optional[int] = None
+    # 2026-08-25: تاريخ فعلي اختياري للحركة (لتسجيل حركة قديمة بتاريخها الحقيقي
+    # بدل ختمها تلقائياً بتاريخ اليوم)، وتصنيف اختياري كـ"رصيد افتتاحي/سابق"
+    # يُستبعد من تقارير الأشهر المحددة -- انظر شرح كامل عند get_finance_summary().
+    transaction_date: Optional[datetime] = None
+    is_opening_balance: bool = False
     # 2026-08-24: ربط تلقائي اختياري بين مصروف "شراء مادة" ومخزن المواد --
     # انظر create_expense() ومذكرة dental_project_finance_inventory_link.
     add_to_inventory: bool = False
@@ -641,6 +646,7 @@ class ExpenseResponse(BaseModel):
     description: str
     doctor_name: Optional[str] = None
     created_at: datetime
+    is_opening_balance: bool = False
     inventory_synced: bool = False
     inventory_item_id: Optional[int] = None
     inventory_action: Optional[str] = None
@@ -655,12 +661,18 @@ class FinancialTransactionResponse(BaseModel):
     type: str
     description: str
     created_at: datetime
+    is_opening_balance: bool = False
     model_config = ConfigDict(from_attributes=True)
 
 
 class FinancialTransactionUpdate(BaseModel):
     amount: float
     description: str
+    # 2026-08-25: تصحيح يدوي لاحق لتصنيف/تاريخ حركة مسجّلة مسبقاً (مثال: دفعة
+    # قديمة سُجّلت بالخطأ بتاريخ اليوم بدل تصنيفها كرصيد افتتاحي). كلاهما
+    # اختياري تماماً؛ تُرك None يعني "لا تغيير".
+    is_opening_balance: Optional[bool] = None
+    transaction_date: Optional[datetime] = None
 
 
 # ====================================================================
@@ -677,6 +689,10 @@ class TreatmentInvoiceCreate(BaseModel):
 class TreatmentInvoicePaymentCreate(BaseModel):
     amount: float
     description: Optional[str] = None
+    # 2026-08-25: نفس الحقلين الاختياريين في ExpenseCreate أعلاه، لنفس السبب --
+    # انظر شرح كامل عند get_finance_summary().
+    transaction_date: Optional[datetime] = None
+    is_opening_balance: bool = False
 
 
 class TreatmentInvoicePaymentResponse(BaseModel):
@@ -684,6 +700,7 @@ class TreatmentInvoicePaymentResponse(BaseModel):
     amount: float
     description: str
     created_at: datetime
+    is_opening_balance: bool = False
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -2121,6 +2138,7 @@ def _serialize_invoice(invoice: "models.TreatmentInvoice", payments: list) -> di
                 "amount": float(p.amount),
                 "description": p.description,
                 "created_at": p.created_at,
+                "is_opening_balance": bool(getattr(p, "is_opening_balance", False)),
             }
             for p in sorted(payments, key=lambda p: (p.created_at, p.id), reverse=True)
         ],
@@ -2236,6 +2254,16 @@ def register_invoice_payment(
     if payment.amount is None or payment.amount <= 0:
         raise HTTPException(status_code=400, detail="قيمة الدفعة يجب أن تكون أكبر من صفر")
 
+    # 2026-08-25: تاريخ فعلي اختياري -- يسمح بتسجيل دفعة قديمة بتاريخها الحقيقي
+    # بدل ختمها تلقائياً بتاريخ اليوم (انظر شرح كامل عند get_finance_summary()).
+    transaction_date = None
+    if payment.transaction_date is not None:
+        transaction_date = payment.transaction_date
+        if transaction_date.tzinfo is not None:
+            transaction_date = transaction_date.replace(tzinfo=None)
+        if transaction_date > datetime.utcnow():
+            raise HTTPException(status_code=400, detail="تاريخ الدفعة لا يمكن أن يكون في المستقبل")
+
     description = (payment.description or "").strip() or f"دفعة على فاتورة: {invoice.title}"
 
     try:
@@ -2247,7 +2275,10 @@ def register_invoice_payment(
             type="income",
             description=description,
             invoice_id=invoice.id,
+            is_opening_balance=bool(payment.is_opening_balance),
         )
+        if transaction_date is not None:
+            db_payment.created_at = transaction_date
         db.add(db_payment)
         db.commit()
     except Exception:
@@ -2681,6 +2712,15 @@ def create_expense(
     # inventory.html وإدخالها هناك من جديد. الربط متاح فقط لمصروفات (type=expense)
     # ولحسابات الباقة premium فقط -- نفس تسقيف صفحة المخزن نفسها (require_premium_user_by_email)
     # -- وإن طُلب الربط من حساب standard لا نفشل حفظ المصروف، فقط نتجاهل الربط بصمت.
+    # 2026-08-25: تاريخ فعلي اختياري -- انظر شرح كامل عند get_finance_summary().
+    transaction_date = None
+    if expense.transaction_date is not None:
+        transaction_date = expense.transaction_date
+        if transaction_date.tzinfo is not None:
+            transaction_date = transaction_date.replace(tzinfo=None)
+        if transaction_date > datetime.utcnow():
+            raise HTTPException(status_code=400, detail="تاريخ الحركة لا يمكن أن يكون في المستقبل")
+
     sync_to_inventory = bool(expense.add_to_inventory) and transaction_type == "expense" and current_user.tier == "premium"
 
     inventory_item_name = None
@@ -2702,7 +2742,10 @@ def create_expense(
             type=transaction_type,
             description=description,
             invoice_id=expense.invoice_id,
+            is_opening_balance=bool(expense.is_opening_balance),
         )
+        if transaction_date is not None:
+            db_expense.created_at = transaction_date
         db.add(db_expense)
 
         inventory_item = None
@@ -2743,6 +2786,7 @@ def create_expense(
             description=db_expense.description,
             doctor_name=db_expense.doctor_name,
             created_at=db_expense.created_at,
+            is_opening_balance=db_expense.is_opening_balance,
             inventory_synced=sync_to_inventory and inventory_item is not None,
             inventory_item_id=(inventory_item.id if inventory_item is not None else None),
             inventory_action=inventory_action,
@@ -2800,13 +2844,20 @@ def get_finance_summary(
         if resolved_month < 1 or resolved_month > 12:
             raise HTTPException(status_code=400, detail="الشهر يجب أن يكون رقماً بين 1 و 12.")
         month_start, month_end = _month_bounds(resolved_year, resolved_month)
+        # 2026-08-25: أي حركة is_opening_balance=True (رصيد افتتاحي/سابق مُرحّل)
+        # تُستبعد دوماً من تقرير شهر محدد -- لا تنتمي فعلياً لهذا الشهر، انظر
+        # شرح كامل عند FinancialTransaction.is_opening_balance في models.py.
+        # في وضع all_time=true تبقى محتسبة (لا فلترة هنا) لأنها أموال حقيقية
+        # فعلاً محصّلة.
         income_query = income_query.filter(
             models.FinancialTransaction.created_at >= month_start,
             models.FinancialTransaction.created_at < month_end,
+            models.FinancialTransaction.is_opening_balance.is_(False),
         )
         expense_query = expense_query.filter(
             models.FinancialTransaction.created_at >= month_start,
             models.FinancialTransaction.created_at < month_end,
+            models.FinancialTransaction.is_opening_balance.is_(False),
         )
 
     total_income = income_query.scalar()
@@ -2816,11 +2867,24 @@ def get_finance_summary(
     expenses_value = Decimal(total_expenses or 0)
     net_profit = income_value - expenses_value
 
+    # 2026-08-25: مجموع كل الأرصدة الافتتاحية/السابقة المُرحّلة (تراكمي كلي دوماً،
+    # بصرف النظر عن الشهر/السنة المطلوبة) -- يُعرض بشكل منفصل تماماً في الواجهة
+    # كرقم توضيحي، ولا يدخل إطلاقاً في total_income أو net_profit أعلاه.
+    opening_balance_total = (
+        db.query(func.coalesce(func.sum(models.FinancialTransaction.amount), 0))
+        .filter(models.FinancialTransaction.type == "income")
+        .filter(models.FinancialTransaction.doctor_email == current_user.email)
+        .filter(models.FinancialTransaction.is_opening_balance.is_(True))
+        .scalar()
+    )
+    opening_balance_value = Decimal(opening_balance_total or 0)
+
     return {
         "total_income": float(income_value),
         "total_expenses": float(expenses_value),
         "net_profit": float(net_profit),
         "total_revenue": float(income_value),
+        "opening_balance_income": float(opening_balance_value),
         "all_time": all_time,
         "year": resolved_year,
         "month": resolved_month,
@@ -2902,9 +2966,23 @@ def update_financial_transaction(
     if transaction_update.amount <= 0:
         raise HTTPException(status_code=400, detail="قيمة الدفعة يجب أن تكون أكبر من صفر")
 
+    # 2026-08-25: تصحيح يدوي اختياري لتاريخ/تصنيف الحركة -- انظر شرح كامل عند
+    # get_finance_summary(). يسمح للطبيب بتصحيح حركة قديمة سُجّلت بالخطأ.
+    new_transaction_date = None
+    if transaction_update.transaction_date is not None:
+        new_transaction_date = transaction_update.transaction_date
+        if new_transaction_date.tzinfo is not None:
+            new_transaction_date = new_transaction_date.replace(tzinfo=None)
+        if new_transaction_date > datetime.utcnow():
+            raise HTTPException(status_code=400, detail="تاريخ الحركة لا يمكن أن يكون في المستقبل")
+
     try:
         transaction.amount = Decimal(str(transaction_update.amount))
         transaction.description = description
+        if transaction_update.is_opening_balance is not None:
+            transaction.is_opening_balance = bool(transaction_update.is_opening_balance)
+        if new_transaction_date is not None:
+            transaction.created_at = new_transaction_date
         db.commit()
         db.refresh(transaction)
     except Exception:
@@ -3765,6 +3843,53 @@ def admin_reset_password(
         "status": "success",
         "message": f"تم تعيين كلمة مرور جديدة للحساب {normalized_email} بنجاح.",
         "email": normalized_email,
+    }
+
+
+@app.post("/api/admin/backfill-opening-balance")
+def admin_backfill_opening_balance(
+    x_admin_secret: str | None = Header(default=None, alias="X-Admin-Secret"),
+    db: Session = Depends(database.get_db),
+):
+    # مسار إداري لمرة واحدة (2026-08-25) لتصحيح دفعات سُجّلت عبر واجهة ترحيل
+    # فواتير العلاج القديمة (نظام "السجل المالي السابق (مرحّل تلقائياً)") لكنها
+    # ظهرت بالخطأ كدخل الشهر الحالي بدل تصنيفها "رصيد افتتاحي/سابق" -- انظر شرح
+    # كامل عند get_finance_summary() ومذكرة dental_project_finance_integrity_fix.
+    # يُصحح أي دفعة income مرتبطة بفاتورة تحمل عنوان الترحيل التلقائي بالضبط،
+    # لكل الأطباء دفعة واحدة، بغض النظر عن تاريخها -- محمي بنفس مفتاح الإدارة
+    # السرّي. آمن تماماً للتكرار (idempotent): الشرط "is_opening_balance = FALSE"
+    # يجعله لا يُغيّر شيئاً بعد أول تشغيل ناجح.
+    if not x_admin_secret or x_admin_secret != ADMIN_SECRET_KEY:
+        raise HTTPException(status_code=401, detail="مفتاح الإدارة السرّي مفقود أو غير صحيح.")
+
+    legacy_invoice_title = "السجل المالي السابق (مرحّل تلقائياً)"
+
+    try:
+        result = db.execute(
+            text(
+                """
+                UPDATE financial_transactions
+                SET is_opening_balance = TRUE
+                WHERE type = 'income'
+                  AND is_opening_balance = FALSE
+                  AND invoice_id IN (
+                      SELECT id FROM treatment_invoices WHERE title = :legacy_title
+                  )
+                """
+            ),
+            {"legacy_title": legacy_invoice_title},
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="تعذر تنفيذ التصحيح في قاعدة البيانات.")
+
+    updated_count = result.rowcount if result.rowcount is not None else 0
+
+    return {
+        "status": "success",
+        "message": f"تم تصنيف {updated_count} دفعة كرصيد افتتاحي/سابق بنجاح.",
+        "updated_count": updated_count,
     }
 
 

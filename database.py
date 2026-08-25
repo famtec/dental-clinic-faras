@@ -256,6 +256,15 @@ def init_db():
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE financial_transactions ADD COLUMN invoice_id INTEGER"))
 
+    # عمود "رصيد افتتاحي/سابق" (2026-08-25) -- انظر شرح كامل في models.py عند
+    # FinancialTransaction.is_opening_balance. بلا شرط نوع قاعدة البيانات لنفس
+    # سبب عمود invoice_id أعلاه: الإنتاج الحقيقي على Render يستخدم Postgres.
+    if "financial_transactions" in inspector.get_table_names():
+        finance_opening_balance_columns = {column["name"] for column in inspector.get_columns("financial_transactions")}
+        if "is_opening_balance" not in finance_opening_balance_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE financial_transactions ADD COLUMN is_opening_balance BOOLEAN NOT NULL DEFAULT FALSE"))
+
     # ترحيل بيانات لمرة واحدة لكل مريض: أي مريض كانت لديه تكلفة/دفعات مسجّلة
     # قبل هذا التحديث (total_treatment_cost > 0 أو دفعات income/received قديمة
     # بلا invoice_id) يحصل تلقائياً على "فاتورة تاريخية" واحدة تحمل نفس قيمة
@@ -319,7 +328,7 @@ def init_db():
                     text(
                         """
                         UPDATE financial_transactions
-                        SET invoice_id = :invoice_id
+                        SET invoice_id = :invoice_id, is_opening_balance = TRUE
                         WHERE patient_id = :pid
                           AND invoice_id IS NULL
                           AND type IN ('income', 'received')
