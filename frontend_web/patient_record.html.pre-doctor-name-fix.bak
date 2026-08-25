@@ -1,0 +1,3567 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>الملف الطبي الشامل للمريض</title>
+  <link rel="stylesheet" href="/tailwind.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Tajawal', sans-serif; }
+    .panel-soft {
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(12px);
+    }
+    @keyframes financeToastIn {
+      from { opacity: 0; transform: translate(-50%, -12px) scale(0.98); }
+      to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+    }
+    .finance-toast {
+      animation: financeToastIn 280ms ease-out;
+    }
+    .xray-toast {
+      animation: financeToastIn 280ms ease-out;
+    }
+    @keyframes mobileSwipeHintFade {
+      0% { opacity: 0; transform: translateY(6px); }
+      10% { opacity: 0.96; transform: translateY(0); }
+      75% { opacity: 0.96; transform: translateY(0); }
+      100% { opacity: 0; transform: translateY(4px); }
+    }
+    .mobile-swipe-hint {
+      animation: mobileSwipeHintFade 5.6s ease-out forwards;
+    }
+    /* ---- 2D dental chart (تبسم-style) ---- */
+    .tooth-row {
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      gap: 2px;
+    }
+    .tooth-number-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+    }
+    .tooth-number-cell {
+      flex: 1 1 0;
+      min-width: 34px;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 800;
+      color: #94a3b8;
+    }
+    @media (min-width: 640px) {
+      .tooth-number-cell { font-size: 12px; }
+    }
+    .tooth-midline-gap { margin-inline-start: 12px; }
+    .tooth-btn {
+      position: relative;
+      display: flex;
+      flex: 1 1 0;
+      min-width: 34px;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      padding: 2px 0;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.15s ease;
+    }
+    .tooth-btn:hover,
+    .tooth-btn:focus-visible {
+      transform: translateY(-3px);
+      outline: none;
+    }
+    .tooth-svg {
+      width: 100%;
+      height: 52px;
+      overflow: visible;
+      display: block;
+    }
+    @media (min-width: 640px) {
+      .tooth-svg { height: 62px; }
+    }
+    .tooth-flip { transform: scaleY(-1); }
+    .tooth-root {
+      fill: #f4ead8;
+      stroke: #dfc196;
+      stroke-width: 1.4;
+      opacity: 0.62;
+      transition: fill 0.2s ease, opacity 0.2s ease;
+    }
+    .tooth-crown {
+      fill: #fffbf2;
+      stroke: #e7c894;
+      stroke-width: 1.6;
+      transition: fill 0.2s ease;
+    }
+    .tooth-btn:hover .tooth-crown { filter: brightness(1.04); }
+    .tooth-btn.tooth-missing .tooth-crown,
+    .tooth-btn.tooth-missing .tooth-root {
+      fill: none;
+      stroke: #94a3b8;
+      stroke-dasharray: 3 3;
+      opacity: 0.55;
+    }
+    .tooth-dot {
+      position: absolute;
+      top: -2px;
+      inset-inline-end: 2px;
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      border: 1.5px solid #ffffff;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25);
+      display: none;
+    }
+    @media (min-width: 640px) {
+      .tooth-dot { width: 9px; height: 9px; }
+    }
+    .tooth-btn[data-has-status="1"] .tooth-dot { display: block; }
+    .tooth-gumline {
+      height: 1px;
+      margin: 2px 0;
+      background: linear-gradient(to right, transparent, rgba(244, 63, 94, 0.28), transparent);
+    }
+    .modal-pop {
+      animation: financeToastIn 220ms ease-out;
+    }
+    #prescriptionPrintTemplate {
+      display: none;
+    }
+    @media print {
+      body * {
+        visibility: hidden !important;
+      }
+      #prescriptionPrintTemplate,
+      #prescriptionPrintTemplate * {
+        visibility: visible !important;
+      }
+      #prescriptionPrintTemplate {
+        display: block !important;
+        position: absolute;
+        inset: 0;
+        background: #ffffff;
+        color: #0f172a;
+        padding: 22px;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.22),_transparent_30%),linear-gradient(135deg,_#f8fafc_0%,_#eef2ff_45%,_#e0e7ff_100%)] text-slate-800">
+  <div class="pointer-events-none absolute inset-0 overflow-hidden">
+    <div class="absolute right-[10%] top-16 h-40 w-40 rounded-full bg-indigo-200/30 blur-3xl"></div>
+    <div class="absolute left-[8%] top-[30%] h-56 w-56 rounded-full bg-violet-200/20 blur-3xl"></div>
+  </div>
+
+  <div id="patientRecordApp" class="relative flex min-h-screen w-full flex-col overflow-x-hidden px-4 pt-24 pb-6 sm:px-6 sm:pt-32 md:pt-32 lg:px-8 lg:pt-32 xl:px-10">
+    <header class="fixed inset-x-0 top-0 z-50 w-full border-b border-white/15 bg-[#1e1b4b]/85 shadow-2xl shadow-indigo-950/35 backdrop-blur-2xl md:block hidden">
+      <div class="mx-auto flex w-full max-w-none flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8 xl:px-10">
+        <div class="flex items-center gap-3 text-white">
+          <img id="clinicLogoImg" src="logo.png" alt="شعار العيادة" class="h-12 w-12 rounded-xl border border-white/10 bg-white/10 object-contain p-2 shadow-lg shadow-indigo-950/25" />
+          <div class="flex items-center gap-3">
+            <p id="clinicTitle" class="text-lg font-extrabold tracking-tight text-white sm:text-xl">عيادة الطبيب</p>
+            <span id="tierBadge" class="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Standard</span>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 lg:flex-1 lg:justify-center">
+          <a href="index.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]">👥 لوحة المرضى</a>
+          <a href="appointments.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]">📅 المواعيد اليومية</a>
+          <a href="finance.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]">📊 التقارير المالية</a>
+          <a href="inventory.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]">📦 مخزن المواد</a>
+          <a href="contact_developer.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]">🛠️ تواصل مع المطور</a>
+          <a href="profile.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]">👤 حسابي</a>
+          <button id="backupBtn" type="button" class="rounded-2xl border border-cyan-300/30 bg-cyan-500/15 px-4 py-2 text-sm font-extrabold text-cyan-50 shadow-[0_0_24px_rgba(34,211,238,0.14)] transition hover:-translate-y-0.5 hover:border-cyan-200/50 hover:bg-cyan-400/20 hover:shadow-[0_0_28px_rgba(34,211,238,0.26)]">نسخة احتياطية 💾</button>
+          <button id="logoutBtn" type="button" class="rounded-2xl border border-rose-300/30 bg-rose-500/15 px-4 py-2 text-sm font-bold text-rose-100 transition hover:-translate-y-0.5 hover:border-rose-200/50 hover:bg-rose-500/25 hover:shadow-[0_0_24px_rgba(244,63,94,0.18)]">⎋ تسجيل الخروج</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="fixed inset-x-0 top-0 z-[60] border-b border-white/15 bg-[#1e1b4b]/90 shadow-2xl shadow-indigo-950/35 backdrop-blur-2xl md:hidden">
+      <div class="relative mx-auto flex w-full max-w-none items-center justify-between gap-3 px-4 py-3 sm:px-6">
+        <div class="flex min-w-0 items-center gap-3 text-white">
+          <img id="mobileClinicLogoImg" src="logo.png" alt="شعار العيادة" class="h-10 w-10 rounded-xl border border-white/10 bg-white/10 object-contain p-1.5 shadow-lg shadow-indigo-950/25" />
+          <div class="min-w-0">
+            <div class="flex min-w-0 items-center gap-2">
+              <p id="mobileClinicTitle" class="truncate text-sm font-extrabold tracking-tight text-white">عيادة الطبيب</p>
+              <span id="mobileTierBadge" class="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[11px] font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Standard</span>
+            </div>
+          </div>
+        </div>
+
+        <button id="mobileMenuToggle" type="button" class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white shadow-lg shadow-indigo-950/20 transition hover:bg-white/15" aria-expanded="false" aria-controls="mobileMenuDropdown">
+          <svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M4 7h16"></path>
+            <path d="M4 12h16"></path>
+            <path d="M4 17h16"></path>
+          </svg>
+        </button>
+
+        <div id="mobileMenuDropdown" class="absolute left-0 right-0 top-full hidden border-t border-white/10 bg-[#1e1b4b] px-4 py-3 shadow-2xl shadow-indigo-950/35 md:hidden">
+          <div class="mx-auto flex w-full max-w-none flex-col gap-2 sm:px-2">
+            <a href="index.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">👥 لوحة المرضى</a>
+            <a href="appointments.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">📅 المواعيد اليومية</a>
+            <a href="finance.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">📊 التقارير المالية</a>
+            <a href="inventory.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">📦 مخزن المواد</a>
+            <a href="contact_developer.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">🛠️ تواصل مع المطور</a>
+            <a href="profile.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">👤 حسابي</a>
+            <button id="mobileLogoutBtn" type="button" class="rounded-2xl border border-rose-300/30 bg-rose-500/15 px-4 py-3 text-right text-sm font-bold text-rose-100 transition hover:bg-rose-500/25">⎋ تسجيل الخروج</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <main class="grid min-w-0 flex-1 gap-6 overflow-x-hidden lg:grid-cols-[1.2fr_0.8fr]">
+      <section class="panel-soft min-w-0 rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/80">
+        <div class="mb-1 flex items-center justify-between gap-3">
+          <h2 class="flex items-center gap-2 text-xl font-extrabold text-indigo-900">🦷 مخطط الأسنان</h2>
+          <span class="rounded-full border border-sky-100 bg-sky-50 px-3 py-1 text-xs font-extrabold tracking-wide text-sky-700">FDI</span>
+        </div>
+        <p class="mb-4 text-sm text-slate-500">اضغط أي سن لتسجيل حالته العلاجية أو تحديثها — يتم حفظ كل تغيير مباشرة على الملف السحابي.</p>
+        <div id="chartSceneHint" class="mb-4 inline-flex items-center gap-2 rounded-full border border-sky-100 bg-sky-50 px-4 py-2 text-xs font-extrabold text-sky-700">
+          🦷 جاهز الآن — اضغط أي سن
+        </div>
+
+        <div class="rounded-[24px] border border-slate-100 bg-gradient-to-b from-slate-50 to-white p-3 shadow-inner shadow-slate-100 sm:p-5">
+          <div class="w-full overflow-x-auto scrollbar-thin select-none">
+            <div id="dentalChartStage" dir="ltr" class="mx-auto min-w-[640px] max-w-[860px] md:min-w-0"></div>
+          </div>
+          <p class="mobile-swipe-hint mt-2 text-center text-[11px] font-semibold text-slate-400 md:hidden">
+            ↔️ اسحب لليمين أو اليسار لاستعراض كامل الأسنان
+          </p>
+          <div id="chartLegend" class="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-slate-100 pt-4"></div>
+        </div>
+
+        <div class="mt-6 rounded-[28px] border border-violet-100 bg-violet-50/70 p-4 sm:p-5">
+          <div class="mb-3">
+            <h3 class="text-lg font-bold text-violet-800">أرشيف ملفات المريض</h3>
+            <p class="mt-1 text-xs text-violet-700/80">اسحب الملفات الطبية أو الصور أو مستندات PDF مباشرة إلى المنطقة أدناه أو اضغط للتصفح.</p>
+          </div>
+
+          <form id="xrayUploadForm" class="space-y-4">
+            <label id="archiveDropzone" class="group block cursor-pointer rounded-[26px] border-2 border-dashed border-violet-300/80 bg-[linear-gradient(145deg,_rgba(255,255,255,0.82),_rgba(245,243,255,0.88))] p-5 text-center shadow-inner shadow-violet-100/70 transition duration-200 hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-white hover:shadow-[0_0_32px_rgba(129,140,248,0.18)]">
+              <input id="xrayFileInput" type="file" accept="image/png,image/jpeg,image/jpg,application/pdf" multiple class="hidden" />
+              <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-3xl shadow-lg shadow-violet-300/40">📥</div>
+              <p class="mt-4 text-base font-bold text-slate-800 sm:text-lg">اسحب وأفلت ملفات المريض هنا أو اضغط للتصفح (صور وأشعة أو ملفات PDF)</p>
+              <p class="mt-2 text-xs font-semibold text-slate-500">PNG / JPG / JPEG / PDF</p>
+            </label>
+
+            <div class="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+              <label class="block">
+                <span class="mb-1 block text-xs font-semibold text-slate-600">وصف الملف</span>
+                <input id="xrayDescriptionInput" type="text" placeholder="مثال: أشعة بانوراما قبل العلاج" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm outline-none focus:border-violet-500 focus:ring-4 focus:ring-violet-100" />
+              </label>
+              <button id="xrayUploadBtn" type="submit" class="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-sm font-extrabold text-white shadow-lg transition hover:-translate-y-0.5 hover:from-indigo-700 hover:to-violet-700">
+                رفع الملفات 📸
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div class="mt-5 rounded-[28px] border border-slate-100 bg-white/80 p-4 sm:p-5">
+          <div class="mb-3 flex items-center justify-between gap-3">
+            <h3 class="text-lg font-bold text-indigo-900">أرشيف الملفات الطبية</h3>
+            <span id="xrayGalleryCount" class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">0 ملف</span>
+          </div>
+          <div id="xrayGallery" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div id="xrayGalleryEmpty" class="col-span-full rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+              لا توجد ملفات طبية مرفوعة لهذا المريض حتى الآن.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="min-w-0 space-y-6">
+        <div class="panel-soft min-w-0 rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/80">
+          <div class="mb-4 flex items-center justify-between gap-3">
+            <h2 class="text-xl font-extrabold text-indigo-900">البروفايل الطبي</h2>
+            <div class="flex items-center gap-2">
+              <button id="editProfileBtn" type="button" class="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-indigo-700 hover:to-violet-700">✏️ تعديل</button>
+              <button id="saveProfileBtn" type="button" class="hidden rounded-2xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700">💾 حفظ</button>
+            </div>
+          </div>
+          <div id="profileCard" class="space-y-4">
+            <div class="rounded-[24px] bg-slate-50/90 p-4">
+              <p class="text-sm text-slate-500">الاسم</p>
+              <p id="patientName" class="mt-1 text-lg font-bold text-slate-800">—</p>
+              <input id="patientNameInput" type="text" class="mt-2 hidden w-full rounded-2xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
+            </div>
+            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div class="rounded-[24px] bg-slate-50/90 p-4">
+                <p class="text-sm text-slate-500">الهاتف</p>
+                <p id="patientPhone" class="mt-1 font-semibold text-slate-800">—</p>
+                <input id="patientPhoneInput" type="text" class="mt-2 hidden w-full rounded-2xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
+              </div>
+              <div class="rounded-[24px] bg-slate-50/90 p-4">
+                <p class="text-sm text-slate-500">العمر</p>
+                <p id="patientAge" class="mt-1 font-semibold text-slate-800">—</p>
+                <input id="patientAgeInput" type="number" min="0" class="mt-2 hidden w-full rounded-2xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" readonly disabled />
+              </div>
+              <div class="rounded-[24px] border border-amber-100 bg-amber-50/80 p-4">
+                <p class="text-sm text-amber-700">إجمالي تكلفة العلاج الكلية (ل.س)</p>
+                <p id="patientTotalTreatmentCost" class="mt-1 font-extrabold text-amber-800">0.00 ل.س</p>
+                <input id="patientTotalTreatmentCostInput" type="number" min="0" step="0.01" class="mt-2 hidden w-full rounded-2xl border border-amber-200 bg-white px-3 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-amber-400 focus:ring-4 focus:ring-amber-100" />
+              </div>
+            </div>
+            <div class="rounded-[24px] bg-slate-50/90 p-4">
+              <p class="text-sm text-slate-500">ملاحظات التاريخ الطبي</p>
+              <p id="patientHistory" class="mt-2 text-sm leading-7 text-slate-700">—</p>
+              <textarea id="patientHistoryInput" rows="4" class="mt-2 hidden w-full rounded-2xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"></textarea>
+            </div>
+            <form id="financialPaymentForm" class="rounded-[24px] border border-violet-100 bg-violet-50/70 p-4">
+              <p class="text-sm font-semibold text-violet-700">تحصيل الدفعات المالية</p>
+              <input
+                id="financialPaymentInput"
+                type="text"
+                inputmode="decimal"
+                placeholder="أدخل المبلغ المدفوع (ل.س)"
+                class="mt-3 w-full rounded-xl border border-violet-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
+              />
+              <button
+                id="financialPaymentBtn"
+                type="submit"
+                class="mt-3 w-full rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3 text-sm font-bold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700"
+              >
+                تسجيل الدفع المالي
+              </button>
+            </form>
+
+            <div class="mt-4 rounded-[24px] border border-slate-100 bg-white/90 p-4 shadow-sm">
+              <div class="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h3 class="text-lg font-extrabold text-slate-800">سجل المدفوعات التفصيلي</h3>
+                  <p class="mt-1 text-xs text-slate-500">يعرض أحدث الدفعات الخاصة بهذا المريض أولاً مع الوقت الكامل للحركة.</p>
+                </div>
+                <span id="financeLedgerCount" class="rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">0 دفعة</span>
+              </div>
+              <div class="overflow-hidden rounded-[20px] border border-slate-200">
+                <div class="max-h-[360px] overflow-auto">
+                  <table class="min-w-full border-collapse text-right">
+                    <thead class="sticky top-0 z-10 bg-slate-50/95 backdrop-blur">
+                      <tr class="border-b border-slate-200 text-sm text-slate-600">
+                        <th class="px-4 py-3 font-semibold">اليوم والتاريخ</th>
+                        <th class="px-4 py-3 font-semibold">المبلغ المستلم</th>
+                        <th class="px-4 py-3 font-semibold">البيان</th>
+                        <th class="px-4 py-3 font-semibold">الإجراء</th>
+                      </tr>
+                    </thead>
+                    <tbody id="financeLedgerTableBody" class="divide-y divide-slate-100 bg-white text-sm text-slate-700">
+                      <tr id="financeLedgerEmptyState">
+                        <td colspan="4" class="px-4 py-6 text-center text-slate-500">لا توجد دفعات مالية مسجلة لهذا المريض حتى الآن.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="mt-4">
+                <span id="remainingBalanceBadge" class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-extrabold text-amber-700 shadow-sm">
+                  المتبقي بذمة المريض الحالي: 0.00 ل.س
+                </span>
+              </div>
+            </div>
+
+            <div class="mt-4 rounded-[24px] border border-violet-100 bg-violet-50/70 p-4 sm:p-5">
+              <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h3 class="text-lg font-extrabold text-violet-900">الوصفات الطبية</h3>
+                  <p class="mt-1 text-xs text-violet-700/80">أصدر وصفة جديدة للمريض واحتفظ بسجلها مع إمكانية الطباعة الفورية.</p>
+                </div>
+                <span id="prescriptionCountBadge" class="rounded-full bg-white/80 px-3 py-1 text-xs font-semibold text-violet-700">0 وصفة</span>
+              </div>
+
+              <form id="prescriptionForm" class="rounded-[22px] border border-violet-200 bg-white/85 p-4">
+                <div class="grid gap-3">
+                  <label class="block">
+                    <span class="mb-1 block text-xs font-semibold text-slate-700">الأدوية والمستحضرات</span>
+                    <textarea id="prescriptionMedicationsInput" rows="3" required placeholder="مثال: Amoxicillin 500mg, Paracetamol 500mg" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100"></textarea>
+                  </label>
+                  <label class="block">
+                    <span class="mb-1 block text-xs font-semibold text-slate-700">التعليمات والجرعات</span>
+                    <textarea id="prescriptionInstructionsInput" rows="3" required placeholder="مثال: حبة كل 8 ساعات بعد الطعام" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100"></textarea>
+                  </label>
+                </div>
+                <div class="mt-3 flex justify-end">
+                  <button id="prescriptionSubmitBtn" type="submit" class="rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 px-5 py-3 text-sm font-extrabold text-white shadow-lg shadow-violet-300/40 transition hover:-translate-y-0.5 hover:from-indigo-700 hover:via-violet-700 hover:to-purple-700">
+                    إصدار وحفظ الوصفة 📝
+                  </button>
+                </div>
+              </form>
+
+              <div class="mt-4 overflow-hidden rounded-[20px] border border-violet-200 bg-white">
+                <div class="max-h-[280px] overflow-auto">
+                  <table class="min-w-full border-collapse text-right">
+                    <thead class="sticky top-0 z-10 bg-violet-50/95 backdrop-blur">
+                      <tr class="border-b border-violet-100 text-sm text-violet-800">
+                        <th class="px-4 py-3 font-semibold">التاريخ</th>
+                        <th class="px-4 py-3 font-semibold">الأدوية</th>
+                        <th class="px-4 py-3 font-semibold">التعليمات</th>
+                        <th class="px-4 py-3 font-semibold">الإجراء</th>
+                      </tr>
+                    </thead>
+                    <tbody id="prescriptionsTableBody" class="divide-y divide-violet-100 bg-white text-sm text-slate-700">
+                      <tr id="prescriptionsEmptyState">
+                        <td colspan="4" class="px-4 py-6 text-center text-slate-500">لا توجد وصفات طبية مسجلة لهذا المريض حتى الآن.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-soft rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/80">
+          <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 class="text-xl font-extrabold text-indigo-900">إدارة مواعيد هذا المريض</h2>
+              <p class="mt-1 text-sm text-slate-500">عرض مباشر للمواعيد المرتبطة بهذا الملف مع تعديل سريع للموعد والوصف.</p>
+            </div>
+            <span id="patientAppointmentsCount" class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">0 موعد</span>
+          </div>
+          <div class="mb-4 flex justify-start">
+            <button
+              id="addAppointmentBtn"
+              type="button"
+              class="rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 px-5 py-3 text-sm font-extrabold text-white shadow-lg shadow-violet-300/50 transition hover:-translate-y-0.5 hover:from-indigo-700 hover:via-violet-700 hover:to-purple-700"
+            >
+              إضافة موعد جديد 📅
+            </button>
+          </div>
+          <div class="overflow-hidden rounded-[22px] border border-slate-200 bg-white">
+            <div class="max-h-[360px] overflow-auto">
+              <table class="min-w-full border-collapse text-right">
+                <thead class="sticky top-0 z-10 bg-slate-50/95 backdrop-blur">
+                  <tr class="border-b border-slate-200 text-sm text-slate-600">
+                    <th class="px-3 py-3 font-semibold">اليوم والتاريخ</th>
+                    <th class="px-3 py-3 font-semibold">الوقت</th>
+                    <th class="px-3 py-3 font-semibold">الوصف</th>
+                    <th class="px-3 py-3 font-semibold">الحالة</th>
+                    <th class="px-3 py-3 font-semibold">إجراء</th>
+                  </tr>
+                </thead>
+                <tbody id="patientAppointmentsTableBody" class="divide-y divide-slate-100 text-sm text-slate-700">
+                  <tr id="patientAppointmentsEmptyState">
+                    <td colspan="5" class="px-3 py-6 text-center text-slate-500">لا توجد مواعيد مسجلة لهذا المريض حتى الآن.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="mt-6 flex justify-center">
+      <p class="text-center text-xs font-mono tracking-wide text-indigo-500/90">
+        تطوير وإدارة: المهندس فارس حلاوي © 2026
+      </p>
+    </footer>
+  </div>
+
+  <section id="prescriptionPrintTemplate" aria-hidden="true">
+    <div class="mx-auto max-w-[800px] rounded-[24px] border border-indigo-200 bg-white p-6">
+      <div class="border-b border-indigo-100 pb-4">
+        <div class="flex items-center justify-between gap-4">
+          <div class="flex items-center gap-3">
+            <img src="logo.png" alt="شعار العيادة" class="h-16 w-16 rounded-xl border border-indigo-100 object-contain p-2" />
+            <div>
+              <p class="text-xs font-semibold tracking-[0.2em] text-indigo-600">PRESCRIPTION LETTER</p>
+              <h2 id="printClinicName" class="mt-1 text-2xl font-extrabold text-indigo-900">عيادتي الرقمية</h2>
+            </div>
+          </div>
+          <div class="text-right text-sm text-slate-600">
+            <p><span class="font-semibold text-slate-800">اسم المريض:</span> <span id="printPatientName">—</span></p>
+            <p class="mt-1"><span class="font-semibold text-slate-800">التاريخ:</span> <span id="printPrescriptionDate">—</span></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-5 space-y-5">
+        <div class="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4">
+          <p class="text-sm font-bold text-indigo-900">الأدوية والمستحضرات</p>
+          <p id="printMedications" class="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-700">—</p>
+        </div>
+        <div class="rounded-2xl border border-violet-100 bg-violet-50/50 p-4">
+          <p class="text-sm font-bold text-violet-900">التعليمات والجرعات</p>
+          <p id="printInstructions" class="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-700">—</p>
+        </div>
+      </div>
+
+      <div class="mt-8 border-t border-dashed border-slate-300 pt-5 text-center">
+        <p class="text-xs font-mono tracking-wide text-indigo-700">تطوير وإدارة: المهندس فارس حلاوي © 2026</p>
+      </div>
+    </div>
+  </section>
+
+  <div id="toothStatusModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+    <div class="modal-pop w-full max-w-md rounded-[28px] border border-white/20 bg-white p-5 shadow-2xl shadow-slate-950/50 sm:p-6">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <p class="text-sm font-semibold text-indigo-600">تحديث حالة السن</p>
+          <h3 class="mt-1 text-2xl font-extrabold text-slate-900">السن <span id="toothStatusNumber">0</span></h3>
+        </div>
+        <button id="closeToothStatusModalBtn" type="button" class="rounded-full bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-200">إغلاق</button>
+      </div>
+      <p class="mt-3 text-sm leading-7 text-slate-600">اختر الحالة السنية المناسبة وسيتم حفظها فورًا على الملف السحابي.</p>
+      <div class="mt-5 grid gap-3 sm:grid-cols-3">
+        <button type="button" data-tooth-status="decay" class="rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm font-bold text-red-700 transition hover:-translate-y-0.5 hover:bg-red-100">تسوس</button>
+        <button type="button" data-tooth-status="filling" class="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4 text-sm font-bold text-blue-700 transition hover:-translate-y-0.5 hover:bg-blue-100">حشوة</button>
+        <button type="button" data-tooth-status="veneer" class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm font-bold text-emerald-700 transition hover:-translate-y-0.5 hover:bg-emerald-100">فينير</button>
+        <button type="button" data-tooth-status="crown" class="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-4 text-sm font-bold text-amber-700 transition hover:-translate-y-0.5 hover:bg-amber-100">تاج / تلبيسة</button>
+        <button type="button" data-tooth-status="endo" class="rounded-2xl border border-purple-200 bg-purple-50 px-4 py-4 text-sm font-bold text-purple-700 transition hover:-translate-y-0.5 hover:bg-purple-100">لبية (عصب)</button>
+        <button type="button" data-tooth-status="bridge" class="rounded-2xl border border-orange-300 bg-orange-50 px-4 py-4 text-sm font-bold text-orange-700 transition hover:-translate-y-0.5 hover:bg-orange-100">جسر</button>
+        <button type="button" data-tooth-status="implant" class="rounded-2xl border border-pink-200 bg-pink-50 px-4 py-4 text-sm font-bold text-pink-700 transition hover:-translate-y-0.5 hover:bg-pink-100">زراعة</button>
+        <button type="button" data-tooth-status="extracted" class="rounded-2xl border border-slate-300 bg-slate-100 px-4 py-4 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:bg-slate-200">مقلوع</button>
+      </div>
+
+      <div class="mt-5 border-t border-slate-100 pt-4">
+        <p class="mb-2 text-xs font-bold text-slate-600">أو أضف حالة مخصصة باسم ولون من اختيارك</p>
+        <input id="customToothStatusInput" type="text" maxlength="40" placeholder="مثال: كسر، تنظيف، تلميع..." class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
+        <div id="customToothColorSwatches" class="mt-3 flex flex-wrap gap-2"></div>
+        <button id="saveCustomToothStatusBtn" type="button" class="mt-3 w-full rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3 text-sm font-extrabold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700">
+          حفظ الحالة المخصصة
+        </button>
+      </div>
+
+      <p id="toothStatusSavingHint" class="mt-4 text-xs font-semibold text-slate-500">لن يتم حفظ التعديل حتى يتم اختيار الحالة.</p>
+    </div>
+  </div>
+
+  <div id="appointmentEditModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 p-4 opacity-0 backdrop-blur-sm transition-opacity duration-200">
+    <div class="modal-pop w-full max-w-2xl scale-95 rounded-[28px] border border-violet-300/25 bg-[linear-gradient(155deg,_rgba(30,27,75,0.95),_rgba(49,46,129,0.94),_rgba(76,29,149,0.93))] p-5 text-violet-50 shadow-2xl shadow-indigo-950/70 transition-transform duration-200 sm:p-6">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <p class="text-sm font-semibold text-violet-200">تعديل موعد</p>
+          <h3 class="mt-1 text-2xl font-extrabold text-white">تحديث تفاصيل الموعد</h3>
+        </div>
+        <button id="closeAppointmentEditModalBtn" type="button" class="rounded-full border border-violet-200/30 bg-white/10 px-3 py-2 text-sm font-semibold text-violet-100 transition hover:bg-white/15">إغلاق</button>
+      </div>
+      <form id="appointmentEditForm" class="mt-5 space-y-4">
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="block">
+            <span class="mb-1 block text-xs font-semibold text-violet-100">التاريخ</span>
+            <input id="appointmentEditDate" type="date" required class="w-full rounded-2xl border border-violet-200/30 bg-white/10 px-4 py-3 text-sm text-white outline-none transition placeholder:text-violet-200/60 focus:border-violet-300 focus:ring-4 focus:ring-violet-300/25" />
+          </label>
+          <label class="block">
+            <span class="mb-1 block text-xs font-semibold text-violet-100">الوقت</span>
+            <input id="appointmentEditTime" type="time" required class="w-full rounded-2xl border border-violet-200/30 bg-white/10 px-4 py-3 text-sm text-white outline-none transition placeholder:text-violet-200/60 focus:border-violet-300 focus:ring-4 focus:ring-violet-300/25" />
+          </label>
+        </div>
+        <label class="block">
+          <span class="mb-1 block text-xs font-semibold text-violet-100">الوصف</span>
+          <textarea id="appointmentEditDescription" rows="4" required class="w-full rounded-2xl border border-violet-200/30 bg-white/10 px-4 py-3 text-sm text-white outline-none transition placeholder:text-violet-200/60 focus:border-violet-300 focus:ring-4 focus:ring-violet-300/25"></textarea>
+        </label>
+        <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+          <button id="cancelAppointmentEditBtn" type="button" class="rounded-2xl border border-violet-200/35 bg-white/10 px-5 py-3 text-sm font-semibold text-violet-50 transition hover:bg-white/20">إلغاء</button>
+          <button id="saveAppointmentEditBtn" type="submit" class="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700">حفظ التعديلات</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="appointmentCreateModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 p-4 opacity-0 backdrop-blur-sm transition-opacity duration-200">
+    <div class="modal-pop w-full max-w-2xl scale-95 rounded-[28px] border border-violet-300/25 bg-[linear-gradient(155deg,_rgba(30,27,75,0.95),_rgba(49,46,129,0.94),_rgba(76,29,149,0.93))] p-5 text-violet-50 shadow-2xl shadow-indigo-950/70 transition-transform duration-200 sm:p-6">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <p class="text-sm font-semibold text-violet-200">إضافة موعد للمريض</p>
+          <h3 class="mt-1 text-2xl font-extrabold text-white">موعد جديد</h3>
+        </div>
+        <button id="closeAppointmentCreateModalBtn" type="button" class="rounded-full border border-violet-200/30 bg-white/10 px-3 py-2 text-sm font-semibold text-violet-100 transition hover:bg-white/15">إغلاق</button>
+      </div>
+      <form id="appointmentCreateForm" class="mt-5 space-y-4">
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="block">
+            <span class="mb-1 block text-xs font-semibold text-violet-100">التاريخ</span>
+            <input id="appointmentCreateDate" type="date" required class="w-full rounded-2xl border border-violet-200/30 bg-white/10 px-4 py-3 text-sm text-white outline-none transition placeholder:text-violet-200/60 focus:border-violet-300 focus:ring-4 focus:ring-violet-300/25" />
+          </label>
+          <label class="block">
+            <span class="mb-1 block text-xs font-semibold text-violet-100">الوقت</span>
+            <input id="appointmentCreateTime" type="time" required class="w-full rounded-2xl border border-violet-200/30 bg-white/10 px-4 py-3 text-sm text-white outline-none transition placeholder:text-violet-200/60 focus:border-violet-300 focus:ring-4 focus:ring-violet-300/25" />
+          </label>
+        </div>
+        <label class="block">
+          <span class="mb-1 block text-xs font-semibold text-violet-100">الوصف / الملاحظات</span>
+          <textarea id="appointmentCreateDescription" rows="4" required class="w-full rounded-2xl border border-violet-200/30 bg-white/10 px-4 py-3 text-sm text-white outline-none transition placeholder:text-violet-200/60 focus:border-violet-300 focus:ring-4 focus:ring-violet-300/25" placeholder="اكتب ملاحظات الموعد..."></textarea>
+        </label>
+        <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+          <button id="cancelAppointmentCreateBtn" type="button" class="rounded-2xl border border-violet-200/35 bg-white/10 px-5 py-3 text-sm font-semibold text-violet-50 transition hover:bg-white/20">إلغاء</button>
+          <button id="saveAppointmentCreateBtn" type="submit" class="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700">حفظ الموعد</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="financeEditModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 p-4 opacity-0 backdrop-blur-sm transition-opacity duration-200">
+    <div class="modal-pop w-full max-w-xl scale-95 rounded-[28px] border border-indigo-300/25 bg-[linear-gradient(165deg,_rgba(15,23,42,0.96),_rgba(30,27,75,0.95),_rgba(49,46,129,0.94))] p-5 text-indigo-50 shadow-2xl shadow-indigo-950/70 transition-transform duration-200 sm:p-6">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <p class="text-sm font-semibold text-indigo-200">تعديل الدفعة المالية</p>
+          <h3 class="mt-1 text-2xl font-extrabold text-white">تحديث تفاصيل الدفعة</h3>
+        </div>
+        <button id="closeFinanceEditModalBtn" type="button" class="rounded-full border border-indigo-200/35 bg-white/10 px-3 py-2 text-sm font-semibold text-indigo-100 transition hover:bg-white/15">إغلاق</button>
+      </div>
+      <form id="financeEditForm" class="mt-5 space-y-4">
+        <label class="block">
+          <span class="mb-1 block text-xs font-semibold text-indigo-100">المبلغ</span>
+          <input id="financeEditAmount" type="text" inputmode="decimal" required class="w-full rounded-2xl border border-indigo-200/30 bg-white/10 px-4 py-3 text-sm text-white outline-none transition placeholder:text-indigo-200/60 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-300/25" placeholder="أدخل المبلغ الجديد" />
+        </label>
+        <label class="block">
+          <span class="mb-1 block text-xs font-semibold text-indigo-100">الوصف</span>
+          <textarea id="financeEditDescription" rows="4" required class="w-full rounded-2xl border border-indigo-200/30 bg-white/10 px-4 py-3 text-sm text-white outline-none transition placeholder:text-indigo-200/60 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-300/25" placeholder="اكتب وصف الدفعة..."></textarea>
+        </label>
+        <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+          <button id="cancelFinanceEditBtn" type="button" class="rounded-2xl border border-indigo-200/35 bg-white/10 px-5 py-3 text-sm font-semibold text-indigo-50 transition hover:bg-white/20">إلغاء</button>
+          <button id="saveFinanceEditBtn" type="submit" class="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700">حفظ التعديل المالي</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="deleteConfirmModal" class="fixed inset-0 z-[55] hidden items-center justify-center bg-indigo-950/75 p-3 opacity-0 backdrop-blur-md transition-opacity duration-200 sm:p-4">
+    <div class="w-full max-w-md scale-95 rounded-[26px] border border-indigo-200/20 bg-[linear-gradient(160deg,_rgba(30,27,75,0.96),_rgba(49,46,129,0.95),_rgba(67,56,202,0.94))] p-5 text-indigo-50 shadow-2xl shadow-indigo-950/70 transition-transform duration-200 sm:p-6">
+      <div class="flex items-start gap-3">
+        <div class="rounded-2xl bg-rose-500/20 px-3 py-2 text-2xl leading-none">⚠️</div>
+        <div>
+          <h3 id="deleteConfirmTitle" class="text-lg font-extrabold text-white">تأكيد الحذف</h3>
+          <p id="deleteConfirmMessage" class="mt-2 text-sm leading-7 text-indigo-100">هل أنت متأكد من تنفيذ الحذف؟ لا يمكن التراجع عن هذا الإجراء.</p>
+        </div>
+      </div>
+      <div class="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+        <button id="deleteConfirmCancelBtn" type="button" class="rounded-xl border border-slate-300/45 bg-slate-200/20 px-4 py-2.5 text-sm font-semibold text-slate-100 transition hover:bg-slate-200/30">إلغاء</button>
+        <button id="deleteConfirmActionBtn" type="button" class="rounded-xl bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 px-4 py-2.5 text-sm font-extrabold text-white shadow-lg shadow-rose-900/40 transition hover:from-rose-700 hover:via-red-700 hover:to-rose-800">تأكيد الحذف النهائي</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toothPalmerTooltip" class="pointer-events-none fixed z-[80] hidden rounded-2xl border border-cyan-200/35 bg-slate-900/90 px-3 py-2 text-xs font-semibold text-cyan-100 shadow-2xl shadow-cyan-900/40 backdrop-blur"></div>
+
+  <div id="archiveImageModal" class="fixed inset-0 z-[90] hidden items-center justify-center bg-slate-950/90 p-4 opacity-0 backdrop-blur-md transition-opacity duration-200">
+    <div class="w-full max-w-5xl scale-95 overflow-hidden rounded-[28px] border border-white/15 bg-[linear-gradient(160deg,_rgba(15,23,42,0.98),_rgba(30,27,75,0.96),_rgba(49,46,129,0.94))] shadow-2xl shadow-indigo-950/70 transition-transform duration-200">
+      <div class="flex items-center justify-between gap-4 border-b border-white/10 px-5 py-4 text-white">
+        <div>
+          <p class="text-xs font-bold tracking-[0.22em] text-cyan-200">ARCHIVE PREVIEW</p>
+          <h3 id="archiveImageModalTitle" class="mt-1 text-lg font-extrabold">معاينة الصورة</h3>
+        </div>
+        <button id="closeArchiveImageModalBtn" type="button" class="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/20">إغلاق</button>
+      </div>
+      <div class="bg-black/20 p-4">
+        <img id="archiveImageModalImg" alt="معاينة الملف" class="mx-auto max-h-[78vh] w-full rounded-2xl object-contain shadow-2xl shadow-black/40" />
+      </div>
+    </div>
+  </div>
+
+  <script src="api-config.js"></script>
+  <script src="clinic-loader.js"></script>
+  <script>
+    const clinicTitle = document.getElementById('clinicTitle');
+    const mobileClinicTitle = document.getElementById('mobileClinicTitle');
+    const doctorName = localStorage.getItem('doctor_name') || localStorage.getItem('user_name');
+    const userTier = (localStorage.getItem('user_tier') || 'standard').toString().toLowerCase();
+    // 🔒 حظر فوري ومتزامن لأي زائر لم يسجّل الدخول إطلاقاً -- بدون هذا الفحص كان أي زائر مجهول (وصل مثلاً عبر قائمة تنقل صفحة عامة مثل contact_developer.html) يتجاوز الحماية لأن userTier يعود 'standard' افتراضياً عند غياب user_tier، والأخطر أن دوال جلب البيانات هنا تسقط على بريد الطبيب الاحتياطي الحقيقي عند غياب تسجيل الدخول فتعرض السجل الطبي/المالي الفعلي لأي زائر.
+    if (!localStorage.getItem('user_email')) {
+        window.location.replace('login.html');
+    }
+    // 🔒 حظر فوري ومتزامن قبل أي تسجيل لمستمع DOMContentLoaded أو أي طلب Fetch لبيانات محمية (السجل الطبي/المالي/الأشعة) -- التوجيه وحده في نهاية الملف لم يكن كافياً لأن السكربت يستمر بالتنفيذ حتى بعد استدعاء window.location.
+    if (userTier === 'pending_activation') {
+        window.location.replace('index.html');
+    }
+
+    // 🔒 قفل التجديد الشهري اللطيف (Soft Paywall) لحساب expired_subscription:
+    // غير هدّام عمداً -- ينقل عناصر body الحالية داخل غلاف مموَّه (blur) بدل
+    // حذفها، ويضيف نافذة التجديد كعنصر شقيق (وليس ابناً للغلاف) حتى لا يكسر
+    // CSS filter تموضعها الثابت (position: fixed) ولا يموّهها هي أيضاً بالخطأ.
+    function renderExpiredSubscriptionLock() {
+        if (document.getElementById('expiredSubscriptionOverlay')) return;
+
+        const blurWrap = document.createElement('div');
+        blurWrap.id = 'expiredBlurWrap';
+        blurWrap.style.filter = 'blur(8px)';
+        blurWrap.style.pointerEvents = 'none';
+        blurWrap.style.userSelect = 'none';
+        while (document.body.firstChild) {
+            blurWrap.appendChild(document.body.firstChild);
+        }
+        document.body.appendChild(blurWrap);
+
+        const overlay = document.createElement('div');
+        overlay.id = 'expiredSubscriptionOverlay';
+        overlay.setAttribute('dir', 'rtl');
+        overlay.className = 'fixed inset-0 z-[999] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 font-sans';
+        overlay.innerHTML = `
+            <div class="max-w-xl w-full bg-indigo-950/60 backdrop-blur-2xl border border-purple-500/25 p-8 rounded-3xl shadow-2xl shadow-purple-950/60 text-center space-y-6">
+                <div class="w-20 h-20 bg-purple-500/10 border border-purple-500/30 rounded-2xl flex items-center justify-center mx-auto text-4xl shadow-lg shadow-purple-500/10 animate-pulse">
+                🔒
+                </div>
+
+                <h1 class="text-2xl font-bold text-purple-300">انتهت صلاحية باقتك</h1>
+
+                <p class="text-slate-300 leading-relaxed text-sm">
+                    مرحباً يا دكتور، نود إعلامك بأن فترة صلاحية باقتك الحالية قد انتهت. سجلات مرضاك، مواعيدك، ومخزن عيادتك في أمان تام ومحفوظة أبدياً داخل السيرفر ولا تضيع أبداً 🔒. للمتابعة الفورية واستعادة صلاحيات الإدارة كاملة، يرجى إدخال كود التجديد الشهري الجديد. للدعم الفني السريع والحصول على الكود كاش، يرجى التواصل مع مطور المنصة المهندس فارس حلاوي على الرقم: 0956907698 🛠️
+                </p>
+
+                <div class="space-y-3">
+                    <input type="text" id="renewalKeyInput" placeholder="أدخل كود التجديد الجديد هنا"
+                           class="w-full bg-slate-900 border border-purple-500/25 rounded-xl px-4 py-3 text-center text-sm focus:outline-none focus:border-purple-400 transition-colors text-white placeholder-slate-500" />
+
+                    <p id="renewalStatusMsg" class="text-xs min-h-[1rem]"></p>
+
+                    <button id="renewSubscriptionBtn" onclick="renewSubscription()"
+                            class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-purple-600/30 active:scale-[0.98]">
+                        تجديد الاشتراك ومتابعة العمل 🚀
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+    }
+
+    // دالة التحقق من كود التجديد الشهري -- تستدعي نفس مسار /api/activate الموحّد
+    // (مسار مزدوج الغرض: يفعّل حساباً جديداً أو يجدّد حساباً منتهياً بنفس المنطق)
+    function renewSubscription() {
+        const input = document.getElementById('renewalKeyInput');
+        const statusEl = document.getElementById('renewalStatusMsg');
+        const btn = document.getElementById('renewSubscriptionBtn');
+        const keyCode = (input && input.value || '').trim();
+
+        if (!keyCode) {
+            if (statusEl) {
+                statusEl.textContent = 'يرجى إدخال كود التجديد أولاً.';
+                statusEl.className = 'text-xs min-h-[1rem] text-rose-400';
+            }
+            return;
+        }
+
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'جاري التحقق من الكود...';
+        }
+        if (statusEl) {
+            statusEl.textContent = 'يتم الاتصال بالخادم الآن...';
+            statusEl.className = 'text-xs min-h-[1rem] text-indigo-300';
+        }
+
+        fetch('/api/activate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: localStorage.getItem('user_email'),
+                activation_key: keyCode,
+            }),
+        })
+            .then(async (res) => {
+                let data = null;
+                try {
+                    data = await res.json();
+                } catch (parseError) {
+                    data = null;
+                }
+
+                if (!res.ok) {
+                    const message = (data && data.detail) || 'تعذر التحقق من الكود. حاول مرة أخرى.';
+                    if (statusEl) {
+                        statusEl.textContent = message;
+                        statusEl.className = 'text-xs min-h-[1rem] text-rose-400';
+                    }
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = 'تجديد الاشتراك ومتابعة العمل 🚀';
+                    }
+                    return;
+                }
+
+                localStorage.setItem('user_tier', data.user_tier);
+                if (statusEl) {
+                    statusEl.textContent = '🎉 تم التجديد بنجاح!';
+                    statusEl.className = 'text-xs min-h-[1rem] text-emerald-400';
+                }
+                // رسالة تهنئة منبثقة فورية حسب الطلب، ثم إعادة تحميل الصفحة مباشرة
+                // لإظهار كامل عناصر لوحة التحكم بعد استعادة الصلاحيات.
+                alert('🎉 تم تجديد اشتراكك بنجاح! سيتم تحديث الصفحة الآن لإظهار كامل صلاحيات لوحة التحكم.');
+                window.location.reload();
+            })
+            .catch(() => {
+                if (statusEl) {
+                    statusEl.textContent = 'تعذر الاتصال بالخادم. تحقق من الإنترنت وحاول مرة أخرى.';
+                    statusEl.className = 'text-xs min-h-[1rem] text-rose-400';
+                }
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'تجديد الاشتراك ومتابعة العمل 🚀';
+                }
+            });
+    }
+
+    if (userTier === 'expired_subscription') {
+        renderExpiredSubscriptionLock();
+    }
+    const tierBadge = document.getElementById('tierBadge');
+    const mobileTierBadge = document.getElementById('mobileTierBadge');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+    const mobileMenuDropdown = document.getElementById('mobileMenuDropdown');
+    const mobileLogoutBtn = document.getElementById('mobileLogoutBtn');
+    if (clinicTitle) {
+            clinicTitle.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادة الطبيب المعتمد';
+    }
+    if (mobileClinicTitle) {
+            mobileClinicTitle.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادة الطبيب المعتمد';
+    }
+
+    function renderTierBadge() {
+      if (!tierBadge) return;
+      if (userTier === 'premium') {
+        tierBadge.className = 'rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1 text-xs font-extrabold tracking-wide text-emerald-100 shadow-[0_0_18px_rgba(16,185,129,0.18)]';
+        tierBadge.textContent = 'Premium 👑';
+        if (mobileTierBadge) {
+          mobileTierBadge.className = 'shrink-0 rounded-full border border-emerald-300/30 bg-emerald-500/15 px-2 py-1 text-[11px] font-extrabold tracking-wide text-emerald-100 shadow-[0_0_18px_rgba(16,185,129,0.18)]';
+          mobileTierBadge.textContent = 'Premium 👑';
+        }
+        return;
+      }
+
+      tierBadge.className = 'rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]';
+      tierBadge.textContent = 'Standard';
+      if (mobileTierBadge) {
+        mobileTierBadge.className = 'shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[11px] font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]';
+        mobileTierBadge.textContent = 'Standard';
+      }
+    }
+
+    renderTierBadge();
+
+    function closeMobileMenu() {
+      if (!mobileMenuDropdown || !mobileMenuToggle) return;
+      mobileMenuDropdown.classList.add('hidden');
+      mobileMenuToggle.setAttribute('aria-expanded', 'false');
+    }
+
+    function toggleMobileMenu() {
+      if (!mobileMenuDropdown || !mobileMenuToggle) return;
+      const willOpen = mobileMenuDropdown.classList.contains('hidden');
+      mobileMenuDropdown.classList.toggle('hidden');
+      mobileMenuToggle.setAttribute('aria-expanded', String(willOpen));
+    }
+
+    if (mobileMenuToggle) {
+      mobileMenuToggle.addEventListener('click', toggleMobileMenu);
+    }
+
+    if (mobileMenuDropdown) {
+      mobileMenuDropdown.querySelectorAll('a, button').forEach((item) => {
+        item.addEventListener('click', () => {
+          closeMobileMenu();
+        });
+      });
+    }
+
+    window.addEventListener('resize', () => {
+      if (window.innerWidth >= 768) {
+        closeMobileMenu();
+      }
+    });
+
+    function showBackupToast(message) {
+      const existingToast = document.getElementById('backupToast');
+      if (existingToast) existingToast.remove();
+
+      const toast = document.createElement('div');
+      toast.id = 'backupToast';
+      toast.className = 'fixed left-1/2 top-5 z-[70] -translate-x-1/2 rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-500 via-cyan-500 to-sky-500 px-5 py-3 text-sm font-bold text-white shadow-2xl shadow-emerald-400/30 finance-toast';
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      window.setTimeout(() => toast.remove(), 2600);
+    }
+
+    let currentPatient = null;
+    let isEditing = false;
+
+    // Every /api/* route in this app now requires a doctor-identifying header
+    // (added in the 2026-08-22 activation/paywall audit). These two helpers are
+    // the single source of truth for that header on this page.
+    function getDoctorEmail() {
+      return (localStorage.getItem('user_email') || 'fareshalawi17@gmail.com').trim();
+    }
+
+    function getSessionToken() {
+      return (localStorage.getItem('authToken') || '').trim();
+    }
+
+    function getDoctorAuthHeaders(extraHeaders = {}) {
+      const headers = { 'X-Doctor-Email': getDoctorEmail(), ...extraHeaders };
+      const token = getSessionToken();
+      if (token) {
+        headers.Authorization = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+      }
+      return headers;
+    }
+    const XRAY_API_BASE_URL = 'https://dental-clinic-faras.onrender.com';
+    const APPOINTMENT_UPDATE_BASE_URL = window.DENTAL_APP_CONFIG?.apiBaseUrl || 'https://dental-clinic-faras.onrender.com';
+    const APPOINTMENT_DELETE_BASE_URL = 'https://dental-clinic-faras.onrender.com';
+    const APPOINTMENT_CREATE_BASE_URL = 'https://dental-clinic-faras.onrender.com';
+    const FINANCE_UPDATE_BASE_URL = 'https://dental-clinic-faras.onrender.com';
+    const PRESCRIPTION_BASE_URL = window.DENTAL_APP_CONFIG?.apiBaseUrl || 'https://dental-clinic-faras.onrender.com';
+    const TOOTH_STATUS_OPTIONS = {
+      decay: { label: 'تسوس', color: '#ef4444' },
+      filling: { label: 'حشوة', color: '#3b82f6' },
+      veneer: { label: 'فينير', color: '#10b981' },
+      crown: { label: 'تاج / تلبيسة', color: '#eab308' },
+      endo: { label: 'لبية (عصب)', color: '#a855f7' },
+      bridge: { label: 'جسر', color: '#f97316' },
+      implant: { label: 'زراعة', color: '#ec4899' },
+      extracted: { label: 'مقلوع', color: '#64748b' },
+    };
+    const DEFAULT_TOOTH_COLOR = '#fbfbf7';
+    const PALMER_TOOTH_NAMES = {
+      1: 'القاطع المركزي',
+      2: 'القاطع الجانبي',
+      3: 'الناب',
+      4: 'الضاحك الأول',
+      5: 'الضاحك الثاني',
+      6: 'الرحى الأولى',
+      7: 'الرحى الثانية',
+      8: 'الرحى الثالثة',
+    };
+    const PALMER_QUADRANT_META = {
+      UR: { name: 'العلوية اليمنى', symbol: '┘' },
+      UL: { name: 'العلوية اليسرى', symbol: '└' },
+      LR: { name: 'السفلية اليمنى', symbol: '┐' },
+      LL: { name: 'السفلية اليسرى', symbol: '┌' },
+    };
+    const PALMER_KEY_REGEX = /^(UR|UL|LR|LL)[1-8]$/;
+
+    let currentChartState = {};
+    let toothElements = {};
+    let activeTooth = null;
+    let currentAppointments = [];
+    let activeAppointment = null;
+    let appointmentModalCloseTimer = null;
+    let appointmentCreateModalCloseTimer = null;
+    let currentFinanceLedger = [];
+    let activeFinanceTransaction = null;
+    let financeEditModalCloseTimer = null;
+    let deleteConfirmModalCloseTimer = null;
+    let pendingDeleteAction = null;
+    let currentPrescriptions = [];
+
+    function getAppointmentUpdateEndpoint(appointmentId) {
+      return `${APPOINTMENT_UPDATE_BASE_URL}/api/appointments/${encodeURIComponent(String(appointmentId))}`;
+    }
+
+    function getAppointmentDeleteEndpoint(appointmentId) {
+      return `${APPOINTMENT_DELETE_BASE_URL}/api/appointments/${encodeURIComponent(String(appointmentId))}`;
+    }
+
+    function getAppointmentCreateEndpoint() {
+      return `${APPOINTMENT_CREATE_BASE_URL}/api/appointments`;
+    }
+
+    function getFinanceTransactionUpdateEndpoint(transactionId) {
+      return `${FINANCE_UPDATE_BASE_URL}/api/finance/transaction/${encodeURIComponent(String(transactionId))}`;
+    }
+
+    function getFinanceTransactionDeleteEndpoint(transactionId) {
+      return `${FINANCE_UPDATE_BASE_URL}/api/finance/transaction/${encodeURIComponent(String(transactionId))}`;
+    }
+
+    function getPrescriptionCreateEndpoint() {
+      return `${PRESCRIPTION_BASE_URL}/api/prescriptions`;
+    }
+
+    function getPatientPrescriptionsEndpoint(patientId) {
+      return `${PRESCRIPTION_BASE_URL}/api/prescriptions/patient/${encodeURIComponent(String(patientId))}`;
+    }
+
+    function openDeleteConfirmModal({ title, message, action }) {
+      const modal = document.getElementById('deleteConfirmModal');
+      const titleEl = document.getElementById('deleteConfirmTitle');
+      const messageEl = document.getElementById('deleteConfirmMessage');
+      if (!modal || typeof action !== 'function') return;
+
+      pendingDeleteAction = action;
+
+      if (titleEl) {
+        titleEl.textContent = title || 'تأكيد الحذف';
+      }
+      if (messageEl) {
+        messageEl.textContent = message || 'هل أنت متأكد من تنفيذ الحذف؟ لا يمكن التراجع عن هذا الإجراء.';
+      }
+
+      if (deleteConfirmModalCloseTimer) {
+        window.clearTimeout(deleteConfirmModalCloseTimer);
+        deleteConfirmModalCloseTimer = null;
+      }
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      requestAnimationFrame(() => {
+        modal.classList.remove('opacity-0');
+        const panel = modal.firstElementChild;
+        if (panel) {
+          panel.classList.remove('scale-95');
+        }
+      });
+    }
+
+    function closeDeleteConfirmModal({ clearAction = true } = {}) {
+      const modal = document.getElementById('deleteConfirmModal');
+      if (!modal) return;
+
+      modal.classList.add('opacity-0');
+      const panel = modal.firstElementChild;
+      if (panel) {
+        panel.classList.add('scale-95');
+      }
+
+      deleteConfirmModalCloseTimer = window.setTimeout(() => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        deleteConfirmModalCloseTimer = null;
+      }, 180);
+
+      if (clearAction) {
+        pendingDeleteAction = null;
+      }
+    }
+
+    async function confirmDeleteFromModal() {
+      if (!pendingDeleteAction) return;
+
+      const actionButton = document.getElementById('deleteConfirmActionBtn');
+      if (actionButton && window.ClinicLoader) {
+        ClinicLoader.setButtonLoading(actionButton, true, { loadingText: '...جاري الحذف' });
+      } else if (actionButton) {
+        actionButton.disabled = true;
+        actionButton.textContent = '...جاري الحذف';
+      }
+
+      try {
+        await pendingDeleteAction();
+        closeDeleteConfirmModal();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'تعذر تنفيذ الحذف حالياً.';
+        createMedicalToast(message);
+      } finally {
+        if (actionButton && window.ClinicLoader) {
+          ClinicLoader.setButtonLoading(actionButton, false);
+        } else if (actionButton) {
+          actionButton.disabled = false;
+          actionButton.textContent = 'تأكيد الحذف النهائي';
+        }
+      }
+    }
+
+    function getPatientIdFromUrl() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const patientId = urlParams.get('id');
+      return patientId;
+    }
+
+    function calculateAge(birthDate) {
+      if (!birthDate) return '—';
+      const birth = new Date(birthDate);
+      if (Number.isNaN(birth.getTime())) return '—';
+      const today = new Date();
+      let age = today.getFullYear() - birth.getFullYear();
+      const monthDiff = today.getMonth() - birth.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+        age -= 1;
+      }
+      return `${age} سنة`;
+    }
+
+    function parseAgeNumberFromDisplay(value) {
+      const normalized = String(value || '').trim();
+      if (!normalized) return null;
+
+      const matched = normalized.match(/\d+/);
+      if (!matched) return null;
+
+      const parsed = Number.parseInt(matched[0], 10);
+      return Number.isInteger(parsed) ? parsed : null;
+    }
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    function normalizeText(value) {
+      return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    }
+
+    function parseChartState(rawState) {
+      if (!rawState) return {};
+
+      let parsedState = rawState;
+      if (typeof rawState === 'string') {
+        try {
+          parsedState = JSON.parse(rawState);
+        } catch (error) {
+          return {};
+        }
+      }
+
+      if (!parsedState || typeof parsedState !== 'object' || Array.isArray(parsedState)) {
+        return {};
+      }
+
+      const normalizedState = {};
+      Object.entries(parsedState).forEach(([key, value]) => {
+        const normalizedKey = String(key || '').trim().toUpperCase();
+        if (PALMER_KEY_REGEX.test(normalizedKey)) {
+          normalizedState[normalizedKey] = normalizeToothStateValue(value);
+          return;
+        }
+
+        const numericKey = Number.parseInt(normalizedKey, 10);
+        if (Number.isInteger(numericKey)) {
+          const palmerInfo = getPalmerNotationForTooth(numericKey);
+          if (palmerInfo?.code) {
+            normalizedState[palmerInfo.code] = normalizeToothStateValue(value);
+          }
+        }
+      });
+      return normalizedState;
+    }
+
+    function buildPalmerChartPayload(chartState) {
+      const payload = {};
+      Object.entries(chartState || {}).forEach(([key, value]) => {
+        const normalizedKey = String(key || '').trim().toUpperCase();
+        if (PALMER_KEY_REGEX.test(normalizedKey)) {
+          payload[normalizedKey] = normalizeToothStateValue(value);
+          return;
+        }
+
+        const numericKey = Number.parseInt(normalizedKey, 10);
+        if (Number.isInteger(numericKey)) {
+          const palmerInfo = getPalmerNotationForTooth(numericKey);
+          if (palmerInfo?.code) {
+            payload[palmerInfo.code] = normalizeToothStateValue(value);
+          }
+        }
+      });
+
+      return payload;
+    }
+
+    function resolveStatusKey(value) {
+      if (!value) return null;
+
+      if (typeof value === 'object') {
+        if (value.status) return resolveStatusKey(value.status);
+        if (value.color) return resolveStatusKey(value.color);
+      }
+
+      const normalized = String(value).trim().toLowerCase();
+      if (TOOTH_STATUS_OPTIONS[normalized]) return normalized;
+
+      if (normalized === '#ef4444' || normalized === 'red' || normalized === 'rgb(239, 68, 68)') return 'decay';
+      if (normalized === '#3b82f6' || normalized === 'blue' || normalized === 'rgb(59, 130, 246)') return 'filling';
+      if (normalized === '#475569' || normalized === 'gray' || normalized === 'grey' || normalized === 'rgb(71, 85, 105)') return 'extracted';
+      if (normalized === '#8b0000' || normalized === 'darkred' || normalized === 'rgb(139, 0, 0)') return 'endo';
+      if (normalized === '#c0c0c0' || normalized === 'silver' || normalized === 'rgb(192, 192, 192)') return 'implant';
+      if (normalized === '#ffd700' || normalized === 'gold' || normalized === 'rgb(255, 215, 0)') return 'crown';
+      if (normalized === '#ff8c00' || normalized === 'darkorange' || normalized === 'rgb(255, 140, 0)') return 'bridge';
+
+      return null;
+    }
+
+    function normalizeToothStateValue(value) {
+      const statusKey = resolveStatusKey(value);
+      if (statusKey) return statusKey;
+
+      const textValue = String(value || '').trim();
+      return textValue || 'decay';
+    }
+
+    // ---------------------------------------------------------------------
+    // Doctor-authored custom status (free-text label + a color picked from
+    // the same base palette as the fixed presets — see the "أضف حالة
+    // مخصصة" section of the tooth-status modal). The backend's
+    // PatientChartUpdate model only accepts `dict[str, str]` and its
+    // normalize_palmer_chart_state() coerces every value through Python's
+    // str(...) — a nested {label, color} object would either fail
+    // validation outright or come back mangled as a Python repr string. So
+    // a custom status is encoded as a single plain string the existing
+    // string-only pipeline (parseChartState / buildPalmerChartPayload /
+    // the PUT endpoint) already round-trips untouched, no backend change
+    // needed: "custom:<url-encoded label>|<hex color>".
+    // ---------------------------------------------------------------------
+    const CUSTOM_STATUS_PREFIX = 'custom:';
+
+    function encodeCustomStatusValue(label, color) {
+      return `${CUSTOM_STATUS_PREFIX}${encodeURIComponent(label)}|${color}`;
+    }
+
+    function decodeCustomStatusValue(value) {
+      if (typeof value !== 'string' || !value.startsWith(CUSTOM_STATUS_PREFIX)) return null;
+      const rest = value.slice(CUSTOM_STATUS_PREFIX.length);
+      const separatorIndex = rest.lastIndexOf('|');
+      if (separatorIndex === -1) return null;
+
+      const color = rest.slice(separatorIndex + 1).trim();
+      let label = '';
+      try {
+        label = decodeURIComponent(rest.slice(0, separatorIndex));
+      } catch (error) {
+        label = rest.slice(0, separatorIndex);
+      }
+      label = label.trim();
+
+      if (!label || !color) return null;
+      return { label, color };
+    }
+
+    function resolveToothColor(value) {
+      const statusKey = resolveStatusKey(value);
+      if (statusKey && TOOTH_STATUS_OPTIONS[statusKey]) {
+        return TOOTH_STATUS_OPTIONS[statusKey].color;
+      }
+
+      const customEntry = decodeCustomStatusValue(value);
+      if (customEntry) return customEntry.color;
+
+      const textValue = String(value || '').trim();
+      if (!textValue) return DEFAULT_TOOTH_COLOR;
+      return textValue;
+    }
+
+    function getToothStatusLabel(rawValue) {
+      if (!rawValue) return null;
+      const statusKey = resolveStatusKey(rawValue);
+      if (statusKey && TOOTH_STATUS_OPTIONS[statusKey]) return TOOTH_STATUS_OPTIONS[statusKey].label;
+
+      const customEntry = decodeCustomStatusValue(rawValue);
+      if (customEntry) return customEntry.label;
+
+      if (typeof rawValue === 'string' && rawValue.trim()) return rawValue.trim();
+      return 'حالة مخصصة';
+    }
+
+    function getPalmerNotationForTooth(toothNumber) {
+      const numericTooth = Number(toothNumber);
+      if (!Number.isInteger(numericTooth) || numericTooth < 1 || numericTooth > 32) {
+        return null;
+      }
+
+      const upper = numericTooth <= 16;
+      const indexInArch = upper ? numericTooth - 1 : numericTooth - 17;
+
+      let quadrant = '';
+      let order = 0;
+
+      if (upper) {
+        if (indexInArch >= 8) {
+          quadrant = 'UR';
+          order = indexInArch - 7;
+        } else {
+          quadrant = 'UL';
+          order = 8 - indexInArch;
+        }
+      } else if (indexInArch <= 7) {
+        quadrant = 'LR';
+        order = 8 - indexInArch;
+      } else {
+        quadrant = 'LL';
+        order = indexInArch - 7;
+      }
+
+      const quadrantMeta = PALMER_QUADRANT_META[quadrant];
+      const toothName = PALMER_TOOTH_NAMES[order] || 'سن';
+      const code = `${quadrant}${order}`;
+      return {
+        code,
+        label: `${toothName} ${quadrantMeta?.name || ''}`.trim(),
+        symbolCode: `${quadrantMeta?.symbol || ''}${order}`,
+        order,
+      };
+    }
+
+    function showPalmerTooltip(tooth, clientX, clientY) {
+      const tooltip = document.getElementById('toothPalmerTooltip');
+      if (!tooltip || !tooth) return;
+
+      const statusLabel = getToothStatusLabel(currentChartState[tooth.palmerCode]) || 'سليم';
+
+      tooltip.innerHTML = `
+        <div class="text-[11px] font-extrabold tracking-wide text-cyan-100">السن ${escapeHtml(String(tooth.fdi))} · ${escapeHtml(tooth.palmerCode)}</div>
+        <div class="mt-0.5 text-[11px] text-cyan-200/90">${escapeHtml(tooth.palmerLabel)} — ${escapeHtml(statusLabel)}</div>
+      `;
+
+      tooltip.classList.remove('hidden');
+      tooltip.style.left = `${clientX + 14}px`;
+      tooltip.style.top = `${clientY - 8}px`;
+    }
+
+    function hidePalmerTooltip() {
+      const tooltip = document.getElementById('toothPalmerTooltip');
+      if (!tooltip) return;
+      tooltip.classList.add('hidden');
+    }
+
+    // ---------------------------------------------------------------------
+    // Flat 2D dental chart (FDI notation), rendered as inline SVG icons —
+    // no WebGL, so it scales cleanly and stays fully responsive on every
+    // screen size, including mobile (with horizontal scroll for the full
+    // arch). Each tooth is a small SVG button split into a "crown" path and
+    // one or two "root" paths so a treatment status can tint them
+    // independently. Upper-arch teeth are drawn root-up/crown-down; the
+    // exact same shapes are reused for the lower arch via a vertical CSS
+    // flip (scaleY(-1)), which naturally produces the mirrored
+    // root-down/crown-up anatomy without needing separate path data.
+    // ---------------------------------------------------------------------
+
+    const TOOTH_SHAPES = {
+      incisor: {
+        crown: 'M13,40 Q13,70 22,74 Q31,70 31,40 Q22,34 13,40 Z',
+        roots: ['M18,2 Q22,-2 26,2 L24.5,40 Q22,45 19.5,40 Z'],
+      },
+      canine: {
+        crown: 'M12,42 Q12,52 16,60 Q22,76 28,60 Q32,52 32,42 Q22,35 12,42 Z',
+        roots: ['M17,2 Q22,-2 27,2 L25,42 Q22,48 19,42 Z'],
+      },
+      premolar: {
+        crown: 'M8,44 Q8,68 22,72 Q36,68 36,44 Q22,34 8,44 Z',
+        roots: ['M18,3 Q22,-1 26,3 L24.5,42 Q22,47 19.5,42 Z'],
+      },
+      molar: {
+        crown: 'M5,42 Q5,68 22,73 Q39,68 39,42 Q22,32 5,42 Z',
+        roots: [
+          'M8,3 Q12,-1 16,3 L14.5,40 Q12,45 9.5,40 Z',
+          'M28,3 Q32,-1 36,3 L34.5,40 Q32,45 29.5,40 Z',
+        ],
+      },
+    };
+
+    function getToothShapeKey(order) {
+      if (order <= 2) return 'incisor';
+      if (order === 3) return 'canine';
+      if (order <= 5) return 'premolar';
+      return 'molar';
+    }
+
+    // FDI quadrant digit -> internal Palmer quadrant code used by the
+    // chart_state payload (kept identical to the pre-existing storage
+    // format so no backend/data-model change is required).
+    const FDI_QUADRANT_TO_PALMER = { 1: 'UR', 2: 'UL', 3: 'LL', 4: 'LR' };
+
+    function buildToothInfo(fdiNumber) {
+      const quadrantDigit = Math.floor(fdiNumber / 10);
+      const order = fdiNumber % 10;
+      const palmerQuadrant = FDI_QUADRANT_TO_PALMER[quadrantDigit];
+      const palmerCode = `${palmerQuadrant}${order}`;
+      const quadrantMeta = PALMER_QUADRANT_META[palmerQuadrant];
+      const toothName = PALMER_TOOTH_NAMES[order] || 'سن';
+      const isLower = quadrantDigit === 3 || quadrantDigit === 4;
+      return {
+        fdi: fdiNumber,
+        palmerCode,
+        palmerLabel: `${toothName} ${quadrantMeta?.name || ''}`.trim(),
+        shapeKey: getToothShapeKey(order),
+        isLower,
+      };
+    }
+
+    function createToothSvg(shapeKey, isLower) {
+      const svgNS = 'http://www.w3.org/2000/svg';
+      const shape = TOOTH_SHAPES[shapeKey];
+      const svg = document.createElementNS(svgNS, 'svg');
+      svg.setAttribute('viewBox', '0 0 44 78');
+      svg.setAttribute('class', `tooth-svg${isLower ? ' tooth-flip' : ''}`);
+      svg.setAttribute('aria-hidden', 'true');
+
+      const rootGroup = document.createElementNS(svgNS, 'g');
+      shape.roots.forEach((d) => {
+        const rootPath = document.createElementNS(svgNS, 'path');
+        rootPath.setAttribute('d', d);
+        rootPath.setAttribute('class', 'tooth-root');
+        rootGroup.appendChild(rootPath);
+      });
+
+      const crownPath = document.createElementNS(svgNS, 'path');
+      crownPath.setAttribute('d', shape.crown);
+      crownPath.setAttribute('class', 'tooth-crown');
+
+      svg.appendChild(rootGroup);
+      svg.appendChild(crownPath);
+
+      return { svg, crownPath, rootPaths: Array.from(rootGroup.children) };
+    }
+
+    function createToothButton(fdiNumber) {
+      const tooth = buildToothInfo(fdiNumber);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'tooth-btn';
+      button.dataset.fdi = String(tooth.fdi);
+      button.dataset.palmer = tooth.palmerCode;
+      button.setAttribute('aria-label', `السن ${tooth.fdi} — ${tooth.palmerLabel}`);
+
+      const { svg, crownPath, rootPaths } = createToothSvg(tooth.shapeKey, tooth.isLower);
+      const dot = document.createElement('span');
+      dot.className = 'tooth-dot';
+      button.appendChild(svg);
+      button.appendChild(dot);
+
+      button.addEventListener('click', () => {
+        hidePalmerTooltip();
+        openToothStatusModal(tooth);
+      });
+      button.addEventListener('pointerenter', (event) => {
+        if (event.pointerType === 'touch') return;
+        showPalmerTooltip(tooth, event.clientX, event.clientY);
+      });
+      button.addEventListener('pointermove', (event) => {
+        if (event.pointerType === 'touch') return;
+        showPalmerTooltip(tooth, event.clientX, event.clientY);
+      });
+      button.addEventListener('pointerleave', hidePalmerTooltip);
+
+      toothElements[tooth.palmerCode] = { button, crownPath, rootPaths, tooth };
+      return button;
+    }
+
+    function buildNumberRow(fdiList) {
+      const row = document.createElement('div');
+      row.className = 'tooth-number-row';
+      fdiList.forEach((fdiNumber, index) => {
+        const cell = document.createElement('span');
+        cell.className = `tooth-number-cell${index === 8 ? ' tooth-midline-gap' : ''}`;
+        cell.textContent = String(fdiNumber);
+        row.appendChild(cell);
+      });
+      return row;
+    }
+
+    function buildTeethRow(fdiList) {
+      const row = document.createElement('div');
+      row.className = 'tooth-row';
+      fdiList.forEach((fdiNumber, index) => {
+        const button = createToothButton(fdiNumber);
+        if (index === 8) button.classList.add('tooth-midline-gap');
+        row.appendChild(button);
+      });
+      return row;
+    }
+
+    function renderDentalChart() {
+      const stage = document.getElementById('dentalChartStage');
+      if (!stage) return;
+
+      stage.innerHTML = '';
+      toothElements = {};
+
+      const upperFDI = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
+      const lowerFDI = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38];
+
+      const gumline = document.createElement('div');
+      gumline.className = 'tooth-gumline';
+
+      stage.appendChild(buildNumberRow(upperFDI));
+      stage.appendChild(buildTeethRow(upperFDI));
+      stage.appendChild(gumline);
+      stage.appendChild(buildTeethRow(lowerFDI));
+      stage.appendChild(buildNumberRow(lowerFDI));
+
+      renderChartLegend();
+      refreshChartFromState();
+    }
+
+    function renderChartLegend() {
+      const legend = document.getElementById('chartLegend');
+      if (!legend) return;
+      legend.innerHTML = '';
+      Object.values(TOOTH_STATUS_OPTIONS).forEach((option) => {
+        const chip = document.createElement('span');
+        chip.className = 'inline-flex items-center gap-1.5 text-xs font-bold text-slate-600';
+        chip.innerHTML = `<span class="inline-block h-2.5 w-2.5 rounded-full" style="background:${option.color}"></span>${escapeHtml(option.label)}`;
+        legend.appendChild(chip);
+      });
+    }
+
+    function applyToothVisual(entry) {
+      if (!entry) return;
+      const { button, crownPath, rootPaths, tooth } = entry;
+      const rawValue = currentChartState[tooth.palmerCode];
+      const statusKey = rawValue ? resolveStatusKey(rawValue) : null;
+
+      button.classList.remove('tooth-missing');
+      button.removeAttribute('data-has-status');
+
+      if (statusKey === 'extracted') {
+        button.classList.add('tooth-missing');
+        crownPath.style.fill = '';
+        rootPaths.forEach((rootPath) => { rootPath.style.fill = ''; });
+      } else if (rawValue) {
+        // resolveToothColor covers both a fixed preset key and a
+        // doctor-authored custom {custom, label, color} entry.
+        const color = resolveToothColor(rawValue);
+        crownPath.style.fill = color;
+        rootPaths.forEach((rootPath) => { rootPath.style.fill = color; });
+      } else {
+        crownPath.style.fill = '';
+        rootPaths.forEach((rootPath) => { rootPath.style.fill = ''; });
+      }
+
+      const dot = button.querySelector('.tooth-dot');
+      if (dot) {
+        if (rawValue && statusKey !== 'extracted') {
+          dot.style.background = resolveToothColor(rawValue);
+          button.setAttribute('data-has-status', '1');
+        } else {
+          dot.style.background = '';
+        }
+      }
+    }
+
+    function refreshChartFromState() {
+      Object.values(toothElements).forEach(applyToothVisual);
+    }
+
+    function getPatientAppointmentDateValue(appointment) {
+      if (appointment?.appointment_date) return appointment.appointment_date;
+      return '';
+    }
+
+    function formatAppointmentDateTime(value) {
+      if (!value) return '—';
+      const dateValue = new Date(value);
+      if (Number.isNaN(dateValue.getTime())) return '—';
+
+      return dateValue.toLocaleString('ar-EG', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: false,
+      });
+    }
+
+    function formatAppointmentTimeValue(appointment) {
+      if (appointment?.appointment_time) return appointment.appointment_time;
+      const dateValue = getPatientAppointmentDateValue(appointment);
+      if (!dateValue) return '—';
+      const parsed = new Date(dateValue);
+      if (Number.isNaN(parsed.getTime())) return '—';
+      return parsed.toLocaleTimeString('ar-EG', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: false,
+      });
+    }
+
+    function formatAppointmentDescription(appointment) {
+      return appointment?.notes || appointment?.description || appointment?.procedure_type || '—';
+    }
+
+    function normalizeWhatsappPhone(phone) {
+      const raw = String(phone || '').trim();
+      if (!raw) return '';
+
+      let digits = raw.replace(/\D/g, '');
+      if (!digits) return '';
+
+      if (digits.startsWith('00')) {
+        digits = digits.slice(2);
+      }
+
+      if (digits.startsWith('0')) {
+        digits = `963${digits.slice(1)}`;
+      } else if (!digits.startsWith('963') && digits.length === 9) {
+        digits = `963${digits}`;
+      }
+
+      return digits;
+    }
+
+    function formatReminderDate(appointment) {
+      const rawDate = appointment?.appointment_date;
+      if (!rawDate) return 'غير محدد';
+
+      const parsed = new Date(rawDate);
+      if (Number.isNaN(parsed.getTime())) return 'غير محدد';
+
+      return parsed.toLocaleDateString('ar-EG', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+    }
+
+    function openWhatsAppReminder(appointment) {
+      if (!currentPatient || !appointment) return;
+
+      const patientPhone = normalizeWhatsappPhone(currentPatient.phone);
+      if (!patientPhone) {
+        alert('تعذر إرسال التذكير: رقم هاتف المريض غير متوفر أو غير صالح.');
+        return;
+      }
+
+      const patientName = String(currentPatient.full_name || appointment.patient_name || 'المريض').trim();
+      const doctorNameValue = String(doctorName || 'الطبيب المدخل').trim();
+      const appointmentDate = formatReminderDate(appointment);
+      const appointmentTime = String(appointment?.appointment_time || 'غير محدد').trim() || 'غير محدد';
+      const message = `مرحباً سيد/ة ${patientName}، نذكركم بموعدكم القادم في العيادة ${doctorNameValue} اليوم ${appointmentDate} عند الساعة ${appointmentTime}. نتمنى لكم دوام الصحة والعافية. 🦷✨`;
+      const whatsappUrl = `https://wa.me/${patientPhone}?text=${encodeURIComponent(message)}`;
+
+      window.open(whatsappUrl, '_blank');
+    }
+
+    function getAppointmentStatusBadgeClass(status) {
+      const normalized = String(status || 'Pending').trim().toLowerCase();
+      if (normalized === 'completed') return 'bg-emerald-100 text-emerald-700';
+      if (normalized === 'cancelled') return 'bg-rose-100 text-rose-700';
+      return 'bg-amber-100 text-amber-700';
+    }
+
+    function isAppointmentForCurrentPatient(appointment) {
+      if (!currentPatient) return false;
+
+      if (appointment?.patient_id && String(appointment.patient_id) === String(currentPatient.id)) {
+        return true;
+      }
+
+      const currentName = normalizeText(currentPatient.full_name);
+      const appointmentName = normalizeText(appointment?.patient_name);
+      if (!currentName || !appointmentName) return false;
+
+      return currentName === appointmentName;
+    }
+
+    function showToast(message) {
+      const existingToast = document.getElementById('profileToast');
+      if (existingToast) existingToast.remove();
+
+      const toast = document.createElement('div');
+      toast.id = 'profileToast';
+      toast.className = 'fixed left-1/2 top-5 z-50 -translate-x-1/2 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3 text-sm font-semibold text-white shadow-lg';
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      setTimeout(() => toast.remove(), 2200);
+    }
+
+    function showFinanceSuccessAlert(message) {
+      const existingToast = document.getElementById('financePaymentToast');
+      if (existingToast) existingToast.remove();
+
+      const toast = document.createElement('div');
+      toast.id = 'financePaymentToast';
+      toast.className = 'finance-toast fixed left-1/2 top-5 z-50 -translate-x-1/2 rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-500 to-cyan-500 px-5 py-3 text-sm font-bold text-white shadow-2xl shadow-emerald-300/40';
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      setTimeout(() => toast.remove(), 2600);
+    }
+
+    function showXRaySuccessAlert(message) {
+      const existingToast = document.getElementById('xrayUploadToast');
+      if (existingToast) existingToast.remove();
+
+      const toast = document.createElement('div');
+      toast.id = 'xrayUploadToast';
+      toast.className = 'xray-toast fixed left-1/2 top-5 z-50 -translate-x-1/2 rounded-2xl border border-violet-200 bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-2xl shadow-violet-300/40';
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      setTimeout(() => toast.remove(), 2600);
+    }
+
+    function getArchiveEndpoint(patientId) {
+      return `${XRAY_API_BASE_URL}/api/patients/${encodeURIComponent(String(patientId))}/archive`;
+    }
+
+    function getXRayEndpoint(patientId) {
+      return getArchiveEndpoint(patientId);
+    }
+
+    function resolveXRayImageUrl(imageUrl) {
+      const raw = String(imageUrl || '').trim();
+      if (!raw) return '';
+      if (raw.startsWith('http://') || raw.startsWith('https://')) {
+        return raw;
+      }
+      return `${XRAY_API_BASE_URL}${raw.startsWith('/') ? raw : '/' + raw}`;
+    }
+
+    function getArchiveFileType(record) {
+      const normalized = String(record?.file_type || '').trim().toLowerCase();
+      if (normalized === 'pdf') return 'pdf';
+      if (normalized === 'image') return 'image';
+
+      const candidate = String(record?.file_name || record?.file_url || record?.image_url || '').toLowerCase();
+      if (candidate.endsWith('.pdf')) return 'pdf';
+      if (candidate.match(/\.(png|jpe?g|webp|gif|bmp|tiff)$/i)) return 'image';
+      return 'image';
+    }
+
+    function openArchiveImageModal(imageUrl, title) {
+      const modal = document.getElementById('archiveImageModal');
+      const modalImg = document.getElementById('archiveImageModalImg');
+      const modalTitle = document.getElementById('archiveImageModalTitle');
+      if (!modal || !modalImg) return;
+
+      modalImg.src = imageUrl;
+      if (modalTitle) modalTitle.textContent = title || 'معاينة الصورة';
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      requestAnimationFrame(() => {
+        modal.classList.remove('opacity-0');
+        const panel = modal.firstElementChild;
+        if (panel) panel.classList.remove('scale-95');
+      });
+    }
+
+    function closeArchiveImageModal() {
+      const modal = document.getElementById('archiveImageModal');
+      if (!modal) return;
+
+      modal.classList.add('opacity-0');
+      const panel = modal.firstElementChild;
+      if (panel) panel.classList.add('scale-95');
+
+      window.setTimeout(() => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }, 180);
+    }
+
+    function normalizeArchiveRecord(record) {
+      const fileUrl = resolveXRayImageUrl(record?.file_url || record?.image_url || '');
+      const fileName = String(record?.file_name || '').trim() || (fileUrl ? fileUrl.split('/').pop() : `archive_${record?.id || ''}`);
+      const fileType = getArchiveFileType(record);
+      return {
+        ...record,
+        file_url: fileUrl,
+        image_url: record?.image_url || fileUrl,
+        file_name: fileName,
+        file_type: fileType,
+      };
+    }
+
+    function formatArabicDate(value) {
+      if (!value) return 'تاريخ غير متاح';
+      const dt = new Date(value);
+      if (Number.isNaN(dt.getTime())) return 'تاريخ غير متاح';
+      return dt.toLocaleString('ar-SA');
+    }
+
+    function formatFinanceLedgerDate(value) {
+      if (!value) return 'تاريخ غير متاح';
+      const dt = new Date(value);
+      if (Number.isNaN(dt.getTime())) return 'تاريخ غير متاح';
+
+      return dt.toLocaleString('ar-EG', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: false,
+      });
+    }
+
+    function formatFinanceAmount(value) {
+      const amount = Number(value);
+      if (Number.isNaN(amount)) return '—';
+      return new Intl.NumberFormat('ar-EG', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(amount);
+    }
+
+    function parseCurrencyNumber(value) {
+      const normalized = String(value ?? '').replace(/,/g, '').trim();
+      const parsed = Number(normalized);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function getCurrentTotalTreatmentCost() {
+      if (!currentPatient) return 0;
+      return Math.max(parseCurrencyNumber(currentPatient.total_treatment_cost), 0);
+    }
+
+    function getTotalReceivedPayments() {
+      if (!Array.isArray(currentFinanceLedger) || currentFinanceLedger.length === 0) return 0;
+      return currentFinanceLedger.reduce((sum, record) => {
+        const amount = parseCurrencyNumber(record?.amount);
+        return sum + (amount > 0 ? amount : 0);
+      }, 0);
+    }
+
+    function renderTotalTreatmentCostDisplay() {
+      const costDisplay = document.getElementById('patientTotalTreatmentCost');
+      const costInput = document.getElementById('patientTotalTreatmentCostInput');
+      const totalCost = getCurrentTotalTreatmentCost();
+      if (costDisplay) {
+        costDisplay.textContent = `${formatFinanceAmount(totalCost)} ل.س`;
+      }
+      if (costInput && !isEditing) {
+        costInput.value = totalCost > 0 ? String(totalCost) : '';
+      }
+    }
+
+    function renderRemainingBalanceBadge() {
+      const badge = document.getElementById('remainingBalanceBadge');
+      if (!badge) return;
+
+      const totalCost = getCurrentTotalTreatmentCost();
+      const totalReceived = getTotalReceivedPayments();
+      const remaining = Math.max(totalCost - totalReceived, 0);
+
+      badge.textContent = `المتبقي بذمة المريض الحالي: ${formatFinanceAmount(remaining)} ل.س`;
+
+      badge.classList.remove(
+        'border-amber-200',
+        'bg-amber-50',
+        'text-amber-700',
+        'border-emerald-200',
+        'bg-emerald-50',
+        'text-emerald-700',
+      );
+
+      if (remaining > 0) {
+        badge.classList.add('border-amber-200', 'bg-amber-50', 'text-amber-700');
+      } else {
+        badge.classList.add('border-emerald-200', 'bg-emerald-50', 'text-emerald-700');
+      }
+    }
+
+    function createMedicalToast(message) {
+      const existingToast = document.getElementById('medicalActionToast');
+      if (existingToast) existingToast.remove();
+
+      const toast = document.createElement('div');
+      toast.id = 'medicalActionToast';
+      toast.className = 'fixed left-1/2 top-5 z-[60] -translate-x-1/2 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-sm font-bold text-white shadow-2xl shadow-indigo-500/30';
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      setTimeout(() => toast.remove(), 2400);
+    }
+
+    function updatePrescriptionCount(count) {
+      const countBadge = document.getElementById('prescriptionCountBadge');
+      if (!countBadge) return;
+      countBadge.textContent = `${count} وصفة`;
+    }
+
+    function formatPrescriptionCreatedAt(value) {
+      if (!value) return 'تاريخ غير متاح';
+      const dt = new Date(value);
+      if (Number.isNaN(dt.getTime())) return 'تاريخ غير متاح';
+      return dt.toLocaleString('ar-EG', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: false,
+      });
+    }
+
+    function createPrescriptionRow(record) {
+      const row = document.createElement('tr');
+      row.setAttribute('data-prescription-row', '1');
+      row.setAttribute('data-prescription-id', String(record?.id ?? ''));
+      row.className = 'transition hover:bg-violet-50/40';
+
+      const createdAt = formatPrescriptionCreatedAt(record?.created_at);
+      const medications = String(record?.medications || '—');
+      const instructions = String(record?.instructions || '—');
+
+      row.innerHTML = `
+        <td class="px-4 py-3 align-top text-slate-600">${escapeHtml(createdAt)}</td>
+        <td class="px-4 py-3 align-top leading-7 text-slate-700">${escapeHtml(medications)}</td>
+        <td class="px-4 py-3 align-top leading-7 text-slate-700">${escapeHtml(instructions)}</td>
+        <td class="px-4 py-3 align-top">
+          <button type="button" data-print-prescription-id="${escapeHtml(record?.id)}" class="print-prescription-btn rounded-xl border border-sky-300 bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-2 text-xs font-extrabold text-white shadow-md shadow-sky-300/40 transition hover:from-sky-600 hover:to-blue-700">
+            طباعة 🖨️
+          </button>
+        </td>
+      `;
+      return row;
+    }
+
+    function populatePrescriptionPrintTemplate(record) {
+      const clinicNameEl = document.getElementById('printClinicName');
+      const patientNameEl = document.getElementById('printPatientName');
+      const dateEl = document.getElementById('printPrescriptionDate');
+      const medicationsEl = document.getElementById('printMedications');
+      const instructionsEl = document.getElementById('printInstructions');
+
+      const savedDoctorName = localStorage.getItem('doctor_name');
+      const clinicName = savedDoctorName ? `عيادة ${savedDoctorName}` : 'عيادة الطبيب';
+      const patientName = String(currentPatient?.full_name || document.getElementById('patientName')?.textContent || '—').trim() || '—';
+
+      if (clinicNameEl) clinicNameEl.textContent = clinicName;
+      if (patientNameEl) patientNameEl.textContent = patientName;
+      if (dateEl) dateEl.textContent = formatPrescriptionCreatedAt(record?.created_at || new Date().toISOString());
+      if (medicationsEl) medicationsEl.textContent = String(record?.medications || '—');
+      if (instructionsEl) instructionsEl.textContent = String(record?.instructions || '—');
+    }
+
+    function printPrescriptionById(prescriptionId) {
+      const selected = currentPrescriptions.find((item) => String(item.id) === String(prescriptionId));
+      if (!selected) {
+        createMedicalToast('تعذر قراءة بيانات الوصفة للطباعة.');
+        return;
+      }
+
+      populatePrescriptionPrintTemplate(selected);
+      requestAnimationFrame(() => {
+        window.print();
+      });
+    }
+
+    function attachPrescriptionRowListeners() {
+      const tableBody = document.getElementById('prescriptionsTableBody');
+      if (!tableBody) return;
+
+      tableBody.querySelectorAll('.print-prescription-btn').forEach((button) => {
+        button.addEventListener('click', () => {
+          const prescriptionId = button.getAttribute('data-print-prescription-id');
+          if (!prescriptionId) return;
+          printPrescriptionById(prescriptionId);
+        });
+      });
+    }
+
+    function renderPrescriptions(records) {
+      const tableBody = document.getElementById('prescriptionsTableBody');
+      const emptyState = document.getElementById('prescriptionsEmptyState');
+      if (!tableBody) return;
+
+      tableBody.querySelectorAll('[data-prescription-row="1"]').forEach((row) => row.remove());
+
+      const safeRecords = Array.isArray(records) ? records : [];
+      currentPrescriptions = safeRecords.map((record) => ({ ...record }));
+      updatePrescriptionCount(safeRecords.length);
+
+      if (safeRecords.length === 0) {
+        if (emptyState) emptyState.classList.remove('hidden');
+        return;
+      }
+
+      if (emptyState) emptyState.classList.add('hidden');
+      safeRecords.forEach((record) => {
+        const row = createPrescriptionRow(record);
+        tableBody.appendChild(row);
+      });
+
+      attachPrescriptionRowListeners();
+    }
+
+    async function loadPatientPrescriptions() {
+      const patientId = getPatientIdFromUrl();
+      if (!patientId) return;
+
+      try {
+        const response = await fetch(getPatientPrescriptionsEndpoint(patientId), { headers: getDoctorAuthHeaders() });
+        if (!response.ok) {
+          throw new Error('Failed to load prescriptions');
+        }
+
+        const records = await response.json();
+        renderPrescriptions(records);
+      } catch (error) {
+        renderPrescriptions([]);
+      }
+    }
+
+    async function submitPrescriptionForm(event) {
+      event.preventDefault();
+
+      const patientId = getPatientIdFromUrl();
+      const medicationsInput = document.getElementById('prescriptionMedicationsInput');
+      const instructionsInput = document.getElementById('prescriptionInstructionsInput');
+      const submitButton = document.getElementById('prescriptionSubmitBtn');
+      if (!patientId || !medicationsInput || !instructionsInput || !submitButton) return;
+
+      const medications = medicationsInput.value.trim();
+      const instructions = instructionsInput.value.trim();
+
+      if (!medications || !instructions) {
+        createMedicalToast('يرجى إدخال الأدوية والتعليمات قبل حفظ الوصفة.');
+        return;
+      }
+
+      if (window.ClinicLoader) {
+        ClinicLoader.setButtonLoading(submitButton, true, { loadingText: '...جاري حفظ الوصفة' });
+      } else {
+        submitButton.disabled = true;
+        submitButton.textContent = '...جاري الحفظ';
+      }
+
+      try {
+        const response = await fetch(getPrescriptionCreateEndpoint(), {
+          method: 'POST',
+          headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            patient_id: Number(patientId),
+            medications,
+            instructions,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText || 'تعذر حفظ الوصفة الطبية.');
+        }
+
+        medicationsInput.value = '';
+        instructionsInput.value = '';
+        createMedicalToast('تم إصدار وحفظ الوصفة الطبية بنجاح 📝');
+        await loadPatientPrescriptions();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'تعذر حفظ الوصفة الطبية حالياً.';
+        createMedicalToast(message);
+      } finally {
+        if (window.ClinicLoader) {
+          ClinicLoader.setButtonLoading(submitButton, false);
+        } else {
+          submitButton.disabled = false;
+          submitButton.textContent = 'إصدار وحفظ الوصفة 📝';
+        }
+      }
+    }
+
+    function initDentalChart() {
+      renderDentalChart();
+    }
+
+    function setPatientChartState(rawState) {
+      currentChartState = parseChartState(rawState);
+      refreshChartFromState();
+    }
+
+    // The base palette a doctor can pick from for a custom status — reuses
+    // the exact same colors already used by the fixed presets, per the
+    // user's request, rather than introducing a separate color set.
+    const CUSTOM_STATUS_COLOR_PALETTE = Object.values(TOOTH_STATUS_OPTIONS).map((option) => option.color);
+    let selectedCustomColor = null;
+
+    function renderCustomColorSwatches() {
+      const container = document.getElementById('customToothColorSwatches');
+      if (!container) return;
+      container.innerHTML = '';
+      CUSTOM_STATUS_COLOR_PALETTE.forEach((color) => {
+        const swatch = document.createElement('button');
+        swatch.type = 'button';
+        swatch.setAttribute('aria-label', color);
+        swatch.className = 'h-8 w-8 rounded-full border-2 transition hover:scale-110';
+        swatch.style.background = color;
+        swatch.style.borderColor = selectedCustomColor === color ? '#312e81' : '#ffffff';
+        swatch.style.boxShadow = selectedCustomColor === color
+          ? '0 0 0 2px rgba(49,46,129,0.35)'
+          : '0 1px 3px rgba(15,23,42,0.25)';
+        swatch.addEventListener('click', () => {
+          selectedCustomColor = color;
+          renderCustomColorSwatches();
+        });
+        container.appendChild(swatch);
+      });
+    }
+
+    function openToothStatusModal(tooth) {
+      if (!tooth) return;
+
+      activeTooth = tooth;
+      const toothNumberElement = document.getElementById('toothStatusNumber');
+      const modal = document.getElementById('toothStatusModal');
+      const hint = document.getElementById('toothStatusSavingHint');
+      const customInput = document.getElementById('customToothStatusInput');
+
+      if (toothNumberElement) {
+        toothNumberElement.textContent = String(tooth.fdi);
+      }
+
+      if (hint) {
+        hint.textContent = 'اختر الحالة المناسبة وسيتم حفظها مباشرة على الملف السحابي.';
+      }
+
+      // Pre-fill the custom-status fields from the tooth's existing entry
+      // (if it already carries a custom label/color) so re-opening the
+      // modal on a customized tooth lets the doctor see/tweak it rather
+      // than starting from a blank field every time.
+      const rawValue = currentChartState[tooth.palmerCode];
+      const customEntry = decodeCustomStatusValue(rawValue);
+      if (customInput) {
+        customInput.value = customEntry ? customEntry.label : '';
+      }
+      selectedCustomColor = customEntry ? customEntry.color : null;
+      renderCustomColorSwatches();
+
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      }
+    }
+
+    function closeToothStatusModal() {
+      activeTooth = null;
+      const modal = document.getElementById('toothStatusModal');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+      hidePalmerTooltip();
+    }
+
+    async function persistToothStatusValue(value, toastLabel) {
+      if (!activeTooth) return;
+
+      const patientId = getPatientIdFromUrl();
+      if (!patientId) return;
+
+      const palmerCode = activeTooth.palmerCode;
+      const previousChartState = { ...currentChartState };
+
+      currentChartState[palmerCode] = value;
+      currentChartState = buildPalmerChartPayload(currentChartState);
+      refreshChartFromState();
+
+      const hint = document.getElementById('toothStatusSavingHint');
+      if (hint) hint.textContent = 'جاري حفظ التحديث...';
+
+      try {
+        const chartPayload = buildPalmerChartPayload(currentChartState);
+        const response = await fetch(apiUrl(`/api/patients/${patientId}/chart`), {
+          method: 'PUT',
+          headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ chart_state: chartPayload }),
+        });
+
+        if (!response.ok) {
+          throw new Error('تعذر حفظ حالة السن');
+        }
+
+        const updatedPatient = await response.json();
+        currentPatient = updatedPatient;
+        setPatientChartState(updatedPatient.chart_state || currentChartState);
+        createMedicalToast(`تم تحديث السن ${activeTooth.fdi} إلى ${toastLabel}`);
+        closeToothStatusModal();
+      } catch (error) {
+        currentChartState = previousChartState;
+        refreshChartFromState();
+        if (hint) hint.textContent = 'تعذر الحفظ الآن. أعد المحاولة بعد قليل.';
+      }
+    }
+
+    async function saveToothStatus(statusKey) {
+      const selectedConfig = TOOTH_STATUS_OPTIONS[statusKey];
+      if (!selectedConfig) return;
+      await persistToothStatusValue(statusKey, selectedConfig.label);
+    }
+
+    async function saveCustomToothStatus() {
+      const hint = document.getElementById('toothStatusSavingHint');
+      const customInput = document.getElementById('customToothStatusInput');
+      const label = String(customInput?.value || '').trim();
+
+      if (!label) {
+        if (hint) hint.textContent = 'يرجى إدخال اسم الحالة أولاً.';
+        customInput?.focus();
+        return;
+      }
+      if (!selectedCustomColor) {
+        if (hint) hint.textContent = 'يرجى اختيار لون للحالة المخصصة.';
+        return;
+      }
+
+      await persistToothStatusValue(encodeCustomStatusValue(label, selectedCustomColor), label);
+    }
+
+    function updatePatientAppointmentsCount(count) {
+      const countBadge = document.getElementById('patientAppointmentsCount');
+      if (!countBadge) return;
+      countBadge.textContent = `${count} موعد`;
+    }
+
+    function createAppointmentRow(appointment) {
+      const row = document.createElement('tr');
+      row.className = 'transition hover:bg-violet-50/40';
+
+      const dateValue = formatAppointmentDateTime(getPatientAppointmentDateValue(appointment));
+      const timeValue = formatAppointmentTimeValue(appointment);
+      const descriptionValue = formatAppointmentDescription(appointment);
+      const statusValue = appointment?.status || 'Pending';
+      const badgeClass = getAppointmentStatusBadgeClass(statusValue);
+
+      row.innerHTML = `
+        <td class="px-3 py-3 align-top text-slate-600">${escapeHtml(dateValue)}</td>
+        <td class="px-3 py-3 align-top font-semibold text-slate-700">${escapeHtml(timeValue)}</td>
+        <td class="px-3 py-3 align-top leading-7 text-slate-700">${escapeHtml(descriptionValue)}</td>
+        <td class="px-3 py-3 align-top">
+          <span class="rounded-full px-3 py-1 text-xs font-bold ${badgeClass}">${escapeHtml(statusValue)}</span>
+        </td>
+        <td class="px-3 py-3 align-top">
+          <div class="flex flex-wrap items-center justify-end gap-2">
+            <button type="button" data-appointment-id="${escapeHtml(appointment?.id)}" class="edit-appointment-btn rounded-2xl border border-violet-200 bg-gradient-to-r from-indigo-100 to-violet-100 px-4 py-2 text-xs font-bold text-indigo-800 shadow-sm transition hover:from-indigo-200 hover:to-violet-200">✏️ تعديل</button>
+            <button type="button" data-delete-appointment-id="${escapeHtml(appointment?.id)}" class="delete-appointment-btn rounded-xl border border-rose-300 bg-gradient-to-r from-rose-500 to-red-600 px-4 py-2 text-xs font-extrabold text-white shadow-md shadow-rose-300/40 transition hover:from-rose-600 hover:to-red-700">🗑️ حذف</button>
+            <button type="button" data-whatsapp-appointment-id="${escapeHtml(appointment?.id)}" class="whatsapp-reminder-btn rounded-xl border border-emerald-300 bg-gradient-to-r from-emerald-500 to-green-600 px-4 py-2 text-xs font-extrabold text-white shadow-[0_0_24px_rgba(34,197,94,0.35)] transition hover:from-emerald-600 hover:to-green-700">تذكير واتساب 📱</button>
+          </div>
+        </td>
+      `;
+
+      return row;
+    }
+
+    function renderPatientAppointments(records) {
+      const tableBody = document.getElementById('patientAppointmentsTableBody');
+      const emptyState = document.getElementById('patientAppointmentsEmptyState');
+      if (!tableBody) return;
+
+      tableBody.querySelectorAll('[data-appointment-row="1"]').forEach((row) => row.remove());
+
+      const safeRecords = Array.isArray(records) ? records : [];
+      updatePatientAppointmentsCount(safeRecords.length);
+
+      if (safeRecords.length === 0) {
+        if (emptyState) emptyState.classList.remove('hidden');
+        return;
+      }
+
+      if (emptyState) emptyState.classList.add('hidden');
+      safeRecords.forEach((appointment) => {
+        const row = createAppointmentRow(appointment);
+        row.setAttribute('data-appointment-row', '1');
+        tableBody.appendChild(row);
+      });
+
+      attachAppointmentRowListeners();
+    }
+
+    function getCurrentPatientAppointments() {
+      if (!currentPatient) return [];
+
+      return currentAppointments.filter((appointment) => isAppointmentForCurrentPatient(appointment));
+    }
+
+    function hydrateAppointmentModal(appointment) {
+      const dateInput = document.getElementById('appointmentEditDate');
+      const timeInput = document.getElementById('appointmentEditTime');
+      const descriptionInput = document.getElementById('appointmentEditDescription');
+      const modal = document.getElementById('appointmentEditModal');
+
+      if (!appointment) return;
+
+      activeAppointment = appointment;
+
+      if (dateInput) {
+        const appointmentDate = appointment.appointment_date ? new Date(appointment.appointment_date) : null;
+        dateInput.value = appointmentDate && !Number.isNaN(appointmentDate.getTime())
+          ? appointmentDate.toISOString().slice(0, 10)
+          : '';
+      }
+
+      if (timeInput) {
+        if (appointment.appointment_time) {
+          timeInput.value = String(appointment.appointment_time).slice(0, 5);
+        } else if (appointment.appointment_date) {
+          const appointmentDate = new Date(appointment.appointment_date);
+          timeInput.value = !Number.isNaN(appointmentDate.getTime())
+            ? appointmentDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
+            : '';
+        } else {
+          timeInput.value = '';
+        }
+      }
+
+      if (descriptionInput) {
+        descriptionInput.value = appointment.notes || appointment.description || appointment.procedure_type || '';
+      }
+
+      if (modal) {
+        if (appointmentModalCloseTimer) {
+          window.clearTimeout(appointmentModalCloseTimer);
+          appointmentModalCloseTimer = null;
+        }
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        requestAnimationFrame(() => {
+          modal.classList.remove('opacity-0');
+          const panel = modal.firstElementChild;
+          if (panel) {
+            panel.classList.remove('scale-95');
+          }
+        });
+      }
+    }
+
+    function closeAppointmentModal() {
+      activeAppointment = null;
+      const modal = document.getElementById('appointmentEditModal');
+      if (modal) {
+        modal.classList.add('opacity-0');
+        const panel = modal.firstElementChild;
+        if (panel) {
+          panel.classList.add('scale-95');
+        }
+
+        appointmentModalCloseTimer = window.setTimeout(() => {
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+          appointmentModalCloseTimer = null;
+        }, 180);
+      }
+    }
+
+    function openAppointmentCreateModal() {
+      const modal = document.getElementById('appointmentCreateModal');
+      if (!modal) return;
+
+      if (appointmentCreateModalCloseTimer) {
+        window.clearTimeout(appointmentCreateModalCloseTimer);
+        appointmentCreateModalCloseTimer = null;
+      }
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      requestAnimationFrame(() => {
+        modal.classList.remove('opacity-0');
+        const panel = modal.firstElementChild;
+        if (panel) {
+          panel.classList.remove('scale-95');
+        }
+      });
+    }
+
+    function closeAppointmentCreateModal() {
+      const modal = document.getElementById('appointmentCreateModal');
+      if (!modal) return;
+
+      modal.classList.add('opacity-0');
+      const panel = modal.firstElementChild;
+      if (panel) {
+        panel.classList.add('scale-95');
+      }
+
+      appointmentCreateModalCloseTimer = window.setTimeout(() => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        appointmentCreateModalCloseTimer = null;
+      }, 180);
+    }
+
+    function clearAppointmentCreateForm() {
+      const form = document.getElementById('appointmentCreateForm');
+      if (!form) return;
+      form.reset();
+    }
+
+    async function loadPatientAppointments() {
+      const patientId = getPatientIdFromUrl();
+      if (!patientId || !currentPatient) {
+        renderPatientAppointments([]);
+        return;
+      }
+
+      try {
+        const response = await fetch(apiUrl('/api/appointments'), { headers: getDoctorAuthHeaders() });
+        if (!response.ok) {
+          throw new Error('Failed to load appointments');
+        }
+
+        const records = await response.json();
+        currentAppointments = Array.isArray(records) ? records : [];
+        const patientAppointments = getCurrentPatientAppointments().sort((left, right) => {
+          const leftValue = new Date(left.appointment_date || 0).getTime();
+          const rightValue = new Date(right.appointment_date || 0).getTime();
+          return rightValue - leftValue;
+        });
+        renderPatientAppointments(patientAppointments);
+      } catch (error) {
+        currentAppointments = [];
+        renderPatientAppointments([]);
+      }
+    }
+
+    async function submitAppointmentEdit(event) {
+      event.preventDefault();
+
+      if (!activeAppointment) return;
+
+      const dateInput = document.getElementById('appointmentEditDate');
+      const timeInput = document.getElementById('appointmentEditTime');
+      const descriptionInput = document.getElementById('appointmentEditDescription');
+      const saveButton = document.getElementById('saveAppointmentEditBtn');
+      const patientId = getPatientIdFromUrl();
+
+      if (!patientId) return;
+
+      const selectedDate = dateInput ? dateInput.value : '';
+      const selectedTime = timeInput ? timeInput.value : '';
+      const selectedDescription = descriptionInput ? descriptionInput.value.trim() : '';
+
+      if (!selectedDate || !selectedTime || !selectedDescription) {
+        alert('يرجى إكمال حقول الموعد قبل الحفظ.');
+        return;
+      }
+
+      const appointmentDateTime = new Date(`${selectedDate}T${selectedTime}:00`);
+      if (Number.isNaN(appointmentDateTime.getTime())) {
+        alert('صيغة التاريخ أو الوقت غير صحيحة.');
+        return;
+      }
+
+      if (saveButton) {
+        saveButton.disabled = true;
+        saveButton.textContent = 'جاري الحفظ...';
+      }
+
+      try {
+        const response = await fetch(getAppointmentUpdateEndpoint(activeAppointment.id), {
+          method: 'PUT',
+          headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            appointment_date: appointmentDateTime.toISOString(),
+            appointment_time: selectedTime,
+            description: selectedDescription,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to update appointment');
+        }
+
+        const updatedAppointment = await response.json();
+        currentAppointments = currentAppointments.map((appointment) => (
+          String(appointment.id) === String(updatedAppointment.id) ? updatedAppointment : appointment
+        ));
+
+        await loadPatientAppointments();
+        createMedicalToast('تم تحديث الموعد بنجاح');
+        closeAppointmentModal();
+      } catch (error) {
+        alert('تعذر تحديث الموعد الآن. يرجى المحاولة لاحقاً.');
+      } finally {
+        if (saveButton) {
+          saveButton.disabled = false;
+          saveButton.textContent = 'حفظ التعديلات';
+        }
+      }
+    }
+
+    async function submitAppointmentCreate(event) {
+      event.preventDefault();
+
+      const dateInput = document.getElementById('appointmentCreateDate');
+      const timeInput = document.getElementById('appointmentCreateTime');
+      const descriptionInput = document.getElementById('appointmentCreateDescription');
+      const saveButton = document.getElementById('saveAppointmentCreateBtn');
+
+      const patientId = Number.parseInt(getPatientIdFromUrl() || '', 10);
+      if (!Number.isInteger(patientId) || patientId <= 0) {
+        alert('تعذر تحديد معرف المريض من الرابط.');
+        return;
+      }
+
+      const selectedDate = dateInput ? dateInput.value : '';
+      const selectedTime = timeInput ? timeInput.value : '';
+      const selectedDescription = descriptionInput ? descriptionInput.value.trim() : '';
+
+      if (!selectedDate || !selectedTime || !selectedDescription) {
+        alert('يرجى تعبئة التاريخ والوقت والوصف قبل الحفظ.');
+        return;
+      }
+
+      const appointmentDateTime = new Date(`${selectedDate}T${selectedTime}:00`);
+      if (Number.isNaN(appointmentDateTime.getTime())) {
+        alert('صيغة التاريخ أو الوقت غير صحيحة.');
+        return;
+      }
+
+      if (saveButton && window.ClinicLoader) {
+        ClinicLoader.setButtonLoading(saveButton, true, { loadingText: '...جاري حفظ الموعد' });
+      } else if (saveButton) {
+        saveButton.disabled = true;
+        saveButton.textContent = 'جاري الحفظ...';
+      }
+
+      try {
+        const response = await fetch(getAppointmentCreateEndpoint(), {
+          method: 'POST',
+          headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            patient_id: patientId,
+            patient_name: currentPatient?.full_name || '',
+            appointment_date: appointmentDateTime.toISOString(),
+            appointment_time: selectedTime,
+            notes: selectedDescription,
+            procedure_type: selectedDescription,
+            status: 'Pending',
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('تعذر إضافة الموعد حالياً.');
+        }
+
+        await response.json();
+        await loadPatientAppointments();
+        createMedicalToast('تمت إضافة الموعد بنجاح ✨');
+        clearAppointmentCreateForm();
+        closeAppointmentCreateModal();
+      } catch (error) {
+        alert('تعذر إضافة الموعد الآن. يرجى المحاولة لاحقاً.');
+      } finally {
+        if (saveButton && window.ClinicLoader) {
+          ClinicLoader.setButtonLoading(saveButton, false);
+        } else if (saveButton) {
+          saveButton.disabled = false;
+          saveButton.textContent = 'حفظ الموعد';
+        }
+      }
+    }
+
+    async function deleteAppointmentById(appointmentId) {
+      const response = await fetch(getAppointmentDeleteEndpoint(appointmentId), {
+        method: 'DELETE',
+        headers: getDoctorAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error('تعذر حذف الموعد حالياً.');
+      }
+
+      closeAppointmentModal();
+      closeAppointmentCreateModal();
+      await loadPatientAppointments();
+      createMedicalToast('تم حذف الموعد بنجاح');
+    }
+
+    function requestDeleteAppointment(appointmentId) {
+      if (!appointmentId) return;
+
+      openDeleteConfirmModal({
+        title: 'حذف الموعد',
+        message: 'هل أنت متأكد من حذف هذا الموعد نهائياً؟ لا يمكن التراجع عن هذا الإجراء.',
+        action: async () => {
+          await deleteAppointmentById(appointmentId);
+        },
+      });
+    }
+
+    async function deleteFinanceTransactionById(transactionId) {
+      const response = await fetch(getFinanceTransactionDeleteEndpoint(transactionId), {
+        method: 'DELETE',
+        headers: getDoctorAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error('تعذر حذف الدفعة المالية حالياً.');
+      }
+
+      await loadFinanceLedger();
+      showFinanceSuccessAlert('تم حذف الدفعة المالية بنجاح');
+    }
+
+    function requestDeleteFinanceTransaction(transactionId) {
+      if (!transactionId) return;
+
+      openDeleteConfirmModal({
+        title: 'حذف الدفعة المالية',
+        message: 'هل أنت متأكد من حذف هذه الدفعة نهائياً؟ لا يمكن التراجع عن هذا الإجراء.',
+        action: async () => {
+          await deleteFinanceTransactionById(transactionId);
+        },
+      });
+    }
+
+    function attachAppointmentRowListeners() {
+      const tableBody = document.getElementById('patientAppointmentsTableBody');
+      if (!tableBody) return;
+
+      tableBody.querySelectorAll('.edit-appointment-btn').forEach((button) => {
+        button.addEventListener('click', () => {
+          const appointmentId = button.getAttribute('data-appointment-id');
+          const appointment = currentAppointments.find((item) => String(item.id) === String(appointmentId));
+          if (appointment) {
+            hydrateAppointmentModal(appointment);
+          }
+        });
+      });
+
+      tableBody.querySelectorAll('.delete-appointment-btn').forEach((button) => {
+        button.addEventListener('click', () => {
+          const appointmentId = button.getAttribute('data-delete-appointment-id');
+          if (!appointmentId) return;
+          requestDeleteAppointment(appointmentId);
+        });
+      });
+
+      tableBody.querySelectorAll('.whatsapp-reminder-btn').forEach((button) => {
+        button.addEventListener('click', () => {
+          const appointmentId = button.getAttribute('data-whatsapp-appointment-id');
+          if (!appointmentId) return;
+
+          const appointment = currentAppointments.find((item) => String(item.id) === String(appointmentId));
+          if (!appointment) {
+            alert('تعذر العثور على بيانات الموعد لإرسال التذكير.');
+            return;
+          }
+
+          openWhatsAppReminder(appointment);
+        });
+      });
+    }
+
+    function createXRayCard(record) {
+      const normalizedRecord = normalizeArchiveRecord(record);
+      const card = document.createElement('article');
+      card.className = 'overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-md transition hover:-translate-y-0.5 hover:shadow-xl';
+
+      const description = (normalizedRecord?.description || 'بدون وصف').toString();
+      const uploadedAt = formatArabicDate(normalizedRecord?.uploaded_at);
+      const fileType = getArchiveFileType(normalizedRecord);
+      const fileUrl = normalizedRecord?.file_url || '';
+      const fileName = normalizedRecord?.file_name || 'archive';
+
+      if (fileType === 'pdf') {
+        card.innerHTML = `
+          <div class="flex h-full flex-col justify-between gap-4 bg-[linear-gradient(160deg,_rgba(255,255,255,0.96),_rgba(239,246,255,0.95))] p-5">
+            <div class="flex items-start gap-4">
+              <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-500 to-orange-500 text-3xl text-white shadow-lg shadow-rose-300/40">📄</div>
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-extrabold text-slate-800">${escapeHtml(fileName)}</p>
+                <p class="mt-1 text-xs leading-6 text-slate-500">${escapeHtml(description)}</p>
+                <p class="mt-2 text-xs font-semibold text-slate-400">${escapeHtml(uploadedAt)}</p>
+              </div>
+            </div>
+            <a href="${escapeHtml(fileUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded-2xl border border-violet-200 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-3 text-sm font-extrabold text-white shadow-lg shadow-violet-300/35 transition hover:-translate-y-0.5 hover:from-violet-700 hover:to-indigo-700">فتح المستند 📄</a>
+          </div>
+        `;
+      } else {
+        const imageSrc = resolveXRayImageUrl(normalizedRecord?.image_url || fileUrl);
+        card.innerHTML = `
+          <button type="button" class="group block text-right" data-archive-image-card="1" data-archive-image-url="${escapeHtml(imageSrc)}" data-archive-image-title="${escapeHtml(fileName)}">
+            <div class="aspect-[4/3] w-full overflow-hidden bg-slate-100">
+              <img src="${imageSrc}" alt="${escapeHtml(fileName)}" class="h-full w-full object-cover transition duration-300 group-hover:scale-105" loading="lazy" />
+            </div>
+            <div class="p-3">
+              <p class="truncate text-sm font-semibold text-slate-800">${escapeHtml(fileName)}</p>
+              <p class="mt-1 line-clamp-2 text-xs text-slate-500">${escapeHtml(description)}</p>
+              <p class="mt-1 text-xs text-slate-400">${escapeHtml(uploadedAt)}</p>
+            </div>
+          </button>
+        `;
+      }
+
+      return card;
+    }
+
+    function updateXRayGalleryCount(count) {
+      const countBadge = document.getElementById('xrayGalleryCount');
+      if (!countBadge) return;
+      countBadge.textContent = `${count} ملف`;
+    }
+
+    function renderXRayGallery(records) {
+      const gallery = document.getElementById('xrayGallery');
+      const emptyState = document.getElementById('xrayGalleryEmpty');
+      if (!gallery) return;
+
+      gallery.querySelectorAll('[data-xray-card="1"]').forEach((el) => el.remove());
+
+      const safeRecords = Array.isArray(records) ? records : [];
+      updateXRayGalleryCount(safeRecords.length);
+
+      if (safeRecords.length === 0) {
+        if (emptyState) emptyState.classList.remove('hidden');
+        return;
+      }
+
+      if (emptyState) emptyState.classList.add('hidden');
+      safeRecords.forEach((record) => {
+        const card = createXRayCard(record);
+        card.setAttribute('data-xray-card', '1');
+        gallery.appendChild(card);
+      });
+
+      attachArchiveCardListeners();
+    }
+
+    function appendXRayCard(record) {
+      const gallery = document.getElementById('xrayGallery');
+      const emptyState = document.getElementById('xrayGalleryEmpty');
+      if (!gallery) return;
+
+      if (emptyState) emptyState.classList.add('hidden');
+      const card = createXRayCard(record);
+      card.setAttribute('data-xray-card', '1');
+      gallery.prepend(card);
+
+      const totalCards = gallery.querySelectorAll('[data-xray-card="1"]').length;
+      updateXRayGalleryCount(totalCards);
+
+      attachArchiveCardListeners();
+    }
+
+    function getFinanceLedgerEndpoint(patientId) {
+      return apiUrl(`/api/finance/patient/${encodeURIComponent(String(patientId))}`);
+    }
+
+    function getFinancePaymentEndpoint() {
+      return apiUrl('/api/finance');
+    }
+
+    function updateFinanceLedgerCount(count) {
+      const countBadge = document.getElementById('financeLedgerCount');
+      if (!countBadge) return;
+      countBadge.textContent = `${count} دفعة`;
+    }
+
+    function createFinanceLedgerRow(record) {
+      const row = document.createElement('tr');
+      row.setAttribute('data-finance-row', '1');
+      row.setAttribute('data-finance-transaction-id', String(record?.id ?? ''));
+      row.className = 'transition hover:bg-violet-50/50';
+
+      const createdAt = formatFinanceLedgerDate(record?.created_at);
+      const amount = formatFinanceAmount(record?.amount);
+      const description = (record?.description || '—').toString();
+
+      row.innerHTML = `
+        <td class="px-4 py-3 align-top text-slate-600">${createdAt}</td>
+        <td class="finance-amount-cell px-4 py-3 align-top font-bold text-emerald-700">${amount} ل.س</td>
+        <td class="finance-description-cell px-4 py-3 align-top leading-7 text-slate-700">${description}</td>
+        <td class="px-4 py-3 align-top">
+          <div class="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              data-finance-edit-id="${String(record?.id ?? '')}"
+              class="finance-edit-btn rounded-xl border border-indigo-200 bg-gradient-to-r from-indigo-100 to-violet-100 px-3 py-2 text-xs font-extrabold text-indigo-800 shadow-sm transition hover:from-indigo-200 hover:to-violet-200"
+            >
+              ✏️ تعديل
+            </button>
+            <button
+              type="button"
+              data-finance-delete-id="${String(record?.id ?? '')}"
+              class="finance-delete-btn rounded-xl border border-rose-300 bg-gradient-to-r from-rose-500 to-red-600 px-3 py-2 text-xs font-extrabold text-white shadow-md shadow-rose-300/40 transition hover:from-rose-600 hover:to-red-700"
+            >
+              🗑️ حذف
+            </button>
+          </div>
+        </td>
+      `;
+      return row;
+    }
+
+    function renderFinanceLedger(records) {
+      const tableBody = document.getElementById('financeLedgerTableBody');
+      const emptyState = document.getElementById('financeLedgerEmptyState');
+      if (!tableBody) return;
+
+      tableBody.querySelectorAll('[data-finance-row="1"]').forEach((row) => row.remove());
+
+      const safeRecords = Array.isArray(records) ? records : [];
+      currentFinanceLedger = safeRecords.map((record) => ({ ...record }));
+      updateFinanceLedgerCount(safeRecords.length);
+      renderRemainingBalanceBadge();
+
+      if (safeRecords.length === 0) {
+        if (emptyState) emptyState.classList.remove('hidden');
+        return;
+      }
+
+      if (emptyState) emptyState.classList.add('hidden');
+      safeRecords.forEach((record) => {
+        const row = createFinanceLedgerRow(record);
+        tableBody.appendChild(row);
+      });
+
+      attachFinanceRowListeners();
+    }
+
+    function prependFinanceLedgerRow(record) {
+      const tableBody = document.getElementById('financeLedgerTableBody');
+      const emptyState = document.getElementById('financeLedgerEmptyState');
+      if (!tableBody) return;
+
+      if (emptyState) emptyState.classList.add('hidden');
+
+      const row = createFinanceLedgerRow(record);
+      row.style.opacity = '0';
+      row.style.transform = 'translateY(-6px)';
+      tableBody.prepend(row);
+
+      requestAnimationFrame(() => {
+        row.style.transition = 'opacity 180ms ease, transform 180ms ease';
+        row.style.opacity = '1';
+        row.style.transform = 'translateY(0)';
+      });
+
+      const totalRows = tableBody.querySelectorAll('[data-finance-row="1"]').length;
+      updateFinanceLedgerCount(totalRows);
+      currentFinanceLedger = [record, ...currentFinanceLedger];
+      renderRemainingBalanceBadge();
+      attachFinanceRowListeners();
+    }
+
+    function openFinanceEditModal(record) {
+      if (!record) return;
+
+      activeFinanceTransaction = record;
+      const amountInput = document.getElementById('financeEditAmount');
+      const descriptionInput = document.getElementById('financeEditDescription');
+      const modal = document.getElementById('financeEditModal');
+
+      if (amountInput) {
+        const rawAmount = Number(record.amount);
+        amountInput.value = Number.isNaN(rawAmount) ? '' : String(rawAmount);
+      }
+      if (descriptionInput) {
+        descriptionInput.value = String(record.description || '').trim();
+      }
+
+      if (!modal) return;
+      if (financeEditModalCloseTimer) {
+        window.clearTimeout(financeEditModalCloseTimer);
+        financeEditModalCloseTimer = null;
+      }
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      requestAnimationFrame(() => {
+        modal.classList.remove('opacity-0');
+        const panel = modal.firstElementChild;
+        if (panel) panel.classList.remove('scale-95');
+      });
+    }
+
+    function closeFinanceEditModal() {
+      activeFinanceTransaction = null;
+      const modal = document.getElementById('financeEditModal');
+      if (!modal) return;
+
+      modal.classList.add('opacity-0');
+      const panel = modal.firstElementChild;
+      if (panel) panel.classList.add('scale-95');
+
+      financeEditModalCloseTimer = window.setTimeout(() => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        financeEditModalCloseTimer = null;
+      }, 180);
+    }
+
+    function applyFinanceRowUpdate(transactionId, nextAmount, nextDescription) {
+      const transactionIdValue = String(transactionId);
+      currentFinanceLedger = currentFinanceLedger.map((record) => (
+        String(record.id) === transactionIdValue
+          ? { ...record, amount: nextAmount, description: nextDescription }
+          : record
+      ));
+
+      const row = document.querySelector(`[data-finance-transaction-id="${transactionIdValue}"]`);
+      if (!row) return;
+
+      const amountCell = row.querySelector('.finance-amount-cell');
+      const descriptionCell = row.querySelector('.finance-description-cell');
+
+      if (amountCell) {
+        amountCell.textContent = `${formatFinanceAmount(nextAmount)} ل.س`;
+      }
+      if (descriptionCell) {
+        descriptionCell.textContent = String(nextDescription || '—');
+      }
+
+      row.style.transition = 'background-color 220ms ease';
+      row.style.backgroundColor = 'rgba(196, 181, 253, 0.35)';
+      window.setTimeout(() => {
+        row.style.backgroundColor = '';
+      }, 320);
+
+      renderRemainingBalanceBadge();
+    }
+
+    async function submitFinanceEdit(event) {
+      event.preventDefault();
+      if (!activeFinanceTransaction) return;
+
+      const amountInput = document.getElementById('financeEditAmount');
+      const descriptionInput = document.getElementById('financeEditDescription');
+      const saveButton = document.getElementById('saveFinanceEditBtn');
+
+      const amountValue = amountInput ? amountInput.value.trim() : '';
+      const descriptionValue = descriptionInput ? descriptionInput.value.trim() : '';
+      const parsedAmount = parseFloat(amountValue);
+
+      if (!descriptionValue || Number.isNaN(parsedAmount) || parsedAmount <= 0) {
+        alert('يرجى إدخال مبلغ صحيح ووصف واضح قبل الحفظ.');
+        return;
+      }
+
+      if (saveButton) {
+        saveButton.disabled = true;
+        saveButton.textContent = 'جاري الحفظ...';
+      }
+
+      try {
+        const response = await fetch(getFinanceTransactionUpdateEndpoint(activeFinanceTransaction.id), {
+          method: 'PUT',
+          headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            amount: parsedAmount,
+            description: descriptionValue,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('تعذر تحديث الدفعة المالية.');
+        }
+
+        applyFinanceRowUpdate(activeFinanceTransaction.id, parsedAmount, descriptionValue);
+        showFinanceSuccessAlert('تم تحديث الدفعة المالية بنجاح ✨');
+        closeFinanceEditModal();
+      } catch (error) {
+        alert('تعذر تحديث الدفعة المالية الآن. يرجى المحاولة لاحقاً.');
+      } finally {
+        if (saveButton) {
+          saveButton.disabled = false;
+          saveButton.textContent = 'حفظ التعديل المالي';
+        }
+      }
+    }
+
+    function attachFinanceRowListeners() {
+      const tableBody = document.getElementById('financeLedgerTableBody');
+      if (!tableBody) return;
+
+      tableBody.querySelectorAll('.finance-edit-btn').forEach((button) => {
+        button.addEventListener('click', () => {
+          const transactionId = button.getAttribute('data-finance-edit-id');
+          if (!transactionId) return;
+
+          const record = currentFinanceLedger.find((item) => String(item.id) === String(transactionId));
+          if (!record) return;
+          openFinanceEditModal(record);
+        });
+      });
+
+      tableBody.querySelectorAll('.finance-delete-btn').forEach((button) => {
+        button.addEventListener('click', () => {
+          const transactionId = button.getAttribute('data-finance-delete-id');
+          if (!transactionId) return;
+          requestDeleteFinanceTransaction(transactionId);
+        });
+      });
+    }
+
+    async function loadFinanceLedger() {
+      const patientId = getPatientIdFromUrl();
+      if (!patientId) return;
+
+      try {
+        const response = await fetch(getFinanceLedgerEndpoint(patientId), { headers: getDoctorAuthHeaders() });
+        if (!response.ok) {
+          throw new Error('Failed to load finance ledger');
+        }
+
+        const records = await response.json();
+        renderFinanceLedger(records);
+      } catch (error) {
+        renderFinanceLedger([]);
+      }
+    }
+
+    function attachArchiveCardListeners() {
+      const gallery = document.getElementById('xrayGallery');
+      if (!gallery) return;
+
+      gallery.querySelectorAll('[data-archive-image-card="1"]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const imageUrl = button.getAttribute('data-archive-image-url');
+          const imageTitle = button.getAttribute('data-archive-image-title');
+          if (imageUrl) {
+            openArchiveImageModal(imageUrl, imageTitle || 'معاينة الصورة');
+          }
+        });
+      });
+    }
+
+    async function uploadSelectedArchiveFiles(selectedFiles, descriptionValue, uploadButton, fileInput, descriptionInput) {
+      const files = Array.from(selectedFiles || []);
+      if (files.length === 0) {
+        alert('يرجى اختيار ملف واحد على الأقل قبل الرفع.');
+        return;
+      }
+
+      if (uploadButton && window.ClinicLoader) {
+        ClinicLoader.setButtonLoading(uploadButton, true, { loadingText: '...جاري رفع الملف' });
+      } else if (uploadButton) {
+        uploadButton.disabled = true;
+        uploadButton.textContent = 'جاري الرفع...';
+      }
+
+      try {
+        for (const file of files) {
+          if (!/\.(png|jpe?g|pdf)$/i.test(file.name)) {
+            throw new Error('Only PNG, JPG, JPEG, and PDF files are allowed');
+          }
+          await uploadArchiveFile(file, descriptionValue);
+        }
+
+        showXRaySuccessAlert('تم رفع الملف الطبي بنجاح!');
+        if (fileInput) fileInput.value = '';
+        if (descriptionInput) descriptionInput.value = '';
+      } finally {
+        if (uploadButton && window.ClinicLoader) {
+          ClinicLoader.setButtonLoading(uploadButton, false);
+        } else if (uploadButton) {
+          uploadButton.disabled = false;
+          uploadButton.textContent = 'رفع الملفات 📸';
+        }
+      }
+    }
+
+    async function loadPatientXRayGallery() {
+      const patientId = getPatientIdFromUrl();
+      if (!patientId) return;
+
+      try {
+        const response = await fetch(getArchiveEndpoint(patientId), { headers: getDoctorAuthHeaders() });
+        if (!response.ok) {
+          throw new Error('Failed to load xray gallery');
+        }
+
+        const records = await response.json();
+        renderXRayGallery(Array.isArray(records) ? records.map(normalizeArchiveRecord) : []);
+      } catch (error) {
+        renderXRayGallery([]);
+      }
+    }
+
+    async function uploadArchiveFile(file, descriptionValue) {
+      const patientId = getPatientIdFromUrl();
+      if (!patientId || !file) return null;
+
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', file);
+      uploadFormData.append('description', descriptionValue || '');
+
+      const response = await fetch(getArchiveEndpoint(patientId), {
+        method: 'POST',
+        headers: getDoctorAuthHeaders(),
+        body: uploadFormData,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Failed to upload archive file');
+      }
+
+      const createdRecord = normalizeArchiveRecord(await response.json());
+      appendXRayCard(createdRecord);
+      return createdRecord;
+    }
+
+    async function uploadPatientXRay(event) {
+      event.preventDefault();
+
+      const fileInput = document.getElementById('xrayFileInput');
+      const descriptionInput = document.getElementById('xrayDescriptionInput');
+      const uploadButton = document.getElementById('xrayUploadBtn');
+      if (!fileInput || !uploadButton) return;
+
+      const selectedFiles = Array.from(fileInput.files || []);
+      const descriptionValue = descriptionInput ? descriptionInput.value.trim() : '';
+
+      try {
+        await uploadSelectedArchiveFiles(selectedFiles, descriptionValue, uploadButton, fileInput, descriptionInput);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'تعذر رفع الملف الطبي الآن. يرجى المحاولة لاحقاً.';
+        alert(message);
+      }
+    }
+
+    async function submitFinancialPayment(event) {
+      event.preventDefault();
+
+      const paymentInput = document.getElementById('financialPaymentInput');
+      const amountValue = paymentInput ? paymentInput.value.trim() : '';
+      const amount = parseFloat(amountValue);
+      const patientId = getPatientIdFromUrl();
+      const patientName = currentPatient?.full_name || 'غير محدد';
+
+      if (!patientId || Number.isNaN(amount) || amount <= 0) {
+        alert('يرجى إدخال مبلغ صحيح قبل تسجيل الدفعة.');
+        return;
+      }
+
+      const payload = {
+        patient_id: patientId,
+        type: 'income',
+        amount: parseFloat(amountValue),
+        description: `دفعة مالية من المريض: ${patientName}`
+      };
+
+      const paymentButton = document.getElementById('financialPaymentBtn');
+      if (paymentButton && window.ClinicLoader) {
+        ClinicLoader.setButtonLoading(paymentButton, true, { loadingText: '...جاري تسجيل الدفعة' });
+      } else if (paymentButton) {
+        paymentButton.disabled = true;
+        paymentButton.textContent = '...جاري تسجيل الدفعة';
+      }
+
+      try {
+        const response = await fetch(getFinancePaymentEndpoint(), {
+          method: 'POST',
+          headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify(payload)
+        });
+
+        if (response.status !== 200) {
+          throw new Error('Failed to register payment');
+        }
+
+        const createdRecord = await response.json();
+        prependFinanceLedgerRow(createdRecord);
+        showFinanceSuccessAlert('تم تسجيل الدفعة وضخها في حسابات العيادة بنجاح!');
+        if (paymentInput) {
+          paymentInput.value = '';
+        }
+      } catch (error) {
+        alert('تعذر تسجيل الدفعة الآن. يرجى المحاولة لاحقاً.');
+      } finally {
+        if (paymentButton && window.ClinicLoader) {
+          ClinicLoader.setButtonLoading(paymentButton, false);
+        } else if (paymentButton) {
+          paymentButton.disabled = false;
+          paymentButton.textContent = 'تسجيل الدفع المالي';
+        }
+      }
+    }
+
+    function bindArchiveDropzone() {
+      const dropzone = document.getElementById('archiveDropzone');
+      const fileInput = document.getElementById('xrayFileInput');
+      const descriptionInput = document.getElementById('xrayDescriptionInput');
+      const uploadButton = document.getElementById('xrayUploadBtn');
+      const closeImageModalBtn = document.getElementById('closeArchiveImageModalBtn');
+      const imageModal = document.getElementById('archiveImageModal');
+
+      if (dropzone && fileInput) {
+        dropzone.addEventListener('dragover', (event) => {
+          event.preventDefault();
+          dropzone.classList.add('border-cyan-400', 'bg-white', 'shadow-[0_0_38px_rgba(34,211,238,0.18)]');
+        });
+
+        dropzone.addEventListener('dragleave', () => {
+          dropzone.classList.remove('border-cyan-400', 'bg-white', 'shadow-[0_0_38px_rgba(34,211,238,0.18)]');
+        });
+
+        dropzone.addEventListener('drop', async (event) => {
+          event.preventDefault();
+          dropzone.classList.remove('border-cyan-400', 'bg-white', 'shadow-[0_0_38px_rgba(34,211,238,0.18)]');
+
+          const droppedFiles = Array.from(event.dataTransfer?.files || []);
+          if (droppedFiles.length === 0) return;
+
+          await uploadSelectedArchiveFiles(
+            droppedFiles,
+            descriptionInput ? descriptionInput.value.trim() : '',
+            uploadButton,
+            fileInput,
+            descriptionInput,
+          );
+        });
+      }
+
+      if (imageModal && closeImageModalBtn) {
+        closeImageModalBtn.addEventListener('click', closeArchiveImageModal);
+        imageModal.addEventListener('click', (event) => {
+          if (event.target && event.target.id === 'archiveImageModal') {
+            closeArchiveImageModal();
+          }
+        });
+      }
+    }
+
+    function toggleProfileEditMode(editing) {
+      isEditing = editing;
+      const editBtn = document.getElementById('editProfileBtn');
+      const saveBtn = document.getElementById('saveProfileBtn');
+      const patientName = document.getElementById('patientName');
+      const patientPhone = document.getElementById('patientPhone');
+      const patientAge = document.getElementById('patientAge');
+      const patientTotalTreatmentCost = document.getElementById('patientTotalTreatmentCost');
+      const patientHistory = document.getElementById('patientHistory');
+      const patientNameInput = document.getElementById('patientNameInput');
+      const patientPhoneInput = document.getElementById('patientPhoneInput');
+      const patientAgeInput = document.getElementById('patientAgeInput');
+      const patientTotalTreatmentCostInput = document.getElementById('patientTotalTreatmentCostInput');
+      const patientHistoryInput = document.getElementById('patientHistoryInput');
+
+      if (editBtn) editBtn.classList.toggle('hidden', editing);
+      if (saveBtn) saveBtn.classList.toggle('hidden', !editing);
+
+      if (patientName) patientName.classList.toggle('hidden', editing);
+      if (patientPhone) patientPhone.classList.toggle('hidden', editing);
+      if (patientAge) patientAge.classList.toggle('hidden', editing);
+      if (patientTotalTreatmentCost) patientTotalTreatmentCost.classList.toggle('hidden', editing);
+      if (patientHistory) patientHistory.classList.toggle('hidden', editing);
+      if (patientNameInput) patientNameInput.classList.toggle('hidden', !editing);
+      if (patientPhoneInput) patientPhoneInput.classList.toggle('hidden', !editing);
+      if (patientAgeInput) patientAgeInput.classList.toggle('hidden', !editing);
+      if (patientTotalTreatmentCostInput) patientTotalTreatmentCostInput.classList.toggle('hidden', !editing);
+      if (patientHistoryInput) patientHistoryInput.classList.toggle('hidden', !editing);
+
+      if (patientAgeInput) {
+        patientAgeInput.disabled = !editing;
+        if (editing) {
+          patientAgeInput.removeAttribute('readonly');
+        } else {
+          patientAgeInput.setAttribute('readonly', 'readonly');
+        }
+      }
+
+      if (editing && currentPatient) {
+        if (patientNameInput) patientNameInput.value = currentPatient.full_name || '';
+        if (patientPhoneInput) patientPhoneInput.value = currentPatient.phone || '';
+        if (patientAgeInput) {
+          const fallbackAge = parseAgeNumberFromDisplay(document.getElementById('patientAge')?.textContent || '');
+          const currentAge = Number.isInteger(currentPatient.age) ? currentPatient.age : fallbackAge;
+          patientAgeInput.value = currentAge != null ? String(currentAge) : '';
+        }
+        if (patientTotalTreatmentCostInput) {
+          const costValue = Math.max(parseCurrencyNumber(currentPatient.total_treatment_cost), 0);
+          patientTotalTreatmentCostInput.value = costValue > 0 ? String(costValue) : '';
+        }
+        if (patientHistoryInput) patientHistoryInput.value = currentPatient.medical_history || '';
+      }
+    }
+
+    async function savePatientProfile() {
+      const patientId = getPatientIdFromUrl();
+      if (!patientId || !currentPatient) return;
+
+      const patientNameInput = document.getElementById('patientNameInput');
+      const patientPhoneInput = document.getElementById('patientPhoneInput');
+      const patientAgeInput = document.getElementById('patientAgeInput');
+      const patientTotalTreatmentCostInput = document.getElementById('patientTotalTreatmentCostInput');
+      const patientHistoryInput = document.getElementById('patientHistoryInput');
+
+      const ageInputValue = patientAgeInput ? patientAgeInput.value.trim() : '';
+      const parsedAge = Number.parseInt(ageInputValue || '0', 10);
+      if (ageInputValue && !Number.isInteger(parsedAge)) {
+        alert('يرجى إدخال عمر صحيح قبل الحفظ.');
+        return;
+      }
+
+      const totalTreatmentCostInputValue = patientTotalTreatmentCostInput ? patientTotalTreatmentCostInput.value.trim() : '';
+      const parsedTotalTreatmentCost = parseCurrencyNumber(totalTreatmentCostInputValue || currentPatient.total_treatment_cost);
+      if (parsedTotalTreatmentCost < 0) {
+        alert('يرجى إدخال تكلفة علاج صحيحة.');
+        return;
+      }
+
+      const payload = {
+        full_name: patientNameInput ? patientNameInput.value.trim() : currentPatient.full_name,
+        phone: patientPhoneInput ? patientPhoneInput.value.trim() : currentPatient.phone,
+        age: ageInputValue ? parsedAge : null,
+        medical_history: patientHistoryInput ? patientHistoryInput.value.trim() : currentPatient.medical_history,
+        total_treatment_cost: parsedTotalTreatmentCost,
+      };
+
+      try {
+        const response = await fetch(apiUrl(`/api/patients/${patientId}`), {
+          method: 'PUT',
+          headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          throw new Error('تعذر حفظ تحديثات المريض');
+        }
+
+        const updatedPatient = await response.json();
+        currentPatient = updatedPatient;
+
+        const patientName = document.getElementById('patientName');
+        const patientPhone = document.getElementById('patientPhone');
+        const patientAge = document.getElementById('patientAge');
+        const patientTotalTreatmentCost = document.getElementById('patientTotalTreatmentCost');
+        const patientHistory = document.getElementById('patientHistory');
+
+        if (patientName) patientName.textContent = updatedPatient.full_name || '—';
+        if (patientPhone) patientPhone.textContent = updatedPatient.phone || '—';
+        if (patientAge) {
+          const renderedAge = Number.isInteger(updatedPatient.age)
+            ? updatedPatient.age
+            : (ageInputValue ? parsedAge : parseAgeNumberFromDisplay(calculateAge(updatedPatient.birth_date)));
+          patientAge.textContent = renderedAge != null ? `${renderedAge} سنة` : calculateAge(updatedPatient.birth_date);
+        }
+        if (patientAgeInput) {
+          patientAgeInput.disabled = true;
+          patientAgeInput.setAttribute('readonly', 'readonly');
+        }
+        if (patientTotalTreatmentCost) {
+          patientTotalTreatmentCost.textContent = `${formatFinanceAmount(Math.max(parseCurrencyNumber(updatedPatient.total_treatment_cost), 0))} ل.س`;
+        }
+        if (patientHistory) patientHistory.textContent = updatedPatient.medical_history || 'لا توجد ملاحظات طبية متاحة.';
+
+        renderRemainingBalanceBadge();
+        toggleProfileEditMode(false);
+        showToast('تم حفظ التحديثات بنجاح');
+      } catch (error) {
+        console.error(error);
+        alert('حدث خطأ أثناء حفظ التعديلات.');
+      }
+    }
+
+    async function loadPatientRecord() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const patientIdRaw = urlParams.get('id');
+      const patientId = Number.parseInt(patientIdRaw || '', 10);
+      const patientName = document.getElementById('patientName');
+      const patientPhone = document.getElementById('patientPhone');
+      const patientAge = document.getElementById('patientAge');
+      const patientHistory = document.getElementById('patientHistory');
+      const chartSceneHint = document.getElementById('chartSceneHint');
+
+      if (!Number.isInteger(patientId) || patientId <= 0) {
+        if (chartSceneHint) {
+          chartSceneHint.textContent = 'لم يتم العثور على معرف المريض في الرابط.';
+        }
+        return;
+      }
+
+      try {
+        const response = await fetch(apiUrl('/api/patients/' + patientId), { headers: getDoctorAuthHeaders() });
+        if (!response.ok) {
+          const errorText = await response.text();
+          let errorDetail = '';
+
+          if (errorText) {
+            try {
+              const parsedError = JSON.parse(errorText);
+              errorDetail = Array.isArray(parsedError?.detail)
+                ? parsedError.detail.map((item) => item?.msg).filter(Boolean).join('، ')
+                : parsedError?.detail || parsedError?.message || errorText;
+            } catch {
+              errorDetail = errorText;
+            }
+          }
+
+          throw new Error(errorDetail || `HTTP ${response.status}`);
+        }
+
+        const patient = await response.json();
+        currentPatient = patient;
+        patientName.textContent = patient.full_name || '—';
+        patientPhone.textContent = patient.phone || '—';
+        patientAge.textContent = patient.age ?? calculateAge(patient.birth_date);
+        renderTotalTreatmentCostDisplay();
+        renderRemainingBalanceBadge();
+        const patientAgeInput = document.getElementById('patientAgeInput');
+        const patientTotalTreatmentCostInput = document.getElementById('patientTotalTreatmentCostInput');
+        if (patientAgeInput) {
+          const ageValue = Number.isInteger(patient.age)
+            ? patient.age
+            : parseAgeNumberFromDisplay(calculateAge(patient.birth_date));
+          patientAgeInput.value = ageValue != null ? String(ageValue) : '';
+          patientAgeInput.disabled = true;
+          patientAgeInput.setAttribute('readonly', 'readonly');
+        }
+        if (patientTotalTreatmentCostInput) {
+          const costValue = Math.max(parseCurrencyNumber(patient.total_treatment_cost), 0);
+          patientTotalTreatmentCostInput.value = costValue > 0 ? String(costValue) : '';
+        }
+        patientHistory.textContent = patient.medical_history || 'لا توجد ملاحظات طبية متاحة.';
+        if (chartSceneHint) {
+          chartSceneHint.textContent = `الملف الخاص بـ ${patient.full_name || 'المريض'} جاهز للمراجعة`;
+        }
+
+        setPatientChartState(patient.chart_state);
+        await loadPatientAppointments();
+      } catch (error) {
+        console.error(error);
+        const serverMessage = error instanceof Error ? error.message : 'تعذر تحميل بيانات المريض.';
+        alert(`تعذر تحميل بيانات المريض: ${serverMessage}`);
+        if (chartSceneHint) {
+          chartSceneHint.textContent = 'حدث خطأ أثناء تحميل الملف الطبي.';
+        }
+      }
+    }
+
+    document.getElementById('editProfileBtn').addEventListener('click', () => toggleProfileEditMode(true));
+    document.getElementById('saveProfileBtn').addEventListener('click', savePatientProfile);
+    document.getElementById('closeToothStatusModalBtn').addEventListener('click', closeToothStatusModal);
+    document.getElementById('toothStatusModal').addEventListener('click', (event) => {
+      if (event.target && event.target.id === 'toothStatusModal') {
+        closeToothStatusModal();
+      }
+    });
+    document.querySelectorAll('[data-tooth-status]').forEach((button) => {
+      button.addEventListener('click', () => saveToothStatus(button.getAttribute('data-tooth-status')));
+    });
+    document.getElementById('saveCustomToothStatusBtn')?.addEventListener('click', saveCustomToothStatus);
+    document.getElementById('closeAppointmentEditModalBtn').addEventListener('click', closeAppointmentModal);
+    document.getElementById('cancelAppointmentEditBtn').addEventListener('click', closeAppointmentModal);
+    document.getElementById('appointmentEditModal').addEventListener('click', (event) => {
+      if (event.target && event.target.id === 'appointmentEditModal') {
+        closeAppointmentModal();
+      }
+    });
+    document.getElementById('appointmentEditForm').addEventListener('submit', submitAppointmentEdit);
+    document.getElementById('addAppointmentBtn').addEventListener('click', openAppointmentCreateModal);
+    document.getElementById('closeAppointmentCreateModalBtn').addEventListener('click', closeAppointmentCreateModal);
+    document.getElementById('cancelAppointmentCreateBtn').addEventListener('click', closeAppointmentCreateModal);
+    document.getElementById('appointmentCreateModal').addEventListener('click', (event) => {
+      if (event.target && event.target.id === 'appointmentCreateModal') {
+        closeAppointmentCreateModal();
+      }
+    });
+    document.getElementById('appointmentCreateForm').addEventListener('submit', submitAppointmentCreate);
+    document.getElementById('closeFinanceEditModalBtn').addEventListener('click', closeFinanceEditModal);
+    document.getElementById('cancelFinanceEditBtn').addEventListener('click', closeFinanceEditModal);
+    document.getElementById('financeEditModal').addEventListener('click', (event) => {
+      if (event.target && event.target.id === 'financeEditModal') {
+        closeFinanceEditModal();
+      }
+    });
+    document.getElementById('financeEditForm').addEventListener('submit', submitFinanceEdit);
+    document.getElementById('deleteConfirmCancelBtn').addEventListener('click', () => {
+      closeDeleteConfirmModal();
+    });
+    document.getElementById('deleteConfirmActionBtn').addEventListener('click', confirmDeleteFromModal);
+    document.getElementById('deleteConfirmModal').addEventListener('click', (event) => {
+      if (event.target && event.target.id === 'deleteConfirmModal') {
+        closeDeleteConfirmModal();
+      }
+    });
+    const financialPaymentForm = document.getElementById('financialPaymentForm');
+    if (financialPaymentForm) {
+      financialPaymentForm.addEventListener('submit', submitFinancialPayment);
+    }
+    const xrayUploadForm = document.getElementById('xrayUploadForm');
+    if (xrayUploadForm) {
+      xrayUploadForm.addEventListener('submit', uploadPatientXRay);
+    }
+    const prescriptionForm = document.getElementById('prescriptionForm');
+    if (prescriptionForm) {
+      prescriptionForm.addEventListener('submit', submitPrescriptionForm);
+    }
+    const backupBtn = document.getElementById('backupBtn');
+    if (backupBtn) {
+      backupBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        const doctorEmail = (localStorage.getItem('user_email') || '').trim();
+        if (!doctorEmail) {
+          alert('تعذر تحديد حساب الطبيب لتوليد النسخة الاحتياطية.');
+          return;
+        }
+
+        showBackupToast('جاري توليد وتحميل النسخة الاحتياطية للعيادة بأمان تام!');
+
+        fetch('https://dental-clinic-faras.onrender.com/api/finance/backup', {
+          method: 'GET',
+          headers: getDoctorAuthHeaders(),
+        })
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error('تعذر إنشاء النسخة الاحتياطية الآن.');
+            }
+
+            return response.blob().then((blob) => ({ blob, response }));
+          })
+          .then(({ blob, response }) => {
+            const contentDisposition = response.headers.get('Content-Disposition') || '';
+            const filenameMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+            const fileName = filenameMatch?.[1] || 'dental_backup_2026.csv';
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(downloadUrl);
+          })
+          .catch((error) => {
+            console.error(error);
+            alert('تعذر تنزيل النسخة الاحتياطية الآن. يرجى المحاولة لاحقاً.');
+          });
+      });
+    }
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', () => {
+        localStorage.removeItem('doctor_name');
+        localStorage.removeItem('user_email');
+        localStorage.removeItem('doctor_id');
+        localStorage.removeItem('user_tier');
+        window.location.href = 'login.html';
+      });
+    }
+
+    if (mobileLogoutBtn) {
+      mobileLogoutBtn.addEventListener('click', () => {
+        localStorage.removeItem('doctor_name');
+        localStorage.removeItem('user_email');
+        localStorage.removeItem('doctor_id');
+        localStorage.removeItem('user_tier');
+        window.location.href = 'login.html';
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      // خط دفاع ثانٍ: حتى لو لم يكتمل التوجيه أعلاه بعد، لا تُنفَّذ أي
+      // عملية جلب بيانات محمية لحساب بانتظار التفعيل.
+      const activeGateTier = localStorage.getItem('user_tier');
+      if (activeGateTier === 'pending_activation' || activeGateTier === 'expired_subscription') {
+        return;
+      }
+      initDentalChart();
+      bindArchiveDropzone();
+      loadPatientRecord();
+      loadPatientXRayGallery();
+      loadFinanceLedger();
+      loadPatientPrescriptions();
+    });
+    // ملاحظة: تمت إزالة الفحص المكرر الذي كان هنا -- أصبح الحظر يحدث الآن
+    // فوراً في أعلى هذا السكربت (انظر تعريف userTier بالأعلى).
+
+  
+  function applyDoctorAvatarToHeaderLogo() {
+    const avatarUrl = localStorage.getItem('user_avatar_url');
+    const logoTargets = [document.getElementById('clinicLogoImg'), document.getElementById('mobileClinicLogoImg')].filter(Boolean);
+    if (!avatarUrl) return;
+    logoTargets.forEach((img) => {
+      // نحفظ الشعار الافتراضي logo.png وأصنافه قبل استبداله بصورة الطبيب، حتى نرجع
+      // إليه تلقائياً إن فشل تحميل الصورة (رابط معطوب أو محذوف من التخزين المؤقت
+      // على Render) بدل ترك أيقونة صورة مكسورة ظاهرة للزائر (2026-08-25).
+      const fallbackSrc = img.getAttribute('src');
+      const fallbackClassName = img.className;
+      img.onerror = () => {
+        img.onerror = null;
+        img.src = fallbackSrc;
+        img.className = fallbackClassName;
+      };
+      img.src = window.apiUrl ? apiUrl(avatarUrl) : avatarUrl;
+      img.classList.remove('object-contain', 'p-2', 'p-1.5', 'rounded-xl');
+      img.classList.add('object-cover', 'rounded-full');
+    });
+  }
+
+  applyDoctorAvatarToHeaderLogo();
+</script>
+</body>
+</html>

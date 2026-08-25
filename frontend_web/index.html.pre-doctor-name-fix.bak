@@ -107,11 +107,6 @@
           <div class="relative w-full sm:w-64 md:w-72 lg:w-80">
             <input id="searchInput" type="search" placeholder="🔍 ابحث عن مريض..." class="w-full rounded-2xl border border-slate-300 bg-white py-3 pr-10 pl-4 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
           </div>
-          <select id="patientSortSelect" class="w-full rounded-2xl border border-slate-300 bg-white py-3 px-4 text-sm font-semibold text-slate-600 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 sm:w-auto" title="فرز قائمة المرضى">
-            <option value="default">↕️ الترتيب الافتراضي</option>
-            <option value="name">🔤 فرز حسب: الاسم</option>
-            <option value="birth_date">🎂 فرز حسب: تاريخ الميلاد</option>
-          </select>
         </div>
       </div>
       </div>
@@ -222,10 +217,6 @@
           <label class="block">
             <div class="text-xs text-slate-600 mb-1">رقم الهاتف</div>
             <input name="phone" required class="w-full rounded-2xl border border-slate-300 px-3 py-3 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
-          </label>
-          <label class="block">
-            <div class="text-xs text-slate-600 mb-1">العمر (اختياري)</div>
-            <input name="age" type="number" min="0" max="150" placeholder="مثال: 30" class="w-full rounded-2xl border border-slate-300 px-3 py-3 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
           </label>
         </div>
         <label>
@@ -343,27 +334,6 @@
     }
     renderTierBadge();
 
-    // تحديث اسم الطبيب من السيرفر مباشرة عند كل تحميل صفحة (2026-08-25) --
-    // القيمة المخزَّنة في localStorage أعلاه قد تكون قديمة (حساب آخر استخدم
-    // نفس المتصفح، أو اسم عُدِّل ولم يُزَر بعدها "حسابي") ولا تُحدَّث تلقائياً
-    // إلا عند زيارة تلك الصفحة تحديداً. هذا يجلب الاسم الصحيح دائماً دون
-    // انتظارها، مع إبقاء القيمة المخزَّنة كعرض فوري مؤقت ريثما يصل الرد.
-    async function refreshDoctorNameFromServer() {
-      try {
-        const response = await fetch(apiUrl('/api/auth/profile'), { headers: getDoctorAuthHeaders() });
-        if (!response.ok) return;
-        const profile = await response.json();
-        const freshName = (profile.doctor_name || '').trim();
-        if (!freshName) return;
-        localStorage.setItem('doctor_name', freshName);
-        if (titleElement) titleElement.textContent = `عيادة ${freshName}`;
-        if (mobileClinicTitle) mobileClinicTitle.textContent = `عيادة ${freshName}`;
-      } catch (err) {
-        // تجاهل: يبقى الاسم المخزَّن محلياً معروضاً كما هو عند انقطاع الشبكة
-      }
-    }
-    refreshDoctorNameFromServer();
-
     // Configuration
     const API_URL = apiUrl('/api/patients');
 
@@ -377,7 +347,6 @@
     const cancelBtn = document.getElementById('cancelBtn');
     const patientForm = document.getElementById('patientForm');
     const searchInput = document.getElementById('searchInput');
-    const patientSortSelect = document.getElementById('patientSortSelect');
     const statsTotalPatients = document.getElementById('statsTotalPatients');
     const statsActiveAppointments = document.getElementById('statsActiveAppointments');
     const pendingBalancesCounter = document.getElementById('pendingBalancesCounter');
@@ -822,27 +791,8 @@
       }
     }
 
-    // فرز قائمة المرضى حسب الاختيار في patientSortSelect (2026-08-25) --
-    // "الاسم" ترتيب أبجدي عربي، و"تاريخ الميلاد" الأقدم أولاً (المرضى بلا
-    // تاريخ ميلاد مسجَّل يُوضعون في نهاية القائمة بدل التسبب بخطأ أو ترتيب
-    // عشوائي). "الترتيب الافتراضي" يُبقي ترتيب وصول البيانات من السيرفر كما هو.
-    function sortPatientsList(patients, sortMode) {
-      const list = Array.isArray(patients) ? patients.slice() : [];
-      if (sortMode === 'name') {
-        list.sort((a, b) => String(a.full_name || '').localeCompare(String(b.full_name || ''), 'ar'));
-      } else if (sortMode === 'birth_date') {
-        list.sort((a, b) => {
-          const dateA = a.birth_date ? new Date(a.birth_date).getTime() : Infinity;
-          const dateB = b.birth_date ? new Date(b.birth_date).getTime() : Infinity;
-          return dateA - dateB;
-        });
-      }
-      return list;
-    }
-
     function renderPatients(patients, query=""){
-      const sortMode = patientSortSelect ? patientSortSelect.value : 'default';
-      const sourcePatients = sortPatientsList(Array.isArray(patients) ? patients : [], sortMode);
+      const sourcePatients = Array.isArray(patients) ? patients : [];
       const normalizedQuery = (query || '').trim();
       const matchedCount = normalizedQuery
         ? sourcePatients.filter((patient) => isPatientMatch(patient, normalizedQuery)).length
@@ -860,16 +810,8 @@
       emptyFeedback.classList.add('hidden');
 
       sourcePatients.forEach(patient => {
-        const matched = isPatientMatch(patient, normalizedQuery);
-
-        // فلترة فعلية عند وجود نص بحث: نعرض فقط المرضى المطابقين فعلاً بدل
-        // عرض القائمة كاملة وتمييز المطابق منها بلون فقط -- هذا كان الخلل
-        // الفعلي (دالة filterPatients() المُعرَّفة بالأعلى كانت غير مُستخدَمة
-        // إطلاقاً): حقل البحث كان "يُبرز" الصفوف المطابقة فقط دون أن يُخفي
-        // بقية الصفوف، فبدا للمستخدم أن البحث لا يعمل -- إصلاح 2026-08-25.
-        if (normalizedQuery && !matched) return;
-
         const tr = document.createElement('tr');
+        const matched = isPatientMatch(patient, normalizedQuery);
         tr.className = matched
           ? 'transition hover:bg-emerald-50/70 bg-emerald-50/30'
           : 'transition hover:bg-slate-50';
@@ -975,36 +917,15 @@
     patientForm.addEventListener('submit', async function(e){
       e.preventDefault();
       const formData = new FormData(patientForm);
-
-      // 2026-08-25: كان تاريخ الميلاد يُزرع دائماً كقيمة ثابتة "2000-01-01"
-      // بلا أي حقل عمر حقيقي في هذا النموذج، وهذا هو سبب ظهور عمر كل مريض
-      // جديد كـ 26 سنة تحديداً في عام 2026 (2026 - 2000 = 26). الحل الصحيح:
-      // نضيف حقل "العمر" اختيارياً ونحسب منه birth_date تقريبياً (بنفس أسلوب
-      // savePatientProfile في patient_record.html)، وإن تُرك فارغاً لا نرسل
-      // birth_date إطلاقاً بدل زرع قيمة وهمية -- الحقل Optional في الباك-إند.
-      const ageRawValue = (formData.get('age') || '').toString().trim();
-      let computedBirthDate;
-      if (ageRawValue) {
-        const parsedAge = Number.parseInt(ageRawValue, 10);
-        if (!Number.isInteger(parsedAge) || parsedAge < 0 || parsedAge > 150) {
-          showToast('الرجاء إدخال عمر صحيح (رقم بين 0 و150).');
-          return;
-        }
-        const birthYear = new Date().getFullYear() - parsedAge;
-        computedBirthDate = `${birthYear}-01-01`;
-      }
-
       const payload = {
         full_name: formData.get('full_name') || '',
         phone: formData.get('phone') || '',
         medical_history: formData.get('medical_history') || '',
         doctor_email: doctorEmail,
         doctor_id: doctorId,
+        birth_date: '2000-01-01',
         gender: 'Male'
       };
-      if (computedBirthDate) {
-        payload.birth_date = computedBirthDate;
-      }
 
       if (savePatientBtn && window.ClinicLoader) {
         ClinicLoader.setButtonLoading(savePatientBtn, true, { loadingText: '...جاري تسجيل المريض' });
@@ -1080,12 +1001,6 @@
       const query = this.value.trim();
       renderPatients(allPatients, query);
     });
-
-    if (patientSortSelect) {
-      patientSortSelect.addEventListener('change', function(){
-        renderPatients(allPatients, searchInput.value.trim());
-      });
-    }
 
     // Initialize
     const yearElement = document.getElementById('year');

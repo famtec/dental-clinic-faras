@@ -1,0 +1,837 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>التقارير المالية - عيادتي الرقمية</title>
+	<link rel="stylesheet" href="/tailwind.css" />
+	<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
+	<style>
+		body { font-family: 'Tajawal', sans-serif; }
+		.panel-soft {
+			background: rgba(255, 255, 255, 0.92);
+			backdrop-filter: blur(12px);
+		}
+		.badge-premium {
+			background: linear-gradient(130deg, #fef08a 0%, #f59e0b 45%, #fde68a 100%);
+			color: #5b3400;
+			box-shadow: 0 8px 28px rgba(245, 158, 11, 0.45);
+		}
+		.badge-standard {
+			background: linear-gradient(130deg, #4338ca 0%, #6366f1 100%);
+			color: #e0e7ff;
+			box-shadow: 0 8px 22px rgba(67, 56, 202, 0.35);
+		}
+		.upgrade-card-hidden {
+			opacity: 0;
+			transform: translateY(-8px);
+			pointer-events: none;
+		}
+	</style>
+</head>
+<body class="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.22),_transparent_30%),linear-gradient(135deg,_#f8fafc_0%,_#eef2ff_45%,_#e0e7ff_100%)] text-slate-800">
+	<div class="pointer-events-none absolute inset-0 overflow-hidden">
+		<div class="absolute right-[10%] top-16 h-40 w-40 rounded-full bg-indigo-200/30 blur-3xl"></div>
+		<div class="absolute left-[6%] top-[22%] h-56 w-56 rounded-full bg-violet-200/20 blur-3xl"></div>
+	</div>
+
+	<div id="patientRecordApp" class="relative flex min-h-screen w-full flex-col overflow-x-hidden px-4 pt-24 pb-6 sm:px-6 sm:pt-32 md:pt-32 lg:px-8 lg:pt-32 xl:px-10">
+		<header class="fixed inset-x-0 top-0 z-50 hidden w-full border-b border-white/15 bg-[#1e1b4b]/85 shadow-2xl shadow-indigo-950/35 backdrop-blur-2xl md:block">
+			<div class="mx-auto flex w-full max-w-none flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8 xl:px-10">
+				<div class="flex items-center gap-3 text-white">
+					<img id="clinicLogoImg" src="logo.png" alt="شعار العيادة" class="h-12 w-12 rounded-xl border border-white/10 bg-white/10 object-contain p-2 shadow-lg shadow-indigo-950/25" />
+					<div class="flex items-center gap-3">
+						<h1 id="clinicTitle" class="text-lg font-extrabold tracking-tight text-white sm:text-xl">عيادة الطبيب</h1>
+						<span id="tierBadge" class="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Standard</span>
+					</div>
+				</div>
+
+				<div class="flex flex-wrap items-center gap-2 lg:flex-1 lg:justify-center">
+					<a href="index.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]">👥 لوحة المرضى</a>
+					<a href="appointments.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]">📅 المواعيد اليومية</a>
+					<a href="finance.html" class="rounded-2xl border border-cyan-300/30 bg-cyan-500/15 px-4 py-2 text-sm font-extrabold text-cyan-50 shadow-[0_0_24px_rgba(34,211,238,0.14)] transition hover:-translate-y-0.5 hover:border-cyan-200/50 hover:bg-cyan-400/20 hover:shadow-[0_0_28px_rgba(34,211,238,0.26)]">📊 التقارير المالية</a>
+					<a href="inventory.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]">📦 مخزن المواد</a>
+					<a href="contact_developer.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]">🛠️ تواصل مع المطور</a>
+					<a href="profile.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]">👤 حسابي</a>
+					<button id="logoutBtn" type="button" class="rounded-2xl border border-rose-300/30 bg-rose-500/15 px-4 py-2 text-sm font-bold text-rose-100 transition hover:-translate-y-0.5 hover:border-rose-200/50 hover:bg-rose-500/25 hover:shadow-[0_0_24px_rgba(244,63,94,0.18)]">⎋ تسجيل الخروج</button>
+				</div>
+			</div>
+		</header>
+
+		<div class="fixed inset-x-0 top-0 z-[60] border-b border-white/15 bg-[#1e1b4b]/90 shadow-2xl shadow-indigo-950/35 backdrop-blur-2xl md:hidden">
+			<div class="relative mx-auto flex w-full max-w-none items-center justify-between gap-3 px-4 py-3 sm:px-6">
+				<div class="flex min-w-0 items-center gap-3 text-white">
+					<img id="mobileClinicLogoImg" src="logo.png" alt="شعار العيادة" class="h-10 w-10 rounded-xl border border-white/10 bg-white/10 object-contain p-1.5 shadow-lg shadow-indigo-950/25" />
+					<div class="min-w-0">
+						<div class="flex min-w-0 items-center gap-2">
+							<p id="mobileClinicTitle" class="truncate text-sm font-extrabold tracking-tight text-white">عيادة الطبيب</p>
+							<span id="mobileTierBadge" class="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[11px] font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Standard</span>
+						</div>
+					</div>
+				</div>
+
+				<button id="mobileMenuToggle" type="button" class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white shadow-lg shadow-indigo-950/20 transition hover:bg-white/15" aria-expanded="false" aria-controls="mobileMenuDropdown">
+					<svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+						<path d="M4 7h16"></path>
+						<path d="M4 12h16"></path>
+						<path d="M4 17h16"></path>
+					</svg>
+				</button>
+
+				<div id="mobileMenuDropdown" class="absolute left-0 right-0 top-full hidden border-t border-white/10 bg-[#1e1b4b] px-4 py-3 shadow-2xl shadow-indigo-950/35 md:hidden">
+					<div class="mx-auto flex w-full max-w-none flex-col gap-2 sm:px-2">
+						<a href="index.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">👥 لوحة المرضى</a>
+						<a href="appointments.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">📅 المواعيد اليومية</a>
+						<a href="finance.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">📊 التقارير المالية</a>
+						<a href="inventory.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">📦 مخزن المواد</a>
+						<a href="contact_developer.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">🛠️ تواصل مع المطور</a>
+						<a href="profile.html" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">👤 حسابي</a>
+						<button id="mobileLogoutBtn" type="button" class="rounded-2xl border border-rose-300/30 bg-rose-500/15 px-4 py-3 text-right text-sm font-bold text-rose-100 transition hover:bg-rose-500/25">⎋ تسجيل الخروج</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<main class="min-w-0 flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8 xl:p-10">
+			<div id="dashboardWrapper" class="transition duration-300">
+				<section id="upgradeInlineCard" class="mb-6 rounded-[28px] border border-indigo-200 bg-gradient-to-br from-indigo-800 via-indigo-700 to-violet-700 p-6 text-white shadow-2xl shadow-indigo-900/35 transition duration-300 sm:p-7">
+					<div class="mx-auto max-w-3xl text-center">
+						<div class="mb-3 inline-flex rounded-full border border-indigo-200/40 bg-white/10 px-3 py-1 text-xs font-bold tracking-[0.2em] text-indigo-100">STANDARD PLAN</div>
+						<p class="text-lg font-bold leading-8 sm:text-xl">
+							أنت تستخدم الباقة القياسية الحالية. أدخل كود الترقية لتفعيل التقارير المادية وصافي الأرباح فوراً!
+						</p>
+						<form id="upgradeForm" class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-center">
+							<input
+								id="upgradeCodeInput"
+								type="text"
+								required
+								placeholder="أدخل كود الترقية"
+								class="w-full rounded-2xl border border-indigo-200/30 bg-white/90 px-4 py-3 text-right text-sm font-semibold text-slate-800 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-200 sm:max-w-sm"
+							/>
+							<button id="upgradeSubmitBtn" type="submit" class="rounded-2xl border border-amber-200/70 bg-gradient-to-r from-amber-300 via-yellow-300 to-amber-400 px-5 py-3 text-sm font-extrabold text-amber-950 shadow-xl shadow-amber-500/30 transition hover:-translate-y-0.5 hover:from-amber-200 hover:to-yellow-300">
+								تفعيل الترقية الفورية
+							</button>
+						</form>
+						<p id="upgradeStatus" class="mt-3 text-sm font-semibold text-indigo-100">أدخل الكود ثم اضغط التفعيل.</p>
+					</div>
+				</section>
+
+				<div id="premiumDataWrapper" class="transition duration-300">
+				<section class="panel-soft mb-6 rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/70 sm:p-6">
+					<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+						<div>
+							<div class="inline-flex rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-bold tracking-[0.22em] text-violet-700">FINANCE PREMIUM</div>
+							<h2 class="mt-3 text-2xl font-extrabold text-slate-800 sm:text-3xl">لوحة التقارير المالية المتقدمة</h2>
+							<p class="mt-1 text-sm text-slate-500">متابعة مؤشرات الأداء المالي للعيادة وإدخال المصروفات بشكل احترافي.</p>
+						</div>
+						<div id="lastSync" class="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-xs font-semibold text-indigo-700">آخر تحديث: --</div>
+					</div>
+				</section>
+
+				<section class="panel-soft mb-6 rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/70 sm:p-6">
+					<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+						<div>
+							<h3 class="text-sm font-bold text-indigo-900">عرض التقرير المالي لشهر</h3>
+							<p id="periodHint" class="mt-1 text-xs text-slate-500">التقرير يتجدد تلقائياً كل شهر، مع الاحتفاظ الكامل بتقارير كل الأشهر السابقة.</p>
+						</div>
+						<select id="monthSelect" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 sm:w-64">
+							<option value="">جاري تحميل الأشهر...</option>
+						</select>
+					</div>
+				</section>
+
+				<section class="mb-6 grid gap-4 md:grid-cols-3">
+					<article class="panel-soft rounded-3xl border border-emerald-100 p-5 shadow-xl shadow-emerald-100/60">
+						<p class="text-xs font-bold text-emerald-700">إجمالي الإيرادات</p>
+						<p id="revenueValue" class="mt-3 text-3xl font-extrabold text-emerald-600">0 ل.س</p>
+					</article>
+					<article class="panel-soft rounded-3xl border border-rose-100 p-5 shadow-xl shadow-rose-100/60">
+						<p class="text-xs font-bold text-rose-700">تكلفة المواد والمستلزمات</p>
+						<p id="expenseValue" class="mt-3 text-3xl font-extrabold text-rose-600">0 ل.س</p>
+					</article>
+					<article id="profitCard" class="panel-soft rounded-3xl border border-violet-100 bg-gradient-to-br from-violet-50 to-indigo-50 p-5 shadow-xl shadow-violet-100/70">
+						<p class="text-xs font-bold text-violet-700">صافي أرباح العيادة</p>
+						<p id="profitValue" class="mt-3 text-3xl font-extrabold text-violet-700">0 ل.س</p>
+					</article>
+				</section>
+
+				<section class="panel-soft rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/70 sm:p-6">
+					<div class="mb-5">
+						<h3 class="text-xl font-bold text-indigo-900">إضافة مصروف جديد</h3>
+						<p class="mt-1 text-sm text-slate-500">سجّل أي تكلفة تشغيلية جديدة ليتم تضمينها ضمن تقارير الأداء المالي.</p>
+					</div>
+
+					<form id="expenseForm" class="grid gap-4 md:grid-cols-3">
+						<label class="block md:col-span-1">
+							<span class="mb-2 block text-sm font-semibold text-slate-700">المبلغ</span>
+							<input id="expenseAmount" name="amount" type="number" min="0" step="0.01" required class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" placeholder="1500" />
+						</label>
+						<label class="block md:col-span-2">
+							<span class="mb-2 block text-sm font-semibold text-slate-700">الوصف</span>
+							<input id="expenseDescription" name="description" type="text" required class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" placeholder="شراء مواد حشو وتجهيزات" />
+						</label>
+
+						<div class="md:col-span-3 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
+							<label class="flex cursor-pointer items-center gap-3 text-sm font-semibold text-indigo-900">
+								<input id="addToInventoryToggle" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400" />
+								📦 هذا المصروف لشراء مادة جديدة — أضفها تلقائياً إلى مخزن المواد
+							</label>
+							<div id="inventoryLinkFields" class="mt-4 hidden grid gap-4 sm:grid-cols-2">
+								<label class="block">
+									<span class="mb-2 block text-sm font-semibold text-slate-700">اسم المادة</span>
+									<input id="inventoryItemNameInput" name="inventory_item_name" type="text" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" placeholder="مثال: قفازات طبية" />
+								</label>
+								<label class="block">
+									<span class="mb-2 block text-sm font-semibold text-slate-700">الكمية المضافة</span>
+									<input id="inventoryQuantityInput" name="inventory_quantity" type="number" min="1" step="1" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" placeholder="10" />
+								</label>
+							</div>
+							<p class="mt-2 text-xs text-slate-500">إن وجدت مادة بنفس الاسم في المخزن سيتم زيادة كميتها تلقائياً، وإلا سيتم إنشاء مادة جديدة.</p>
+						</div>
+
+						<div class="md:col-span-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+							<p id="expenseStatus" class="text-sm font-medium text-slate-500">جاهز لإرسال العملية.</p>
+							<button id="expenseSubmitBtn" type="submit" class="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700">
+								حفظ المصروف
+							</button>
+						</div>
+					</form>
+				</section>
+				</div>
+			</div>
+
+			<footer class="mt-8 text-center text-xs font-mono tracking-wide text-indigo-500/90">
+				تطوير وإدارة: المهندس فارس حلاوي © 2026
+			</footer>
+		</main>
+	</div>
+
+	<script src="api-config.js"></script>
+	<script src="clinic-loader.js"></script>
+
+	<script>
+		// Feature gate at the very top of page load.
+		const currentTier = localStorage.getItem("user_tier");
+		let activeTier = currentTier === 'premium' ? 'premium' : 'standard';
+		// 🔒 حظر فوري ومتزامن لأي زائر لم يسجّل الدخول إطلاقاً -- بدون هذا الفحص كان أي زائر مجهول (وصل مثلاً عبر قائمة تنقل صفحة عامة مثل contact_developer.html) يتجاوز الحماية لأن currentTier الفارغ (null) لا يساوي 'pending_activation'، والأخطر أن دوال جلب البيانات المالية هنا تسقط على بريد الطبيب الاحتياطي الحقيقي عند غياب تسجيل الدخول فتعرض بياناته المالية الفعلية لأي زائر.
+		if (!localStorage.getItem('user_email')) {
+			window.location.replace('login.html');
+		}
+		// 🔒 حظر فوري ومتزامن قبل أي تنفيذ لبقية السكربت -- هذا الملف لا يستخدم DOMContentLoaded إطلاقاً، فكل الكود بالأسفل (بما فيه renderTierExperience() التي تجلب بيانات مالية عند تفعيل الحساب) كان يُنفَّذ فوراً عند تحليل السكربت، والتوجيه القديم في آخر الملف كان يأتي بعد كل ذلك، لا قبله.
+		if (currentTier === 'pending_activation') {
+			window.location.replace('index.html');
+		}
+
+		// 🔒 قفل التجديد الشهري اللطيف (Soft Paywall) لحساب expired_subscription:
+		// غير هدّام عمداً -- ينقل عناصر body الحالية داخل غلاف مموَّه (blur) بدل
+		// حذفها، ويضيف نافذة التجديد كعنصر شقيق (وليس ابناً للغلاف) حتى لا يكسر
+		// CSS filter تموضعها الثابت (position: fixed) ولا يموّهها هي أيضاً بالخطأ.
+		function renderExpiredSubscriptionLock() {
+				if (document.getElementById('expiredSubscriptionOverlay')) return;
+
+				const blurWrap = document.createElement('div');
+				blurWrap.id = 'expiredBlurWrap';
+				blurWrap.style.filter = 'blur(8px)';
+				blurWrap.style.pointerEvents = 'none';
+				blurWrap.style.userSelect = 'none';
+				while (document.body.firstChild) {
+						blurWrap.appendChild(document.body.firstChild);
+				}
+				document.body.appendChild(blurWrap);
+
+				const overlay = document.createElement('div');
+				overlay.id = 'expiredSubscriptionOverlay';
+				overlay.setAttribute('dir', 'rtl');
+				overlay.className = 'fixed inset-0 z-[999] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 font-sans';
+				overlay.innerHTML = `
+						<div class="max-w-xl w-full bg-indigo-950/60 backdrop-blur-2xl border border-purple-500/25 p-8 rounded-3xl shadow-2xl shadow-purple-950/60 text-center space-y-6">
+								<div class="w-20 h-20 bg-purple-500/10 border border-purple-500/30 rounded-2xl flex items-center justify-center mx-auto text-4xl shadow-lg shadow-purple-500/10 animate-pulse">
+								🔒
+								</div>
+
+								<h1 class="text-2xl font-bold text-purple-300">انتهت صلاحية باقتك</h1>
+
+								<p class="text-slate-300 leading-relaxed text-sm">
+								    مرحباً يا دكتور، نود إعلامك بأن فترة صلاحية باقتك الحالية قد انتهت. سجلات مرضاك، مواعيدك، ومخزن عيادتك في أمان تام ومحفوظة أبدياً داخل السيرفر ولا تضيع أبداً 🔒. للمتابعة الفورية واستعادة صلاحيات الإدارة كاملة، يرجى إدخال كود التجديد الشهري الجديد. للدعم الفني السريع والحصول على الكود كاش، يرجى التواصل مع مطور المنصة المهندس فارس حلاوي على الرقم: 0956907698 🛠️
+								</p>
+
+								<div class="space-y-3">
+								    <input type="text" id="renewalKeyInput" placeholder="أدخل كود التجديد الجديد هنا"
+								           class="w-full bg-slate-900 border border-purple-500/25 rounded-xl px-4 py-3 text-center text-sm focus:outline-none focus:border-purple-400 transition-colors text-white placeholder-slate-500" />
+
+								    <p id="renewalStatusMsg" class="text-xs min-h-[1rem]"></p>
+
+								    <button id="renewSubscriptionBtn" onclick="renewSubscription()"
+								            class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-purple-600/30 active:scale-[0.98]">
+								        تجديد الاشتراك ومتابعة العمل 🚀
+								    </button>
+								</div>
+						</div>
+				`;
+				document.body.appendChild(overlay);
+		}
+
+		// دالة التحقق من كود التجديد الشهري -- تستدعي نفس مسار /api/activate الموحّد
+		// (مسار مزدوج الغرض: يفعّل حساباً جديداً أو يجدّد حساباً منتهياً بنفس المنطق)
+		function renewSubscription() {
+				const input = document.getElementById('renewalKeyInput');
+				const statusEl = document.getElementById('renewalStatusMsg');
+				const btn = document.getElementById('renewSubscriptionBtn');
+				const keyCode = (input && input.value || '').trim();
+
+				if (!keyCode) {
+						if (statusEl) {
+								statusEl.textContent = 'يرجى إدخال كود التجديد أولاً.';
+								statusEl.className = 'text-xs min-h-[1rem] text-rose-400';
+						}
+						return;
+				}
+
+				if (btn) {
+						btn.disabled = true;
+						btn.textContent = 'جاري التحقق من الكود...';
+				}
+				if (statusEl) {
+						statusEl.textContent = 'يتم الاتصال بالخادم الآن...';
+						statusEl.className = 'text-xs min-h-[1rem] text-indigo-300';
+				}
+
+				fetch('/api/activate', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+								email: localStorage.getItem('user_email'),
+								activation_key: keyCode,
+						}),
+				})
+						.then(async (res) => {
+								let data = null;
+								try {
+								    data = await res.json();
+								} catch (parseError) {
+								    data = null;
+								}
+
+								if (!res.ok) {
+								    const message = (data && data.detail) || 'تعذر التحقق من الكود. حاول مرة أخرى.';
+								    if (statusEl) {
+								        statusEl.textContent = message;
+								        statusEl.className = 'text-xs min-h-[1rem] text-rose-400';
+								    }
+								    if (btn) {
+								        btn.disabled = false;
+								        btn.textContent = 'تجديد الاشتراك ومتابعة العمل 🚀';
+								    }
+								    return;
+								}
+
+								localStorage.setItem('user_tier', data.user_tier);
+								if (statusEl) {
+								    statusEl.textContent = '🎉 تم التجديد بنجاح!';
+								    statusEl.className = 'text-xs min-h-[1rem] text-emerald-400';
+								}
+								// رسالة تهنئة منبثقة فورية حسب الطلب، ثم إعادة تحميل الصفحة مباشرة
+								// لإظهار كامل عناصر لوحة التحكم بعد استعادة الصلاحيات.
+								alert('🎉 تم تجديد اشتراكك بنجاح! سيتم تحديث الصفحة الآن لإظهار كامل صلاحيات لوحة التحكم.');
+								window.location.reload();
+						})
+						.catch(() => {
+								if (statusEl) {
+								    statusEl.textContent = 'تعذر الاتصال بالخادم. تحقق من الإنترنت وحاول مرة أخرى.';
+								    statusEl.className = 'text-xs min-h-[1rem] text-rose-400';
+								}
+								if (btn) {
+								    btn.disabled = false;
+								    btn.textContent = 'تجديد الاشتراك ومتابعة العمل 🚀';
+								}
+						});
+		}
+
+		if (currentTier === 'expired_subscription') {
+			renderExpiredSubscriptionLock();
+		}
+
+		const clinicTitle = document.getElementById('clinicTitle');
+		const tierBadge = document.getElementById('tierBadge');
+		const mobileClinicTitle = document.getElementById('mobileClinicTitle');
+		const mobileTierBadge = document.getElementById('mobileTierBadge');
+		const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+		const mobileMenuDropdown = document.getElementById('mobileMenuDropdown');
+		const mobileLogoutBtn = document.getElementById('mobileLogoutBtn');
+		const logoutBtn = document.getElementById('logoutBtn');
+		const dashboardWrapper = document.getElementById('dashboardWrapper');
+		const upgradeInlineCard = document.getElementById('upgradeInlineCard');
+		const premiumDataWrapper = document.getElementById('premiumDataWrapper');
+		const upgradeForm = document.getElementById('upgradeForm');
+		const upgradeCodeInput = document.getElementById('upgradeCodeInput');
+		const upgradeSubmitBtn = document.getElementById('upgradeSubmitBtn');
+		const upgradeStatus = document.getElementById('upgradeStatus');
+
+		const revenueValue = document.getElementById('revenueValue');
+		const expenseValue = document.getElementById('expenseValue');
+		const profitValue = document.getElementById('profitValue');
+		const profitCard = document.getElementById('profitCard');
+		const lastSync = document.getElementById('lastSync');
+		const monthSelect = document.getElementById('monthSelect');
+		const periodHint = document.getElementById('periodHint');
+
+		const expenseForm = document.getElementById('expenseForm');
+		const expenseStatus = document.getElementById('expenseStatus');
+		const expenseSubmitBtn = document.getElementById('expenseSubmitBtn');
+		const addToInventoryToggle = document.getElementById('addToInventoryToggle');
+		const inventoryLinkFields = document.getElementById('inventoryLinkFields');
+		const inventoryItemNameInput = document.getElementById('inventoryItemNameInput');
+		const inventoryQuantityInput = document.getElementById('inventoryQuantityInput');
+
+		// 2026-08-24: إظهار/إخفاء حقلي اسم المادة + الكمية حسب حالة المفتاح.
+		if (addToInventoryToggle && inventoryLinkFields) {
+			addToInventoryToggle.addEventListener('change', () => {
+				inventoryLinkFields.classList.toggle('hidden', !addToInventoryToggle.checked);
+			});
+		}
+
+		function handleLogout() {
+			localStorage.removeItem('doctor_name');
+			localStorage.removeItem('user_email');
+			localStorage.removeItem('doctor_id');
+			localStorage.removeItem('user_tier');
+			window.location.href = 'login.html';
+		}
+
+		const RENDER_BASE_URL = 'https://dental-clinic-faras.onrender.com';
+		const METRICS_ENDPOINT = `${RENDER_BASE_URL}/api/finance/summary`;
+		const AVAILABLE_MONTHS_ENDPOINT = `${RENDER_BASE_URL}/api/finance/available-months`;
+		const EXPENSE_POST_ENDPOINT = `${RENDER_BASE_URL}/api/finance/expenses`;
+		const UPGRADE_ENDPOINT = `${RENDER_BASE_URL}/api/auth/upgrade-tier`;
+
+		// /api/finance/summary and /api/finance/expenses require a doctor-identifying
+		// header, added server-side in the 2026-08-22 activation/paywall audit.
+		// /api/auth/upgrade-tier does NOT require it (used to resolve the doctor).
+		function getDoctorEmail() {
+			return (localStorage.getItem('user_email') || 'fareshalawi17@gmail.com').trim();
+		}
+
+		function getSessionToken() {
+			return (localStorage.getItem('authToken') || '').trim();
+		}
+
+		function getDoctorAuthHeaders(extraHeaders = {}) {
+			const headers = { 'X-Doctor-Email': getDoctorEmail(), ...extraHeaders };
+			const token = getSessionToken();
+			if (token) {
+				headers.Authorization = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+			}
+			return headers;
+		}
+
+		function formatCurrency(value) {
+			const numericValue = Number(value || 0);
+			return `${numericValue.toLocaleString('ar-SA', { maximumFractionDigits: 2 })} ل.س`;
+		}
+
+		const ARABIC_MONTH_NAMES = [
+			'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+			'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر',
+		];
+
+		function formatMonthLabel(year, month) {
+			const name = ARABIC_MONTH_NAMES[(Number(month) - 1 + 12) % 12] || '';
+			return `${name} ${year}`;
+		}
+
+		// يبني رابط /api/finance/summary حسب الشهر المختار في القائمة المنسدلة --
+		// value="all" يعني كل الوقت (السلوك القديم)، وvalue="<year>-<month>" يعني
+		// شهراً محدداً. لا يوجد اختيار = يعتمد الخادم افتراضياً على الشهر الحالي.
+		function buildMetricsUrl() {
+			const rawValue = monthSelect && monthSelect.value ? monthSelect.value : '';
+			const url = new URL(METRICS_ENDPOINT);
+			if (rawValue === 'all') {
+				url.searchParams.set('all_time', 'true');
+				return url.toString();
+			}
+			const parts = rawValue.split('-');
+			if (parts.length === 2 && parts[0] && parts[1]) {
+				url.searchParams.set('year', parts[0]);
+				url.searchParams.set('month', parts[1]);
+			}
+			return url.toString();
+		}
+
+		function updatePeriodHint(data) {
+			if (!periodHint) return;
+			if (data && data.all_time) {
+				periodHint.textContent = 'يعرض هذا الملخص إجمالي كل الحركات المالية منذ بداية استخدام النظام.';
+				return;
+			}
+			if (data && data.year && data.month) {
+				periodHint.textContent = `يعرض هذا الملخص حركات شهر ${formatMonthLabel(data.year, data.month)} فقط، ويتجدد تلقائياً كل شهر مع الاحتفاظ بتقارير الأشهر السابقة كاملة.`;
+				return;
+			}
+			periodHint.textContent = 'التقرير يتجدد تلقائياً كل شهر، مع الاحتفاظ الكامل بتقارير كل الأشهر السابقة.';
+		}
+
+		function setMetrics(totalIncome, totalExpenses, netProfit) {
+			const incomeValue = Number(totalIncome || 0);
+			const expensesValue = Number(totalExpenses || 0);
+			const netProfitValue = Number(netProfit || 0);
+
+			revenueValue.textContent = formatCurrency(incomeValue);
+			expenseValue.textContent = formatCurrency(expensesValue);
+			profitValue.textContent = formatCurrency(netProfitValue);
+
+			if (netProfitValue < 0) {
+				profitValue.className = 'mt-3 text-3xl font-extrabold text-rose-700';
+				if (profitCard) {
+					profitCard.className = 'panel-soft rounded-3xl border border-rose-200 bg-gradient-to-br from-rose-50 to-red-50 p-5 shadow-xl shadow-rose-100/70';
+				}
+			} else {
+				profitValue.className = 'mt-3 text-3xl font-extrabold text-violet-700';
+				if (profitCard) {
+					profitCard.className = 'panel-soft rounded-3xl border border-violet-100 bg-gradient-to-br from-violet-50 to-indigo-50 p-5 shadow-xl shadow-violet-100/70';
+				}
+			}
+		}
+
+		function setExpenseStatus(message, type = 'normal') {
+			if (type === 'error') {
+				expenseStatus.className = 'text-sm font-medium text-rose-600';
+			} else if (type === 'success') {
+				expenseStatus.className = 'text-sm font-medium text-emerald-600';
+			} else {
+				expenseStatus.className = 'text-sm font-medium text-slate-500';
+			}
+			expenseStatus.textContent = message;
+		}
+
+		function setUpgradeStatus(message, type = 'normal') {
+			if (!upgradeStatus) return;
+			if (type === 'error') {
+				upgradeStatus.className = 'mt-3 text-sm font-semibold text-rose-100';
+			} else if (type === 'success') {
+				upgradeStatus.className = 'mt-3 text-sm font-semibold text-emerald-200';
+			} else {
+				upgradeStatus.className = 'mt-3 text-sm font-semibold text-indigo-100';
+			}
+			upgradeStatus.textContent = message;
+		}
+
+		function renderTierBadge() {
+			if (!tierBadge) return;
+			if (activeTier === 'premium') {
+				tierBadge.className = 'badge-premium rounded-full px-3 py-1 text-xs font-extrabold tracking-wide';
+				tierBadge.textContent = 'Premium 👑';
+				if (mobileTierBadge) {
+					mobileTierBadge.className = 'shrink-0 rounded-full border border-emerald-300/30 bg-emerald-400/15 px-2 py-1 text-[11px] font-extrabold tracking-wide text-emerald-50 shadow-[0_0_18px_rgba(52,211,153,0.18)]';
+					mobileTierBadge.textContent = 'Premium 👑';
+				}
+				return;
+			}
+
+			tierBadge.className = 'badge-standard rounded-full px-3 py-1 text-xs font-extrabold tracking-wide';
+			tierBadge.textContent = 'Standard';
+			if (mobileTierBadge) {
+				mobileTierBadge.className = 'shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[11px] font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]';
+				mobileTierBadge.textContent = 'Standard';
+			}
+		}
+
+		function renderTierExperience() {
+			if (activeTier === 'premium') {
+				if (upgradeInlineCard) {
+					upgradeInlineCard.classList.add('upgrade-card-hidden');
+					setTimeout(() => {
+						upgradeInlineCard.classList.add('hidden');
+					}, 220);
+				}
+				premiumDataWrapper.classList.remove('pointer-events-none', 'blur-[4px]', 'opacity-70');
+				populateMonthSelect();
+				return;
+			}
+
+			if (upgradeInlineCard) {
+				upgradeInlineCard.classList.remove('hidden', 'upgrade-card-hidden');
+			}
+			premiumDataWrapper.classList.add('pointer-events-none', 'blur-[4px]', 'opacity-70');
+			setMetrics(0, 0);
+			lastSync.textContent = 'آخر تحديث: متاح بعد الترقية إلى Premium';
+			if (periodHint) periodHint.textContent = 'التقرير الشهري متاح بعد الترقية إلى Premium.';
+		}
+
+		async function fetchFinancialMetrics() {
+			try {
+				const response = await fetch(buildMetricsUrl(), { method: 'GET', headers: getDoctorAuthHeaders() });
+				if (!response.ok) {
+					throw new Error('Failed to fetch metrics');
+				}
+
+				const data = await response.json();
+				const totalIncome = Number(data?.total_income ?? data?.total_revenue ?? data?.revenue ?? 0);
+				const totalExpenses = Number(data?.total_expenses ?? data?.expenses ?? 0);
+				const netProfit = totalIncome - totalExpenses;
+
+				setMetrics(totalIncome, totalExpenses, netProfit);
+				updatePeriodHint(data);
+				lastSync.textContent = `آخر تحديث: ${new Date().toLocaleString('ar-SA')}`;
+			} catch (error) {
+				setMetrics(0, 0, 0);
+				lastSync.textContent = 'آخر تحديث: تعذر جلب البيانات الآن';
+			}
+		}
+
+		// يجلب قائمة الأشهر التي فيها حركات فعلية (الشهر الحالي مضمون الوجود دائماً
+		// من الخادم)، يملأ القائمة المنسدلة، يختار أحدث شهر افتراضياً (وهو الشهر
+		// الحالي ما لم توجد حركات بتاريخ مستقبلي)، ثم يجلب ملخص الفترة المختارة.
+		async function populateMonthSelect() {
+			if (!monthSelect) {
+				await fetchFinancialMetrics();
+				return;
+			}
+
+			monthSelect.disabled = true;
+			monthSelect.innerHTML = '<option value="">جاري تحميل الأشهر...</option>';
+
+			try {
+				const response = await fetch(AVAILABLE_MONTHS_ENDPOINT, { method: 'GET', headers: getDoctorAuthHeaders() });
+				if (!response.ok) {
+					throw new Error('Failed to fetch available months');
+				}
+
+				const data = await response.json();
+				const months = Array.isArray(data?.months) ? data.months : [];
+
+				monthSelect.innerHTML = '';
+				months.forEach((entry) => {
+					const option = document.createElement('option');
+					option.value = `${entry.year}-${entry.month}`;
+					option.textContent = formatMonthLabel(entry.year, entry.month);
+					monthSelect.appendChild(option);
+				});
+
+				const allTimeOption = document.createElement('option');
+				allTimeOption.value = 'all';
+				allTimeOption.textContent = 'كل الوقت (الإجمالي التراكمي)';
+				monthSelect.appendChild(allTimeOption);
+
+				if (months.length > 0) {
+					monthSelect.value = `${months[0].year}-${months[0].month}`;
+				}
+			} catch (error) {
+				monthSelect.innerHTML = '<option value="all">كل الوقت (الإجمالي التراكمي)</option>';
+				monthSelect.value = 'all';
+			} finally {
+				monthSelect.disabled = false;
+			}
+
+			await fetchFinancialMetrics();
+		}
+
+		async function submitExpense(event) {
+			event.preventDefault();
+
+			const formData = new FormData(expenseForm);
+			const amount = Number(formData.get('amount'));
+			const description = String(formData.get('description') || '').trim();
+
+			if (!amount || amount <= 0 || !description) {
+				setExpenseStatus('يرجى إدخال مبلغ صحيح ووصف واضح للمصروف.', 'error');
+				return;
+			}
+
+			// 2026-08-24: ربط اختياري بمخزن المواد -- يُرسل فقط عند تفعيل المفتاح.
+			const addToInventory = Boolean(addToInventoryToggle && addToInventoryToggle.checked);
+			const inventoryItemName = String(formData.get('inventory_item_name') || '').trim();
+			const inventoryQuantityRaw = formData.get('inventory_quantity');
+			const inventoryQuantity = inventoryQuantityRaw ? Number(inventoryQuantityRaw) : null;
+
+			if (addToInventory && (!inventoryItemName || !inventoryQuantity || inventoryQuantity <= 0)) {
+				setExpenseStatus('يرجى إدخال اسم المادة وكمية صحيحة أكبر من صفر لإضافتها إلى المخزن.', 'error');
+				return;
+			}
+
+			const payload = { amount, description };
+			if (addToInventory) {
+				payload.add_to_inventory = true;
+				payload.inventory_item_name = inventoryItemName;
+				payload.inventory_quantity = inventoryQuantity;
+			}
+
+			if (window.ClinicLoader) {
+				ClinicLoader.setButtonLoading(expenseSubmitBtn, true, { loadingText: '...جاري تسجيل المصروف' });
+			} else {
+				expenseSubmitBtn.disabled = true;
+				expenseSubmitBtn.textContent = 'جاري الحفظ...';
+			}
+			setExpenseStatus('يتم إرسال العملية المالية...', 'normal');
+
+			try {
+				const response = await fetch(EXPENSE_POST_ENDPOINT, {
+					method: 'POST',
+					headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
+					body: JSON.stringify(payload)
+				});
+
+				if (!response.ok) {
+					throw new Error('Failed to save expense');
+				}
+
+				let savedExpense = null;
+				try {
+					savedExpense = await response.json();
+				} catch (parseError) {
+					savedExpense = null;
+				}
+
+				expenseForm.reset();
+				if (inventoryLinkFields) {
+					inventoryLinkFields.classList.add('hidden');
+				}
+
+				if (savedExpense && savedExpense.inventory_synced) {
+					const actionText = savedExpense.inventory_action === 'created'
+						? 'تمت إضافتها كمادة جديدة'
+						: 'تم تحديث كميتها';
+					setExpenseStatus(`تم حفظ المصروف بنجاح، و${actionText} في مخزن المواد.`, 'success');
+				} else {
+					setExpenseStatus('تم حفظ المصروف بنجاح.', 'success');
+				}
+
+				await populateMonthSelect();
+			} catch (error) {
+				setExpenseStatus('تعذر حفظ المصروف الآن. حاول مرة أخرى لاحقاً.', 'error');
+			} finally {
+				if (window.ClinicLoader) {
+					ClinicLoader.setButtonLoading(expenseSubmitBtn, false);
+				} else {
+					expenseSubmitBtn.disabled = false;
+					expenseSubmitBtn.textContent = 'حفظ المصروف';
+				}
+			}
+		}
+
+		if (logoutBtn) {
+			logoutBtn.addEventListener('click', handleLogout);
+		}
+
+		if (mobileLogoutBtn) {
+			mobileLogoutBtn.addEventListener('click', handleLogout);
+		}
+
+		if (mobileMenuToggle && mobileMenuDropdown) {
+			mobileMenuToggle.addEventListener('click', () => {
+				const isHidden = mobileMenuDropdown.classList.contains('hidden');
+				mobileMenuDropdown.classList.toggle('hidden');
+				mobileMenuToggle.setAttribute('aria-expanded', String(isHidden));
+			});
+		}
+
+		async function submitUpgradeCode(event) {
+			event.preventDefault();
+			const activationCode = String(upgradeCodeInput?.value || '').trim();
+
+			if (!activationCode) {
+				setUpgradeStatus('يرجى إدخال كود الترقية أولاً.', 'error');
+				return;
+			}
+
+			if (!upgradeSubmitBtn) return;
+			upgradeSubmitBtn.disabled = true;
+			upgradeSubmitBtn.textContent = 'جاري التحقق...';
+			setUpgradeStatus('يتم التحقق من الكود مع الخادم الآن...', 'normal');
+
+			try {
+				const storedEmail = String(localStorage.getItem('user_email') || '').trim().toLowerCase();
+				const storedDoctorName = String(localStorage.getItem('doctor_name') || '').trim();
+
+				const response = await fetch(UPGRADE_ENDPOINT, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						activation_code: activationCode,
+						email: storedEmail || null,
+						doctor_name: storedDoctorName || null
+					})
+				});
+
+				let data = null;
+				try {
+					data = await response.json();
+				} catch (error) {
+					data = null;
+				}
+
+				if (!response.ok) {
+					const safeMessage = data?.detail || data?.message || 'تعذر تفعيل الترقية حالياً. تأكد من الكود ثم أعد المحاولة.';
+					setUpgradeStatus(safeMessage, 'error');
+					return;
+				}
+
+				localStorage.setItem('user_tier', 'premium');
+				if (data?.email) {
+					localStorage.setItem('user_email', String(data.email).toLowerCase());
+				}
+				activeTier = 'premium';
+				renderTierBadge();
+				setUpgradeStatus('تم تفعيل Premium بنجاح. يتم تحديث التقارير الآن...', 'success');
+				renderTierExperience();
+			} catch (error) {
+				setUpgradeStatus('تعذر الاتصال بالخادم أثناء محاولة الترقية.', 'error');
+			} finally {
+				upgradeSubmitBtn.disabled = false;
+				upgradeSubmitBtn.textContent = 'تفعيل الترقية الفورية';
+			}
+		}
+
+		const doctorName = localStorage.getItem('doctor_name') || localStorage.getItem('user_name');
+		clinicTitle.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادة الطبيب المعتمد';
+		if (mobileClinicTitle) {
+			mobileClinicTitle.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادة الطبيب المعتمد';
+		}
+		renderTierBadge();
+
+		if (expenseForm) {
+			expenseForm.addEventListener('submit', submitExpense);
+		}
+
+		if (upgradeForm) {
+			upgradeForm.addEventListener('submit', submitUpgradeCode);
+		}
+
+		if (monthSelect) {
+			monthSelect.addEventListener('change', () => {
+				fetchFinancialMetrics();
+			});
+		}
+
+		// خط دفاع ثانٍ: حتى لو لم يكتمل التوجيه أعلاه بعد، لا نستدعي
+		// renderTierExperience() (وبالتالي أي جلب بيانات مالية) لحساب بانتظار
+		// التفعيل.
+		if (currentTier !== 'pending_activation' && currentTier !== 'expired_subscription') {
+			renderTierExperience();
+		}
+
+	
+	function applyDoctorAvatarToHeaderLogo() {
+		const avatarUrl = localStorage.getItem('user_avatar_url');
+		const logoTargets = [document.getElementById('clinicLogoImg'), document.getElementById('mobileClinicLogoImg')].filter(Boolean);
+		if (!avatarUrl) return;
+		logoTargets.forEach((img) => {
+			// نحفظ الشعار الافتراضي logo.png وأصنافه قبل استبداله بصورة الطبيب، حتى نرجع
+			// إليه تلقائياً إن فشل تحميل الصورة (رابط معطوب أو محذوف من التخزين المؤقت
+			// على Render) بدل ترك أيقونة صورة مكسورة ظاهرة للزائر (2026-08-25).
+			const fallbackSrc = img.getAttribute('src');
+			const fallbackClassName = img.className;
+			img.onerror = () => {
+				img.onerror = null;
+				img.src = fallbackSrc;
+				img.className = fallbackClassName;
+			};
+			img.src = window.apiUrl ? apiUrl(avatarUrl) : avatarUrl;
+			img.classList.remove('object-contain', 'p-2', 'p-1.5', 'rounded-xl');
+			img.classList.add('object-cover', 'rounded-full');
+		});
+	}
+
+	applyDoctorAvatarToHeaderLogo();
+</script>
+</body>
+</html>
