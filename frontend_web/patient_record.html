@@ -812,6 +812,24 @@
             mobileClinicTitle.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادة الطبيب المعتمد';
     }
 
+    // تحديث اسم الطبيب من السيرفر مباشرة عند كل تحميل صفحة (2026-08-25) --
+    // انظر نفس التعليق في index.html لتفاصيل المشكلة الأصلية.
+    async function refreshDoctorNameFromServer() {
+      try {
+        const response = await fetch(apiUrl('/api/auth/profile'), { headers: getDoctorAuthHeaders() });
+        if (!response.ok) return;
+        const profile = await response.json();
+        const freshName = (profile.doctor_name || '').trim();
+        if (!freshName) return;
+        localStorage.setItem('doctor_name', freshName);
+        if (clinicTitle) clinicTitle.textContent = `عيادة ${freshName}`;
+        if (mobileClinicTitle) mobileClinicTitle.textContent = `عيادة ${freshName}`;
+      } catch (err) {
+        // تجاهل: يبقى الاسم المخزَّن محلياً معروضاً كما هو عند انقطاع الشبكة
+      }
+    }
+    refreshDoctorNameFromServer();
+
     function renderTierBadge() {
       if (!tierBadge) return;
       if (userTier === 'premium') {

@@ -248,6 +248,29 @@
 			titleElement.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادة الطبيب المعتمد';
 		}
 
+		// تحديث اسم الطبيب من السيرفر مباشرة عند كل تحميل صفحة (2026-08-25) --
+		// هذه الصفحة قد تُزار بلا تسجيل دخول (زائر مجهول)، لذا نتحقق أولاً من
+		// وجود بريد طبيب مسجَّل قبل أي محاولة جلب -- لا نفرض تسجيل الدخول هنا.
+		async function refreshDoctorNameFromServer() {
+			const email = (localStorage.getItem('user_email') || '').trim();
+			if (!email) return;
+			try {
+				const token = (localStorage.getItem('authToken') || '').trim();
+				const headers = { 'X-Doctor-Email': email };
+				if (token) headers.Authorization = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+				const response = await fetch(apiUrl('/api/auth/profile'), { headers });
+				if (!response.ok) return;
+				const profile = await response.json();
+				const freshName = (profile.doctor_name || '').trim();
+				if (!freshName) return;
+				localStorage.setItem('doctor_name', freshName);
+				if (titleElement) titleElement.textContent = `عيادة ${freshName}`;
+			} catch (err) {
+				// تجاهل: يبقى الاسم المخزَّن محلياً معروضاً كما هو عند انقطاع الشبكة
+			}
+		}
+		refreshDoctorNameFromServer();
+
 		if (mobileMenuToggle && mobileMenuDropdown) {
 			mobileMenuToggle.addEventListener('click', () => {
 				const isHidden = mobileMenuDropdown.classList.contains('hidden');

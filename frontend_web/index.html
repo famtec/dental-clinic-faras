@@ -334,6 +334,27 @@
     }
     renderTierBadge();
 
+    // تحديث اسم الطبيب من السيرفر مباشرة عند كل تحميل صفحة (2026-08-25) --
+    // القيمة المخزَّنة في localStorage أعلاه قد تكون قديمة (حساب آخر استخدم
+    // نفس المتصفح، أو اسم عُدِّل ولم يُزَر بعدها "حسابي") ولا تُحدَّث تلقائياً
+    // إلا عند زيارة تلك الصفحة تحديداً. هذا يجلب الاسم الصحيح دائماً دون
+    // انتظارها، مع إبقاء القيمة المخزَّنة كعرض فوري مؤقت ريثما يصل الرد.
+    async function refreshDoctorNameFromServer() {
+      try {
+        const response = await fetch(apiUrl('/api/auth/profile'), { headers: getDoctorAuthHeaders() });
+        if (!response.ok) return;
+        const profile = await response.json();
+        const freshName = (profile.doctor_name || '').trim();
+        if (!freshName) return;
+        localStorage.setItem('doctor_name', freshName);
+        if (titleElement) titleElement.textContent = `عيادة ${freshName}`;
+        if (mobileClinicTitle) mobileClinicTitle.textContent = `عيادة ${freshName}`;
+      } catch (err) {
+        // تجاهل: يبقى الاسم المخزَّن محلياً معروضاً كما هو عند انقطاع الشبكة
+      }
+    }
+    refreshDoctorNameFromServer();
+
     // Configuration
     const API_URL = apiUrl('/api/patients');
 
