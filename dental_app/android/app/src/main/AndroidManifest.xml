@@ -1,9 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- بدون هذا الإذن لا يستطيع التطبيق الاتصال بالـ API إطلاقاً في نسخة
          release (كان مفقوداً من القالب الأصلي؛ Flutter يضيفه تلقائياً في
-         debug manifest فقط، وليس هنا) -- أُضيف 2026-08-24. -->
+         debug manifest فقط، وليس هنا)، أُضيف بتاريخ 2026 08 24. -->
     <uses-permission android:name="android.permission.INTERNET"/>
-    <!-- إذن عرض الإشعارات (مطلوب صراحة على أندرويد 13+ / API 33+) -- 2026-08-24 -->
+    <!-- إذن عرض الإشعارات (مطلوب صراحة على أندرويد 13+ / API 33+)، أُضيف 2026 08 24 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="My Digital Clinic"
@@ -36,7 +36,7 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-        <!-- قناة الإشعارات الافتراضية لحجوزات المرضى الجديدة (2026-08-24) --
+        <!-- قناة الإشعارات الافتراضية لحجوزات المرضى الجديدة (أُضيف 2026 08 24).
              يجب أن يطابق معرّفها الثابت "new_booking_channel" القناة المُنشأة
              في lib/services/push_notification_service.dart. -->
         <meta-data

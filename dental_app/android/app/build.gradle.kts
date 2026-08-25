@@ -1,5 +1,6 @@
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.android")
     // مطلوب لقراءة google-services.json وتفعيل Firebase -- أُضيف 2026-08-24
     // (لن يعمل الـ build إلا بعد وضع الملف الحقيقي في هذا المجلد -- android/app/)
     id("com.google.gms.google-services")
@@ -15,6 +16,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // مطلوب لحزمة flutter_local_notifications -- أُضيف 2026-08-24
+        isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
@@ -45,4 +48,9 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // مطلوب لحزمة flutter_local_notifications (core library desugaring) -- أُضيف 2026-08-24
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }

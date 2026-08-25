@@ -1619,6 +1619,42 @@ def create_patient(
     return db_patient
 
 
+# يربط (أو ينشئ عند الحاجة) سجل مريض حقيقي عند قبول طلب حجز وارد من صفحة
+# الحجز العامة booking.html -- انظر التعليق في respond_to_booking_request أعلاه
+# لسياق سبب إضافة هذه الدالة (2026-08-25). المطابقة تعتمد على رقم الهاتف بعد
+# تطبيعه بنفس normalize_whatsapp_phone المستخدمة لإشعارات واتساب، حتى لا يُنشأ
+# سجل مريض مكرر لنفس الشخص إن حجز أكثر من مرة بصيغ مختلفة لنفس الرقم
+# (0.. أو 963.. أو 00963..)، ومحصورة بنفس الطبيب (doctor_email) دائماً.
+def find_or_create_patient_for_booking(
+    db: Session,
+    doctor: "models.User",
+    patient_name: str,
+    patient_phone: str | None,
+) -> int | None:
+    normalized_target = normalize_whatsapp_phone(patient_phone)
+
+    if normalized_target:
+        candidates = (
+            db.query(models.Patient)
+            .filter(models.Patient.doctor_email == doctor.email)
+            .all()
+        )
+        for candidate in candidates:
+            if normalize_whatsapp_phone(candidate.phone) == normalized_target:
+                return candidate.id
+
+    db_patient = models.Patient(
+        doctor_name=(doctor.doctor_name or doctor.email or "").strip() or None,
+        doctor_email=doctor.email,
+        full_name=(patient_name or "").strip() or "مريض بدون اسم",
+        phone=(patient_phone or "").strip() or "غير متوفر",
+        gender="Male",
+    )
+    db.add(db_patient)
+    db.flush()  # للحصول على db_patient.id دون إنهاء المعاملة الحالية (commit يتم لاحقاً في المستدعي)
+    return db_patient.id
+
+
 # 5. مسار جلب قائمة جميع المرضى المخزنين في العيادة [GET]
 @app.get("/api/patients", response_model=List[PatientResponse])
 def get_all_patients(
@@ -1715,32 +1751,32 @@ def get_patient_stats(
     patient_ids = [patient.id for patient in patients]
 
     try:
-        patient_names = {
-            (patient.full_name or "").strip().lower(): patient.id
-            for patient in patients
-            if (patient.full_name or "").strip()
-        }
-
         now = datetime.utcnow()
         active_appointments = 0
-        if patient_names:
-            appointments = (
-                db.query(models.Appointment)
-                .filter(models.Appointment.doctor_email == user.email)
-                .all()
-            )
-            for appointment in appointments:
-                appointment_patient_name = (appointment.patient_name or "").strip().lower()
-                if appointment_patient_name not in patient_names:
-                    continue
+        # ملاحظة (2026-08-25): سابقاً كان هذا العدّاد يتجاهل أي موعد لا يطابق اسمه
+        # اسم مريض موجود مسبقاً في جدول patients (عبر قاموس patient_names محلي كان
+        # يُبنى هنا) -- وهو فحص كان مقصوداً أصلاً لحماية جمع المستحقات المالية (Step 1/2 بالأسفل)
+        # من صفوف مالية يتيمة، لكنه امتد بالخطأ ليشمل عدّ المواعيد أيضاً. بما أنّ كل
+        # طلب حجز وارد عبر صفحة الحجز العامة booking.html لا يُربط بسجل مريض فعلي إلا
+        # بعد أن يقبله الطبيب (انظر find_or_create_patient_for_booking في
+        # respond_to_booking_request)، كانت كل الطلبات الجديدة (pending_confirmation)
+        # تختفي من هذه الإحصائية رغم ظهورها في لوحة "طلبات حجز جديدة" على
+        # appointments.html -- وهذا هو سبب التباين الذي رُصد أثناء فحص الموقع. الفلترة
+        # الصحيحة والكافية هنا هي doctor_email فقط (كما بالأسفل)، وأضفنا أيضاً
+        # pending_confirmation إلى حالات "المعلّقة" لأنها أكثر الحالات وضوحاً كـ"معلّقة".
+        appointments = (
+            db.query(models.Appointment)
+            .filter(models.Appointment.doctor_email == user.email)
+            .all()
+        )
+        for appointment in appointments:
+            appointment_status = (appointment.status or "").strip().lower()
+            appointment_date = appointment.appointment_date
+            is_upcoming = appointment_date is not None and appointment_date >= now
+            is_pending = appointment_status in {"pending", "upcoming", "pending_confirmation"}
 
-                appointment_status = (appointment.status or "").strip().lower()
-                appointment_date = appointment.appointment_date
-                is_upcoming = appointment_date is not None and appointment_date >= now
-                is_pending = appointment_status in {"pending", "upcoming"}
-
-                if is_upcoming or is_pending:
-                    active_appointments += 1
+            if is_upcoming or is_pending:
+                active_appointments += 1
 
         pending_balances = Decimal("0.00")
         if patient_ids:
@@ -2120,6 +2156,18 @@ def respond_to_booking_request(
 
     try:
         appointment.status = new_status
+        # عند قبول طلب حجز عام لم يكن مرتبطاً بأي سجل مريض بعد (patient_id فارغ) --
+        # وهي حال كل طلب وارد عبر booking.html -- نربطه الآن بسجل مريض حقيقي، حتى
+        # يظهر في "قائمة المرضى" ويصبح ممكناً فتح ملف طبي شامل له (مخطط أسنان،
+        # زيارات، وصفات، أرشيف أشعة) عبر patient_record.html. قبل هذا الإصلاح كان
+        # patient_id يبقى NULL إلى الأبد لكل مريض قادم عبر رابط الحجز العام (2026-08-25).
+        if new_status == "pending" and not appointment.patient_id:
+            appointment.patient_id = find_or_create_patient_for_booking(
+                db,
+                doctor=current_user,
+                patient_name=appointment.patient_name,
+                patient_phone=appointment.patient_phone,
+            )
         db.commit()
         db.refresh(appointment)
     except Exception:
