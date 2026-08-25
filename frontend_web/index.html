@@ -831,8 +831,16 @@
       emptyFeedback.classList.add('hidden');
 
       sourcePatients.forEach(patient => {
-        const tr = document.createElement('tr');
         const matched = isPatientMatch(patient, normalizedQuery);
+
+        // فلترة فعلية عند وجود نص بحث: نعرض فقط المرضى المطابقين فعلاً بدل
+        // عرض القائمة كاملة وتمييز المطابق منها بلون فقط -- هذا كان الخلل
+        // الفعلي (دالة filterPatients() المُعرَّفة بالأعلى كانت غير مُستخدَمة
+        // إطلاقاً): حقل البحث كان "يُبرز" الصفوف المطابقة فقط دون أن يُخفي
+        // بقية الصفوف، فبدا للمستخدم أن البحث لا يعمل -- إصلاح 2026-08-25.
+        if (normalizedQuery && !matched) return;
+
+        const tr = document.createElement('tr');
         tr.className = matched
           ? 'transition hover:bg-emerald-50/70 bg-emerald-50/30'
           : 'transition hover:bg-slate-50';
