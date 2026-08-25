@@ -66,18 +66,6 @@ def init_db():
                 with engine.begin() as connection:
                     connection.execute(text("ALTER TABLE appointments ADD COLUMN notes VARCHAR"))
 
-        if "patient_xrays" in inspector.get_table_names():
-            archive_columns = {column["name"] for column in inspector.get_columns("patient_xrays")}
-            if "file_name" not in archive_columns:
-                with engine.begin() as connection:
-                    connection.execute(text("ALTER TABLE patient_xrays ADD COLUMN file_name VARCHAR"))
-            if "file_url" not in archive_columns:
-                with engine.begin() as connection:
-                    connection.execute(text("ALTER TABLE patient_xrays ADD COLUMN file_url VARCHAR"))
-            if "file_type" not in archive_columns:
-                with engine.begin() as connection:
-                    connection.execute(text("ALTER TABLE patient_xrays ADD COLUMN file_type VARCHAR"))
-
     # ترحيل أعمدة صفحة "حسابي" (بيانات الطبيب/العيادة) -- يُنفَّذ بلا شرط نوع
     # قاعدة البيانات (خلافاً لكتلة SQLite أعلاه) لأن بيئة الإنتاج الحقيقية على
     # Render تستخدم Supabase Postgres وليس SQLite، و create_all() وحدها لا تُضيف
@@ -96,6 +84,24 @@ def init_db():
         if "avatar_url" not in user_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE users ADD COLUMN avatar_url VARCHAR"))
+
+    # ترحيل أعمدة أرشيف/صور المرضى الشعاعية (patient_xrays) -- مصحح في 2026-08-25:
+    # كانت هذه الكتلة محصورة خطأً داخل كتلة SQLite أعلاه فلم تصل إطلاقاً إلى
+    # إنتاج Postgres الحقيقي على Render — مما كان يتسبب بفشل أي محاولة
+    # لحذف مريض لديه صورة شعاعية/أرشيف مرفوع بخطأ 500 غير معالج
+    # ("column patient_xrays.file_name does not exist"). بلا شرط نوع قاعدة البيانات
+    # لنفس السبب الموضح أعلاه لأعمدة users/appointments.
+    if "patient_xrays" in inspector.get_table_names():
+        archive_columns = {column["name"] for column in inspector.get_columns("patient_xrays")}
+        if "file_name" not in archive_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE patient_xrays ADD COLUMN file_name VARCHAR"))
+        if "file_url" not in archive_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE patient_xrays ADD COLUMN file_url VARCHAR"))
+        if "file_type" not in archive_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE patient_xrays ADD COLUMN file_type VARCHAR"))
 
     # ترحيل أعمدة محرك تذكيرات واتساب التلقائية (2026-08-23) -- بلا شرط نوع
     # قاعدة البيانات، لنفس السبب الموضح أعلاه لأعمدة "حسابي" (الإنتاج الحقيقي
