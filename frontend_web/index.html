@@ -103,12 +103,19 @@
       display: flex;
       flex-direction: column;
       gap: 2px;
-      transform-origin: top right;
-      animation: sortMenuIn 0.15s ease;
+      transform-origin: top center;
+      overflow: hidden;
+      max-height: 0;
+      opacity: 0;
+      transform: translateY(-6px) scaleY(0.96);
+      pointer-events: none;
+      transition: max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.18s ease, transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    @keyframes sortMenuIn {
-      from { opacity: 0; transform: scale(0.96) translateY(-4px); }
-      to { opacity: 1; transform: scale(1) translateY(0); }
+    .sort-dropdown-wrap.dropdown-open .sort-dropdown-menu {
+      max-height: 320px;
+      opacity: 1;
+      transform: translateY(0) scaleY(1);
+      pointer-events: auto;
     }
     .sort-dropdown-option {
       display: flex;
@@ -229,7 +236,7 @@
               <svg class="chevron-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
             </button>
 
-            <div id="patientSortMenu" class="sort-dropdown-menu hidden" role="listbox">
+            <div id="patientSortMenu" class="sort-dropdown-menu" role="listbox">
               <button type="button" class="sort-dropdown-option" role="option" aria-selected="true" data-sort-value="default" data-sort-label="الترتيب الافتراضي">
                 <span class="option-main">
                   <svg class="option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l4-4 4 4"></path><path d="M16 15l-4 4-4-4"></path></svg>
@@ -1244,13 +1251,11 @@
     const patientSortOptionEls = patientSortMenu ? Array.from(patientSortMenu.querySelectorAll('[data-sort-value]')) : [];
 
     function closePatientSortMenu() {
-      if (patientSortMenu) patientSortMenu.classList.add('hidden');
       if (patientSortTrigger) patientSortTrigger.setAttribute('aria-expanded', 'false');
       if (patientSortWrap) patientSortWrap.classList.remove('dropdown-open');
     }
 
     function openPatientSortMenu() {
-      if (patientSortMenu) patientSortMenu.classList.remove('hidden');
       if (patientSortTrigger) patientSortTrigger.setAttribute('aria-expanded', 'true');
       if (patientSortWrap) patientSortWrap.classList.add('dropdown-open');
     }
@@ -1269,7 +1274,7 @@
 
     if (patientSortTrigger) {
       patientSortTrigger.addEventListener('click', () => {
-        const isOpen = patientSortMenu && !patientSortMenu.classList.contains('hidden');
+        const isOpen = patientSortWrap && patientSortWrap.classList.contains('dropdown-open');
         if (isOpen) closePatientSortMenu(); else openPatientSortMenu();
       });
     }
