@@ -107,6 +107,11 @@
           <div class="relative w-full sm:w-64 md:w-72 lg:w-80">
             <input id="searchInput" type="search" placeholder="🔍 ابحث عن مريض..." class="w-full rounded-2xl border border-slate-300 bg-white py-3 pr-10 pl-4 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
           </div>
+          <select id="patientSortSelect" class="w-full rounded-2xl border border-slate-300 bg-white py-3 px-4 text-sm font-semibold text-slate-600 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 sm:w-auto" title="فرز قائمة المرضى">
+            <option value="default">↕️ الترتيب الافتراضي</option>
+            <option value="name">🔤 فرز حسب: الاسم</option>
+            <option value="birth_date">🎂 فرز حسب: تاريخ الميلاد</option>
+          </select>
         </div>
       </div>
       </div>
@@ -368,6 +373,7 @@
     const cancelBtn = document.getElementById('cancelBtn');
     const patientForm = document.getElementById('patientForm');
     const searchInput = document.getElementById('searchInput');
+    const patientSortSelect = document.getElementById('patientSortSelect');
     const statsTotalPatients = document.getElementById('statsTotalPatients');
     const statsActiveAppointments = document.getElementById('statsActiveAppointments');
     const pendingBalancesCounter = document.getElementById('pendingBalancesCounter');
@@ -812,8 +818,27 @@
       }
     }
 
+    // فرز قائمة المرضى حسب الاختيار في patientSortSelect (2026-08-25) --
+    // "الاسم" ترتيب أبجدي عربي، و"تاريخ الميلاد" الأقدم أولاً (المرضى بلا
+    // تاريخ ميلاد مسجَّل يُوضعون في نهاية القائمة بدل التسبب بخطأ أو ترتيب
+    // عشوائي). "الترتيب الافتراضي" يُبقي ترتيب وصول البيانات من السيرفر كما هو.
+    function sortPatientsList(patients, sortMode) {
+      const list = Array.isArray(patients) ? patients.slice() : [];
+      if (sortMode === 'name') {
+        list.sort((a, b) => String(a.full_name || '').localeCompare(String(b.full_name || ''), 'ar'));
+      } else if (sortMode === 'birth_date') {
+        list.sort((a, b) => {
+          const dateA = a.birth_date ? new Date(a.birth_date).getTime() : Infinity;
+          const dateB = b.birth_date ? new Date(b.birth_date).getTime() : Infinity;
+          return dateA - dateB;
+        });
+      }
+      return list;
+    }
+
     function renderPatients(patients, query=""){
-      const sourcePatients = Array.isArray(patients) ? patients : [];
+      const sortMode = patientSortSelect ? patientSortSelect.value : 'default';
+      const sourcePatients = sortPatientsList(Array.isArray(patients) ? patients : [], sortMode);
       const normalizedQuery = (query || '').trim();
       const matchedCount = normalizedQuery
         ? sourcePatients.filter((patient) => isPatientMatch(patient, normalizedQuery)).length
@@ -1030,6 +1055,12 @@
       const query = this.value.trim();
       renderPatients(allPatients, query);
     });
+
+    if (patientSortSelect) {
+      patientSortSelect.addEventListener('change', function(){
+        renderPatients(allPatients, searchInput.value.trim());
+      });
+    }
 
     // Initialize
     const yearElement = document.getElementById('year');
