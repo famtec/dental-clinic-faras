@@ -71,15 +71,17 @@
 
     /* قائمة فرز المرضى -- بديل عصري لعنصر select الأصلي الذي كان يظهر
        بمظهر المتصفح الافتراضي غير القابل للتنسيق (2026-08-25). */
+    .sort-dropdown-wrap { flex-shrink: 0; }
     .sort-dropdown-trigger {
       display: inline-flex;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
+      white-space: nowrap;
       cursor: pointer;
       transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
-    .sort-dropdown-trigger .option-main { display: inline-flex; align-items: center; gap: 8px; }
+    .sort-dropdown-trigger .option-main { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; flex-shrink: 0; }
     .sort-dropdown-trigger .option-icon { color: #6366f1; flex-shrink: 0; }
     .sort-dropdown-trigger .chevron-icon { color: #94a3b8; flex-shrink: 0; transition: transform 0.2s ease; }
     .sort-dropdown-wrap.dropdown-open .sort-dropdown-trigger { border-color: #6366f1 !important; box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12); }
@@ -126,7 +128,7 @@
       text-align: right;
       transition: background 0.15s ease, color 0.15s ease;
     }
-    .sort-dropdown-option .option-main { display: inline-flex; align-items: center; gap: 10px; }
+    .sort-dropdown-option .option-main { display: inline-flex; align-items: center; gap: 10px; white-space: nowrap; }
     .sort-dropdown-option .option-icon { flex-shrink: 0; color: #6366f1; }
     .sort-dropdown-option .check-icon { flex-shrink: 0; color: #4338ca; opacity: 0; transform: scale(0.8); transition: opacity 0.15s ease, transform 0.15s ease; }
     .sort-dropdown-option:hover { background: #f8fafc; color: #312e81; }
