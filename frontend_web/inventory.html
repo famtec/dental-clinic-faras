@@ -32,6 +32,136 @@
 			color: #ffffff;
 			box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.22), 0 0 24px rgba(239, 68, 68, 0.45);
 		}
+
+		/* زر تعديل عنصر المخزون -- شريحة فاتحة تمتلئ بتدرّج إندگو/بنفسجي مع
+		   ارتفاع خفيف وتوهّج عند المرور (2026-08-25). */
+		.edit-item-btn {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			padding: 9px 14px;
+			border-radius: 12px;
+			border: 1px solid #e0e7ff;
+			background: linear-gradient(135deg, #ffffff 0%, #eef2ff 100%);
+			color: #4338ca;
+			font-family: inherit;
+			font-size: 12px;
+			font-weight: 800;
+			cursor: pointer;
+			box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+			transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+		}
+		.edit-item-btn svg { flex-shrink: 0; }
+		.edit-item-btn:hover {
+			background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+			color: #ffffff;
+			border-color: transparent;
+			transform: translateY(-2px);
+			box-shadow: 0 10px 24px rgba(79, 70, 229, 0.35);
+		}
+		.edit-item-btn:active { transform: translateY(0); box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3); }
+		.edit-item-btn:focus-visible { outline: 2px solid #a5b4fc; outline-offset: 2px; }
+
+		.modal-overlay {
+			position: fixed;
+			inset: 0;
+			z-index: 70;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			background: rgba(15, 23, 42, 0.55);
+			backdrop-filter: blur(6px);
+			padding: 16px;
+		}
+		.modal-panel {
+			width: 100%;
+			max-width: 440px;
+			background: #ffffff;
+			border-radius: 28px;
+			border: 1px solid rgba(255, 255, 255, 0.7);
+			box-shadow: 0 25px 50px -12px rgba(30, 27, 75, 0.35);
+			padding: 26px;
+		}
+		.modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; gap: 12px; }
+		.modal-title { margin: 0; font-size: 19px; font-weight: 800; color: #312e81; }
+		.modal-close {
+			width: 32px;
+			height: 32px;
+			flex-shrink: 0;
+			border-radius: 10px;
+			border: 1px solid #e2e8f0;
+			background: #f8fafc;
+			color: #64748b;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			cursor: pointer;
+			transition: all 0.15s ease;
+		}
+		.modal-close:hover { background: #fee2e2; color: #dc2626; border-color: #fecaca; }
+		.field-label { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; font-size: 13px; font-weight: 700; color: #334155; }
+		.field-input {
+			width: 100%;
+			border-radius: 16px;
+			border: 1px solid #cbd5e1;
+			background: #ffffff;
+			padding: 12px 16px;
+			font-size: 14px;
+			font-family: inherit;
+			color: #1e293b;
+			outline: none;
+			transition: border-color 0.15s ease, box-shadow 0.15s ease;
+		}
+		.field-input:focus { border-color: #6366f1; box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15); }
+		.modal-footer { display: flex; gap: 12px; margin-top: 6px; }
+		.btn-cancel {
+			flex: 1;
+			border-radius: 16px;
+			border: 1px solid #cbd5e1;
+			background: #ffffff;
+			color: #475569;
+			font-family: inherit;
+			font-weight: 700;
+			font-size: 14px;
+			padding: 12px;
+			cursor: pointer;
+			transition: background 0.15s ease;
+		}
+		.btn-cancel:hover { background: #f8fafc; }
+		.btn-save {
+			flex: 1;
+			border-radius: 16px;
+			border: none;
+			background: linear-gradient(90deg, #4f46e5, #7c3aed);
+			color: #ffffff;
+			font-family: inherit;
+			font-weight: 700;
+			font-size: 14px;
+			padding: 12px;
+			cursor: pointer;
+			box-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.4);
+			transition: transform 0.15s ease, background 0.15s ease;
+		}
+		.btn-save:hover { background: linear-gradient(90deg, #4338ca, #6d28d9); transform: translateY(-1px); }
+		.btn-save:disabled { opacity: 0.7; cursor: default; transform: none; }
+
+		.toast-success {
+			position: fixed;
+			top: 24px;
+			left: 50%;
+			transform: translateX(-50%);
+			background: linear-gradient(90deg, #10b981, #059669);
+			color: #ffffff;
+			padding: 12px 22px;
+			border-radius: 16px;
+			font-weight: 700;
+			font-size: 14px;
+			box-shadow: 0 15px 30px -8px rgba(16, 185, 129, 0.5);
+			z-index: 80;
+			animation: toastIn 0.25s ease, toastOut 0.25s ease 2.35s forwards;
+		}
+		@keyframes toastIn { from { opacity: 0; transform: translate(-50%, -10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+		@keyframes toastOut { to { opacity: 0; transform: translate(-50%, -10px); } }
 	</style>
 </head>
 <body class="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.22),_transparent_30%),linear-gradient(135deg,_#f8fafc_0%,_#eef2ff_45%,_#e0e7ff_100%)] text-slate-800 transition-opacity duration-300">
@@ -177,6 +307,7 @@
 										<th class="px-4 py-3 font-semibold">الكمية</th>
 										<th class="px-4 py-3 font-semibold">حد التنبيه</th>
 										<th class="px-4 py-3 font-semibold">آخر تحديث</th>
+										<th class="px-4 py-3 font-semibold">الإجراءات</th>
 									</tr>
 								</thead>
 								<tbody id="inventoryTableBody" class="divide-y divide-slate-100 bg-white text-sm text-slate-700"></tbody>
@@ -187,6 +318,39 @@
 							لا توجد مواد مخزنية مسجلة حتى الآن.
 						</div>
 					</section>
+				</div>
+			</div>
+
+			<div id="editInventoryModal" class="modal-overlay hidden">
+				<div class="modal-panel">
+					<div class="modal-header">
+						<h3 class="modal-title">تعديل مادة المخزون</h3>
+						<button type="button" id="editModalCloseBtn" class="modal-close" aria-label="إغلاق">
+							<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<path d="M18 6 6 18"></path>
+								<path d="M6 6l12 12"></path>
+							</svg>
+						</button>
+					</div>
+					<form id="editInventoryForm">
+						<label class="field-label">
+							<span>اسم المادة</span>
+							<input id="editItemNameInput" type="text" required class="field-input" />
+						</label>
+						<label class="field-label">
+							<span>الكمية الحالية</span>
+							<input id="editItemQuantityInput" type="number" min="0" required class="field-input" />
+						</label>
+						<label class="field-label">
+							<span>حد التنبيه الأدنى</span>
+							<input id="editItemAlertInput" type="number" min="0" required class="field-input" />
+						</label>
+						<p id="editInventoryStatus" class="mb-2 min-h-[1rem] text-sm font-medium text-rose-500"></p>
+						<div class="modal-footer">
+							<button type="button" id="editModalCancelBtn" class="btn-cancel">إلغاء</button>
+							<button type="submit" id="editModalSaveBtn" class="btn-save">حفظ التعديلات</button>
+						</div>
+					</form>
 				</div>
 			</div>
 
@@ -376,6 +540,17 @@
 		const itemQuantityInput = document.getElementById('itemQuantityInput');
 		const itemAlertInput = document.getElementById('itemAlertInput');
 
+		const editInventoryModal = document.getElementById('editInventoryModal');
+		const editInventoryForm = document.getElementById('editInventoryForm');
+		const editItemNameInput = document.getElementById('editItemNameInput');
+		const editItemQuantityInput = document.getElementById('editItemQuantityInput');
+		const editItemAlertInput = document.getElementById('editItemAlertInput');
+		const editInventoryStatus = document.getElementById('editInventoryStatus');
+		const editModalCloseBtn = document.getElementById('editModalCloseBtn');
+		const editModalCancelBtn = document.getElementById('editModalCancelBtn');
+		const editModalSaveBtn = document.getElementById('editModalSaveBtn');
+		let editingInventoryItemId = null;
+
 		function handleLogout() {
 			localStorage.removeItem('doctor_name');
 			localStorage.removeItem('user_email');
@@ -521,10 +696,13 @@
 			inventoryCountBadge.textContent = `${count} عنصر`;
 		}
 
+		let currentInventoryItems = [];
+
 		function renderInventoryRows(items) {
 			if (!inventoryTableBody || !inventoryEmptyState) return;
 
 			const safeItems = Array.isArray(items) ? items : [];
+			currentInventoryItems = safeItems;
 			updateInventoryCount(safeItems.length);
 
 			if (safeItems.length === 0) {
@@ -548,6 +726,15 @@
 						<td class="px-4 py-3"><span class="${quantityBadgeClass}">${escapeHtml(quantity)}</span></td>
 						<td class="px-4 py-3 text-slate-600">${escapeHtml(minAlert)}</td>
 						<td class="px-4 py-3 text-slate-500">${escapeHtml(formatDateTime(item?.updated_at))}</td>
+						<td class="px-4 py-3">
+							<button type="button" class="edit-item-btn" data-edit-item-id="${escapeHtml(item?.id)}" aria-label="تعديل ${escapeHtml(item?.item_name)}">
+								<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<path d="M12 20h9"></path>
+									<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+								</svg>
+								<span>تعديل</span>
+							</button>
+						</td>
 					</tr>
 				`;
 			}).join('');
@@ -580,6 +767,100 @@
 					inventoryStatus.textContent = 'تعذر تحميل بيانات المخزن حالياً.';
 				}
 			}
+		}
+
+		function showInventoryToast(message) {
+			const toast = document.createElement('div');
+			toast.className = 'toast-success';
+			toast.textContent = message;
+			document.body.appendChild(toast);
+			setTimeout(() => toast.remove(), 2600);
+		}
+
+		function openEditInventoryModal(itemId) {
+			const item = currentInventoryItems.find((it) => String(it?.id) === String(itemId));
+			if (!item || !editInventoryModal) return;
+
+			editingInventoryItemId = item.id;
+			if (editItemNameInput) editItemNameInput.value = item.item_name ?? '';
+			if (editItemQuantityInput) editItemQuantityInput.value = item.quantity ?? 0;
+			if (editItemAlertInput) editItemAlertInput.value = item.min_alert_quantity ?? 0;
+			if (editInventoryStatus) editInventoryStatus.textContent = '';
+			editInventoryModal.classList.remove('hidden');
+		}
+
+		function closeEditInventoryModal() {
+			editingInventoryItemId = null;
+			if (editInventoryModal) editInventoryModal.classList.add('hidden');
+		}
+
+		async function handleEditInventorySubmit(event) {
+			event.preventDefault();
+			if (!editingInventoryItemId) return;
+
+			const itemName = String(editItemNameInput?.value || '').trim();
+			const quantity = Number.parseInt(String(editItemQuantityInput?.value || ''), 10);
+			const minAlert = Number.parseInt(String(editItemAlertInput?.value || ''), 10);
+
+			if (!itemName || !Number.isInteger(quantity) || quantity < 0 || !Number.isInteger(minAlert) || minAlert < 0) {
+				if (editInventoryStatus) editInventoryStatus.textContent = 'يرجى إدخال اسم مادة وكمية وحد تنبيه صحيحين.';
+				return;
+			}
+
+			if (editModalSaveBtn && window.ClinicLoader) {
+				ClinicLoader.setButtonLoading(editModalSaveBtn, true, { loadingText: '...جاري الحفظ' });
+			} else if (editModalSaveBtn) {
+				editModalSaveBtn.disabled = true;
+				editModalSaveBtn.textContent = '...جاري الحفظ';
+			}
+			if (editInventoryStatus) editInventoryStatus.textContent = '';
+
+			try {
+				const response = await fetch(apiUrl(`/api/inventory/${editingInventoryItemId}`), {
+					method: 'PUT',
+					headers: getInventoryAuthHeaders({ 'Content-Type': 'application/json' }),
+					body: JSON.stringify({
+						item_name: itemName,
+						quantity,
+						min_alert_quantity: minAlert,
+					}),
+				});
+
+				if (!response.ok) {
+					const errorText = await response.text();
+					throw new Error(errorText || 'تعذر تحديث المادة.');
+				}
+
+				closeEditInventoryModal();
+				showInventoryToast('تم تحديث المادة بنجاح');
+				await loadInventoryItems();
+			} catch (error) {
+				if (editInventoryStatus) editInventoryStatus.textContent = 'فشل تحديث المادة. يرجى المحاولة مرة أخرى.';
+			} finally {
+				if (editModalSaveBtn && window.ClinicLoader) {
+					ClinicLoader.setButtonLoading(editModalSaveBtn, false);
+				} else if (editModalSaveBtn) {
+					editModalSaveBtn.disabled = false;
+					editModalSaveBtn.textContent = 'حفظ التعديلات';
+				}
+			}
+		}
+
+		if (inventoryTableBody) {
+			inventoryTableBody.addEventListener('click', (event) => {
+				const btn = event.target.closest('[data-edit-item-id]');
+				if (!btn) return;
+				openEditInventoryModal(btn.getAttribute('data-edit-item-id'));
+			});
+		}
+
+		if (editInventoryForm) editInventoryForm.addEventListener('submit', handleEditInventorySubmit);
+		if (editModalCloseBtn) editModalCloseBtn.addEventListener('click', closeEditInventoryModal);
+		if (editModalCancelBtn) editModalCancelBtn.addEventListener('click', closeEditInventoryModal);
+		if (editInventoryModal) {
+			editInventoryModal.addEventListener('click', (event) => {
+				if (event.target === editInventoryModal) closeEditInventoryModal();
+			});
 		}
 
 		async function handleInventorySubmit(event) {
