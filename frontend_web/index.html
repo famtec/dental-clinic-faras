@@ -71,6 +71,11 @@
 
     /* قائمة فرز المرضى -- بديل عصري لعنصر select الأصلي الذي كان يظهر
        بمظهر المتصفح الافتراضي غير القابل للتنسيق (2026-08-25). */
+    /* الحاوية العلوية (بحث + فرز) بها backdrop-filter الخاص بـ .panel-soft، وهذا
+       ينشئ سياق تكديس (stacking context) جديداً لها فيصير z-index الداخلي لقائمة
+       الفرز بلا فائدة أمام قسم "SMART STAT" التالي لها بترتيب DOM -- رفع الحاوية
+       نفسها فوقه يحل المشكلة (2026-08-25). */
+    .patient-toolbar-panel { position: relative; z-index: 30; }
     .sort-dropdown-wrap { flex-shrink: 0; }
     .sort-dropdown-trigger {
       display: inline-flex;
@@ -208,7 +213,7 @@
     </div>
 
     <main class="mx-auto min-w-0 w-full max-w-[1400px] flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8 xl:p-10">
-      <div class="panel-soft mb-6 rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/70 sm:p-6">
+      <div class="panel-soft patient-toolbar-panel mb-6 rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/70 sm:p-6">
         <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <div class="inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-bold tracking-[0.22em] text-indigo-700">PATIENTS HUB</div>
