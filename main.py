@@ -498,6 +498,16 @@ class PatientUpdate(BaseModel):
     full_name: Optional[str] = None
     phone: Optional[str] = None
     medical_history: Optional[str] = None
+    # 2026-08-25: لم يكن هذا المسار يقبل birth_date إطلاقاً من قبل -- وهذا هو
+    # السبب الفعلي وراء بقاء "العمر" ثابتاً دائماً بعد الحفظ في patient_record.html:
+    # العمر ليس عموداً مخزَّناً بل يُحسب دائماً من birth_date، وكل مريض جديد
+    # يُنشأ حالياً من index.html بتاريخ ميلاد ثابت مزروع "2000-01-01" (لا يوجد
+    # حقل عمر/تاريخ ميلاد حقيقي في نموذج "إضافة مريض")، وبما أن هذا المسار لم
+    # يكن يقبل تعديل birth_date كان أي تعديل لاحق للعمر من صفحة المريض يُهمَل
+    # بصمت من طرف الخادم مهما أُعيد الحفظ. الحل: نسمح بتعديل birth_date هنا،
+    # وpatient_record.html يحسب birth_date تقريبياً من العمر المُدخَل (1 يناير
+    # من سنة الميلاد الموافقة) قبل الإرسال بدل إرسال حقل "age" غير موجود أصلاً.
+    birth_date: Optional[date] = None
     # total_treatment_cost أُزيل من هنا عمداً (2026-08-25) -- التكلفة لم تعد
     # حقلاً واحداً قابلاً للاستبدال، بل فواتير علاج مستقلة (انظر
     # TreatmentInvoiceCreate + /api/patients/{id}/invoices بالأسفل). العمود
@@ -2075,6 +2085,8 @@ def update_patient(
             patient.phone = patient_update.phone
         if patient_update.medical_history is not None:
             patient.medical_history = patient_update.medical_history
+        if patient_update.birth_date is not None:
+            patient.birth_date = patient_update.birth_date
         # لم يعد هذا المسار يقبل تعديل التكلفة الإجمالية مباشرة (2026-08-25) --
         # التكلفة تُدار الآن حصراً عبر فواتير علاج مستقلة، انظر
         # POST /api/patients/{patient_id}/invoices بالأسفل.

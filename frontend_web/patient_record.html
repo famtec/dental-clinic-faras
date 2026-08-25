@@ -3532,12 +3532,30 @@
 
       // 2026-08-25: total_treatment_cost لم تعد تُرسَل من هنا -- التكلفة تُدار
       // حصراً عبر فواتير علاج مستقلة (انظر submitNewInvoice/submitInvoicePayment).
+      //
+      // 2026-08-25 (إصلاح ثبات العمر على نفس القيمة بعد الحفظ): كان هذا
+      // المسار يرسل "age" مباشرة، لكن لا يوجد عمود "age" على الإطلاق في قاعدة
+      // البيانات -- main.py لم يكن يقبله أصلاً فكان يُهمَل بصمت في كل مرة،
+      // والعمر المعروض دائماً يُعاد حسابه من birth_date (calculateAge()) الذي
+      // يبقى على قيمته الأصلية الثابتة (كل مريض جديد يُنشأ حالياً بتاريخ ميلاد
+      // مزروع 2000-01-01 من index.html، أي عمر 26 دائماً في 2026 -- هذا مصدر
+      // الرقم الثابت الذي رآه الطبيب). الحل: نحسب تاريخ ميلاد تقريبي (1 يناير
+      // من سنة الميلاد الموافقة للعمر المُدخَل) ونرسله كـ birth_date بدل ذلك،
+      // وmain.py الآن يقبل تعديل birth_date فعلياً (انظر PatientUpdate هناك).
+      let birthDateToSend;
+      if (ageInputValue) {
+        const birthYear = new Date().getFullYear() - parsedAge;
+        birthDateToSend = `${birthYear}-01-01`;
+      }
+
       const payload = {
         full_name: patientNameInput ? patientNameInput.value.trim() : currentPatient.full_name,
         phone: patientPhoneInput ? patientPhoneInput.value.trim() : currentPatient.phone,
-        age: ageInputValue ? parsedAge : null,
         medical_history: patientHistoryInput ? patientHistoryInput.value.trim() : currentPatient.medical_history,
       };
+      if (birthDateToSend) {
+        payload.birth_date = birthDateToSend;
+      }
 
       try {
         const response = await fetch(apiUrl(`/api/patients/${patientId}`), {
