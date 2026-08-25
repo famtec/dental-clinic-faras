@@ -487,8 +487,8 @@ class PatientCreate(BaseModel):
     doctor_email: Optional[str] = None
     full_name: str
     phone: str
-    birth_date: date = None
-    gender: str = None
+    birth_date: Optional[date] = None
+    gender: Optional[str] = None
     medical_history: Optional[str] = None
     total_treatment_cost: float = 0.0
 
@@ -1771,6 +1771,14 @@ def get_patient_stats(
         )
         for appointment in appointments:
             appointment_status = (appointment.status or "").strip().lower()
+
+            # "rejected" و"no_show" حالتان نهائيتان -- لا تُحسبان ضمن المواعيد
+            # النشطة أبداً حتى لو كان appointment_date لا يزال اليوم أو في
+            # المستقبل (مثال: طبيب يرفض حجزاً ليوم غد يبقى "مرفوضاً" فوراً، لا
+            # "نشطاً" حتى يمر تاريخ الغد) -- إصلاح 2026-08-25.
+            if appointment_status in {"rejected", "no_show"}:
+                continue
+
             appointment_date = appointment.appointment_date
             is_upcoming = appointment_date is not None and appointment_date >= now
             is_pending = appointment_status in {"pending", "upcoming", "pending_confirmation"}
