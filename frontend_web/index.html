@@ -605,7 +605,7 @@
 
     async function loadAppointmentsForStats() {
       try {
-        const response = await fetch(apiUrl('/api/appointments'), { method: 'GET' });
+        const response = await fetch(apiUrl('/api/appointments'), { method: 'GET', headers: getDoctorAuthHeaders() });
         if (!response.ok) {
           throw new Error('Failed to load appointments for stats');
         }
@@ -757,7 +757,8 @@
 
       try {
         const response = await fetch(apiUrl(`/api/patients/${pendingDeletePatientId}`), {
-          method: 'DELETE'
+          method: 'DELETE',
+          headers: getDoctorAuthHeaders(),
         });
 
         if (!response.ok) {
