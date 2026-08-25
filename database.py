@@ -238,6 +238,97 @@ def init_db():
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE users ADD COLUMN fcm_token VARCHAR"))
 
+    # ====================================================================
+    # فواتير العلاج المستقلة (treatment_invoices) -- 2026-08-25
+    # ====================================================================
+    # يحل مشكلة تداخل حسابات المريض: كانت "التكلفة الإجمالية" حقلاً واحداً
+    # قابلاً للاستبدال على patients.total_treatment_cost، بينما "المدفوع"
+    # يُحسب كمجموع كل دفعات المريض التاريخية بلا فصل بين جولات العلاج. جدول
+    # treatment_invoices الجديد (تُنشئه Base.metadata.create_all أعلاه تلقائياً
+    # لأنه جدول جديد بالكامل) يفصل كل جولة علاج كصف مستقل بتكلفته الخاصة.
+    # عمود financial_transactions.invoice_id يربط كل دفعة بفاتورتها تحديداً --
+    # بلا شرط نوع قاعدة البيانات (خلافاً لكتلة SQLite بالأعلى)، لنفس السبب
+    # الموثّق أعلاه لأعمدة "حسابي"/الحجز العام/patient_xrays: الإنتاج الحقيقي
+    # على Render يستخدم Supabase Postgres وليس SQLite.
+    if "financial_transactions" in inspector.get_table_names():
+        finance_invoice_columns = {column["name"] for column in inspector.get_columns("financial_transactions")}
+        if "invoice_id" not in finance_invoice_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE financial_transactions ADD COLUMN invoice_id INTEGER"))
+
+    # ترحيل بيانات لمرة واحدة لكل مريض: أي مريض كانت لديه تكلفة/دفعات مسجّلة
+    # قبل هذا التحديث (total_treatment_cost > 0 أو دفعات income/received قديمة
+    # بلا invoice_id) يحصل تلقائياً على "فاتورة تاريخية" واحدة تحمل نفس قيمة
+    # total_treatment_cost الحالية، وتُربط بها كل دفعاته القديمة غير المرتبطة.
+    # هذا يحافظ حرفياً على نفس رصيد "المتبقي" الذي كان يراه الطبيب قبل الترحيل
+    # (نفس صيغة max(cost - paid, 0))، ثم من هذه اللحظة فصاعداً أي فاتورة جديدة
+    # تُفتح من صفحة المريض تكون مستقلة تماماً بحساباتها. آمنة للتكرار
+    # (idempotent): الشرط "WHERE id NOT IN (... treatment_invoices ...)" يجعلها
+    # لا تعمل شيئاً بعد أول تشغيل ناجح لكل مريض.
+    if "treatment_invoices" in inspector.get_table_names() and "patients" in inspector.get_table_names() and "financial_transactions" in inspector.get_table_names():
+        with engine.begin() as connection:
+            candidate_patients = connection.execute(
+                text(
+                    """
+                    SELECT id, total_treatment_cost, doctor_email FROM patients
+                    WHERE id NOT IN (
+                        SELECT DISTINCT patient_id FROM treatment_invoices WHERE patient_id IS NOT NULL
+                    )
+                    AND (
+                        COALESCE(total_treatment_cost, 0) > 0
+                        OR id IN (
+                            SELECT DISTINCT patient_id FROM financial_transactions
+                            WHERE patient_id IS NOT NULL
+                              AND invoice_id IS NULL
+                              AND type IN ('income', 'received')
+                              AND amount > 0
+                        )
+                    )
+                    """
+                )
+            ).fetchall()
+
+            for row in candidate_patients:
+                legacy_patient_id = row[0]
+                legacy_total_cost = float(row[1] or 0)
+                legacy_doctor_email = row[2]
+
+                connection.execute(
+                    text(
+                        """
+                        INSERT INTO treatment_invoices (patient_id, doctor_email, title, total_cost, created_at)
+                        VALUES (:patient_id, :doctor_email, :title, :total_cost, CURRENT_TIMESTAMP)
+                        """
+                    ),
+                    {
+                        "patient_id": legacy_patient_id,
+                        "doctor_email": legacy_doctor_email,
+                        "title": "السجل المالي السابق (مرحّل تلقائياً)",
+                        "total_cost": legacy_total_cost,
+                    },
+                )
+
+                new_invoice_id = connection.execute(
+                    text(
+                        "SELECT id FROM treatment_invoices WHERE patient_id = :pid ORDER BY id DESC LIMIT 1"
+                    ),
+                    {"pid": legacy_patient_id},
+                ).scalar()
+
+                connection.execute(
+                    text(
+                        """
+                        UPDATE financial_transactions
+                        SET invoice_id = :invoice_id
+                        WHERE patient_id = :pid
+                          AND invoice_id IS NULL
+                          AND type IN ('income', 'received')
+                          AND amount > 0
+                        """
+                    ),
+                    {"invoice_id": new_invoice_id, "pid": legacy_patient_id},
+                )
+
 
 def get_db():
     db = SessionLocal()

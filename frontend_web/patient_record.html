@@ -291,7 +291,7 @@
               <p id="patientName" class="mt-1 text-lg font-bold text-slate-800">—</p>
               <input id="patientNameInput" type="text" class="mt-2 hidden w-full rounded-2xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
             </div>
-            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div class="grid gap-4 sm:grid-cols-2">
               <div class="rounded-[24px] bg-slate-50/90 p-4">
                 <p class="text-sm text-slate-500">الهاتف</p>
                 <p id="patientPhone" class="mt-1 font-semibold text-slate-800">—</p>
@@ -302,34 +302,64 @@
                 <p id="patientAge" class="mt-1 font-semibold text-slate-800">—</p>
                 <input id="patientAgeInput" type="number" min="0" class="mt-2 hidden w-full rounded-2xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" readonly disabled />
               </div>
-              <div class="rounded-[24px] border border-amber-100 bg-amber-50/80 p-4">
-                <p class="text-sm text-amber-700">إجمالي تكلفة العلاج الكلية (ل.س)</p>
-                <p id="patientTotalTreatmentCost" class="mt-1 font-extrabold text-amber-800">0.00 ل.س</p>
-                <input id="patientTotalTreatmentCostInput" type="number" min="0" step="0.01" class="mt-2 hidden w-full rounded-2xl border border-amber-200 bg-white px-3 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-amber-400 focus:ring-4 focus:ring-amber-100" />
-              </div>
             </div>
+            <!-- 2026-08-25: خانة "إجمالي تكلفة العلاج الكلية" القديمة (رقم واحد
+                 قابل للاستبدال) أُزيلت من هنا -- التكلفة تُدار الآن حصراً عبر
+                 فواتير علاج مستقلة في قسم "الحساب المالي" أدناه. -->
             <div class="rounded-[24px] bg-slate-50/90 p-4">
               <p class="text-sm text-slate-500">ملاحظات التاريخ الطبي</p>
               <p id="patientHistory" class="mt-2 text-sm leading-7 text-slate-700">—</p>
               <textarea id="patientHistoryInput" rows="4" class="mt-2 hidden w-full rounded-2xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"></textarea>
             </div>
-            <form id="financialPaymentForm" class="rounded-[24px] border border-violet-100 bg-violet-50/70 p-4">
-              <p class="text-sm font-semibold text-violet-700">تحصيل الدفعات المالية</p>
-              <input
-                id="financialPaymentInput"
-                type="text"
-                inputmode="decimal"
-                placeholder="أدخل المبلغ المدفوع (ل.س)"
-                class="mt-3 w-full rounded-xl border border-violet-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
-              />
-              <button
-                id="financialPaymentBtn"
-                type="submit"
-                class="mt-3 w-full rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3 text-sm font-bold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700"
-              >
-                تسجيل الدفع المالي
-              </button>
-            </form>
+            <div class="rounded-[24px] border border-slate-100 bg-white/90 p-4 shadow-sm sm:p-5">
+              <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h3 class="text-lg font-extrabold text-slate-800">الحساب المالي - فواتير العلاج</h3>
+                  <p class="mt-1 text-xs leading-6 text-slate-500">كل جولة علاج جديدة تُدار كفاتورة مستقلة بتكلفتها ودفعاتها الخاصة -- تسديد فاتورة سابقة بالكامل لا يؤثر إطلاقاً على حساب أي فاتورة جديدة.</p>
+                </div>
+                <button id="toggleNewInvoiceFormBtn" type="button" class="whitespace-nowrap rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5 text-sm font-extrabold text-white shadow-md transition hover:from-indigo-700 hover:to-violet-700">+ بدء فاتورة علاج جديدة</button>
+              </div>
+
+              <div class="mb-4">
+                <span id="remainingBalanceBadge" class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-extrabold text-amber-700 shadow-sm">
+                  المتبقي بذمة المريض الحالي: 0.00 ل.س
+                </span>
+              </div>
+
+              <form id="newInvoiceForm" class="mb-4 hidden rounded-[20px] border border-violet-100 bg-violet-50/70 p-4">
+                <p class="mb-3 text-sm font-semibold text-violet-700">تفاصيل فاتورة العلاج الجديدة</p>
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <label class="block">
+                    <span class="mb-1 block text-xs font-semibold text-slate-700">عنوان جولة العلاج</span>
+                    <input id="newInvoiceTitleInput" type="text" required placeholder="مثال: تركيب تلبيسة زركونيوم" class="w-full rounded-xl border border-violet-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100" />
+                  </label>
+                  <label class="block">
+                    <span class="mb-1 block text-xs font-semibold text-slate-700">التكلفة الإجمالية (ل.س)</span>
+                    <input id="newInvoiceCostInput" type="text" inputmode="decimal" required placeholder="أدخل التكلفة" class="w-full rounded-xl border border-violet-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100" />
+                  </label>
+                </div>
+                <div class="mt-3 flex justify-end gap-2">
+                  <button id="cancelNewInvoiceBtn" type="button" class="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">إلغاء</button>
+                  <button type="submit" class="rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-sm font-extrabold text-white shadow-md transition hover:from-indigo-700 hover:to-violet-700">إنشاء الفاتورة</button>
+                </div>
+              </form>
+
+              <div class="mb-2 flex items-center justify-between">
+                <h4 class="text-sm font-extrabold text-slate-700">الفواتير المفتوحة حالياً</h4>
+                <span id="openInvoicesCount" class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">0 فاتورة</span>
+              </div>
+              <div id="openInvoicesContainer" class="space-y-3">
+                <p id="openInvoicesEmptyState" class="rounded-[18px] border border-dashed border-slate-300 p-4 text-center text-xs text-slate-500">لا توجد فواتير علاج مفتوحة حالياً. اضغط "بدء فاتورة علاج جديدة" عند بدء أي جولة علاج جديدة.</p>
+              </div>
+
+              <div class="mb-2 mt-5 flex items-center justify-between">
+                <h4 class="text-sm font-extrabold text-slate-700">سجل الفواتير السابقة (مسددة بالكامل)</h4>
+                <span id="closedInvoicesCount" class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">0 فاتورة</span>
+              </div>
+              <div id="closedInvoicesContainer" class="space-y-2">
+                <p id="closedInvoicesEmptyState" class="text-center text-xs text-slate-400">لا توجد فواتير مؤرشفة بعد.</p>
+              </div>
+            </div>
 
             <div class="mt-4 rounded-[24px] border border-slate-100 bg-white/90 p-4 shadow-sm">
               <div class="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
@@ -357,11 +387,6 @@
                     </tbody>
                   </table>
                 </div>
-              </div>
-              <div class="mt-4">
-                <span id="remainingBalanceBadge" class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-extrabold text-amber-700 shadow-sm">
-                  المتبقي بذمة المريض الحالي: 0.00 ل.س
-                </span>
               </div>
             </div>
 
@@ -1809,38 +1834,35 @@
       return Number.isFinite(parsed) ? parsed : 0;
     }
 
-    function getCurrentTotalTreatmentCost() {
-      if (!currentPatient) return 0;
-      return Math.max(parseCurrencyNumber(currentPatient.total_treatment_cost), 0);
+    // ====================================================================
+    // فواتير العلاج المستقلة -- 2026-08-25 (الحل الجذري لمشكلة تداخل الحسابات)
+    // ====================================================================
+    // بدل خانة "التكلفة الإجمالية" الواحدة القديمة (كانت تُستبدل بالكامل عند كل
+    // جولة علاج جديدة، بينما "المدفوع" يُحسب كمجموع كل دفعات المريض التاريخية
+    // بلا فصل)، كل جولة علاج الآن فاتورة (TreatmentInvoice) مستقلة تماماً --
+    // انظر /api/patients/{id}/invoices في main.py. currentPatientInvoices يحمل
+    // آخر نسخة محمّلة من فواتير هذا المريض (كل واحدة تحمل remaining_amount
+    // المحسوب من السيرفر لهذه الفاتورة وحدها).
+    let currentPatientInvoices = [];
+    const expandedInvoiceHistoryIds = new Set();
+
+    function getPatientInvoicesEndpoint(patientId) {
+      return apiUrl(`/api/patients/${encodeURIComponent(String(patientId))}/invoices`);
     }
 
-    function getTotalReceivedPayments() {
-      if (!Array.isArray(currentFinanceLedger) || currentFinanceLedger.length === 0) return 0;
-      return currentFinanceLedger.reduce((sum, record) => {
-        const amount = parseCurrencyNumber(record?.amount);
-        return sum + (amount > 0 ? amount : 0);
-      }, 0);
-    }
-
-    function renderTotalTreatmentCostDisplay() {
-      const costDisplay = document.getElementById('patientTotalTreatmentCost');
-      const costInput = document.getElementById('patientTotalTreatmentCostInput');
-      const totalCost = getCurrentTotalTreatmentCost();
-      if (costDisplay) {
-        costDisplay.textContent = `${formatFinanceAmount(totalCost)} ل.س`;
-      }
-      if (costInput && !isEditing) {
-        costInput.value = totalCost > 0 ? String(totalCost) : '';
-      }
+    function getInvoicePaymentEndpoint(patientId, invoiceId) {
+      return apiUrl(`/api/patients/${encodeURIComponent(String(patientId))}/invoices/${encodeURIComponent(String(invoiceId))}/payments`);
     }
 
     function renderRemainingBalanceBadge() {
       const badge = document.getElementById('remainingBalanceBadge');
       if (!badge) return;
 
-      const totalCost = getCurrentTotalTreatmentCost();
-      const totalReceived = getTotalReceivedPayments();
-      const remaining = Math.max(totalCost - totalReceived, 0);
+      const invoices = Array.isArray(currentPatientInvoices) ? currentPatientInvoices : [];
+      const remaining = invoices.reduce((sum, invoice) => {
+        const invoiceRemaining = Number(invoice?.remaining_amount);
+        return sum + (invoiceRemaining > 0 ? invoiceRemaining : 0);
+      }, 0);
 
       badge.textContent = `المتبقي بذمة المريض الحالي: ${formatFinanceAmount(remaining)} ل.س`;
 
@@ -1857,6 +1879,293 @@
         badge.classList.add('border-amber-200', 'bg-amber-50', 'text-amber-700');
       } else {
         badge.classList.add('border-emerald-200', 'bg-emerald-50', 'text-emerald-700');
+      }
+    }
+
+    function createInvoicePaymentRow(payment) {
+      const row = document.createElement('div');
+      row.className = 'flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-1 py-2 text-xs last:border-b-0';
+      row.innerHTML = `
+        <span class="text-slate-400">${escapeHtml(formatFinanceLedgerDate(payment?.created_at))}</span>
+        <span class="flex-1 px-2 text-slate-600">${escapeHtml(String(payment?.description || '—'))}</span>
+        <span class="font-bold text-emerald-700">${formatFinanceAmount(payment?.amount)} ل.س</span>
+        <span class="flex items-center gap-1">
+          <button type="button" data-invoice-payment-edit-id="${String(payment?.id ?? '')}" class="invoice-payment-edit-btn rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700 transition hover:bg-indigo-100">تعديل</button>
+          <button type="button" data-invoice-payment-delete-id="${String(payment?.id ?? '')}" class="invoice-payment-delete-btn rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-700 transition hover:bg-rose-100">حذف</button>
+        </span>
+      `;
+      return row;
+    }
+
+    function attachInvoicePaymentRowListeners(scope) {
+      scope.querySelectorAll('.invoice-payment-edit-btn').forEach((button) => {
+        button.addEventListener('click', () => {
+          const transactionId = button.getAttribute('data-invoice-payment-edit-id');
+          if (!transactionId) return;
+          const record = currentPatientInvoices
+            .flatMap((invoice) => (Array.isArray(invoice.payments) ? invoice.payments : []))
+            .find((item) => String(item.id) === String(transactionId));
+          if (!record) return;
+          openFinanceEditModal(record);
+        });
+      });
+
+      scope.querySelectorAll('.invoice-payment-delete-btn').forEach((button) => {
+        button.addEventListener('click', () => {
+          const transactionId = button.getAttribute('data-invoice-payment-delete-id');
+          if (!transactionId) return;
+          requestDeleteFinanceTransaction(transactionId);
+        });
+      });
+    }
+
+    function createOpenInvoiceCard(invoice) {
+      const card = document.createElement('div');
+      card.className = 'rounded-[20px] border border-slate-100 bg-white p-4 shadow-sm';
+
+      const totalCostNumber = Number(invoice.total_cost) || 0;
+      const paidNumber = Number(invoice.paid_amount) || 0;
+      const progressPercent = totalCostNumber > 0 ? Math.min((paidNumber / totalCostNumber) * 100, 100) : 100;
+
+      card.innerHTML = `
+        <div class="flex flex-wrap items-start justify-between gap-2">
+          <div class="min-w-0">
+            <p class="truncate text-sm font-extrabold text-indigo-900">${escapeHtml(invoice.title)}</p>
+            <p class="mt-1 text-[11px] text-slate-400">بدأت في ${escapeHtml(formatFinanceLedgerDate(invoice.created_at))}</p>
+          </div>
+          <span class="whitespace-nowrap rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-bold text-indigo-700">قيد السداد</span>
+        </div>
+        <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+          <div class="h-full rounded-full bg-gradient-to-r from-indigo-600 to-violet-600" style="width:${progressPercent.toFixed(0)}%"></div>
+        </div>
+        <div class="mt-3 grid grid-cols-3 gap-2">
+          <div class="rounded-xl bg-slate-50 px-2 py-2 text-center">
+            <p class="text-[10px] text-slate-500">التكلفة</p>
+            <p class="mt-0.5 text-xs font-extrabold text-slate-800">${formatFinanceAmount(invoice.total_cost)} ل.س</p>
+          </div>
+          <div class="rounded-xl bg-slate-50 px-2 py-2 text-center">
+            <p class="text-[10px] text-slate-500">المدفوع</p>
+            <p class="mt-0.5 text-xs font-extrabold text-emerald-700">${formatFinanceAmount(invoice.paid_amount)} ل.س</p>
+          </div>
+          <div class="rounded-xl bg-amber-50 px-2 py-2 text-center">
+            <p class="text-[10px] text-amber-600">المتبقي</p>
+            <p class="mt-0.5 text-xs font-extrabold text-amber-700">${formatFinanceAmount(invoice.remaining_amount)} ل.س</p>
+          </div>
+        </div>
+        <div data-invoice-payments-list="1" class="mt-3"></div>
+        <form data-invoice-payment-form="${invoice.id}" class="mt-3 flex flex-wrap items-center gap-2">
+          <input type="text" inputmode="decimal" placeholder="مبلغ الدفعة الجديدة (ل.س)" class="min-w-[160px] flex-1 rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100" />
+          <button type="submit" class="whitespace-nowrap rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5 text-xs font-extrabold text-white shadow-sm transition hover:from-indigo-700 hover:to-violet-700">تسجيل دفعة على هذه الفاتورة</button>
+        </form>
+      `;
+
+      const paymentsList = card.querySelector('[data-invoice-payments-list="1"]');
+      if (paymentsList && Array.isArray(invoice.payments) && invoice.payments.length > 0) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'rounded-xl border border-slate-100';
+        invoice.payments.forEach((payment) => wrapper.appendChild(createInvoicePaymentRow(payment)));
+        paymentsList.appendChild(wrapper);
+      }
+
+      const form = card.querySelector(`[data-invoice-payment-form="${invoice.id}"]`);
+      if (form) {
+        form.addEventListener('submit', (event) => {
+          event.preventDefault();
+          const input = form.querySelector('input');
+          submitInvoicePayment(invoice.id, input);
+        });
+      }
+
+      attachInvoicePaymentRowListeners(card);
+
+      return card;
+    }
+
+    function createClosedInvoiceRow(invoice) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'overflow-hidden rounded-[16px] border border-emerald-100 bg-white';
+
+      const isExpanded = expandedInvoiceHistoryIds.has(invoice.id);
+
+      wrapper.innerHTML = `
+        <button type="button" data-toggle-invoice-history="${invoice.id}" class="flex w-full items-center justify-between gap-3 px-4 py-3 text-right">
+          <span class="flex min-w-0 items-center gap-2">
+            <span class="text-emerald-600">✔</span>
+            <span class="truncate text-sm font-bold text-slate-800">${escapeHtml(invoice.title)}</span>
+          </span>
+          <span class="flex flex-shrink-0 items-center gap-3">
+            <span class="text-[11px] text-slate-400">${escapeHtml(formatFinanceLedgerDate(invoice.created_at))}</span>
+            <span class="text-xs font-extrabold text-emerald-700">${formatFinanceAmount(invoice.total_cost)} ل.س</span>
+          </span>
+        </button>
+        <div data-invoice-history-body="${invoice.id}" class="${isExpanded ? '' : 'hidden'} border-t border-emerald-100 px-4 pb-3"></div>
+      `;
+
+      const body = wrapper.querySelector(`[data-invoice-history-body="${invoice.id}"]`);
+      if (body && Array.isArray(invoice.payments)) {
+        invoice.payments.forEach((payment) => body.appendChild(createInvoicePaymentRow(payment)));
+      }
+
+      const toggleBtn = wrapper.querySelector(`[data-toggle-invoice-history="${invoice.id}"]`);
+      if (toggleBtn) {
+        toggleBtn.addEventListener('click', () => {
+          if (expandedInvoiceHistoryIds.has(invoice.id)) {
+            expandedInvoiceHistoryIds.delete(invoice.id);
+          } else {
+            expandedInvoiceHistoryIds.add(invoice.id);
+          }
+          if (body) body.classList.toggle('hidden');
+        });
+      }
+
+      return wrapper;
+    }
+
+    function renderInvoices() {
+      const openContainer = document.getElementById('openInvoicesContainer');
+      const closedContainer = document.getElementById('closedInvoicesContainer');
+      const openCountBadge = document.getElementById('openInvoicesCount');
+      const closedCountBadge = document.getElementById('closedInvoicesCount');
+      const openEmptyState = document.getElementById('openInvoicesEmptyState');
+      const closedEmptyState = document.getElementById('closedInvoicesEmptyState');
+
+      if (!openContainer || !closedContainer) return;
+
+      const invoices = Array.isArray(currentPatientInvoices) ? currentPatientInvoices : [];
+      const openInvoices = invoices.filter((invoice) => invoice.status === 'open');
+      const closedInvoices = invoices.filter((invoice) => invoice.status !== 'open');
+
+      if (openCountBadge) openCountBadge.textContent = `${openInvoices.length} فاتورة`;
+      if (closedCountBadge) closedCountBadge.textContent = `${closedInvoices.length} فاتورة`;
+
+      openContainer.querySelectorAll('[data-open-invoice-card="1"]').forEach((el) => el.remove());
+      closedContainer.querySelectorAll('[data-closed-invoice-row="1"]').forEach((el) => el.remove());
+
+      if (openEmptyState) openEmptyState.classList.toggle('hidden', openInvoices.length > 0);
+      if (closedEmptyState) closedEmptyState.classList.toggle('hidden', closedInvoices.length > 0);
+
+      openInvoices.forEach((invoice) => {
+        const card = createOpenInvoiceCard(invoice);
+        card.setAttribute('data-open-invoice-card', '1');
+        openContainer.appendChild(card);
+      });
+
+      closedInvoices.forEach((invoice) => {
+        const row = createClosedInvoiceRow(invoice);
+        row.setAttribute('data-closed-invoice-row', '1');
+        closedContainer.appendChild(row);
+      });
+
+      renderRemainingBalanceBadge();
+    }
+
+    async function loadPatientInvoices() {
+      const patientId = getPatientIdFromUrl();
+      if (!patientId) return;
+
+      try {
+        const response = await fetch(getPatientInvoicesEndpoint(patientId), { headers: getDoctorAuthHeaders() });
+        if (!response.ok) {
+          throw new Error('Failed to load patient invoices');
+        }
+        currentPatientInvoices = await response.json();
+        renderInvoices();
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    function toggleNewInvoiceForm(forceShow) {
+      const form = document.getElementById('newInvoiceForm');
+      if (!form) return;
+      const show = typeof forceShow === 'boolean' ? forceShow : form.classList.contains('hidden');
+      form.classList.toggle('hidden', !show);
+      const titleInput = document.getElementById('newInvoiceTitleInput');
+      const costInput = document.getElementById('newInvoiceCostInput');
+      if (show) {
+        if (titleInput) titleInput.focus();
+      } else {
+        if (titleInput) titleInput.value = '';
+        if (costInput) costInput.value = '';
+      }
+    }
+
+    async function submitNewInvoice(event) {
+      event.preventDefault();
+      const patientId = getPatientIdFromUrl();
+      if (!patientId) return;
+
+      const titleInput = document.getElementById('newInvoiceTitleInput');
+      const costInput = document.getElementById('newInvoiceCostInput');
+      const title = titleInput ? titleInput.value.trim() : '';
+      const cost = parseCurrencyNumber(costInput ? costInput.value : '');
+
+      if (!title) {
+        alert('يرجى إدخال عنوان جولة العلاج.');
+        return;
+      }
+      if (!(cost > 0)) {
+        alert('يرجى إدخال تكلفة إجمالية صحيحة أكبر من صفر.');
+        return;
+      }
+
+      const submitButton = event.target.querySelector('button[type="submit"]');
+      if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = '...جاري الإنشاء';
+      }
+
+      try {
+        const response = await fetch(apiUrl(`/api/patients/${patientId}/invoices`), {
+          method: 'POST',
+          headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ title, total_cost: cost }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to create invoice');
+        }
+
+        toggleNewInvoiceForm(false);
+        await loadPatientInvoices();
+        showFinanceSuccessAlert('تم إنشاء فاتورة العلاج بنجاح');
+      } catch (error) {
+        alert('تعذر إنشاء فاتورة العلاج الآن. يرجى المحاولة لاحقاً.');
+      } finally {
+        if (submitButton) {
+          submitButton.disabled = false;
+          submitButton.textContent = 'إنشاء الفاتورة';
+        }
+      }
+    }
+
+    async function submitInvoicePayment(invoiceId, inputEl) {
+      const patientId = getPatientIdFromUrl();
+      if (!patientId || !invoiceId) return;
+
+      const amount = parseCurrencyNumber(inputEl ? inputEl.value : '');
+      if (!(amount > 0)) {
+        alert('يرجى إدخال مبلغ صحيح قبل تسجيل الدفعة.');
+        return;
+      }
+
+      try {
+        const response = await fetch(getInvoicePaymentEndpoint(patientId, invoiceId), {
+          method: 'POST',
+          headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ amount }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to register invoice payment');
+        }
+
+        if (inputEl) inputEl.value = '';
+        await loadPatientInvoices();
+        await loadFinanceLedger();
+        showFinanceSuccessAlert('تم تسجيل الدفعة على فاتورة العلاج بنجاح');
+      } catch (error) {
+        alert('تعذر تسجيل الدفعة الآن. يرجى المحاولة لاحقاً.');
       }
     }
 
@@ -2588,6 +2897,9 @@
       }
 
       await loadFinanceLedger();
+      // 2026-08-25: الدفعة المحذوفة قد تخص إحدى فواتير العلاج المستقلة --
+      // يجب تحديث بطاقات الفواتير وشارة "المتبقي" أيضاً، لا سجل الدفعات فقط.
+      await loadPatientInvoices();
       showFinanceSuccessAlert('تم حذف الدفعة المالية بنجاح');
     }
 
@@ -2734,10 +3046,6 @@
 
     function getFinanceLedgerEndpoint(patientId) {
       return apiUrl(`/api/finance/patient/${encodeURIComponent(String(patientId))}`);
-    }
-
-    function getFinancePaymentEndpoint() {
-      return apiUrl('/api/finance');
     }
 
     function updateFinanceLedgerCount(count) {
@@ -2947,6 +3255,9 @@
         }
 
         applyFinanceRowUpdate(activeFinanceTransaction.id, parsedAmount, descriptionValue);
+        // 2026-08-25: نفس السبب أعلاه -- تعديل مبلغ دفعة قد يغيّر المتبقي على
+        // فاتورة العلاج التي تنتمي إليها.
+        await loadPatientInvoices();
         showFinanceSuccessAlert('تم تحديث الدفعة المالية بنجاح ✨');
         closeFinanceEditModal();
       } catch (error) {
@@ -3110,63 +3421,7 @@
       }
     }
 
-    async function submitFinancialPayment(event) {
-      event.preventDefault();
-
-      const paymentInput = document.getElementById('financialPaymentInput');
-      const amountValue = paymentInput ? paymentInput.value.trim() : '';
-      const amount = parseFloat(amountValue);
-      const patientId = getPatientIdFromUrl();
-      const patientName = currentPatient?.full_name || 'غير محدد';
-
-      if (!patientId || Number.isNaN(amount) || amount <= 0) {
-        alert('يرجى إدخال مبلغ صحيح قبل تسجيل الدفعة.');
-        return;
-      }
-
-      const payload = {
-        patient_id: patientId,
-        type: 'income',
-        amount: parseFloat(amountValue),
-        description: `دفعة مالية من المريض: ${patientName}`
-      };
-
-      const paymentButton = document.getElementById('financialPaymentBtn');
-      if (paymentButton && window.ClinicLoader) {
-        ClinicLoader.setButtonLoading(paymentButton, true, { loadingText: '...جاري تسجيل الدفعة' });
-      } else if (paymentButton) {
-        paymentButton.disabled = true;
-        paymentButton.textContent = '...جاري تسجيل الدفعة';
-      }
-
-      try {
-        const response = await fetch(getFinancePaymentEndpoint(), {
-          method: 'POST',
-          headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify(payload)
-        });
-
-        if (response.status !== 200) {
-          throw new Error('Failed to register payment');
-        }
-
-        const createdRecord = await response.json();
-        prependFinanceLedgerRow(createdRecord);
-        showFinanceSuccessAlert('تم تسجيل الدفعة وضخها في حسابات العيادة بنجاح!');
-        if (paymentInput) {
-          paymentInput.value = '';
-        }
-      } catch (error) {
-        alert('تعذر تسجيل الدفعة الآن. يرجى المحاولة لاحقاً.');
-      } finally {
-        if (paymentButton && window.ClinicLoader) {
-          ClinicLoader.setButtonLoading(paymentButton, false);
-        } else if (paymentButton) {
-          paymentButton.disabled = false;
-          paymentButton.textContent = 'تسجيل الدفع المالي';
-        }
-      }
-    }
+    // submitFinancialPayment أُزيلت (2026-08-25) -- الدفعات تُسجَّل الآن حصراً عبر submitInvoicePayment على فاتورة محددة.
 
     function bindArchiveDropzone() {
       const dropzone = document.getElementById('archiveDropzone');
@@ -3220,12 +3475,10 @@
       const patientName = document.getElementById('patientName');
       const patientPhone = document.getElementById('patientPhone');
       const patientAge = document.getElementById('patientAge');
-      const patientTotalTreatmentCost = document.getElementById('patientTotalTreatmentCost');
       const patientHistory = document.getElementById('patientHistory');
       const patientNameInput = document.getElementById('patientNameInput');
       const patientPhoneInput = document.getElementById('patientPhoneInput');
       const patientAgeInput = document.getElementById('patientAgeInput');
-      const patientTotalTreatmentCostInput = document.getElementById('patientTotalTreatmentCostInput');
       const patientHistoryInput = document.getElementById('patientHistoryInput');
 
       if (editBtn) editBtn.classList.toggle('hidden', editing);
@@ -3234,12 +3487,10 @@
       if (patientName) patientName.classList.toggle('hidden', editing);
       if (patientPhone) patientPhone.classList.toggle('hidden', editing);
       if (patientAge) patientAge.classList.toggle('hidden', editing);
-      if (patientTotalTreatmentCost) patientTotalTreatmentCost.classList.toggle('hidden', editing);
       if (patientHistory) patientHistory.classList.toggle('hidden', editing);
       if (patientNameInput) patientNameInput.classList.toggle('hidden', !editing);
       if (patientPhoneInput) patientPhoneInput.classList.toggle('hidden', !editing);
       if (patientAgeInput) patientAgeInput.classList.toggle('hidden', !editing);
-      if (patientTotalTreatmentCostInput) patientTotalTreatmentCostInput.classList.toggle('hidden', !editing);
       if (patientHistoryInput) patientHistoryInput.classList.toggle('hidden', !editing);
 
       if (patientAgeInput) {
@@ -3259,10 +3510,6 @@
           const currentAge = Number.isInteger(currentPatient.age) ? currentPatient.age : fallbackAge;
           patientAgeInput.value = currentAge != null ? String(currentAge) : '';
         }
-        if (patientTotalTreatmentCostInput) {
-          const costValue = Math.max(parseCurrencyNumber(currentPatient.total_treatment_cost), 0);
-          patientTotalTreatmentCostInput.value = costValue > 0 ? String(costValue) : '';
-        }
         if (patientHistoryInput) patientHistoryInput.value = currentPatient.medical_history || '';
       }
     }
@@ -3274,7 +3521,6 @@
       const patientNameInput = document.getElementById('patientNameInput');
       const patientPhoneInput = document.getElementById('patientPhoneInput');
       const patientAgeInput = document.getElementById('patientAgeInput');
-      const patientTotalTreatmentCostInput = document.getElementById('patientTotalTreatmentCostInput');
       const patientHistoryInput = document.getElementById('patientHistoryInput');
 
       const ageInputValue = patientAgeInput ? patientAgeInput.value.trim() : '';
@@ -3284,19 +3530,13 @@
         return;
       }
 
-      const totalTreatmentCostInputValue = patientTotalTreatmentCostInput ? patientTotalTreatmentCostInput.value.trim() : '';
-      const parsedTotalTreatmentCost = parseCurrencyNumber(totalTreatmentCostInputValue || currentPatient.total_treatment_cost);
-      if (parsedTotalTreatmentCost < 0) {
-        alert('يرجى إدخال تكلفة علاج صحيحة.');
-        return;
-      }
-
+      // 2026-08-25: total_treatment_cost لم تعد تُرسَل من هنا -- التكلفة تُدار
+      // حصراً عبر فواتير علاج مستقلة (انظر submitNewInvoice/submitInvoicePayment).
       const payload = {
         full_name: patientNameInput ? patientNameInput.value.trim() : currentPatient.full_name,
         phone: patientPhoneInput ? patientPhoneInput.value.trim() : currentPatient.phone,
         age: ageInputValue ? parsedAge : null,
         medical_history: patientHistoryInput ? patientHistoryInput.value.trim() : currentPatient.medical_history,
-        total_treatment_cost: parsedTotalTreatmentCost,
       };
 
       try {
@@ -3316,7 +3556,6 @@
         const patientName = document.getElementById('patientName');
         const patientPhone = document.getElementById('patientPhone');
         const patientAge = document.getElementById('patientAge');
-        const patientTotalTreatmentCost = document.getElementById('patientTotalTreatmentCost');
         const patientHistory = document.getElementById('patientHistory');
 
         if (patientName) patientName.textContent = updatedPatient.full_name || '—';
@@ -3330,9 +3569,6 @@
         if (patientAgeInput) {
           patientAgeInput.disabled = true;
           patientAgeInput.setAttribute('readonly', 'readonly');
-        }
-        if (patientTotalTreatmentCost) {
-          patientTotalTreatmentCost.textContent = `${formatFinanceAmount(Math.max(parseCurrencyNumber(updatedPatient.total_treatment_cost), 0))} ل.س`;
         }
         if (patientHistory) patientHistory.textContent = updatedPatient.medical_history || 'لا توجد ملاحظات طبية متاحة.';
 
@@ -3387,10 +3623,7 @@
         patientName.textContent = patient.full_name || '—';
         patientPhone.textContent = patient.phone || '—';
         patientAge.textContent = patient.age ?? calculateAge(patient.birth_date);
-        renderTotalTreatmentCostDisplay();
-        renderRemainingBalanceBadge();
         const patientAgeInput = document.getElementById('patientAgeInput');
-        const patientTotalTreatmentCostInput = document.getElementById('patientTotalTreatmentCostInput');
         if (patientAgeInput) {
           const ageValue = Number.isInteger(patient.age)
             ? patient.age
@@ -3399,11 +3632,10 @@
           patientAgeInput.disabled = true;
           patientAgeInput.setAttribute('readonly', 'readonly');
         }
-        if (patientTotalTreatmentCostInput) {
-          const costValue = Math.max(parseCurrencyNumber(patient.total_treatment_cost), 0);
-          patientTotalTreatmentCostInput.value = costValue > 0 ? String(costValue) : '';
-        }
         patientHistory.textContent = patient.medical_history || 'لا توجد ملاحظات طبية متاحة.';
+        // 2026-08-25: يحمّل فواتير العلاج المستقلة لهذا المريض ويرسم بطاقات
+        // الفواتير المفتوحة/المؤرشفة وشارة "المتبقي" (يستدعي renderRemainingBalanceBadge داخلياً).
+        await loadPatientInvoices();
         if (chartSceneHint) {
           chartSceneHint.textContent = `الملف الخاص بـ ${patient.full_name || 'المريض'} جاهز للمراجعة`;
         }
@@ -3466,9 +3698,17 @@
         closeDeleteConfirmModal();
       }
     });
-    const financialPaymentForm = document.getElementById('financialPaymentForm');
-    if (financialPaymentForm) {
-      financialPaymentForm.addEventListener('submit', submitFinancialPayment);
+    const toggleNewInvoiceFormBtn = document.getElementById('toggleNewInvoiceFormBtn');
+    if (toggleNewInvoiceFormBtn) {
+      toggleNewInvoiceFormBtn.addEventListener('click', () => toggleNewInvoiceForm());
+    }
+    const cancelNewInvoiceBtn = document.getElementById('cancelNewInvoiceBtn');
+    if (cancelNewInvoiceBtn) {
+      cancelNewInvoiceBtn.addEventListener('click', () => toggleNewInvoiceForm(false));
+    }
+    const newInvoiceForm = document.getElementById('newInvoiceForm');
+    if (newInvoiceForm) {
+      newInvoiceForm.addEventListener('submit', submitNewInvoice);
     }
     const xrayUploadForm = document.getElementById('xrayUploadForm');
     if (xrayUploadForm) {

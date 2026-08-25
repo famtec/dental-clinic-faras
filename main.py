@@ -498,7 +498,11 @@ class PatientUpdate(BaseModel):
     full_name: Optional[str] = None
     phone: Optional[str] = None
     medical_history: Optional[str] = None
-    total_treatment_cost: Optional[float] = None
+    # total_treatment_cost أُزيل من هنا عمداً (2026-08-25) -- التكلفة لم تعد
+    # حقلاً واحداً قابلاً للاستبدال، بل فواتير علاج مستقلة (انظر
+    # TreatmentInvoiceCreate + /api/patients/{id}/invoices بالأسفل). العمود
+    # الخام في قاعدة البيانات (patients.total_treatment_cost) يبقى بلا حذف
+    # لأغراض تاريخية فقط ولم يعد يُقرأ لأي حساب رصيد فعلي.
 
 
 class PatientChartUpdate(BaseModel):
@@ -607,6 +611,11 @@ class ExpenseCreate(BaseModel):
     type: str = "expense"
     patient_id: Optional[int] = None
     doctor_name: Optional[str] = None
+    # يربط دفعة مريض (type="income") بفاتورة علاج محددة (2026-08-25) -- مطلوب
+    # إلزامياً عند وجود patient_id مع type="income" (انظر create_expense
+    # أدناه)، لضمان أن كل دفعة مرتبطة دائماً بفاتورة مستقلة ولا تتكرر مشكلة
+    # تداخل الحسابات القديمة.
+    invoice_id: Optional[int] = None
     # 2026-08-24: ربط تلقائي اختياري بين مصروف "شراء مادة" ومخزن المواد --
     # انظر create_expense() ومذكرة dental_project_finance_inventory_link.
     add_to_inventory: bool = False
@@ -642,6 +651,43 @@ class FinancialTransactionResponse(BaseModel):
 class FinancialTransactionUpdate(BaseModel):
     amount: float
     description: str
+
+
+# ====================================================================
+# فواتير العلاج المستقلة (Treatment Invoices) -- 2026-08-25
+# ====================================================================
+# انظر شرح models.TreatmentInvoice لسياق كامل. هذه المخططات تخدم ثلاثة
+# مسارات جديدة: عرض فواتير مريض، إنشاء فاتورة جديدة، وتسجيل دفعة على فاتورة
+# محددة.
+class TreatmentInvoiceCreate(BaseModel):
+    title: str
+    total_cost: float
+
+
+class TreatmentInvoicePaymentCreate(BaseModel):
+    amount: float
+    description: Optional[str] = None
+
+
+class TreatmentInvoicePaymentResponse(BaseModel):
+    id: int
+    amount: float
+    description: str
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TreatmentInvoiceResponse(BaseModel):
+    id: int
+    patient_id: int
+    title: str
+    total_cost: float
+    paid_amount: float
+    remaining_amount: float
+    status: str
+    created_at: datetime
+    payments: List[TreatmentInvoicePaymentResponse] = []
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PatientStatsResponse(BaseModel):
@@ -1674,6 +1720,13 @@ def get_all_patients(
 
     patient_ids = [patient.id for patient in patients]
     paid_amount_by_patient_id: dict[int, Decimal] = {}
+    # 2026-08-25: "total_treatment_cost" هنا لم يعد يُقرأ من العمود الخام
+    # المفرد patients.total_treatment_cost (كان هذا مصدر مشكلة تداخل
+    # الحسابات) -- بل يُحسب كمجموع كل فواتير العلاج (treatment_invoices)
+    # المستقلة لهذا المريض، مفتوحة كانت أو مغلقة. الشكل الظاهري لهذا الحقل في
+    # الاستجابة (اسمه ونوعه) لم يتغيّر إطلاقاً حتى لا يُكسر أي كود قائم يقرأه
+    # (index.html يستخدمه كـ fallback عند فشل /api/patients/stats).
+    total_cost_by_patient_id: dict[int, Decimal] = {}
 
     if patient_ids:
         income_rows = (
@@ -1694,11 +1747,30 @@ def get_all_patients(
             if patient_id is not None
         }
 
+        invoice_cost_rows = (
+            db.query(
+                models.TreatmentInvoice.patient_id,
+                func.coalesce(func.sum(models.TreatmentInvoice.total_cost), 0).label("total_cost"),
+            )
+            .filter(models.TreatmentInvoice.patient_id.in_(patient_ids))
+            .group_by(models.TreatmentInvoice.patient_id)
+            .all()
+        )
+        total_cost_by_patient_id = {
+            patient_id: Decimal(str(total_cost or 0))
+            for patient_id, total_cost in invoice_cost_rows
+            if patient_id is not None
+        }
+
     response_payload: list[dict] = []
     for patient in patients:
         paid_amount = paid_amount_by_patient_id.get(patient.id, Decimal("0"))
         if paid_amount < 0:
             paid_amount = Decimal("0")
+
+        total_treatment_cost = total_cost_by_patient_id.get(patient.id, Decimal("0"))
+        if total_treatment_cost < 0:
+            total_treatment_cost = Decimal("0")
 
         response_payload.append(
             {
@@ -1710,7 +1782,7 @@ def get_all_patients(
                 "birth_date": patient.birth_date,
                 "gender": patient.gender,
                 "medical_history": patient.medical_history,
-                "total_treatment_cost": float(getattr(patient, "total_treatment_cost", 0) or 0),
+                "total_treatment_cost": float(total_treatment_cost),
                 "chart_state": getattr(patient, "chart_state", None),
                 "paid_amount": float(paid_amount),
             }
@@ -1788,37 +1860,52 @@ def get_patient_stats(
 
         pending_balances = Decimal("0.00")
         if patient_ids:
-            # Step 2: In-list transaction filtering -- only sum transaction
-            # rows whose patient_id is inside our verified active array.
-            received_rows = (
-                db.query(
-                    models.FinancialTransaction.patient_id,
-                    func.coalesce(func.sum(models.FinancialTransaction.amount), 0).label("total_received"),
-                )
-                .filter(models.FinancialTransaction.patient_id.in_(patient_ids))
-                .filter(models.FinancialTransaction.type.in_(["income", "received"]))
-                .filter(models.FinancialTransaction.amount > 0)
-                .group_by(models.FinancialTransaction.patient_id)
+            # 2026-08-25: هذا هو الإصلاح الجذري لمشكلة "تداخل الحسابات" --
+            # سابقاً كان المتبقي = total_treatment_cost (حقل واحد قابل
+            # للاستبدال) ناقص مجموع كل دفعات المريض التاريخية بلا أي فصل بين
+            # جولات العلاج، فإذا سُدّدت جولة علاج قديمة بالكامل ثم فُتحت جولة
+            # جديدة بتكلفة مختلفة، كانت الدفعات القديمة "تبتلع" تكلفة الجولة
+            # الجديدة في هذا الحساب. الآن: كل فاتورة علاج (treatment_invoices)
+            # تُحسب بمفردها (max(تكلفتها - دفعاتها المرتبطة بها فقط, 0))، ثم
+            # تُجمع فقط الفواتير المفتوحة فعلياً -- تسديد فاتورة قديمة بالكامل
+            # لا يترك أي أثر على حساب أي فاتورة جديدة.
+            invoice_rows = (
+                db.query(models.TreatmentInvoice.id, models.TreatmentInvoice.patient_id, models.TreatmentInvoice.total_cost)
+                .filter(models.TreatmentInvoice.patient_id.in_(patient_ids))
                 .all()
             )
-            received_by_patient_id = {
-                patient_id: Decimal(str(total_received or 0))
-                for patient_id, total_received in received_rows
-                if patient_id is not None
-            }
+            invoice_ids = [row[0] for row in invoice_rows]
 
-            for patient in patients:
-                total_treatment_cost = Decimal(str(getattr(patient, "total_treatment_cost", 0) or 0))
-                if total_treatment_cost < 0:
-                    total_treatment_cost = Decimal("0")
+            paid_by_invoice_id: dict[int, Decimal] = {}
+            if invoice_ids:
+                invoice_payment_rows = (
+                    db.query(
+                        models.FinancialTransaction.invoice_id,
+                        func.coalesce(func.sum(models.FinancialTransaction.amount), 0).label("paid"),
+                    )
+                    .filter(models.FinancialTransaction.invoice_id.in_(invoice_ids))
+                    .filter(models.FinancialTransaction.type.in_(["income", "received"]))
+                    .filter(models.FinancialTransaction.amount > 0)
+                    .group_by(models.FinancialTransaction.invoice_id)
+                    .all()
+                )
+                paid_by_invoice_id = {
+                    invoice_id: Decimal(str(paid or 0))
+                    for invoice_id, paid in invoice_payment_rows
+                    if invoice_id is not None
+                }
 
-                total_received = received_by_patient_id.get(patient.id, Decimal("0"))
-                if total_received < 0:
-                    total_received = Decimal("0")
+            for invoice_id, _patient_id, total_cost in invoice_rows:
+                invoice_total_cost = Decimal(str(total_cost or 0))
+                if invoice_total_cost < 0:
+                    invoice_total_cost = Decimal("0")
+
+                invoice_paid = paid_by_invoice_id.get(invoice_id, Decimal("0"))
+                if invoice_paid < 0:
+                    invoice_paid = Decimal("0")
 
                 # Prevent overpayments or corrupted values from creating negative debt.
-                patient_net_debt = max(total_treatment_cost - total_received, Decimal("0"))
-                pending_balances += patient_net_debt
+                pending_balances += max(invoice_total_cost - invoice_paid, Decimal("0"))
 
         return {
             "total_patients": len(patients),
@@ -1864,7 +1951,35 @@ def get_patient(
     if not patient:
         raise HTTPException(status_code=404, detail="المريض غير موجود")
 
-    return patient
+    # 2026-08-25: نفس منطق get_all_patients أعلاه -- total_treatment_cost
+    # يُحسب من مجموع فواتير العلاج المستقلة بدل قراءة العمود الخام المجمّد،
+    # حتى تبقى استجابة هذا المسار متسقة مع بقية الـ API بعد فصل الحسابات.
+    invoice_total_cost = (
+        db.query(func.coalesce(func.sum(models.TreatmentInvoice.total_cost), 0))
+        .filter(models.TreatmentInvoice.patient_id == patient_id_int)
+        .scalar()
+    )
+    paid_total = (
+        db.query(func.coalesce(func.sum(models.FinancialTransaction.amount), 0))
+        .filter(models.FinancialTransaction.patient_id == patient_id_int)
+        .filter(models.FinancialTransaction.type == "income")
+        .filter(models.FinancialTransaction.amount > 0)
+        .scalar()
+    )
+
+    return {
+        "id": patient.id,
+        "doctor_name": patient.doctor_name,
+        "doctor_email": patient.doctor_email,
+        "full_name": patient.full_name,
+        "phone": patient.phone,
+        "birth_date": patient.birth_date,
+        "gender": patient.gender,
+        "medical_history": patient.medical_history,
+        "total_treatment_cost": float(max(Decimal(str(invoice_total_cost or 0)), Decimal("0"))),
+        "chart_state": getattr(patient, "chart_state", None),
+        "paid_amount": float(max(Decimal(str(paid_total or 0)), Decimal("0"))),
+    }
 
 
 @app.delete("/api/patients/{patient_id}")
@@ -1901,7 +2016,14 @@ def delete_patient(
         db.query(models.Visit).filter(models.Visit.patient_id == patient_id).delete(synchronize_session=False)
         db.query(models.Treatment).filter(models.Treatment.patient_id == patient_id).delete(synchronize_session=False)
         db.query(models.PatientXRay).filter(models.PatientXRay.patient_id == patient_id).delete(synchronize_session=False)
+        # يجب حذف financial_transactions (تشير إلى treatment_invoices عبر
+        # invoice_id) قبل حذف treatment_invoices نفسها، وإلا يرفض Postgres
+        # حذف صف treatment_invoices بانتهاك قيد الـ FK -- تماماً نفس درس قصة
+        # حذف المريض ثلاثية الطبقات الموثقة أعلاه، وهذه طبقتها الرابعة
+        # (2026-08-25): fواتير العلاج الجديدة لها FK نحو patients.id أيضاً ولا
+        # نعتمد على cascade الـ ORM وحده لحذفها.
         db.query(models.FinancialTransaction).filter(models.FinancialTransaction.patient_id == patient_id).delete(synchronize_session=False)
+        db.query(models.TreatmentInvoice).filter(models.TreatmentInvoice.patient_id == patient_id).delete(synchronize_session=False)
         # لا نحذف المواعيد نفسها (قد تكون سجلاً تاريخياً يريد الطبيب الاحتفاظ
         # به) -- فقط نفك ربطها بهذا المريض المحذوف، لأن Appointment.patient_name
         # حقل نصي مستقل أصلاً ولا يعتمد على وجود صف patients ليبقى مقروءاً.
@@ -1953,8 +2075,9 @@ def update_patient(
             patient.phone = patient_update.phone
         if patient_update.medical_history is not None:
             patient.medical_history = patient_update.medical_history
-        if patient_update.total_treatment_cost is not None:
-            patient.total_treatment_cost = max(float(patient_update.total_treatment_cost), 0.0)
+        # لم يعد هذا المسار يقبل تعديل التكلفة الإجمالية مباشرة (2026-08-25) --
+        # التكلفة تُدار الآن حصراً عبر فواتير علاج مستقلة، انظر
+        # POST /api/patients/{patient_id}/invoices بالأسفل.
 
         db.commit()
         db.refresh(patient)
@@ -1963,6 +2086,168 @@ def update_patient(
         raise
 
     return patient
+
+
+def _serialize_invoice(invoice: "models.TreatmentInvoice", payments: list) -> dict:
+    paid_amount = sum((Decimal(str(p.amount)) for p in payments), Decimal("0"))
+    total_cost = Decimal(str(invoice.total_cost or 0))
+    if total_cost < 0:
+        total_cost = Decimal("0")
+    remaining_amount = max(total_cost - paid_amount, Decimal("0"))
+    return {
+        "id": invoice.id,
+        "patient_id": invoice.patient_id,
+        "title": invoice.title,
+        "total_cost": float(total_cost),
+        "paid_amount": float(paid_amount),
+        "remaining_amount": float(remaining_amount),
+        "status": "closed" if remaining_amount <= 0 else "open",
+        "created_at": invoice.created_at,
+        "payments": [
+            {
+                "id": p.id,
+                "amount": float(p.amount),
+                "description": p.description,
+                "created_at": p.created_at,
+            }
+            for p in sorted(payments, key=lambda p: (p.created_at, p.id), reverse=True)
+        ],
+    }
+
+
+def _get_owned_patient_or_404(db: Session, patient_id: int, doctor_email: str) -> "models.Patient":
+    patient = (
+        db.query(models.Patient)
+        .filter(models.Patient.id == patient_id, models.Patient.doctor_email == doctor_email)
+        .first()
+    )
+    if not patient:
+        raise HTTPException(status_code=404, detail="المريض غير موجود")
+    return patient
+
+
+# ====================================================================
+# فواتير العلاج المستقلة -- 2026-08-25 (الحل الجذري لمشكلة تداخل الحسابات)
+# ====================================================================
+# بدل تعديل patients.total_treatment_cost (رقم واحد قابل للاستبدال، فتختلط
+# فيه تكلفة العلاج الجديد بمدفوعات العلاج القديم)، كل جولة علاج جديدة تُنشأ
+# هنا كفاتورة (TreatmentInvoice) مستقلة تماماً بتكلفتها ودفعاتها الخاصة.
+# "الحالة" (مفتوحة/مغلقة) تُشتق دائماً من مقارنة التكلفة بمجموع الدفعات
+# المرتبطة بها تحديداً، ولا تُخزَّن كعمود منفصل، فلا يمكن أن تتضارب مع
+# الحسابات الفعلية.
+@app.get("/api/patients/{patient_id}/invoices", response_model=List[TreatmentInvoiceResponse])
+def get_patient_invoices(
+    patient_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_active_doctor_user),
+):
+    _get_owned_patient_or_404(db, patient_id, current_user.email)
+
+    invoices = (
+        db.query(models.TreatmentInvoice)
+        .filter(models.TreatmentInvoice.patient_id == patient_id)
+        .order_by(models.TreatmentInvoice.created_at.desc(), models.TreatmentInvoice.id.desc())
+        .all()
+    )
+
+    invoice_ids = [invoice.id for invoice in invoices]
+    payments_by_invoice_id: dict[int, list] = {}
+    if invoice_ids:
+        payment_rows = (
+            db.query(models.FinancialTransaction)
+            .filter(models.FinancialTransaction.invoice_id.in_(invoice_ids))
+            .all()
+        )
+        for payment in payment_rows:
+            payments_by_invoice_id.setdefault(payment.invoice_id, []).append(payment)
+
+    return [
+        _serialize_invoice(invoice, payments_by_invoice_id.get(invoice.id, []))
+        for invoice in invoices
+    ]
+
+
+@app.post("/api/patients/{patient_id}/invoices", response_model=TreatmentInvoiceResponse, status_code=201)
+def create_patient_invoice(
+    patient_id: int,
+    invoice_create: TreatmentInvoiceCreate,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_active_doctor_user),
+):
+    _get_owned_patient_or_404(db, patient_id, current_user.email)
+
+    title = (invoice_create.title or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="عنوان فاتورة العلاج مطلوب")
+    if invoice_create.total_cost is None or invoice_create.total_cost < 0:
+        raise HTTPException(status_code=400, detail="التكلفة الإجمالية يجب أن تكون رقماً صحيحاً أكبر من أو يساوي صفر")
+
+    try:
+        db_invoice = models.TreatmentInvoice(
+            patient_id=patient_id,
+            doctor_email=current_user.email,
+            title=title,
+            total_cost=Decimal(str(invoice_create.total_cost)),
+        )
+        db.add(db_invoice)
+        db.commit()
+        db.refresh(db_invoice)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر إنشاء فاتورة العلاج الآن. حاول مرة أخرى.")
+
+    return _serialize_invoice(db_invoice, [])
+
+
+@app.post("/api/patients/{patient_id}/invoices/{invoice_id}/payments", response_model=TreatmentInvoiceResponse)
+def register_invoice_payment(
+    patient_id: int,
+    invoice_id: int,
+    payment: TreatmentInvoicePaymentCreate,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_active_doctor_user),
+):
+    patient = _get_owned_patient_or_404(db, patient_id, current_user.email)
+
+    invoice = (
+        db.query(models.TreatmentInvoice)
+        .filter(
+            models.TreatmentInvoice.id == invoice_id,
+            models.TreatmentInvoice.patient_id == patient_id,
+            models.TreatmentInvoice.doctor_email == current_user.email,
+        )
+        .first()
+    )
+    if not invoice:
+        raise HTTPException(status_code=404, detail="فاتورة العلاج غير موجودة")
+
+    if payment.amount is None or payment.amount <= 0:
+        raise HTTPException(status_code=400, detail="قيمة الدفعة يجب أن تكون أكبر من صفر")
+
+    description = (payment.description or "").strip() or f"دفعة على فاتورة: {invoice.title}"
+
+    try:
+        db_payment = models.FinancialTransaction(
+            patient_id=patient_id,
+            doctor_name=(patient.doctor_name or current_user.doctor_name or current_user.email),
+            doctor_email=current_user.email,
+            amount=Decimal(str(payment.amount)),
+            type="income",
+            description=description,
+            invoice_id=invoice.id,
+        )
+        db.add(db_payment)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر تسجيل الدفعة الآن. حاول مرة أخرى.")
+
+    invoice_payments = (
+        db.query(models.FinancialTransaction)
+        .filter(models.FinancialTransaction.invoice_id == invoice.id)
+        .all()
+    )
+    return _serialize_invoice(invoice, invoice_payments)
 
 
 @app.put("/api/patients/{patient_id}/chart", response_model=PatientResponse)
@@ -2347,6 +2632,9 @@ def create_expense(
     if transaction_type not in {"income", "expense"}:
         raise HTTPException(status_code=400, detail="نوع العملية يجب أن يكون income أو expense.")
 
+    # ملاحظة: transaction_type يجب أن يُحسب هنا -- قبل فحص expense.patient_id
+    # أسفله الذي يعتمد عليه لإلزامية invoice_id.
+
     if expense.patient_id is not None:
         patient = (
             db.query(models.Patient)
@@ -2355,6 +2643,26 @@ def create_expense(
         )
         if not patient:
             raise HTTPException(status_code=404, detail="Patient not found")
+
+        # 2026-08-25: أي دفعة مريض (type="income") يجب أن تُربط إلزامياً بفاتورة
+        # علاج مستقلة موجودة فعلاً -- هذا هو التصحيح الجذري لمشكلة "تداخل
+        # الحسابات" التي كانت تحدث عندما يُفتح علاج جديد بتكلفة جديدة بينما
+        # المدفوع القديم لا يزال محسوباً معه كرقم تراكمي واحد. لا نسمح بعد الآن
+        # بإنشاء دفعة مريض غير مرتبطة بفاتورة محددة عبر هذا المسار المشترك.
+        if transaction_type == "income":
+            if expense.invoice_id is None:
+                raise HTTPException(status_code=400, detail="يجب اختيار فاتورة العلاج المرتبطة بهذه الدفعة")
+            invoice = (
+                db.query(models.TreatmentInvoice)
+                .filter(
+                    models.TreatmentInvoice.id == expense.invoice_id,
+                    models.TreatmentInvoice.patient_id == expense.patient_id,
+                    models.TreatmentInvoice.doctor_email == current_user.email,
+                )
+                .first()
+            )
+            if not invoice:
+                raise HTTPException(status_code=404, detail="فاتورة العلاج غير موجودة")
 
     # 2026-08-24: ربط تلقائي اختياري -- عند تسجيل مصروف لشراء مادة، يمكن للطبيب
     # طلب إضافتها/تحديث كميتها في مخزن المواد بنفس العملية، بدل الانتقال يدوياً إلى
@@ -2381,6 +2689,7 @@ def create_expense(
             amount=expense.amount,
             type=transaction_type,
             description=description,
+            invoice_id=expense.invoice_id,
         )
         db.add(db_expense)
 

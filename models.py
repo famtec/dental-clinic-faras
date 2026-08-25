@@ -75,6 +75,12 @@ class Patient(Base):
     visits = relationship("Visit", back_populates="patient", cascade="all, delete-orphan")
     treatments = relationship("Treatment", back_populates="patient", cascade="all, delete-orphan")
     prescriptions = relationship("Prescription", back_populates="patient", cascade="all, delete-orphan")
+    # فواتير العلاج المستقلة (2026-08-25) -- انظر شرح models.TreatmentInvoice
+    # أدناه لسبب وجودها؛ cascade="all, delete-orphan" هنا للتناسق مع بقية
+    # علاقات Patient، لكن main.py.delete_patient() يحذفها صراحة أيضاً عبر
+    # bulk delete قبل حذف صف patients نفسه (لا يعتمد فقط على cascade الـ ORM)،
+    # بنفس نمط الدرس المستفاد من قصة حذف المريض ثلاثية الطبقات الموثقة هناك.
+    treatment_invoices = relationship("TreatmentInvoice", back_populates="patient", cascade="all, delete-orphan")
 
 
 class Appointment(Base):
@@ -137,6 +143,31 @@ class Expense(Base):
     created_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
 
 
+class TreatmentInvoice(Base):
+    __tablename__ = "treatment_invoices"
+
+    # فاتورة علاج مستقلة (2026-08-25) -- تحل مشكلة تداخل الحسابات التي كانت
+    # تحدث سابقاً عندما تُحسب "التكلفة الإجمالية" كحقل واحد قابل للاستبدال على
+    # Patient (total_treatment_cost)، بينما "المدفوع" يُحسب كمجموع كل دفعات
+    # المريض التاريخية بلا أي فصل بين جولات العلاج المختلفة. الآن: كل جولة
+    # علاج جديدة = صف مستقل هنا بتكلفته الخاصة، ودفعاته (FinancialTransaction
+    # عبر invoice_id) مرتبطة به تحديداً فقط. "المتبقي" يُحسب دائماً لكل فاتورة
+    # على حدة (max(total_cost - مجموع دفعاتها, 0))، فتسديد فاتورة قديمة
+    # بالكامل لا يؤثر إطلاقاً على حساب أي فاتورة جديدة تُفتح لاحقاً. لا يوجد
+    # عمود "status" مخزَّن عمداً -- الحالة (مفتوحة/مغلقة) تُشتق دائماً من
+    # مقارنة total_cost بمجموع الدفعات المرتبطة، لتفادي أي احتمال لتضارب حالة
+    # مخزَّنة مع الحسابات الفعلية.
+    id = Column(Integer, primary_key=True, index=True)
+    patient_id = Column(Integer, ForeignKey("patients.id"), index=True, nullable=False)
+    doctor_email = Column(String, index=True, nullable=True)
+    title = Column(String, nullable=False)
+    total_cost = Column(Numeric(12, 2), nullable=False, default=0)
+    created_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
+
+    patient = relationship("Patient", back_populates="treatment_invoices")
+    payments = relationship("FinancialTransaction", back_populates="invoice", cascade="all, delete-orphan")
+
+
 class FinancialTransaction(Base):
     __tablename__ = "financial_transactions"
 
@@ -150,6 +181,14 @@ class FinancialTransaction(Base):
     type = Column(String, nullable=False, default="expense")
     description = Column(String, nullable=False)
     created_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
+    # يربط دفعة مريض معينة (type="income") بفاتورة علاج محددة (2026-08-25) --
+    # nullable لأن مصاريف العيادة العامة (type="expense") لا علاقة لها بأي
+    # فاتورة مريض إطلاقاً. القيم القديمة (قبل هذا الترحيل) تُملأ تلقائياً عبر
+    # ترحيل بيانات database.py.init_db() الذي يربطها بفاتورة "تاريخية" واحدة
+    # لكل مريض كان لديه تكلفة/دفعات سابقة، فلا يُفقد أي سجل تاريخي.
+    invoice_id = Column(Integer, ForeignKey("treatment_invoices.id"), index=True, nullable=True)
+
+    invoice = relationship("TreatmentInvoice", back_populates="payments")
 
 
 class PatientXRay(Base):
