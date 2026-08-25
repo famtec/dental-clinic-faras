@@ -207,6 +207,7 @@
 	</div>
 
 	<script src="api-config.js"></script>
+	<script src="clinic-loader.js"></script>
 
 	<script>
 		// Feature gate at the very top of page load.
@@ -654,8 +655,12 @@
 				payload.inventory_quantity = inventoryQuantity;
 			}
 
-			expenseSubmitBtn.disabled = true;
-			expenseSubmitBtn.textContent = 'جاري الحفظ...';
+			if (window.ClinicLoader) {
+				ClinicLoader.setButtonLoading(expenseSubmitBtn, true, { loadingText: '...جاري تسجيل المصروف' });
+			} else {
+				expenseSubmitBtn.disabled = true;
+				expenseSubmitBtn.textContent = 'جاري الحفظ...';
+			}
 			setExpenseStatus('يتم إرسال العملية المالية...', 'normal');
 
 			try {
@@ -694,8 +699,12 @@
 			} catch (error) {
 				setExpenseStatus('تعذر حفظ المصروف الآن. حاول مرة أخرى لاحقاً.', 'error');
 			} finally {
-				expenseSubmitBtn.disabled = false;
-				expenseSubmitBtn.textContent = 'حفظ المصروف';
+				if (window.ClinicLoader) {
+					ClinicLoader.setButtonLoading(expenseSubmitBtn, false);
+				} else {
+					expenseSubmitBtn.disabled = false;
+					expenseSubmitBtn.textContent = 'حفظ المصروف';
+				}
 			}
 		}
 

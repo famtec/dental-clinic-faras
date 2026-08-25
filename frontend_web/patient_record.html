@@ -656,6 +656,7 @@
   </div>
 
   <script src="api-config.js"></script>
+  <script src="clinic-loader.js"></script>
   <script>
     const clinicTitle = document.getElementById('clinicTitle');
     const mobileClinicTitle = document.getElementById('mobileClinicTitle');
@@ -1032,7 +1033,9 @@
       if (!pendingDeleteAction) return;
 
       const actionButton = document.getElementById('deleteConfirmActionBtn');
-      if (actionButton) {
+      if (actionButton && window.ClinicLoader) {
+        ClinicLoader.setButtonLoading(actionButton, true, { loadingText: '...جاري الحذف' });
+      } else if (actionButton) {
         actionButton.disabled = true;
         actionButton.textContent = '...جاري الحذف';
       }
@@ -1044,7 +1047,9 @@
         const message = error instanceof Error ? error.message : 'تعذر تنفيذ الحذف حالياً.';
         createMedicalToast(message);
       } finally {
-        if (actionButton) {
+        if (actionButton && window.ClinicLoader) {
+          ClinicLoader.setButtonLoading(actionButton, false);
+        } else if (actionButton) {
           actionButton.disabled = false;
           actionButton.textContent = 'تأكيد الحذف النهائي';
         }
@@ -1996,8 +2001,12 @@
         return;
       }
 
-      submitButton.disabled = true;
-      submitButton.textContent = '...جاري الحفظ';
+      if (window.ClinicLoader) {
+        ClinicLoader.setButtonLoading(submitButton, true, { loadingText: '...جاري حفظ الوصفة' });
+      } else {
+        submitButton.disabled = true;
+        submitButton.textContent = '...جاري الحفظ';
+      }
 
       try {
         const response = await fetch(getPrescriptionCreateEndpoint(), {
@@ -2023,8 +2032,12 @@
         const message = error instanceof Error ? error.message : 'تعذر حفظ الوصفة الطبية حالياً.';
         createMedicalToast(message);
       } finally {
-        submitButton.disabled = false;
-        submitButton.textContent = 'إصدار وحفظ الوصفة 📝';
+        if (window.ClinicLoader) {
+          ClinicLoader.setButtonLoading(submitButton, false);
+        } else {
+          submitButton.disabled = false;
+          submitButton.textContent = 'إصدار وحفظ الوصفة 📝';
+        }
       }
     }
 
@@ -2475,7 +2488,9 @@
         return;
       }
 
-      if (saveButton) {
+      if (saveButton && window.ClinicLoader) {
+        ClinicLoader.setButtonLoading(saveButton, true, { loadingText: '...جاري حفظ الموعد' });
+      } else if (saveButton) {
         saveButton.disabled = true;
         saveButton.textContent = 'جاري الحفظ...';
       }
@@ -2507,7 +2522,9 @@
       } catch (error) {
         alert('تعذر إضافة الموعد الآن. يرجى المحاولة لاحقاً.');
       } finally {
-        if (saveButton) {
+        if (saveButton && window.ClinicLoader) {
+          ClinicLoader.setButtonLoading(saveButton, false);
+        } else if (saveButton) {
           saveButton.disabled = false;
           saveButton.textContent = 'حفظ الموعد';
         }
@@ -2987,7 +3004,9 @@
         return;
       }
 
-      if (uploadButton) {
+      if (uploadButton && window.ClinicLoader) {
+        ClinicLoader.setButtonLoading(uploadButton, true, { loadingText: '...جاري رفع الملف' });
+      } else if (uploadButton) {
         uploadButton.disabled = true;
         uploadButton.textContent = 'جاري الرفع...';
       }
@@ -3004,7 +3023,9 @@
         if (fileInput) fileInput.value = '';
         if (descriptionInput) descriptionInput.value = '';
       } finally {
-        if (uploadButton) {
+        if (uploadButton && window.ClinicLoader) {
+          ClinicLoader.setButtonLoading(uploadButton, false);
+        } else if (uploadButton) {
           uploadButton.disabled = false;
           uploadButton.textContent = 'رفع الملفات 📸';
         }
@@ -3092,6 +3113,14 @@
         description: `دفعة مالية من المريض: ${patientName}`
       };
 
+      const paymentButton = document.getElementById('financialPaymentBtn');
+      if (paymentButton && window.ClinicLoader) {
+        ClinicLoader.setButtonLoading(paymentButton, true, { loadingText: '...جاري تسجيل الدفعة' });
+      } else if (paymentButton) {
+        paymentButton.disabled = true;
+        paymentButton.textContent = '...جاري تسجيل الدفعة';
+      }
+
       try {
         const response = await fetch(getFinancePaymentEndpoint(), {
           method: 'POST',
@@ -3111,6 +3140,13 @@
         }
       } catch (error) {
         alert('تعذر تسجيل الدفعة الآن. يرجى المحاولة لاحقاً.');
+      } finally {
+        if (paymentButton && window.ClinicLoader) {
+          ClinicLoader.setButtonLoading(paymentButton, false);
+        } else if (paymentButton) {
+          paymentButton.disabled = false;
+          paymentButton.textContent = 'تسجيل الدفع المالي';
+        }
       }
     }
 

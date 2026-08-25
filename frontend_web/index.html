@@ -167,7 +167,7 @@
           </article>
         </section>
 
-      <section class="panel-soft rounded-[28px] border border-white/70 bg-white/90 p-4 shadow-xl shadow-slate-200/70 sm:p-6">
+      <section id="patientsTableSection" class="panel-soft rounded-[28px] border border-white/70 bg-white/90 p-4 shadow-xl shadow-slate-200/70 sm:p-6">
         <div class="mb-4 flex items-center justify-between">
           <h3 class="text-xl font-bold text-indigo-900">المرضى</h3>
           <span class="rounded-full bg-indigo-50 px-3 py-1 text-sm font-medium text-indigo-700">محدث تلقائيًا</span>
@@ -228,7 +228,7 @@
           <div class="text-sm text-slate-500">ستُستخدم حقول افتراضية للبينات الإضافية.</div>
           <div class="flex gap-2">
             <button type="button" id="cancelBtn" class="rounded-2xl border border-slate-300 px-4 py-2 text-sm">إلغاء</button>
-            <button type="submit" class="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 text-sm text-white hover:from-indigo-700 hover:to-violet-700">حفظ المريض</button>
+            <button type="submit" id="savePatientBtn" class="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 text-sm text-white hover:from-indigo-700 hover:to-violet-700">حفظ المريض</button>
           </div>
         </div>
       </form>
@@ -254,6 +254,7 @@
   <div id="toast" class="pointer-events-none fixed left-1/2 top-5 z-[60] hidden w-[min(92vw,24rem)] -translate-x-1/2 -translate-y-2 rounded-2xl border border-rose-200 bg-white/95 px-4 py-3 text-sm font-medium text-rose-700 opacity-0 shadow-xl shadow-rose-200/60 backdrop-blur transition duration-200"></div>
 
   <script src="api-config.js"></script>
+  <script src="clinic-loader.js"></script>
   <script>
     const doctorName = localStorage.getItem('doctor_name');
     const doctorEmail = localStorage.getItem('user_email') || 'fareshalawi17@gmail.com';
@@ -353,6 +354,8 @@
     const cancelDeletePatientBtn = document.getElementById('cancelDeletePatientBtn');
     const confirmDeletePatientBtn = document.getElementById('confirmDeletePatientBtn');
     const toast = document.getElementById('toast');
+    const savePatientBtn = document.getElementById('savePatientBtn');
+    const patientsTableSection = document.getElementById('patientsTableSection');
 
     // Utility: show/hide modal
     let toastTimer = null;
@@ -750,7 +753,9 @@
     async function confirmDeletePatient() {
       if (!pendingDeletePatientId) return;
 
-      if (confirmDeletePatientBtn) {
+      if (confirmDeletePatientBtn && window.ClinicLoader) {
+        ClinicLoader.setButtonLoading(confirmDeletePatientBtn, true, { loadingText: '...جاري الحذف' });
+      } else if (confirmDeletePatientBtn) {
         confirmDeletePatientBtn.disabled = true;
         confirmDeletePatientBtn.textContent = '...جاري الحذف';
       }
@@ -777,7 +782,9 @@
         console.error('deletePatient error', error);
         showToast('تعذر حذف المريض. يرجى المحاولة لاحقًا.');
       } finally {
-        if (confirmDeletePatientBtn) {
+        if (confirmDeletePatientBtn && window.ClinicLoader) {
+          ClinicLoader.setButtonLoading(confirmDeletePatientBtn, false);
+        } else if (confirmDeletePatientBtn) {
           confirmDeletePatientBtn.disabled = false;
           confirmDeletePatientBtn.textContent = 'تأكيد الحذف النهائي';
         }
@@ -920,6 +927,10 @@
         gender: 'Male'
       };
 
+      if (savePatientBtn && window.ClinicLoader) {
+        ClinicLoader.setButtonLoading(savePatientBtn, true, { loadingText: '...جاري تسجيل المريض' });
+      }
+
       try{
         const res = await fetch(API_URL, {
           method: 'POST',
@@ -944,15 +955,30 @@
           throw new Error(detail || 'تعذر حفظ المريض. تأكد من الحقول المطلوبة.');
         }
 
-        await fetchPatients();
+        patientForm.reset();
+        closeModal();
+
+        if (patientsTableSection && window.ClinicLoader) {
+          ClinicLoader.showOverlay(patientsTableSection, {
+            title: 'جاري تسجيل المريض...',
+            subtitle: 'نقوم بتحديث قائمة المرضى الآن.',
+          });
+        }
+
         if (searchInput) {
           searchInput.value = '';
         }
-        patientForm.reset();
-        closeModal();
+        await fetchPatients();
       }catch(err){
         console.error('create patient error', err);
         showToast(err.message || 'حدث خطأ أثناء إضافة المريض. الرجاء المحاولة لاحقًا.');
+      } finally {
+        if (savePatientBtn && window.ClinicLoader) {
+          ClinicLoader.setButtonLoading(savePatientBtn, false);
+        }
+        if (patientsTableSection && window.ClinicLoader) {
+          ClinicLoader.hideOverlay(patientsTableSection);
+        }
       }
     });
 

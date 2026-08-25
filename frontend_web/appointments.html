@@ -213,6 +213,7 @@
     </div>
 
     <script src="api-config.js"></script>
+    <script src="clinic-loader.js"></script>
     <script>
         const doctorName = localStorage.getItem('doctor_name') || localStorage.getItem('user_name');
         const userTier = localStorage.getItem('user_tier');
@@ -967,8 +968,12 @@
                     if (!confirmed) return;
 
                     const previousText = button.textContent;
-                    button.disabled = true;
-                    button.textContent = '...جاري الحذف';
+                    if (window.ClinicLoader) {
+                        ClinicLoader.setButtonLoading(button, true, { loadingText: '...جاري الحذف' });
+                    } else {
+                        button.disabled = true;
+                        button.textContent = '...جاري الحذف';
+                    }
 
                     try {
                         const response = await fetch(`${API_URL}/${encodeURIComponent(String(appointmentId))}`, {
@@ -985,8 +990,12 @@
                     } catch (error) {
                         showToast('تعذر حذف الموعد الآن. يرجى المحاولة لاحقاً.', 'error');
                     } finally {
-                        button.disabled = false;
-                        button.textContent = previousText || '🗑️ حذف';
+                        if (window.ClinicLoader) {
+                            ClinicLoader.setButtonLoading(button, false);
+                        } else {
+                            button.disabled = false;
+                            button.textContent = previousText || '🗑️ حذف';
+                        }
                     }
                 });
             });
@@ -1193,7 +1202,15 @@
 
                 const wrapper = triggerButton?.closest('[data-booking-request-id]');
                 if (wrapper) {
-                    wrapper.querySelectorAll('button').forEach((btn) => { btn.disabled = true; });
+                    wrapper.querySelectorAll('button').forEach((btn) => {
+                        if (btn === triggerButton && window.ClinicLoader) {
+                            ClinicLoader.setButtonLoading(btn, true, {
+                                loadingText: decision === 'accept' ? '...جاري القبول' : '...جاري الرفض',
+                            });
+                        } else {
+                            btn.disabled = true;
+                        }
+                    });
                 }
 
                 try {
@@ -1213,7 +1230,13 @@
                 } catch (error) {
                     showToast(error.message || 'تعذر إرسال الرد على الطلب.', 'error');
                     if (wrapper) {
-                        wrapper.querySelectorAll('button').forEach((btn) => { btn.disabled = false; });
+                        wrapper.querySelectorAll('button').forEach((btn) => {
+                            if (btn === triggerButton && window.ClinicLoader) {
+                                ClinicLoader.setButtonLoading(btn, false);
+                            } else {
+                                btn.disabled = false;
+                            }
+                        });
                     }
                 }
             } finally {
@@ -1267,8 +1290,15 @@
                 status: normalizeAppointmentStatus(activeAppointment?.status || 'pending')
             };
 
+            const submitBtn = document.getElementById('appointmentSubmitBtn');
+            const isEditMode = Boolean(activeAppointment);
+            if (submitBtn && window.ClinicLoader) {
+                ClinicLoader.setButtonLoading(submitBtn, true, {
+                    loadingText: isEditMode ? '...جاري تحديث الموعد' : '...جاري حفظ الموعد',
+                });
+            }
+
             try {
-                const isEditMode = Boolean(activeAppointment);
                 const method = isEditMode ? 'PUT' : 'POST';
                 const endpoint = isEditMode
                     ? `${API_URL}/${encodeURIComponent(String(activeAppointment.id))}`
@@ -1291,6 +1321,10 @@
             } catch (error) {
                 console.error(error);
                 showToast(`فشل حفظ الموعد: ${error.message}`, 'error');
+            } finally {
+                if (submitBtn && window.ClinicLoader) {
+                    ClinicLoader.setButtonLoading(submitBtn, false);
+                }
             }
         });
 

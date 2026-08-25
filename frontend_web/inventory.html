@@ -197,6 +197,7 @@
 	</div>
 
 	<script src="api-config.js"></script>
+	<script src="clinic-loader.js"></script>
 	<script>
 		let userTier = localStorage.getItem("user_tier");
 		// 🔒 حظر فوري ومتزامن لأي زائر لم يسجّل الدخول إطلاقاً -- بدون هذا الفحص كان أي زائر مجهول (وصل مثلاً عبر قائمة تنقل صفحة عامة مثل contact_developer.html) يتجاوز الحماية لأن userTier الفارغ (null) لا يساوي 'pending_activation'، والأخطر أن دوال جلب بيانات المخزن هنا تسقط على بريد الطبيب الاحتياطي الحقيقي عند غياب تسجيل الدخول.
@@ -599,7 +600,9 @@
 				return;
 			}
 
-			if (inventorySubmitBtn) {
+			if (inventorySubmitBtn && window.ClinicLoader) {
+				ClinicLoader.setButtonLoading(inventorySubmitBtn, true, { loadingText: '...جاري حفظ المادة' });
+			} else if (inventorySubmitBtn) {
 				inventorySubmitBtn.disabled = true;
 				inventorySubmitBtn.textContent = '...جاري الحفظ';
 			}
@@ -630,7 +633,9 @@
 					inventoryStatus.textContent = 'فشل حفظ المادة. يرجى المحاولة مرة أخرى.';
 				}
 			} finally {
-				if (inventorySubmitBtn) {
+				if (inventorySubmitBtn && window.ClinicLoader) {
+					ClinicLoader.setButtonLoading(inventorySubmitBtn, false);
+				} else if (inventorySubmitBtn) {
 					inventorySubmitBtn.disabled = false;
 					inventorySubmitBtn.textContent = 'حفظ المادة في المخزن';
 				}
