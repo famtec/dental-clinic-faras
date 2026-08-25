@@ -68,6 +68,71 @@
       transform: translateY(-2px);
       box-shadow: 0 14px 28px rgba(99, 102, 241, 0.4);
     }
+
+    /* قائمة فرز المرضى -- بديل عصري لعنصر select الأصلي الذي كان يظهر
+       بمظهر المتصفح الافتراضي غير القابل للتنسيق (2026-08-25). */
+    .sort-dropdown-trigger {
+      display: inline-flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      cursor: pointer;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .sort-dropdown-trigger .option-main { display: inline-flex; align-items: center; gap: 8px; }
+    .sort-dropdown-trigger .option-icon { color: #6366f1; flex-shrink: 0; }
+    .sort-dropdown-trigger .chevron-icon { color: #94a3b8; flex-shrink: 0; transition: transform 0.2s ease; }
+    .sort-dropdown-wrap.dropdown-open .sort-dropdown-trigger { border-color: #6366f1 !important; box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12); }
+    .sort-dropdown-wrap.dropdown-open .sort-dropdown-trigger .chevron-icon { transform: rotate(180deg); }
+
+    .sort-dropdown-menu {
+      position: absolute;
+      z-index: 40;
+      top: calc(100% + 8px);
+      right: 0;
+      width: max-content;
+      min-width: 230px;
+      max-width: calc(100vw - 32px);
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 18px;
+      box-shadow: 0 20px 40px -8px rgba(30, 27, 75, 0.18), 0 4px 10px rgba(30, 27, 75, 0.06);
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      transform-origin: top right;
+      animation: sortMenuIn 0.15s ease;
+    }
+    @keyframes sortMenuIn {
+      from { opacity: 0; transform: scale(0.96) translateY(-4px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    .sort-dropdown-option {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      width: 100%;
+      border: none;
+      background: transparent;
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      color: #475569;
+      cursor: pointer;
+      text-align: right;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .sort-dropdown-option .option-main { display: inline-flex; align-items: center; gap: 10px; }
+    .sort-dropdown-option .option-icon { flex-shrink: 0; color: #6366f1; }
+    .sort-dropdown-option .check-icon { flex-shrink: 0; color: #4338ca; opacity: 0; transform: scale(0.8); transition: opacity 0.15s ease, transform 0.15s ease; }
+    .sort-dropdown-option:hover { background: #f8fafc; color: #312e81; }
+    .sort-dropdown-option[aria-selected="true"] { background: #eef2ff; color: #4338ca; }
+    .sort-dropdown-option[aria-selected="true"] .option-icon { color: #4338ca; }
+    .sort-dropdown-option[aria-selected="true"] .check-icon { opacity: 1; transform: scale(1); }
   </style>
   </head>
 <body class="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.22),_transparent_30%),linear-gradient(135deg,_#f8fafc_0%,_#eef2ff_45%,_#e0e7ff_100%)] text-slate-800 transition-opacity duration-300">
@@ -146,11 +211,52 @@
           <div class="relative w-full sm:w-64 md:w-72 lg:w-80">
             <input id="searchInput" type="search" placeholder="🔍 ابحث عن مريض..." class="w-full rounded-2xl border border-slate-300 bg-white py-3 pr-10 pl-4 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
           </div>
-          <select id="patientSortSelect" class="w-full rounded-2xl border border-slate-300 bg-white py-3 px-4 text-sm font-semibold text-slate-600 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 sm:w-auto" title="فرز قائمة المرضى">
-            <option value="default">↕️ الترتيب الافتراضي</option>
-            <option value="name">🔤 فرز حسب: الاسم</option>
-            <option value="birth_date">🎂 فرز حسب: تاريخ الميلاد</option>
-          </select>
+          <div id="patientSortWrap" class="sort-dropdown-wrap relative w-full sm:w-auto">
+            <button
+              type="button"
+              id="patientSortTrigger"
+              class="sort-dropdown-trigger w-full rounded-2xl border border-slate-300 bg-white py-3 px-4 text-sm font-semibold text-slate-600 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 sm:w-auto"
+              title="فرز قائمة المرضى"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+            >
+              <span class="option-main">
+                <svg class="option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l4-4 4 4"></path><path d="M16 15l-4 4-4-4"></path></svg>
+                <span id="patientSortTriggerLabel">الترتيب الافتراضي</span>
+              </span>
+              <svg class="chevron-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
+            </button>
+
+            <div id="patientSortMenu" class="sort-dropdown-menu hidden" role="listbox">
+              <button type="button" class="sort-dropdown-option" role="option" aria-selected="true" data-sort-value="default" data-sort-label="الترتيب الافتراضي">
+                <span class="option-main">
+                  <svg class="option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l4-4 4 4"></path><path d="M16 15l-4 4-4-4"></path></svg>
+                  <span>الترتيب الافتراضي</span>
+                </span>
+                <svg class="check-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+              </button>
+              <button type="button" class="sort-dropdown-option" role="option" aria-selected="false" data-sort-value="name" data-sort-label="فرز حسب: الاسم">
+                <span class="option-main">
+                  <svg class="option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"></path><path d="M4 12h10"></path><path d="M4 18h6"></path></svg>
+                  <span>فرز حسب: الاسم</span>
+                </span>
+                <svg class="check-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+              </button>
+              <button type="button" class="sort-dropdown-option" role="option" aria-selected="false" data-sort-value="birth_date" data-sort-label="فرز حسب: تاريخ الميلاد">
+                <span class="option-main">
+                  <svg class="option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg>
+                  <span>فرز حسب: تاريخ الميلاد</span>
+                </span>
+                <svg class="check-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+              </button>
+            </div>
+
+            <select id="patientSortSelect" class="hidden" tabindex="-1" aria-hidden="true">
+              <option value="default">الترتيب الافتراضي</option>
+              <option value="name">فرز حسب: الاسم</option>
+              <option value="birth_date">فرز حسب: تاريخ الميلاد</option>
+            </select>
+          </div>
         </div>
       </div>
       </div>
@@ -1125,6 +1231,55 @@
         renderPatients(allPatients, searchInput.value.trim());
       });
     }
+
+    // القائمة العصرية لفرز المرضى (2026-08-25) -- واجهة مخصّصة فوق نفس
+    // select#patientSortSelect المخفي، حتى تبقى renderPatients() ومستمع
+    // change أعلاه بدون أي تعديل: نغيّر select.value ثم نُطلق حدث change يدوياً.
+    const patientSortWrap = document.getElementById('patientSortWrap');
+    const patientSortTrigger = document.getElementById('patientSortTrigger');
+    const patientSortMenu = document.getElementById('patientSortMenu');
+    const patientSortTriggerLabel = document.getElementById('patientSortTriggerLabel');
+    const patientSortOptionEls = patientSortMenu ? Array.from(patientSortMenu.querySelectorAll('[data-sort-value]')) : [];
+
+    function closePatientSortMenu() {
+      if (patientSortMenu) patientSortMenu.classList.add('hidden');
+      if (patientSortTrigger) patientSortTrigger.setAttribute('aria-expanded', 'false');
+      if (patientSortWrap) patientSortWrap.classList.remove('dropdown-open');
+    }
+
+    function openPatientSortMenu() {
+      if (patientSortMenu) patientSortMenu.classList.remove('hidden');
+      if (patientSortTrigger) patientSortTrigger.setAttribute('aria-expanded', 'true');
+      if (patientSortWrap) patientSortWrap.classList.add('dropdown-open');
+    }
+
+    function selectPatientSortOption(optionEl) {
+      const value = optionEl.getAttribute('data-sort-value');
+      const label = optionEl.getAttribute('data-sort-label');
+      if (patientSortTriggerLabel && label) patientSortTriggerLabel.textContent = label;
+      patientSortOptionEls.forEach((opt) => opt.setAttribute('aria-selected', String(opt === optionEl)));
+      if (patientSortSelect && value) {
+        patientSortSelect.value = value;
+        patientSortSelect.dispatchEvent(new Event('change'));
+      }
+      closePatientSortMenu();
+    }
+
+    if (patientSortTrigger) {
+      patientSortTrigger.addEventListener('click', () => {
+        const isOpen = patientSortMenu && !patientSortMenu.classList.contains('hidden');
+        if (isOpen) closePatientSortMenu(); else openPatientSortMenu();
+      });
+    }
+    patientSortOptionEls.forEach((opt) => {
+      opt.addEventListener('click', () => selectPatientSortOption(opt));
+    });
+    document.addEventListener('click', (event) => {
+      if (patientSortWrap && !patientSortWrap.contains(event.target)) closePatientSortMenu();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closePatientSortMenu();
+    });
 
     // Initialize
     const yearElement = document.getElementById('year');
