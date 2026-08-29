@@ -2926,6 +2926,7 @@ def _month_bounds(year: int, month: int):
 def get_finance_summary(
     year: Optional[int] = Query(None),
     month: Optional[int] = Query(None),
+    day: Optional[int] = Query(None),
     all_time: bool = Query(False),
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(require_active_doctor_user),
@@ -2934,6 +2935,8 @@ def get_finance_summary(
     # بداية الاستخدام -- إن لم يُرسل year/month يُستخدم الشهر الحالي بتوقيت
     # KEEP_ALIVE_TIMEZONE (نفس منطقة "اليوم/الآن" المعتمدة في باقي الملف)،
     # وإن أُرسل all_time=true يعود السلوك القديم (إجمالي كل الحركات).
+    # 2026-08-29: أُضيف day اختياري لدعم خيار "اليوم" في finance.html -- إن
+    # أُرسل مع year/month يُضيَّق النطاق ليوم واحد فقط بدل الشهر كاملاً.
     income_query = (
         db.query(func.coalesce(func.sum(models.FinancialTransaction.amount), 0))
         .filter(models.FinancialTransaction.type == "income")
@@ -2947,26 +2950,37 @@ def get_finance_summary(
 
     resolved_year = None
     resolved_month = None
+    resolved_day = None
     if not all_time:
         now_local = _damascus_now()
         resolved_year = year if year is not None else now_local.year
         resolved_month = month if month is not None else now_local.month
         if resolved_month < 1 or resolved_month > 12:
             raise HTTPException(status_code=400, detail="الشهر يجب أن يكون رقماً بين 1 و 12.")
-        month_start, month_end = _month_bounds(resolved_year, resolved_month)
+        if day is not None:
+            resolved_day = day
+            if resolved_day < 1 or resolved_day > 31:
+                raise HTTPException(status_code=400, detail="اليوم يجب أن يكون رقماً بين 1 و 31.")
+            try:
+                period_start = datetime(resolved_year, resolved_month, resolved_day)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="تاريخ اليوم المطلوب غير صالح.")
+            period_end = period_start + timedelta(days=1)
+        else:
+            period_start, period_end = _month_bounds(resolved_year, resolved_month)
         # 2026-08-25: أي حركة is_opening_balance=True (رصيد افتتاحي/سابق مُرحّل)
         # تُستبعد دوماً من تقرير شهر محدد -- لا تنتمي فعلياً لهذا الشهر، انظر
         # شرح كامل عند FinancialTransaction.is_opening_balance في models.py.
         # في وضع all_time=true تبقى محتسبة (لا فلترة هنا) لأنها أموال حقيقية
         # فعلاً محصّلة.
         income_query = income_query.filter(
-            models.FinancialTransaction.created_at >= month_start,
-            models.FinancialTransaction.created_at < month_end,
+            models.FinancialTransaction.created_at >= period_start,
+            models.FinancialTransaction.created_at < period_end,
             models.FinancialTransaction.is_opening_balance.is_(False),
         )
         expense_query = expense_query.filter(
-            models.FinancialTransaction.created_at >= month_start,
-            models.FinancialTransaction.created_at < month_end,
+            models.FinancialTransaction.created_at >= period_start,
+            models.FinancialTransaction.created_at < period_end,
             models.FinancialTransaction.is_opening_balance.is_(False),
         )
 
@@ -2998,6 +3012,7 @@ def get_finance_summary(
         "all_time": all_time,
         "year": resolved_year,
         "month": resolved_month,
+        "day": resolved_day,
     }
 
 

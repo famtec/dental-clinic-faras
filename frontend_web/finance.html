@@ -44,6 +44,82 @@
 		}
 		@keyframes toastIn { from { opacity: 0; transform: translate(-50%, -10px); } to { opacity: 1; transform: translate(-50%, 0); } }
 		@keyframes toastOut { to { opacity: 0; transform: translate(-50%, -10px); } }
+
+		/* قائمة عصرية لاختيار فترة التقرير المالي -- نفس تصميم قائمة فرز المرضى
+		   في index.html (2026-08-29)، بديل عن عنصر select الأصلي غير القابل للتنسيق. */
+		.sort-dropdown-wrap { flex-shrink: 0; }
+		.sort-dropdown-trigger {
+			display: inline-flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 12px;
+			white-space: nowrap;
+			cursor: pointer;
+			transition: border-color 0.15s ease, box-shadow 0.15s ease;
+		}
+		.sort-dropdown-trigger:disabled { opacity: 0.6; cursor: not-allowed; }
+		.sort-dropdown-trigger .option-main { display: inline-flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto; overflow: hidden; }
+		.sort-dropdown-trigger .option-main span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+		.sort-dropdown-trigger .option-icon { color: #6366f1; flex-shrink: 0; }
+		.sort-dropdown-trigger .chevron-icon { color: #94a3b8; flex-shrink: 0; transition: transform 0.2s ease; }
+		.sort-dropdown-wrap.dropdown-open .sort-dropdown-trigger { border-color: #6366f1 !important; box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12); }
+		.sort-dropdown-wrap.dropdown-open .sort-dropdown-trigger .chevron-icon { transform: rotate(180deg); }
+
+		.sort-dropdown-menu {
+			position: absolute;
+			z-index: 40;
+			top: calc(100% + 8px);
+			right: 0;
+			width: max-content;
+			min-width: 230px;
+			max-width: calc(100vw - 32px);
+			background: #ffffff;
+			border: 1px solid #e2e8f0;
+			border-radius: 18px;
+			box-shadow: 0 20px 40px -8px rgba(30, 27, 75, 0.18), 0 4px 10px rgba(30, 27, 75, 0.06);
+			padding: 8px;
+			display: flex;
+			flex-direction: column;
+			gap: 2px;
+			transform-origin: top center;
+			overflow: hidden;
+			max-height: 0;
+			opacity: 0;
+			transform: translateY(-6px) scaleY(0.96);
+			pointer-events: none;
+			transition: max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.18s ease, transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+		}
+		.sort-dropdown-wrap.dropdown-open .sort-dropdown-menu {
+			max-height: 320px;
+			opacity: 1;
+			transform: translateY(0) scaleY(1);
+			pointer-events: auto;
+		}
+		.sort-dropdown-option {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 10px;
+			width: 100%;
+			border: none;
+			background: transparent;
+			border-radius: 12px;
+			padding: 10px 12px;
+			font-family: inherit;
+			font-size: 13px;
+			font-weight: 600;
+			color: #475569;
+			cursor: pointer;
+			text-align: right;
+			transition: background 0.15s ease, color 0.15s ease;
+		}
+		.sort-dropdown-option .option-main { display: inline-flex; align-items: center; gap: 10px; white-space: nowrap; }
+		.sort-dropdown-option .option-icon { flex-shrink: 0; color: #6366f1; }
+		.sort-dropdown-option .check-icon { flex-shrink: 0; color: #4338ca; opacity: 0; transform: scale(0.8); transition: opacity 0.15s ease, transform 0.15s ease; }
+		.sort-dropdown-option:hover { background: #f8fafc; color: #312e81; }
+		.sort-dropdown-option[aria-selected="true"] { background: #eef2ff; color: #4338ca; }
+		.sort-dropdown-option[aria-selected="true"] .option-icon { color: #4338ca; }
+		.sort-dropdown-option[aria-selected="true"] .check-icon { opacity: 1; transform: scale(1); }
 	</style>
 	<link rel="icon" type="image/svg+xml" href="favicon.svg" />
 	<link rel="alternate icon" type="image/png" href="favicon.png" />
@@ -155,9 +231,28 @@
 							<p id="periodHint" class="mt-1 text-xs text-slate-500">التقرير يتجدد تلقائياً كل شهر، مع الاحتفاظ الكامل بتقارير كل الأشهر السابقة.</p>
 						<p id="openingBalanceHint" class="mt-2 hidden rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700"></p>
 						</div>
-						<select id="monthSelect" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 sm:w-64">
-							<option value="">جاري تحميل الأشهر...</option>
-						</select>
+						<div id="monthSelectWrap" class="sort-dropdown-wrap relative w-full sm:w-64">
+							<button
+								type="button"
+								id="monthSelectTrigger"
+								class="sort-dropdown-trigger w-full rounded-2xl border border-slate-300 bg-white py-3 px-4 text-sm font-semibold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+								title="اختيار فترة التقرير المالي"
+								aria-haspopup="listbox"
+								aria-expanded="false"
+							>
+								<span class="option-main">
+									<svg class="option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg>
+									<span id="monthSelectTriggerLabel">جاري تحميل الأشهر...</span>
+								</span>
+								<svg class="chevron-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
+							</button>
+
+							<div id="monthSelectMenu" class="sort-dropdown-menu" role="listbox"></div>
+
+							<select id="monthSelect" class="hidden" tabindex="-1" aria-hidden="true">
+								<option value="">جاري تحميل الأشهر...</option>
+							</select>
+						</div>
 					</div>
 				</section>
 
@@ -405,6 +500,10 @@
 		const profitCard = document.getElementById('profitCard');
 		const lastSync = document.getElementById('lastSync');
 		const monthSelect = document.getElementById('monthSelect');
+		const monthSelectWrap = document.getElementById('monthSelectWrap');
+		const monthSelectTrigger = document.getElementById('monthSelectTrigger');
+		const monthSelectMenu = document.getElementById('monthSelectMenu');
+		const monthSelectTriggerLabel = document.getElementById('monthSelectTriggerLabel');
 		const periodHint = document.getElementById('periodHint');
 		const openingBalanceHint = document.getElementById('openingBalanceHint');
 
@@ -472,6 +571,11 @@
 			return `${name} ${year}`;
 		}
 
+		// 2026-08-29: تسمية يوم محدد لخيار "اليوم" الجديد في القائمة المنسدلة.
+		function formatDayLabel(year, month, day) {
+			return `${day} ${formatMonthLabel(year, month)}`;
+		}
+
 		// يبني رابط /api/finance/summary حسب الشهر المختار في القائمة المنسدلة --
 		// value="all" يعني كل الوقت (السلوك القديم)، وvalue="<year>-<month>" يعني
 		// شهراً محدداً. لا يوجد اختيار = يعتمد الخادم افتراضياً على الشهر الحالي.
@@ -480,6 +584,15 @@
 			const url = new URL(METRICS_ENDPOINT);
 			if (rawValue === 'all') {
 				url.searchParams.set('all_time', 'true');
+				return url.toString();
+			}
+			// 2026-08-29: خيار "اليوم" -- يرسل تاريخ اليوم الحالي (سنة/شهر/يوم) بدل
+			// شهر كامل، ليضيّق الخادم النطاق إلى حركات هذا اليوم فقط.
+			if (rawValue === 'today') {
+				const now = new Date();
+				url.searchParams.set('year', String(now.getFullYear()));
+				url.searchParams.set('month', String(now.getMonth() + 1));
+				url.searchParams.set('day', String(now.getDate()));
 				return url.toString();
 			}
 			const parts = rawValue.split('-');
@@ -494,6 +607,11 @@
 			if (!periodHint) return;
 			if (data && data.all_time) {
 				periodHint.textContent = 'يعرض هذا الملخص إجمالي كل الحركات المالية منذ بداية استخدام النظام.';
+				return;
+			}
+			// 2026-08-29: عند اختيار "اليوم" يعيد الخادم day مع year/month.
+			if (data && data.day && data.year && data.month) {
+				periodHint.textContent = `يعرض هذا الملخص حركات يوم ${formatDayLabel(data.year, data.month, data.day)} فقط.`;
 				return;
 			}
 			if (data && data.year && data.month) {
@@ -626,9 +744,82 @@
 			}
 		}
 
+		// القائمة العصرية لاختيار فترة التقرير المالي (2026-08-29) -- واجهة
+		// مخصّصة بنفس تصميم قائمة فرز المرضى في index.html، مبنية فوق نفس
+		// select#monthSelect المخفي، حتى تبقى buildMetricsUrl() ومستمع change
+		// أدناه بدون أي تعديل: نغيّر select.value ثم نُطلق حدث change يدوياً.
+		function closeMonthSelectMenu() {
+			if (monthSelectTrigger) monthSelectTrigger.setAttribute('aria-expanded', 'false');
+			if (monthSelectWrap) monthSelectWrap.classList.remove('dropdown-open');
+		}
+
+		function openMonthSelectMenu() {
+			if (monthSelectTrigger) monthSelectTrigger.setAttribute('aria-expanded', 'true');
+			if (monthSelectWrap) monthSelectWrap.classList.add('dropdown-open');
+		}
+
+		if (monthSelectTrigger) {
+			monthSelectTrigger.addEventListener('click', () => {
+				const isOpen = monthSelectWrap && monthSelectWrap.classList.contains('dropdown-open');
+				if (isOpen) closeMonthSelectMenu(); else openMonthSelectMenu();
+			});
+		}
+		document.addEventListener('click', (event) => {
+			if (monthSelectWrap && !monthSelectWrap.contains(event.target)) closeMonthSelectMenu();
+		});
+		document.addEventListener('keydown', (event) => {
+			if (event.key === 'Escape') closeMonthSelectMenu();
+		});
+
+		function monthOptionIconSvg(value) {
+			if (value === 'today') {
+				return '<svg class="option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>';
+			}
+			if (value === 'all') {
+				return '<svg class="option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>';
+			}
+			return '<svg class="option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg>';
+		}
+
+		const MONTH_SELECT_CHECK_ICON_SVG = '<svg class="check-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>';
+
+		// يعيد بناء أزرار القائمة العصرية من خيارات select#monthSelect المخفي --
+		// يُستدعى في كل مرة يتغيّر فيها محتوى القائمة (تحميل/نجاح/فشل) لأن الأشهر
+		// المتاحة تختلف من طبيب لآخر.
+		function renderMonthSelectMenu() {
+			if (!monthSelectMenu || !monthSelect) return;
+			monthSelectMenu.innerHTML = Array.from(monthSelect.options).map((option) => {
+				const selected = option.value === monthSelect.value;
+				return `<button type="button" class="sort-dropdown-option" role="option" aria-selected="${selected}" data-month-value="${option.value}">
+					<span class="option-main">${monthOptionIconSvg(option.value)}<span>${option.textContent}</span></span>
+					${MONTH_SELECT_CHECK_ICON_SVG}
+				</button>`;
+			}).join('');
+
+			const selectedOption = monthSelect.options[monthSelect.selectedIndex];
+			if (monthSelectTriggerLabel) {
+				monthSelectTriggerLabel.textContent = selectedOption ? selectedOption.textContent : 'اختر الفترة';
+			}
+
+			Array.from(monthSelectMenu.querySelectorAll('[data-month-value]')).forEach((btn) => {
+				btn.addEventListener('click', () => {
+					const value = btn.getAttribute('data-month-value');
+					const label = btn.querySelector('.option-main span:last-child')?.textContent || '';
+					monthSelect.value = value;
+					Array.from(monthSelectMenu.querySelectorAll('[data-month-value]')).forEach((opt) => {
+						opt.setAttribute('aria-selected', String(opt === btn));
+					});
+					if (monthSelectTriggerLabel && label) monthSelectTriggerLabel.textContent = label;
+					monthSelect.dispatchEvent(new Event('change'));
+					closeMonthSelectMenu();
+				});
+			});
+		}
+
 		// يجلب قائمة الأشهر التي فيها حركات فعلية (الشهر الحالي مضمون الوجود دائماً
-		// من الخادم)، يملأ القائمة المنسدلة، يختار أحدث شهر افتراضياً (وهو الشهر
-		// الحالي ما لم توجد حركات بتاريخ مستقبلي)، ثم يجلب ملخص الفترة المختارة.
+		// من الخادم)، يملأ القائمة المنسدلة، يضيف خيار "اليوم" أولاً ثم الأشهر ثم
+		// "كل الوقت"، يختار أحدث شهر افتراضياً (وهو الشهر الحالي ما لم توجد حركات
+		// بتاريخ مستقبلي)، ثم يجلب ملخص الفترة المختارة.
 		async function populateMonthSelect() {
 			if (!monthSelect) {
 				await fetchFinancialMetrics();
@@ -636,7 +827,10 @@
 			}
 
 			monthSelect.disabled = true;
+			if (monthSelectTrigger) monthSelectTrigger.disabled = true;
 			monthSelect.innerHTML = '<option value="">جاري تحميل الأشهر...</option>';
+			if (monthSelectTriggerLabel) monthSelectTriggerLabel.textContent = 'جاري تحميل الأشهر...';
+			renderMonthSelectMenu();
 
 			try {
 				const response = await fetch(AVAILABLE_MONTHS_ENDPOINT, { method: 'GET', headers: getDoctorAuthHeaders() });
@@ -648,6 +842,12 @@
 				const months = Array.isArray(data?.months) ? data.months : [];
 
 				monthSelect.innerHTML = '';
+
+				const todayOption = document.createElement('option');
+				todayOption.value = 'today';
+				todayOption.textContent = 'اليوم';
+				monthSelect.appendChild(todayOption);
+
 				months.forEach((entry) => {
 					const option = document.createElement('option');
 					option.value = `${entry.year}-${entry.month}`;
@@ -664,10 +864,12 @@
 					monthSelect.value = `${months[0].year}-${months[0].month}`;
 				}
 			} catch (error) {
-				monthSelect.innerHTML = '<option value="all">كل الوقت (الإجمالي التراكمي)</option>';
+				monthSelect.innerHTML = '<option value="today">اليوم</option><option value="all">كل الوقت (الإجمالي التراكمي)</option>';
 				monthSelect.value = 'all';
 			} finally {
 				monthSelect.disabled = false;
+				if (monthSelectTrigger) monthSelectTrigger.disabled = false;
+				renderMonthSelectMenu();
 			}
 
 			await fetchFinancialMetrics();
