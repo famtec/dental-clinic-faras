@@ -1195,6 +1195,23 @@
         payload.birth_date = computedBirthDate;
       }
 
+      // 2026-08-29: بطلب الدكتور -- منع تسجيل مريض بنفس الاسم مرتين. فحص فوري
+      // هنا (بلا حاجة لطلب شبكة) على القائمة المحمَّلة أصلاً allPatients، بعد
+      // توحيد المسافات وحالة الأحرف حتى لا يمر "احمد علي" و"  احمد علي "
+      // كاسمين مختلفين. الباك-إند يملك نفس الفحص كخط دفاع ثانٍ (main.py،
+      // create_patient) للحالات التي تكون فيها allPatients غير محدَّثة (مثلاً
+      // تبويب آخر مفتوح أضاف مريضاً بنفس الاسم للتو).
+      const trimmedFullNameForDuplicateCheck = (payload.full_name || '').trim();
+      if (trimmedFullNameForDuplicateCheck) {
+        const isDuplicatePatientName = allPatients.some((existingPatient) => {
+          return (existingPatient.full_name || '').trim().toLowerCase() === trimmedFullNameForDuplicateCheck.toLowerCase();
+        });
+        if (isDuplicatePatientName) {
+          showToast('الاسم موجود مسبقاً في قائمة المرضى.', 'error');
+          return;
+        }
+      }
+
       if (savePatientBtn && window.ClinicLoader) {
         ClinicLoader.setButtonLoading(savePatientBtn, true, { loadingText: '...جاري تسجيل المريض' });
       }

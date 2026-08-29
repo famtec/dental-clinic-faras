@@ -1679,6 +1679,27 @@ def create_patient(
     # حالة التفعيل/الاشتراك يوقف الطلب فوراً (fail closed) بدلاً من المتابعة.
     current_user = require_active_doctor_user(db=db, doctor_email=doctor_email, authorization=authorization)
 
+    # 2026-08-29: بطلب الدكتور -- منع تسجيل مريض بنفس الاسم مرتين لنفس الطبيب
+    # (خطأ إدخال شائع: الطبيب أو السكرتيرة يعيدون إدخال نفس المريض بالغلط).
+    # المقارنة نصية بعد trim + توحيد حالة الأحرف حتى لا يمر "احمد علي" و"  احمد علي "
+    # كسجلَّين مختلفين، ومحصورة بمرضى نفس الطبيب فقط (doctor_email) حتى لا يُمنع
+    # طبيبان مختلفان من تسجيل مريضين بنفس الاسم الشائع في عيادتين مختلفتين.
+    # هذا فحص احتياطي على مستوى الخادم بالإضافة إلى الفحص الفوري في index.html --
+    # نفس نمط المقارنة المستخدم في find_or_create_patient_for_booking أعلاه.
+    resolved_full_name = (patient.full_name or "").strip()
+    if resolved_full_name:
+        existing_doctor_patients = (
+            db.query(models.Patient)
+            .filter(models.Patient.doctor_email == current_user.email)
+            .all()
+        )
+        for existing_patient in existing_doctor_patients:
+            if (existing_patient.full_name or "").strip().lower() == resolved_full_name.lower():
+                raise HTTPException(
+                    status_code=409,
+                    detail="الاسم موجود مسبقاً في قائمة المرضى.",
+                )
+
     resolved_doctor_name = (patient.doctor_name or "").strip()
     if not resolved_doctor_name:
         resolved_doctor_name = (current_user.doctor_name or current_user.email or "").strip()
@@ -1686,7 +1707,7 @@ def create_patient(
     db_patient = models.Patient(
         doctor_name=resolved_doctor_name or None,
         doctor_email=current_user.email,
-        full_name=patient.full_name,
+        full_name=resolved_full_name or patient.full_name,
         phone=patient.phone,
         birth_date=patient.birth_date if patient.birth_date else None,
         gender=patient.gender if patient.gender else "Male",
