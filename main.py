@@ -2280,6 +2280,44 @@ def update_patient_invoice_cost(
     return _serialize_invoice(invoice, invoice_payments)
 
 
+# 2026-08-29: حذف فاتورة علاج بالكامل (بدل تصحيح تكلفتها فقط أعلاه) -- مثلاً
+# فاتورة أُنشئت بالخطأ من الأساس. models.TreatmentInvoice.payments معرَّفة
+# بـ cascade="all, delete-orphan"، فـ db.delete(invoice) (حذف عبر الـ ORM
+# وليس Query.delete() الخام) يحذف تلقائياً كل FinancialTransaction المرتبطة
+# بها (invoice_id) بلا حاجة لتنظيف يدوي -- نفس نمط تنظيف الـ FK المعتمد في
+# delete_patient() أعلاه. تنبيه: هذا يحذف كل الدفعات المسجَّلة على الفاتورة
+# أيضاً بلا رجعة، والواجهة يجب أن تُحذّر المستخدم من ذلك قبل الاستدعاء.
+@app.delete("/api/patients/{patient_id}/invoices/{invoice_id}", status_code=200)
+def delete_patient_invoice(
+    patient_id: int,
+    invoice_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_active_doctor_user),
+):
+    _get_owned_patient_or_404(db, patient_id, current_user.email)
+
+    invoice = (
+        db.query(models.TreatmentInvoice)
+        .filter(
+            models.TreatmentInvoice.id == invoice_id,
+            models.TreatmentInvoice.patient_id == patient_id,
+            models.TreatmentInvoice.doctor_email == current_user.email,
+        )
+        .first()
+    )
+    if not invoice:
+        raise HTTPException(status_code=404, detail="فاتورة العلاج غير موجودة")
+
+    try:
+        db.delete(invoice)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر حذف فاتورة العلاج الآن. حاول مرة أخرى.")
+
+    return {"message": "تم حذف فاتورة العلاج بنجاح"}
+
+
 @app.post("/api/patients/{patient_id}/invoices/{invoice_id}/payments", response_model=TreatmentInvoiceResponse)
 def register_invoice_payment(
     patient_id: int,
