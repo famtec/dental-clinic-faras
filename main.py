@@ -686,6 +686,13 @@ class TreatmentInvoiceCreate(BaseModel):
     total_cost: float
 
 
+# 2026-08-29: يسمح بتصحيح التكلفة الإجمالية لفاتورة علاج موجودة (مثلاً عند
+# خطأ إدخال) دون المساس بدفعاتها المسجَّلة -- انظر
+# PATCH /api/patients/{patient_id}/invoices/{invoice_id} بالأسفل.
+class TreatmentInvoiceUpdate(BaseModel):
+    total_cost: float
+
+
 class TreatmentInvoicePaymentCreate(BaseModel):
     amount: float
     description: Optional[str] = None
@@ -2227,6 +2234,50 @@ def create_patient_invoice(
         raise HTTPException(status_code=400, detail="تعذر إنشاء فاتورة العلاج الآن. حاول مرة أخرى.")
 
     return _serialize_invoice(db_invoice, [])
+
+
+# 2026-08-29: تصحيح التكلفة الإجمالية لفاتورة علاج قائمة (مثلاً بعد خطأ إدخال
+# عند إنشائها) دون التأثير على الدفعات المسجَّلة عليها -- "المتبقي" و"الحالة"
+# يُعاد اشتقاقهما تلقائياً من _serialize_invoice() بعد الحفظ.
+@app.patch("/api/patients/{patient_id}/invoices/{invoice_id}", response_model=TreatmentInvoiceResponse)
+def update_patient_invoice_cost(
+    patient_id: int,
+    invoice_id: int,
+    invoice_update: TreatmentInvoiceUpdate,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_active_doctor_user),
+):
+    _get_owned_patient_or_404(db, patient_id, current_user.email)
+
+    invoice = (
+        db.query(models.TreatmentInvoice)
+        .filter(
+            models.TreatmentInvoice.id == invoice_id,
+            models.TreatmentInvoice.patient_id == patient_id,
+            models.TreatmentInvoice.doctor_email == current_user.email,
+        )
+        .first()
+    )
+    if not invoice:
+        raise HTTPException(status_code=404, detail="فاتورة العلاج غير موجودة")
+
+    if invoice_update.total_cost is None or invoice_update.total_cost < 0:
+        raise HTTPException(status_code=400, detail="التكلفة الإجمالية يجب أن تكون رقماً صحيحاً أكبر من أو يساوي صفر")
+
+    try:
+        invoice.total_cost = Decimal(str(invoice_update.total_cost))
+        db.commit()
+        db.refresh(invoice)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر تحديث التكلفة الإجمالية الآن. حاول مرة أخرى.")
+
+    invoice_payments = (
+        db.query(models.FinancialTransaction)
+        .filter(models.FinancialTransaction.invoice_id == invoice.id)
+        .all()
+    )
+    return _serialize_invoice(invoice, invoice_payments)
 
 
 @app.post("/api/patients/{patient_id}/invoices/{invoice_id}/payments", response_model=TreatmentInvoiceResponse)

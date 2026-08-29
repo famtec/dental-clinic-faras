@@ -657,6 +657,32 @@
     </div>
   </div>
 
+  <!-- 2026-08-29: تصحيح التكلفة الإجمالية لفاتورة علاج قائمة (بعد خطأ إدخال
+       مثلاً) دون المساس بالدفعات المسجَّلة عليها -- انظر
+       openInvoiceCostEditModal() و PATCH /api/patients/{id}/invoices/{id}. -->
+  <div id="invoiceCostEditModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 p-4 opacity-0 backdrop-blur-sm transition-opacity duration-200">
+    <div class="modal-pop w-full max-w-xl scale-95 rounded-[28px] border border-indigo-300/25 bg-[linear-gradient(165deg,_rgba(15,23,42,0.96),_rgba(30,27,75,0.95),_rgba(49,46,129,0.94))] p-5 text-indigo-50 shadow-2xl shadow-indigo-950/70 transition-transform duration-200 sm:p-6">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <p class="text-sm font-semibold text-indigo-200">تعديل فاتورة العلاج</p>
+          <h3 id="invoiceCostEditTitle" class="mt-1 text-xl font-extrabold text-white">تصحيح التكلفة الإجمالية</h3>
+        </div>
+        <button id="closeInvoiceCostEditModalBtn" type="button" class="rounded-full border border-indigo-200/35 bg-white/10 px-3 py-2 text-sm font-semibold text-indigo-100 transition hover:bg-white/15">إغلاق</button>
+      </div>
+      <form id="invoiceCostEditForm" class="mt-5 space-y-4">
+        <label class="block">
+          <span class="mb-1 block text-xs font-semibold text-indigo-100">التكلفة الإجمالية الجديدة (ل.س)</span>
+          <input id="invoiceCostEditInput" type="text" inputmode="decimal" required class="w-full rounded-2xl border border-indigo-200/30 bg-white/10 px-4 py-3 text-sm text-white outline-none transition placeholder:text-indigo-200/60 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-300/25" placeholder="أدخل التكلفة الصحيحة" />
+        </label>
+        <p class="text-[11px] leading-6 text-indigo-200/80">هذا التصحيح يغيّر التكلفة الإجمالية لهذه الفاتورة فقط، ولا يغيّر أي دفعة مسجَّلة عليها -- سيُعاد احتساب "المتبقي" وحالة الفاتورة تلقائياً بعد الحفظ.</p>
+        <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+          <button id="cancelInvoiceCostEditBtn" type="button" class="rounded-2xl border border-indigo-200/35 bg-white/10 px-5 py-3 text-sm font-semibold text-indigo-50 transition hover:bg-white/20">إلغاء</button>
+          <button id="saveInvoiceCostEditBtn" type="submit" class="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700">حفظ التكلفة الجديدة</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div id="deleteConfirmModal" class="fixed inset-0 z-[55] hidden items-center justify-center bg-indigo-950/75 p-3 opacity-0 backdrop-blur-md transition-opacity duration-200 sm:p-4">
     <div class="w-full max-w-md scale-95 rounded-[26px] border border-indigo-200/20 bg-[linear-gradient(160deg,_rgba(30,27,75,0.96),_rgba(49,46,129,0.95),_rgba(67,56,202,0.94))] p-5 text-indigo-50 shadow-2xl shadow-indigo-950/70 transition-transform duration-200 sm:p-6">
       <div class="flex items-start gap-3">
@@ -1001,6 +1027,8 @@
     let deleteConfirmModalCloseTimer = null;
     let pendingDeleteAction = null;
     let currentPrescriptions = [];
+    let invoiceCostEditModalCloseTimer = null;
+    let activeInvoiceForCostEdit = null;
 
     function getAppointmentUpdateEndpoint(appointmentId) {
       return `${APPOINTMENT_UPDATE_BASE_URL}/api/appointments/${encodeURIComponent(String(appointmentId))}`;
@@ -1871,6 +1899,10 @@
       return apiUrl(`/api/patients/${encodeURIComponent(String(patientId))}/invoices/${encodeURIComponent(String(invoiceId))}/payments`);
     }
 
+    function getInvoiceCostUpdateEndpoint(patientId, invoiceId) {
+      return apiUrl(`/api/patients/${encodeURIComponent(String(patientId))}/invoices/${encodeURIComponent(String(invoiceId))}`);
+    }
+
     function renderRemainingBalanceBadge() {
       const badge = document.getElementById('remainingBalanceBadge');
       if (!badge) return;
@@ -1954,7 +1986,10 @@
             <p class="truncate text-sm font-extrabold text-indigo-900">${escapeHtml(invoice.title)}</p>
             <p class="mt-1 text-[11px] text-slate-400">بدأت في ${escapeHtml(formatFinanceLedgerDate(invoice.created_at))}</p>
           </div>
-          <span class="whitespace-nowrap rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-bold text-indigo-700">قيد السداد</span>
+          <span class="flex flex-shrink-0 flex-wrap items-center gap-1.5">
+            <span class="whitespace-nowrap rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-bold text-indigo-700">قيد السداد</span>
+            <button type="button" data-invoice-edit-cost-id="${invoice.id}" class="invoice-cost-edit-btn whitespace-nowrap rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700" title="تعديل التكلفة الإجمالية">✏️ تعديل التكلفة</button>
+          </span>
         </div>
         <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
           <div class="h-full rounded-full bg-gradient-to-r from-indigo-600 to-violet-600" style="width:${progressPercent.toFixed(0)}%"></div>
@@ -2004,6 +2039,11 @@
 
       attachInvoicePaymentRowListeners(card);
 
+      const editCostBtn = card.querySelector(`.invoice-cost-edit-btn[data-invoice-edit-cost-id="${invoice.id}"]`);
+      if (editCostBtn) {
+        editCostBtn.addEventListener('click', () => openInvoiceCostEditModal(invoice));
+      }
+
       return card;
     }
 
@@ -2014,16 +2054,17 @@
       const isExpanded = expandedInvoiceHistoryIds.has(invoice.id);
 
       wrapper.innerHTML = `
-        <button type="button" data-toggle-invoice-history="${invoice.id}" class="flex w-full items-center justify-between gap-3 px-4 py-3 text-right">
+        <div data-toggle-invoice-history="${invoice.id}" class="flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-3 text-right transition hover:bg-slate-50">
           <span class="flex min-w-0 items-center gap-2">
             <span class="text-emerald-600"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></span>
             <span class="truncate text-sm font-bold text-slate-800">${escapeHtml(invoice.title)}</span>
           </span>
-          <span class="flex flex-shrink-0 items-center gap-3">
+          <span class="flex flex-shrink-0 items-center gap-2">
             <span class="text-[11px] text-slate-400">${escapeHtml(formatFinanceLedgerDate(invoice.created_at))}</span>
             <span class="text-xs font-extrabold text-emerald-700">${formatFinanceAmount(invoice.total_cost)} ل.س</span>
+            <button type="button" data-invoice-edit-cost-id="${invoice.id}" class="invoice-cost-edit-btn rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1 text-[10px] font-bold text-indigo-700 transition hover:bg-indigo-100" title="تعديل التكلفة الإجمالية">✏️ تعديل</button>
           </span>
-        </button>
+        </div>
         <div data-invoice-history-body="${invoice.id}" class="${isExpanded ? '' : 'hidden'} border-t border-emerald-100 px-4 pb-3"></div>
       `;
 
@@ -2034,13 +2075,22 @@
 
       const toggleBtn = wrapper.querySelector(`[data-toggle-invoice-history="${invoice.id}"]`);
       if (toggleBtn) {
-        toggleBtn.addEventListener('click', () => {
+        toggleBtn.addEventListener('click', (event) => {
+          if (event.target.closest('.invoice-cost-edit-btn')) return;
           if (expandedInvoiceHistoryIds.has(invoice.id)) {
             expandedInvoiceHistoryIds.delete(invoice.id);
           } else {
             expandedInvoiceHistoryIds.add(invoice.id);
           }
           if (body) body.classList.toggle('hidden');
+        });
+      }
+
+      const editCostBtn = wrapper.querySelector(`.invoice-cost-edit-btn[data-invoice-edit-cost-id="${invoice.id}"]`);
+      if (editCostBtn) {
+        editCostBtn.addEventListener('click', (event) => {
+          event.stopPropagation();
+          openInvoiceCostEditModal(invoice);
         });
       }
 
@@ -3226,6 +3276,109 @@
       }, 180);
     }
 
+    // 2026-08-29: يفتح نافذة تصحيح التكلفة الإجمالية لفاتورة علاج قائمة (بعد
+    // خطأ إدخال مثلاً)، دون المساس بأي دفعة مسجَّلة عليها.
+    function openInvoiceCostEditModal(invoice) {
+      if (!invoice) return;
+
+      activeInvoiceForCostEdit = invoice;
+      const titleEl = document.getElementById('invoiceCostEditTitle');
+      const input = document.getElementById('invoiceCostEditInput');
+      const modal = document.getElementById('invoiceCostEditModal');
+
+      if (titleEl) {
+        titleEl.textContent = invoice.title
+          ? `تصحيح التكلفة الإجمالية -- ${invoice.title}`
+          : 'تصحيح التكلفة الإجمالية';
+      }
+      if (input) {
+        const rawCost = Number(invoice.total_cost);
+        input.value = Number.isFinite(rawCost) ? String(rawCost) : '';
+      }
+
+      if (!modal) return;
+      if (invoiceCostEditModalCloseTimer) {
+        window.clearTimeout(invoiceCostEditModalCloseTimer);
+        invoiceCostEditModalCloseTimer = null;
+      }
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      requestAnimationFrame(() => {
+        modal.classList.remove('opacity-0');
+        const panel = modal.firstElementChild;
+        if (panel) panel.classList.remove('scale-95');
+      });
+
+      window.setTimeout(() => {
+        if (input) input.focus();
+      }, 60);
+    }
+
+    function closeInvoiceCostEditModal() {
+      activeInvoiceForCostEdit = null;
+      const modal = document.getElementById('invoiceCostEditModal');
+      if (!modal) return;
+
+      modal.classList.add('opacity-0');
+      const panel = modal.firstElementChild;
+      if (panel) panel.classList.add('scale-95');
+
+      invoiceCostEditModalCloseTimer = window.setTimeout(() => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        invoiceCostEditModalCloseTimer = null;
+      }, 180);
+    }
+
+    async function submitInvoiceCostEdit(event) {
+      event.preventDefault();
+      if (!activeInvoiceForCostEdit) return;
+
+      const input = document.getElementById('invoiceCostEditInput');
+      const saveButton = document.getElementById('saveInvoiceCostEditBtn');
+      const newCost = parseCurrencyNumber(input ? input.value : '');
+
+      if (!(newCost > 0)) {
+        showToast('يرجى إدخال تكلفة إجمالية صحيحة أكبر من صفر.', 'error');
+        return;
+      }
+
+      const patientId = getPatientIdFromUrl();
+      if (!patientId) {
+        showToast('تعذر تحديد معرف المريض من الرابط.', 'error');
+        return;
+      }
+
+      if (saveButton) {
+        saveButton.disabled = true;
+        saveButton.textContent = 'جاري الحفظ...';
+      }
+
+      try {
+        const response = await fetch(getInvoiceCostUpdateEndpoint(patientId, activeInvoiceForCostEdit.id), {
+          method: 'PATCH',
+          headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ total_cost: newCost }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to update invoice cost');
+        }
+
+        await loadPatientInvoices();
+        showFinanceSuccessAlert('تم تحديث التكلفة الإجمالية بنجاح ✨');
+        closeInvoiceCostEditModal();
+      } catch (error) {
+        showToast('تعذر تحديث التكلفة الإجمالية الآن. يرجى المحاولة لاحقاً.', 'error');
+      } finally {
+        if (saveButton) {
+          saveButton.disabled = false;
+          saveButton.textContent = 'حفظ التكلفة الجديدة';
+        }
+      }
+    }
+
     function applyFinanceRowUpdate(transactionId, nextAmount, nextDescription, nextIsOpeningBalance) {
       const transactionIdValue = String(transactionId);
       currentFinanceLedger = currentFinanceLedger.map((record) => (
@@ -3751,6 +3904,14 @@
       }
     });
     document.getElementById('financeEditForm').addEventListener('submit', submitFinanceEdit);
+    document.getElementById('closeInvoiceCostEditModalBtn').addEventListener('click', closeInvoiceCostEditModal);
+    document.getElementById('cancelInvoiceCostEditBtn').addEventListener('click', closeInvoiceCostEditModal);
+    document.getElementById('invoiceCostEditModal').addEventListener('click', (event) => {
+      if (event.target && event.target.id === 'invoiceCostEditModal') {
+        closeInvoiceCostEditModal();
+      }
+    });
+    document.getElementById('invoiceCostEditForm').addEventListener('submit', submitInvoiceCostEdit);
     document.getElementById('deleteConfirmCancelBtn').addEventListener('click', () => {
       closeDeleteConfirmModal();
     });
