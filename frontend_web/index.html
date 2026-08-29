@@ -1223,9 +1223,31 @@
           throw new Error(detail || 'تعذر حفظ المريض. تأكد من الحقول المطلوبة.');
         }
 
+        // 2026-08-29: بطلب الدكتور -- بعد إضافة مريض جديد بنجاح، ننتقل مباشرة
+        // إلى صفحة ملف المريض (patient_record.html) الخاصة بهذا المريض تحديداً
+        // بدل البقاء في index والاكتفاء بتحديث القائمة، لأن الخطوة التالية
+        // الطبيعية بعد التسجيل هي فتح ملفه لإكمال بياناته (تاريخ الميلاد،
+        // الفحص، إلخ). نقرأ id المريض الجديد من استجابة الباك-إند (PatientResponse).
+        let newPatient = null;
+        try {
+          newPatient = await res.json();
+        } catch {
+          newPatient = null;
+        }
+
         patientForm.reset();
         closeModal();
 
+        if (newPatient && newPatient.id) {
+          showToast('تم تسجيل المريض بنجاح، جاري فتح ملفه...', 'success');
+          setTimeout(() => {
+            window.location.href = `patient_record.html?id=${newPatient.id}`;
+          }, 900);
+          return;
+        }
+
+        // احتياطي: إن تعذّر الحصول على id المريض الجديد لأي سبب، نعود للسلوك
+        // القديم (تحديث قائمة المرضى في نفس الصفحة) بدل ترك المستخدم بلا استجابة.
         if (patientsTableSection && window.ClinicLoader) {
           ClinicLoader.showOverlay(patientsTableSection, {
             title: 'جاري تسجيل المريض...',
