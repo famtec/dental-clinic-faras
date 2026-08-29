@@ -71,11 +71,6 @@
 
     /* قائمة فرز المرضى -- بديل عصري لعنصر select الأصلي الذي كان يظهر
        بمظهر المتصفح الافتراضي غير القابل للتنسيق (2026-08-25). */
-    /* الحاوية العلوية (بحث + فرز) بها backdrop-filter الخاص بـ .panel-soft، وهذا
-       ينشئ سياق تكديس (stacking context) جديداً لها فيصير z-index الداخلي لقائمة
-       الفرز بلا فائدة أمام قسم "SMART STAT" التالي لها بترتيب DOM -- رفع الحاوية
-       نفسها فوقه يحل المشكلة (2026-08-25). */
-    .patient-toolbar-panel { position: relative; z-index: 30; }
     .sort-dropdown-wrap { flex-shrink: 0; }
     .sort-dropdown-trigger {
       display: inline-flex;
@@ -213,7 +208,7 @@
     </div>
 
     <main class="mx-auto min-w-0 w-full max-w-[1400px] flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8 xl:p-10">
-      <div class="panel-soft patient-toolbar-panel mb-6 rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/70 sm:p-6">
+      <div class="panel-soft mb-6 rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/70 sm:p-6">
         <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <div class="inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-bold tracking-[0.22em] text-indigo-700">PATIENTS HUB</div>
@@ -610,12 +605,21 @@
       }, 180);
     }
 
-    function showToast(message) {
+    const TOAST_TONE_CLASSES = {
+      error: ['border-rose-200', 'text-rose-700', 'shadow-rose-200/60'],
+      success: ['border-emerald-200', 'text-emerald-700', 'shadow-emerald-200/60'],
+      info: ['border-indigo-200', 'text-indigo-700', 'shadow-indigo-200/60'],
+    };
+    const TOAST_TONE_CLASS_LIST = Object.values(TOAST_TONE_CLASSES).flat();
+
+    function showToast(message, tone = 'error') {
       if (!toast) {
         alert(message);
         return;
       }
 
+      toast.classList.remove(...TOAST_TONE_CLASS_LIST);
+      toast.classList.add(...(TOAST_TONE_CLASSES[tone] || TOAST_TONE_CLASSES.error));
       toast.textContent = message;
       toast.classList.remove('hidden', 'opacity-0', '-translate-y-2');
       toast.classList.add('opacity-100', 'translate-y-0');
@@ -837,7 +841,7 @@
         renderPendingBalancesFromPatients(data?.pending_balances);
       } catch (error) {
         console.error('loadPatientStats error:', error);
-        showToast(`فشل تحميل الإحصائيات: ${error.message || 'خطأ غير معروف'}`);
+        showToast(`فشل تحميل الإحصائيات: ${error.message || 'خطأ غير معروف'}`, 'error');
 
         const fallbackTotalPatients = allPatients.length;
         const fallbackActiveAppointments = calculateActiveAppointmentsFallback();
@@ -888,7 +892,7 @@
           // Likely a cold-start (network error / 502 / 503) rather than a real auth failure.
           // Give the server a moment to wake up, then try exactly once more.
           if (err.status !== 401) {
-            showToast('السيرفر يستيقظ من وضع السكون (Render)، جاري إعادة المحاولة خلال لحظات...');
+            showToast('السيرفر يستيقظ من وضع السكون (Render)، جاري إعادة المحاولة خلال لحظات...', 'info');
           }
           setTimeout(() => {
             fetchPatients({ retryOnFailure: false });
@@ -905,7 +909,7 @@
           ? 'الجلسة غير صالحة، يرجى تسجيل الدخول من جديد.'
           : `تعذّر الاتصال بالسيرفر (${err.message || 'خطأ غير معروف'}).`;
         emptyFeedback.textContent = `حدث خطأ أثناء تحميل بيانات المرضى. ${reason}`;
-        showToast(`فشل تحميل بيانات المرضى: ${reason}`);
+        showToast(`فشل تحميل بيانات المرضى: ${reason}`, 'error');
         await loadPatientStats();
       }
     }
@@ -965,12 +969,12 @@
         );
         renderPatients(allPatients, searchInput ? searchInput.value.trim() : '');
         await loadPatientStats();
-        showToast('تم حذف المريض بنجاح.');
+        showToast('تم حذف المريض بنجاح.', 'success');
         pendingDeletePatientId = null;
         closeDeletePatientModal();
       } catch (error) {
         console.error('deletePatient error', error);
-        showToast('تعذر حذف المريض. يرجى المحاولة لاحقًا.');
+        showToast('تعذر حذف المريض. يرجى المحاولة لاحقًا.', 'error');
       } finally {
         if (confirmDeletePatientBtn && window.ClinicLoader) {
           ClinicLoader.setButtonLoading(confirmDeletePatientBtn, false);
@@ -1146,7 +1150,7 @@
       if (ageRawValue) {
         const parsedAge = Number.parseInt(ageRawValue, 10);
         if (!Number.isInteger(parsedAge) || parsedAge < 0 || parsedAge > 150) {
-          showToast('الرجاء إدخال عمر صحيح (رقم بين 0 و150).');
+          showToast('الرجاء إدخال عمر صحيح (رقم بين 0 و150).', 'error');
           return;
         }
         const birthYear = new Date().getFullYear() - parsedAge;
@@ -1209,7 +1213,7 @@
         await fetchPatients();
       }catch(err){
         console.error('create patient error', err);
-        showToast(err.message || 'حدث خطأ أثناء إضافة المريض. الرجاء المحاولة لاحقًا.');
+        showToast(err.message || 'حدث خطأ أثناء إضافة المريض. الرجاء المحاولة لاحقًا.', 'error');
       } finally {
         if (savePatientBtn && window.ClinicLoader) {
           ClinicLoader.setButtonLoading(savePatientBtn, false);
@@ -1450,8 +1454,8 @@ function renewSubscription() {
             }
             // رسالة تهنئة منبثقة فورية حسب الطلب، ثم إعادة تحميل الصفحة مباشرة
             // لإظهار كامل عناصر لوحة التحكم بعد استعادة الصلاحيات.
-            alert('🎉 تم تجديد اشتراكك بنجاح! سيتم تحديث الصفحة الآن لإظهار كامل صلاحيات لوحة التحكم.');
-            window.location.reload();
+            showToast('🎉 تم تجديد اشتراكك بنجاح! سيتم تحديث الصفحة الآن لإظهار كامل صلاحيات لوحة التحكم.', 'success');
+            setTimeout(() => window.location.reload(), 1800);
         })
         .catch(() => {
             if (statusEl) {
@@ -1473,7 +1477,7 @@ if (userTier === 'expired_subscription') {
 function activateClinicAccount() {
     const keyCode = document.getElementById("activationKeyInput").value.trim();
     if (!keyCode) {
-        alert("يرجى كتابة كود التفعيل أولاً!");
+        showToast("يرجى كتابة كود التفعيل أولاً!", 'error');
         return;
     }
     
@@ -1488,14 +1492,14 @@ function activateClinicAccount() {
     .then(res => res.json())
     .then(data => {
         if (data.status === "success") {
-            alert("🎉 تم تفعيل عيادتك الرقمية بنجاح باهر! جاري تحويلك للباقة...");
+            showToast("🎉 تم تفعيل عيادتك الرقمية بنجاح باهر! جاري تحويلك للباقة...", 'success');
             localStorage.setItem("user_tier", data.user_tier);
-            window.location.reload();
+            setTimeout(() => window.location.reload(), 1800);
         } else {
-            alert("❌ كود التفعيل غير صحيح أو مستخدم مسبقاً! يرجى مراجعة المهندس فارس.");
+            showToast("❌ كود التفعيل غير صحيح أو مستخدم مسبقاً! يرجى مراجعة المهندس فارس.", 'error');
         }
     })
-    .catch(err => alert("حدث خطأ أثناء الاتصال بالسيرفر السحابي."));
+    .catch(err => showToast("حدث خطأ أثناء الاتصال بالسيرفر السحابي.", 'error'));
 }
 
 // الدالة الأساسية القديمة بعد التحقق من القفل التجاري المحكم

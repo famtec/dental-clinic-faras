@@ -810,8 +810,8 @@
                 }
                 // رسالة تهنئة منبثقة فورية حسب الطلب، ثم إعادة تحميل الصفحة مباشرة
                 // لإظهار كامل عناصر لوحة التحكم بعد استعادة الصلاحيات.
-                alert('🎉 تم تجديد اشتراكك بنجاح! سيتم تحديث الصفحة الآن لإظهار كامل صلاحيات لوحة التحكم.');
-                window.location.reload();
+                showToast('🎉 تم تجديد اشتراكك بنجاح! سيتم تحديث الصفحة الآن لإظهار كامل صلاحيات لوحة التحكم.', 'success');
+                setTimeout(() => window.location.reload(), 1800);
             })
             .catch(() => {
                 if (statusEl) {
@@ -1653,7 +1653,7 @@
 
       const patientPhone = normalizeWhatsappPhone(currentPatient.phone);
       if (!patientPhone) {
-        alert('تعذر إرسال التذكير: رقم هاتف المريض غير متوفر أو غير صالح.');
+        showToast('تعذر إرسال التذكير: رقم هاتف المريض غير متوفر أو غير صالح.', 'error');
         return;
       }
 
@@ -1688,17 +1688,24 @@
       return currentName === appointmentName;
     }
 
-    function showToast(message) {
+    function showToast(message, tone = 'info') {
       const existingToast = document.getElementById('profileToast');
       if (existingToast) existingToast.remove();
 
+      const toneClasses = {
+        info: 'from-indigo-600 to-violet-600 shadow-indigo-950/30',
+        success: 'from-emerald-500 to-emerald-600 shadow-emerald-950/30',
+        error: 'from-rose-600 to-rose-700 shadow-rose-950/30',
+      };
+      const toneIcon = { success: '✅ ', error: '⚠️ ' }[tone] || '';
+
       const toast = document.createElement('div');
       toast.id = 'profileToast';
-      toast.className = 'fixed left-1/2 top-5 z-50 -translate-x-1/2 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3 text-sm font-semibold text-white shadow-lg';
-      toast.textContent = message;
+      toast.className = `fixed left-1/2 top-5 z-50 -translate-x-1/2 max-w-[90vw] rounded-2xl bg-gradient-to-r px-4 py-3 text-center text-sm font-semibold text-white shadow-lg -translate-x-1/2 ${toneClasses[tone] || toneClasses.info}`;
+      toast.textContent = `${toneIcon}${message}`;
       document.body.appendChild(toast);
 
-      setTimeout(() => toast.remove(), 2200);
+      setTimeout(() => toast.remove(), tone === 'error' ? 3600 : 2200);
     }
 
     function showFinanceSuccessAlert(message) {
@@ -2114,11 +2121,11 @@
       const cost = parseCurrencyNumber(costInput ? costInput.value : '');
 
       if (!title) {
-        alert('يرجى إدخال عنوان جولة العلاج.');
+        showToast('يرجى إدخال عنوان جولة العلاج.', 'error');
         return;
       }
       if (!(cost > 0)) {
-        alert('يرجى إدخال تكلفة إجمالية صحيحة أكبر من صفر.');
+        showToast('يرجى إدخال تكلفة إجمالية صحيحة أكبر من صفر.', 'error');
         return;
       }
 
@@ -2143,7 +2150,7 @@
         await loadPatientInvoices();
         showFinanceSuccessAlert('تم إنشاء فاتورة العلاج بنجاح');
       } catch (error) {
-        alert('تعذر إنشاء فاتورة العلاج الآن. يرجى المحاولة لاحقاً.');
+        showToast('تعذر إنشاء فاتورة العلاج الآن. يرجى المحاولة لاحقاً.', 'error');
       } finally {
         if (submitButton) {
           submitButton.disabled = false;
@@ -2158,7 +2165,7 @@
 
       const amount = parseCurrencyNumber(inputEl ? inputEl.value : '');
       if (!(amount > 0)) {
-        alert('يرجى إدخال مبلغ صحيح قبل تسجيل الدفعة.');
+        showToast('يرجى إدخال مبلغ صحيح قبل تسجيل الدفعة.', 'error');
         return;
       }
 
@@ -2183,7 +2190,7 @@
         await loadFinanceLedger();
         showFinanceSuccessAlert('تم تسجيل الدفعة على فاتورة العلاج بنجاح');
       } catch (error) {
-        alert('تعذر تسجيل الدفعة الآن. يرجى المحاولة لاحقاً.');
+        showToast('تعذر تسجيل الدفعة الآن. يرجى المحاولة لاحقاً.', 'error');
       }
     }
 
@@ -2756,13 +2763,13 @@
       const selectedDescription = descriptionInput ? descriptionInput.value.trim() : '';
 
       if (!selectedDate || !selectedTime || !selectedDescription) {
-        alert('يرجى إكمال حقول الموعد قبل الحفظ.');
+        showToast('يرجى إكمال حقول الموعد قبل الحفظ.', 'error');
         return;
       }
 
       const appointmentDateTime = new Date(`${selectedDate}T${selectedTime}:00`);
       if (Number.isNaN(appointmentDateTime.getTime())) {
-        alert('صيغة التاريخ أو الوقت غير صحيحة.');
+        showToast('صيغة التاريخ أو الوقت غير صحيحة.', 'error');
         return;
       }
 
@@ -2795,7 +2802,7 @@
         createMedicalToast('تم تحديث الموعد بنجاح');
         closeAppointmentModal();
       } catch (error) {
-        alert('تعذر تحديث الموعد الآن. يرجى المحاولة لاحقاً.');
+        showToast('تعذر تحديث الموعد الآن. يرجى المحاولة لاحقاً.', 'error');
       } finally {
         if (saveButton) {
           saveButton.disabled = false;
@@ -2814,7 +2821,7 @@
 
       const patientId = Number.parseInt(getPatientIdFromUrl() || '', 10);
       if (!Number.isInteger(patientId) || patientId <= 0) {
-        alert('تعذر تحديد معرف المريض من الرابط.');
+        showToast('تعذر تحديد معرف المريض من الرابط.', 'error');
         return;
       }
 
@@ -2823,13 +2830,13 @@
       const selectedDescription = descriptionInput ? descriptionInput.value.trim() : '';
 
       if (!selectedDate || !selectedTime || !selectedDescription) {
-        alert('يرجى تعبئة التاريخ والوقت والوصف قبل الحفظ.');
+        showToast('يرجى تعبئة التاريخ والوقت والوصف قبل الحفظ.', 'error');
         return;
       }
 
       const appointmentDateTime = new Date(`${selectedDate}T${selectedTime}:00`);
       if (Number.isNaN(appointmentDateTime.getTime())) {
-        alert('صيغة التاريخ أو الوقت غير صحيحة.');
+        showToast('صيغة التاريخ أو الوقت غير صحيحة.', 'error');
         return;
       }
 
@@ -2865,7 +2872,7 @@
         clearAppointmentCreateForm();
         closeAppointmentCreateModal();
       } catch (error) {
-        alert('تعذر إضافة الموعد الآن. يرجى المحاولة لاحقاً.');
+        showToast('تعذر إضافة الموعد الآن. يرجى المحاولة لاحقاً.', 'error');
       } finally {
         if (saveButton && window.ClinicLoader) {
           ClinicLoader.setButtonLoading(saveButton, false);
@@ -2962,7 +2969,7 @@
 
           const appointment = currentAppointments.find((item) => String(item.id) === String(appointmentId));
           if (!appointment) {
-            alert('تعذر العثور على بيانات الموعد لإرسال التذكير.');
+            showToast('تعذر العثور على بيانات الموعد لإرسال التذكير.', 'error');
             return;
           }
 
@@ -3261,7 +3268,7 @@
       const isOpeningBalance = Boolean(openingBalanceInput && openingBalanceInput.checked);
 
       if (!descriptionValue || Number.isNaN(parsedAmount) || parsedAmount <= 0) {
-        alert('يرجى إدخال مبلغ صحيح ووصف واضح قبل الحفظ.');
+        showToast('يرجى إدخال مبلغ صحيح ووصف واضح قبل الحفظ.', 'error');
         return;
       }
 
@@ -3292,7 +3299,7 @@
         showFinanceSuccessAlert('تم تحديث الدفعة المالية بنجاح ✨');
         closeFinanceEditModal();
       } catch (error) {
-        alert('تعذر تحديث الدفعة المالية الآن. يرجى المحاولة لاحقاً.');
+        showToast('تعذر تحديث الدفعة المالية الآن. يرجى المحاولة لاحقاً.', 'error');
       } finally {
         if (saveButton) {
           saveButton.disabled = false;
@@ -3360,7 +3367,7 @@
     async function uploadSelectedArchiveFiles(selectedFiles, descriptionValue, uploadButton, fileInput, descriptionInput) {
       const files = Array.from(selectedFiles || []);
       if (files.length === 0) {
-        alert('يرجى اختيار ملف واحد على الأقل قبل الرفع.');
+        showToast('يرجى اختيار ملف واحد على الأقل قبل الرفع.', 'error');
         return;
       }
 
@@ -3448,7 +3455,7 @@
         await uploadSelectedArchiveFiles(selectedFiles, descriptionValue, uploadButton, fileInput, descriptionInput);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'تعذر رفع الملف الطبي الآن. يرجى المحاولة لاحقاً.';
-        alert(message);
+        showToast(message, 'error');
       }
     }
 
@@ -3557,7 +3564,7 @@
       const ageInputValue = patientAgeInput ? patientAgeInput.value.trim() : '';
       const parsedAge = Number.parseInt(ageInputValue || '0', 10);
       if (ageInputValue && !Number.isInteger(parsedAge)) {
-        alert('يرجى إدخال عمر صحيح قبل الحفظ.');
+        showToast('يرجى إدخال عمر صحيح قبل الحفظ.', 'error');
         return;
       }
 
@@ -3626,7 +3633,7 @@
         showToast('تم حفظ التحديثات بنجاح');
       } catch (error) {
         console.error(error);
-        alert('حدث خطأ أثناء حفظ التعديلات.');
+        showToast('حدث خطأ أثناء حفظ التعديلات.', 'error');
       }
     }
 
@@ -3694,7 +3701,7 @@
       } catch (error) {
         console.error(error);
         const serverMessage = error instanceof Error ? error.message : 'تعذر تحميل بيانات المريض.';
-        alert(`تعذر تحميل بيانات المريض: ${serverMessage}`);
+        showToast(`تعذر تحميل بيانات المريض: ${serverMessage}`, 'error');
         if (chartSceneHint) {
           chartSceneHint.textContent = 'حدث خطأ أثناء تحميل الملف الطبي.';
         }
@@ -3773,7 +3780,7 @@
         event.preventDefault();
         const doctorEmail = (localStorage.getItem('user_email') || '').trim();
         if (!doctorEmail) {
-          alert('تعذر تحديد حساب الطبيب لتوليد النسخة الاحتياطية.');
+          showToast('تعذر تحديد حساب الطبيب لتوليد النسخة الاحتياطية.', 'error');
           return;
         }
 
@@ -3805,7 +3812,7 @@
           })
           .catch((error) => {
             console.error(error);
-            alert('تعذر تنزيل النسخة الاحتياطية الآن. يرجى المحاولة لاحقاً.');
+            showToast('تعذر تنزيل النسخة الاحتياطية الآن. يرجى المحاولة لاحقاً.', 'error');
           });
       });
     }

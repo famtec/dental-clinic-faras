@@ -27,6 +27,23 @@
 			transform: translateY(-8px);
 			pointer-events: none;
 		}
+		.toast-success {
+			position: fixed;
+			top: 24px;
+			left: 50%;
+			transform: translateX(-50%);
+			background: linear-gradient(90deg, #10b981, #059669);
+			color: #ffffff;
+			padding: 12px 22px;
+			border-radius: 16px;
+			font-weight: 700;
+			font-size: 14px;
+			box-shadow: 0 15px 30px -8px rgba(16, 185, 129, 0.5);
+			z-index: 80;
+			animation: toastIn 0.25s ease, toastOut 0.25s ease 2.35s forwards;
+		}
+		@keyframes toastIn { from { opacity: 0; transform: translate(-50%, -10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+		@keyframes toastOut { to { opacity: 0; transform: translate(-50%, -10px); } }
 	</style>
 </head>
 <body class="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.22),_transparent_30%),linear-gradient(135deg,_#f8fafc_0%,_#eef2ff_45%,_#e0e7ff_100%)] text-slate-800">
@@ -211,6 +228,17 @@
 	<script src="clinic-loader.js"></script>
 
 	<script>
+		function showFinanceToast(message) {
+			const existing = document.getElementById('financeToast');
+			if (existing) existing.remove();
+			const toast = document.createElement('div');
+			toast.id = 'financeToast';
+			toast.className = 'toast-success';
+			toast.textContent = message;
+			document.body.appendChild(toast);
+			setTimeout(() => toast.remove(), 2600);
+		}
+
 		// Feature gate at the very top of page load.
 		const currentTier = localStorage.getItem("user_tier");
 		let activeTier = currentTier === 'premium' ? 'premium' : 'standard';
@@ -333,8 +361,8 @@
 								}
 								// رسالة تهنئة منبثقة فورية حسب الطلب، ثم إعادة تحميل الصفحة مباشرة
 								// لإظهار كامل عناصر لوحة التحكم بعد استعادة الصلاحيات.
-								alert('🎉 تم تجديد اشتراكك بنجاح! سيتم تحديث الصفحة الآن لإظهار كامل صلاحيات لوحة التحكم.');
-								window.location.reload();
+								showFinanceToast('🎉 تم تجديد اشتراكك بنجاح! سيتم تحديث الصفحة الآن لإظهار كامل صلاحيات لوحة التحكم.');
+								setTimeout(() => window.location.reload(), 1800);
 						})
 						.catch(() => {
 								if (statusEl) {
