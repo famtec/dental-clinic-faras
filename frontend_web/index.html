@@ -342,6 +342,7 @@
                 <th class="px-4 py-3 font-semibold">الرقم ID</th>
                 <th class="px-4 py-3 font-semibold">الاسم الكامل</th>
                 <th class="px-4 py-3 font-semibold">رقم الهاتف</th>
+                <th class="px-4 py-3 font-semibold">العمر</th>
                 <th class="px-4 py-3 font-semibold">التاريخ الطبي</th>
                 <th class="px-4 py-3 font-semibold">الإجراءات</th>
               </tr>
@@ -1051,6 +1052,9 @@
             <span>${escapeHtml(patient.phone ?? '')}</span>
           </td>
           <td class="px-4 py-3 text-sm text-slate-600">
+            <span>${escapeHtml(calculateAge(patient.birth_date))}</span>
+          </td>
+          <td class="px-4 py-3 text-sm text-slate-600">
             <span class="line-clamp-1 max-w-[14rem]">${escapeHtml(patient.medical_history ?? '')}</span>
           </td>
           <td class="px-4 py-3 text-sm">
@@ -1094,6 +1098,10 @@
                 <span class="font-bold text-indigo-100/90">الهاتف:</span>
                 <span class="font-semibold text-white">${escapeHtml(patient.phone ?? '')}</span>
               </div>
+              <div class="flex items-start justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                <span class="font-bold text-indigo-100/90">العمر:</span>
+                <span class="font-semibold text-white">${escapeHtml(calculateAge(patient.birth_date))}</span>
+              </div>
               <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
                 <p class="mb-1 text-[11px] font-bold text-indigo-100/90">التاريخ الطبي:</p>
                 <p class="text-xs leading-6 text-white/90">${escapeHtml(patient.medical_history ?? '—')}</p>
@@ -1126,6 +1134,21 @@
         emptyFeedback.classList.remove('hidden');
         emptyFeedback.textContent = 'لا توجد مطابقة لهذا البحث، لكن القائمة الكاملة ما زالت ظاهرة.';
       }
+    }
+
+    // حساب العمر من تاريخ الميلاد -- بنفس منطق calculateAge() في
+    // patient_record.html تماماً حتى يتطابق العمر الظاهر في الصفحتين.
+    function calculateAge(birthDate) {
+      if (!birthDate) return '—';
+      const birth = new Date(birthDate);
+      if (Number.isNaN(birth.getTime())) return '—';
+      const today = new Date();
+      let age = today.getFullYear() - birth.getFullYear();
+      const monthDiff = today.getMonth() - birth.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+        age -= 1;
+      }
+      return `${age} سنة`;
     }
 
     // Simple HTML escape

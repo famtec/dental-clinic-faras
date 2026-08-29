@@ -12,7 +12,7 @@ import json
 import re
 from pydantic import AliasChoices, BaseModel, Field, ConfigDict
 from datetime import date, datetime, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import os
 from uuid import uuid4
 from google.auth.transport import requests as google_requests
@@ -3065,6 +3065,7 @@ def export_finance_backup(
         "record_id",
         "patient_id",
         "patient_name",
+        "patient_phone",
         "doctor_name",
         "birth_date",
         "gender",
@@ -3084,6 +3085,11 @@ def export_finance_backup(
             patient.id,
             patient.id,
             patient.full_name or "",
+            # 2026-08-29: رقم الهاتف كان مفقوداً تماماً من النسخة الاحتياطية القديمة
+            # (لم يكن ضمن الأعمدة إطلاقاً)، فكان أي مريض يُسترجَع يعود بلا رقم هاتف
+            # رغم أن العمود phone إلزامي (NOT NULL) في قاعدة البيانات. أُضيف هنا
+            # بناءً على طلب المستخدم صراحة حتى تصبح النسخة الاحتياطية كاملة فعلاً.
+            patient.phone or "",
             doctor_name,
             patient.birth_date.isoformat() if patient.birth_date else "",
             patient.gender or "",
@@ -3109,6 +3115,7 @@ def export_finance_backup(
             transaction.id,
             transaction.patient_id or "",
             linked_patient_name,
+            "",
             transaction.doctor_name or doctor_name,
             "",
             "",
@@ -3129,6 +3136,7 @@ def export_finance_backup(
             appointment.id,
             appointment_patient_id,
             appointment.patient_name or "",
+            appointment.patient_phone or "",
             doctor_name,
             "",
             "",
@@ -3151,6 +3159,232 @@ def export_finance_backup(
     )
     response.headers["Content-Disposition"] = 'attachment; filename="dental_backup_2026.csv"'
     return response
+
+
+# 2026-08-29: زر "نسخة احتياطية" في patient_record.html كان أحادي الاتجاه
+# فقط (تصدير CSV للتنزيل) دون أي مسار لاستيراد هذا الملف مرة أخرى -- لاحظ
+# المستخدم هذا الخلل بنفسه. هذا المسار يقبل نفس ملف الـ CSV الناتج عن
+# export_finance_backup أعلاه ويعيد استيراده بمنطق "دمج فقط" (لا حذف ولا
+# استبدال لأي بيانات موجودة حالياً في الحساب، بناءً على طلب المستخدم صراحة):
+# - المرضى: يُعاد إدخال أي مريض غير موجود حالياً (مطابقة بالاسم الكامل)، بما
+#   في ذلك رقم الهاتف (عمود patient_phone، أُضيف 2026-08-29 بناءً على طلب
+#   المستخدم بعد أن كان مفقوداً من تنسيق النسخة الاحتياطية الأصلي). ملفات
+#   نسخ احتياطية قديمة صُدِّرت قبل هذه الإضافة تبقى مقبولة (لا تملك هذا العمود
+#   إطلاقاً)، وفي تلك الحالة فقط -- أو إن كان الحقل فارغاً في الملف نفسه --
+#   يعود رقم الهاتف فارغاً (عمود phone إلزامي NOT NULL) ويُذكَر اسم المريض في
+#   الاستجابة ليكمل الطبيب رقمه يدوياً.
+# - المواعيد والمعاملات المالية: تُضاف فقط إن لم يوجد سجل مطابق تماماً (نفس
+#   المريض/التاريخ/الوقت للمواعيد، ونفس المبلغ/النوع/الوصف/التاريخ للمعاملات)
+#   لتفادي التكرار عند استيراد نفس الملف أكثر من مرة بالخطأ.
+@app.post("/api/finance/restore")
+async def restore_finance_backup(
+    file: UploadFile = File(...),
+    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    db: Session = Depends(database.get_db),
+):
+    user = require_active_doctor_user(db=db, doctor_email=doctor_email, authorization=authorization)
+    doctor_name = (user.doctor_name or "").strip() or user.email
+
+    raw_bytes = await file.read()
+    try:
+        text_content = raw_bytes.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise HTTPException(
+            status_code=400,
+            detail="تعذّرت قراءة الملف. تأكد أنه ملف CSV صالح ناتج عن زر (نسخة احتياطية).",
+        )
+
+    reader = csv.DictReader(io.StringIO(text_content))
+    required_columns = {
+        "record_type", "patient_name", "birth_date", "gender", "medical_history",
+        "appointment_date", "appointment_time", "appointment_status",
+        "transaction_amount", "transaction_type", "transaction_description", "created_at",
+    }
+    if not reader.fieldnames or not required_columns.issubset(set(reader.fieldnames)):
+        raise HTTPException(
+            status_code=400,
+            detail="صيغة الملف غير متوافقة مع تنسيق النسخة الاحتياطية لهذا النظام.",
+        )
+
+    rows = list(reader)
+
+    # -- خطوة 1: المرضى -- خريطة اسم(بأحرف صغيرة) -> كائن Patient لاستخدامها
+    # لاحقاً في ربط المواعيد/المعاملات، ولمنع إعادة إدخال مريض موجود أصلاً.
+    existing_patients = (
+        db.query(models.Patient).filter(models.Patient.doctor_email == user.email).all()
+    )
+    name_to_patient = {
+        (p.full_name or "").strip().lower(): p for p in existing_patients if (p.full_name or "").strip()
+    }
+
+    patients_added = 0
+    patients_skipped_existing = 0
+    patients_missing_phone: list[str] = []
+
+    for row in rows:
+        if (row.get("record_type") or "").strip() != "patient":
+            continue
+        full_name = (row.get("patient_name") or "").strip()
+        if not full_name:
+            continue
+        name_key = full_name.lower()
+        if name_key in name_to_patient:
+            patients_skipped_existing += 1
+            continue
+
+        birth_date_value = None
+        raw_birth = (row.get("birth_date") or "").strip()
+        if raw_birth:
+            try:
+                birth_date_value = date.fromisoformat(raw_birth)
+            except ValueError:
+                birth_date_value = None
+
+        # 2026-08-29: عمود patient_phone أُضيف إلى تنسيق النسخة الاحتياطية بناءً
+        # على طلب المستخدم -- لكن نُبقي التوافق مع ملفات نسخ احتياطية قديمة
+        # صُدِّرت قبل هذه الإضافة ولا تملك هذا العمود إطلاقاً (row.get يعيد None
+        # حينها بأمان). phone يبقى عمود إلزامي (NOT NULL) في قاعدة البيانات، فإن
+        # لم يتوفر رقم فعلي (ملف قديم، أو عمود فارغ) نضطر لقيمة فارغة مؤقتة
+        # ونُعيد اسم هذا المريض في الاستجابة ليكمل الطبيب رقمه يدوياً.
+        phone_value = (row.get("patient_phone") or "").strip()
+
+        new_patient = models.Patient(
+            doctor_name=doctor_name,
+            doctor_email=user.email,
+            full_name=full_name,
+            phone=phone_value,
+            birth_date=birth_date_value,
+            gender=(row.get("gender") or "").strip() or None,
+            medical_history=(row.get("medical_history") or "").strip() or None,
+        )
+        db.add(new_patient)
+        db.flush()
+        name_to_patient[name_key] = new_patient
+        patients_added += 1
+        if not phone_value:
+            patients_missing_phone.append(full_name)
+
+    # -- خطوة 2: المواعيد -- مفتاح تكرار: (اسم المريض، تاريخ الموعد، وقته) --
+    existing_appointment_keys = {
+        (
+            (a.patient_name or "").strip().lower(),
+            a.appointment_date.isoformat() if a.appointment_date else "",
+            (a.appointment_time or "").strip(),
+        )
+        for a in db.query(models.Appointment).filter(models.Appointment.doctor_email == user.email).all()
+    }
+
+    appointments_added = 0
+    appointments_skipped_existing = 0
+
+    for row in rows:
+        if (row.get("record_type") or "").strip() != "appointment":
+            continue
+        patient_name = (row.get("patient_name") or "").strip()
+        raw_date = (row.get("appointment_date") or "").strip()
+        appointment_time = (row.get("appointment_time") or "").strip()
+        dedup_key = (patient_name.lower(), raw_date, appointment_time)
+        if dedup_key in existing_appointment_keys:
+            appointments_skipped_existing += 1
+            continue
+
+        appointment_date_value = None
+        if raw_date:
+            try:
+                appointment_date_value = datetime.fromisoformat(raw_date)
+            except ValueError:
+                appointment_date_value = None
+
+        linked_patient = name_to_patient.get(patient_name.lower()) if patient_name else None
+        # عمود transaction_description في صفوف المواعيد يحمل notes/procedure_type
+        # المدموجين معاً (هكذا صُدِّرا أصلاً في export_finance_backup أعلاه).
+        procedure_value = (row.get("transaction_description") or "").strip() or "غير محدد"
+
+        new_appointment = models.Appointment(
+            doctor_email=user.email,
+            patient_name=patient_name or "مريض غير معروف",
+            appointment_date=appointment_date_value,
+            appointment_time=appointment_time or "00:00",
+            procedure_type=procedure_value,
+            status=(row.get("appointment_status") or "").strip() or "pending",
+            patient_id=linked_patient.id if linked_patient else None,
+            patient_phone=(row.get("patient_phone") or "").strip() or None,
+        )
+        db.add(new_appointment)
+        existing_appointment_keys.add(dedup_key)
+        appointments_added += 1
+
+    # -- خطوة 3: المعاملات المالية -- مفتاح تكرار: (المبلغ، النوع، الوصف، تاريخ الإنشاء) --
+    existing_transaction_keys = {
+        (
+            str(t.amount),
+            (t.type or "").strip().lower(),
+            (t.description or "").strip(),
+            t.created_at.isoformat() if t.created_at else "",
+        )
+        for t in db.query(models.FinancialTransaction)
+        .filter(models.FinancialTransaction.doctor_email == user.email)
+        .all()
+    }
+
+    transactions_added = 0
+    transactions_skipped_existing = 0
+
+    for row in rows:
+        if (row.get("record_type") or "").strip() != "financial_transaction":
+            continue
+        amount_raw = (row.get("transaction_amount") or "").strip()
+        if not amount_raw:
+            continue
+        try:
+            amount_value = Decimal(amount_raw)
+        except (InvalidOperation, ValueError):
+            continue
+
+        type_value = (row.get("transaction_type") or "").strip() or "expense"
+        description_value = (row.get("transaction_description") or "").strip()
+        created_at_raw = (row.get("created_at") or "").strip()
+
+        dedup_key = (str(amount_value), type_value.lower(), description_value, created_at_raw)
+        if dedup_key in existing_transaction_keys:
+            transactions_skipped_existing += 1
+            continue
+
+        created_at_value = None
+        if created_at_raw:
+            try:
+                created_at_value = datetime.fromisoformat(created_at_raw)
+            except ValueError:
+                created_at_value = None
+
+        patient_name = (row.get("patient_name") or "").strip()
+        linked_patient = name_to_patient.get(patient_name.lower()) if patient_name else None
+
+        new_transaction = models.FinancialTransaction(
+            patient_id=linked_patient.id if linked_patient else None,
+            doctor_name=doctor_name,
+            doctor_email=user.email,
+            amount=amount_value,
+            type=type_value,
+            description=description_value or "معاملة مستوردة من نسخة احتياطية",
+            created_at=created_at_value or datetime.utcnow(),
+        )
+        db.add(new_transaction)
+        existing_transaction_keys.add(dedup_key)
+        transactions_added += 1
+
+    db.commit()
+
+    return {
+        "patients_added": patients_added,
+        "patients_skipped_existing": patients_skipped_existing,
+        "patients_missing_phone": patients_missing_phone,
+        "appointments_added": appointments_added,
+        "appointments_skipped_existing": appointments_skipped_existing,
+        "transactions_added": transactions_added,
+        "transactions_skipped_existing": transactions_skipped_existing,
+    }
 
 
 @app.post("/api/prescriptions", response_model=PrescriptionResponse, status_code=201)
