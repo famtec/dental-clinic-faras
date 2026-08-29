@@ -73,6 +73,15 @@
 			backdrop-filter: blur(6px);
 			padding: 16px;
 		}
+		/* لازم هذا التحديد الأدق (specificity أعلى) لأن tailwind.css يُحمَّل قبل هذا
+		   الـ<style> في <head>، وقاعدته `.hidden{display:none}` لها نفس درجة التحديد
+		   (0,1,0) لقاعدة `.modal-overlay{display:flex}` أعلاه -- فتكسبها الأخيرة في
+		   ترتيب المصدر وتبقى النافذة ظاهرة رغم إضافة class="hidden" (هذا كان سبب ظهور
+		   نافذة "تعديل مادة المخزون" تلقائياً عند فتح الصفحة، ولماذا كانت أزرار
+		   X/إلغاء "لا تعمل": كانت فعلاً تضيف class hidden لكن بلا أي تأثير بصري). */
+		.modal-overlay.hidden {
+			display: none;
+		}
 		.modal-panel {
 			width: 100%;
 			max-width: 440px;
