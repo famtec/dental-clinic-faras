@@ -3,6 +3,11 @@
 const Map<String, String> appointmentStatusLabelsAr = {
   'pending': 'قيد الانتظار',
   'pending_confirmation': 'طلب حجز جديد',
+  'checked_in': 'دخل العيادة',
+  'no_show': 'تخلّف عن الموعد',
+  // القيم التالية لم تعد تُرسَل فعلياً من التطبيق بعد إصلاح مفردات الحالة
+  // (كانت الشاشة القديمة ترسلها خطأً وهي غير مقبولة من الـ backend)، لكنها
+  // تبقى هنا كترجمة احتياطية لأي بيانات قديمة قد تحمل هذه القيم.
   'confirmed': 'مؤكَّد',
   'completed': 'مكتمل',
   'cancelled': 'ملغى',
@@ -18,6 +23,12 @@ class Appointment {
   final String? notes;
   final String status;
   final String? patientPhone;
+  // 2026-08-30: لازم لتصفية مواعيد مريض واحد من قائمة GET /api/appointments
+  // الكاملة في شاشة "حالة المريض" -- مطابق لِـ isAppointmentForCurrentPatient()
+  // في patient_record.html، التي تعتمد على patient_id أولاً (وتطابق الاسم
+  // كبديل احتياطي فقط عند غيابه). قد يكون null لطلبات الحجز العام الواردة
+  // من booking.html التي لم تُقبَل بعد.
+  final int? patientId;
 
   const Appointment({
     required this.id,
@@ -28,6 +39,7 @@ class Appointment {
     required this.status,
     this.notes,
     this.patientPhone,
+    this.patientId,
   });
 
   String get statusLabel =>
@@ -57,6 +69,7 @@ class Appointment {
       notes: json['notes'] as String?,
       status: (json['status'] as String?)?.trim() ?? 'pending',
       patientPhone: json['patient_phone'] as String?,
+      patientId: json['patient_id'] as int?,
     );
   }
 }

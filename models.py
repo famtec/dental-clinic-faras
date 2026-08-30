@@ -47,8 +47,10 @@ class ActivationKey(Base):
     duration_days = Column(Integer, default=30, nullable=False)
     is_used = Column(Boolean, default=False, nullable=False)
     used_by_email = Column(String, nullable=True)
-    # الرتبة الصريحة المقصودة لهذا الكود ("premium" أو "standard")، تُضبط دائماً
-    # عند توليد أكواد التجديد الشهرية الجديدة عبر /api/admin/renewal-keys/generate.
+    # الرتبة الصريحة المقصودة لهذا الكود ("premium" أو "standard" أو "trial"
+    # -- الأخيرة أُضيفت 2026-08-30 لأكواد التجربة المجانية، وتُفعِّل صلاحيات
+    # premium كاملة عبر /api/activate)، تُضبط دائماً عند توليد أكواد التجديد
+    # الشهرية الجديدة عبر /api/admin/renewal-keys/generate.
     # قد تكون NULL للأكواد الثابتة القديمة المزروعة يدوياً -- /api/activate يرجع
     # عندها لتخمين نصي احتياطي (duration_days/كلمات مفتاحية في الكود نفسه).
     intended_tier = Column(String, nullable=True)

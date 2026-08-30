@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
+import 'screens/dashboard_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/today_schedule_screen.dart';
 import 'services/api_service.dart';
 import 'services/auth_storage.dart';
 import 'services/push_notification_service.dart';
+import 'theme/app_theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,6 +31,7 @@ class _DentalDoctorAppState extends State<DentalDoctorApp> {
       PushNotificationService(_apiService);
 
   final GlobalKey<HomeScreenState> _homeScreenKey = GlobalKey<HomeScreenState>();
+  final GlobalKey<DashboardScreenState> _dashboardKey = GlobalKey<DashboardScreenState>();
   final GlobalKey<TodayScheduleScreenState> _todayScheduleKey =
       GlobalKey<TodayScheduleScreenState>();
 
@@ -56,10 +59,13 @@ class _DentalDoctorAppState extends State<DentalDoctorApp> {
 
   Future<void> _initPush() async {
     _pushService.onNotificationTap = (data) {
-      // أي إشعار حالياً هو طلب حجز جديد -- نوجّه الطبيب لتبويب جدول اليوم
-      // ونحدّث القائمة فوراً حتى يظهر الحجز الجديد بلا حاجة لسحب يدوي.
+      // أي إشعار حالياً هو طلب حجز جديد -- نوجّه الطبيب لتبويب الجدول
+      // ونحدّث كلاً من الجدول ولوحة الرئيسية فوراً حتى يظهر الحجز الجديد
+      // بلا حاجة لسحب يدوي، أياً كان التبويب المفتوح وقت وصول الإشعار
+      // (IndexedStack يبقي حالة الشاشتين حيّة دائماً).
       _homeScreenKey.currentState?.showTodayTab();
       _todayScheduleKey.currentState?.refresh();
+      _dashboardKey.currentState?.refresh();
     };
     try {
       await _pushService.initialize();
@@ -85,10 +91,9 @@ class _DentalDoctorAppState extends State<DentalDoctorApp> {
     return MaterialApp(
       title: 'عيادتي الرقمية',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-        useMaterial3: true,
-      ),
+      // الهوية البصرية الجديدة المطابقة لموقع العيادة (انظر theme/app_theme.dart)
+      // -- كانت الشاشات تستخدم ThemeData افتراضية بسيطة قبل هذا التحديث.
+      theme: AppTheme.theme,
       // كل واجهات التطبيق بالعربي، والتخطيط من اليمين لليسار بالكامل -- بلا
       // حاجة لحزمة flutter_localizations الإضافية لأن كل النصوص هنا مكتوبة
       // يدوياً بالعربي أصلاً وليست نصوص إطار عمل مترجَمة تلقائياً.
@@ -100,7 +105,9 @@ class _DentalDoctorAppState extends State<DentalDoctorApp> {
               ? HomeScreen(
                   key: _homeScreenKey,
                   apiService: _apiService,
+                  authStorage: _authStorage,
                   onLogout: _handleLogout,
+                  dashboardKey: _dashboardKey,
                   todayScheduleKey: _todayScheduleKey,
                 )
               : LoginScreen(

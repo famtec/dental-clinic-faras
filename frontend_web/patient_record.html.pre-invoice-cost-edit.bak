@@ -150,50 +150,6 @@
         padding: 22px;
       }
     }
-
-    /* أزرار إجراءات موعد المريض ("إدارة مواعيد هذا المريض") -- نفس عائلة
-       الإندگو/البنفسجي المستخدمة في appointments.html (2026-08-30، توحيد
-       التصميم بعد ملاحظة المستخدم أنها مختلفة عن باقي الموقع). اللون الأحمر
-       الحقيقي محفوظ لخطوة تأكيد حذف فعلية إن وُجدت مستقبلاً، وأخضر واتساب
-       محفوظ كاستثناء هوية تجارية حقيقية. */
-    .appointment-action-btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      border-radius: 12px;
-      font-weight: 800;
-      transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
-    }
-    .appointment-action-btn:active { transform: translateY(0); }
-    .btn-edit-appointment,
-    .btn-delete-appointment {
-      background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
-      color: #4338ca;
-      border: 1px solid #c7d2fe;
-      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
-    }
-    .btn-edit-appointment:hover,
-    .btn-delete-appointment:hover {
-      background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
-      color: #ffffff;
-      border-color: transparent;
-      transform: translateY(-2px);
-      box-shadow: 0 14px 28px rgba(99, 102, 241, 0.4);
-    }
-    .btn-whatsapp-reminder {
-      background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
-      color: #047857;
-      border: 1px solid #a7f3d0;
-      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
-    }
-    .btn-whatsapp-reminder:hover {
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-      color: #ffffff;
-      border-color: transparent;
-      transform: translateY(-2px);
-      box-shadow: 0 14px 28px rgba(16, 185, 129, 0.4);
-    }
   </style>
 	<link rel="icon" type="image/svg+xml" href="favicon.svg" />
 	<link rel="alternate icon" type="image/png" href="favicon.png" />
@@ -701,32 +657,6 @@
     </div>
   </div>
 
-  <!-- 2026-08-29: تصحيح التكلفة الإجمالية لفاتورة علاج قائمة (بعد خطأ إدخال
-       مثلاً) دون المساس بالدفعات المسجَّلة عليها -- انظر
-       openInvoiceCostEditModal() و PATCH /api/patients/{id}/invoices/{id}. -->
-  <div id="invoiceCostEditModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 p-4 opacity-0 backdrop-blur-sm transition-opacity duration-200">
-    <div class="modal-pop w-full max-w-xl scale-95 rounded-[28px] border border-indigo-300/25 bg-[linear-gradient(165deg,_rgba(15,23,42,0.96),_rgba(30,27,75,0.95),_rgba(49,46,129,0.94))] p-5 text-indigo-50 shadow-2xl shadow-indigo-950/70 transition-transform duration-200 sm:p-6">
-      <div class="flex items-start justify-between gap-4">
-        <div>
-          <p class="text-sm font-semibold text-indigo-200">تعديل فاتورة العلاج</p>
-          <h3 id="invoiceCostEditTitle" class="mt-1 text-xl font-extrabold text-white">تصحيح التكلفة الإجمالية</h3>
-        </div>
-        <button id="closeInvoiceCostEditModalBtn" type="button" class="rounded-full border border-indigo-200/35 bg-white/10 px-3 py-2 text-sm font-semibold text-indigo-100 transition hover:bg-white/15">إغلاق</button>
-      </div>
-      <form id="invoiceCostEditForm" class="mt-5 space-y-4">
-        <label class="block">
-          <span class="mb-1 block text-xs font-semibold text-indigo-100">التكلفة الإجمالية الجديدة (ل.س)</span>
-          <input id="invoiceCostEditInput" type="text" inputmode="decimal" required class="w-full rounded-2xl border border-indigo-200/30 bg-white/10 px-4 py-3 text-sm text-white outline-none transition placeholder:text-indigo-200/60 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-300/25" placeholder="أدخل التكلفة الصحيحة" />
-        </label>
-        <p class="text-[11px] leading-6 text-indigo-200/80">هذا التصحيح يغيّر التكلفة الإجمالية لهذه الفاتورة فقط، ولا يغيّر أي دفعة مسجَّلة عليها -- سيُعاد احتساب "المتبقي" وحالة الفاتورة تلقائياً بعد الحفظ.</p>
-        <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
-          <button id="cancelInvoiceCostEditBtn" type="button" class="rounded-2xl border border-indigo-200/35 bg-white/10 px-5 py-3 text-sm font-semibold text-indigo-50 transition hover:bg-white/20">إلغاء</button>
-          <button id="saveInvoiceCostEditBtn" type="submit" class="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700">حفظ التكلفة الجديدة</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
   <div id="deleteConfirmModal" class="fixed inset-0 z-[55] hidden items-center justify-center bg-indigo-950/75 p-3 opacity-0 backdrop-blur-md transition-opacity duration-200 sm:p-4">
     <div class="w-full max-w-md scale-95 rounded-[26px] border border-indigo-200/20 bg-[linear-gradient(160deg,_rgba(30,27,75,0.96),_rgba(49,46,129,0.95),_rgba(67,56,202,0.94))] p-5 text-indigo-50 shadow-2xl shadow-indigo-950/70 transition-transform duration-200 sm:p-6">
       <div class="flex items-start gap-3">
@@ -1071,8 +1001,6 @@
     let deleteConfirmModalCloseTimer = null;
     let pendingDeleteAction = null;
     let currentPrescriptions = [];
-    let invoiceCostEditModalCloseTimer = null;
-    let activeInvoiceForCostEdit = null;
 
     function getAppointmentUpdateEndpoint(appointmentId) {
       return `${APPOINTMENT_UPDATE_BASE_URL}/api/appointments/${encodeURIComponent(String(appointmentId))}`;
@@ -1943,10 +1871,6 @@
       return apiUrl(`/api/patients/${encodeURIComponent(String(patientId))}/invoices/${encodeURIComponent(String(invoiceId))}/payments`);
     }
 
-    function getInvoiceCostUpdateEndpoint(patientId, invoiceId) {
-      return apiUrl(`/api/patients/${encodeURIComponent(String(patientId))}/invoices/${encodeURIComponent(String(invoiceId))}`);
-    }
-
     function renderRemainingBalanceBadge() {
       const badge = document.getElementById('remainingBalanceBadge');
       if (!badge) return;
@@ -2030,11 +1954,7 @@
             <p class="truncate text-sm font-extrabold text-indigo-900">${escapeHtml(invoice.title)}</p>
             <p class="mt-1 text-[11px] text-slate-400">بدأت في ${escapeHtml(formatFinanceLedgerDate(invoice.created_at))}</p>
           </div>
-          <span class="flex flex-shrink-0 flex-wrap items-center gap-1.5">
-            <span class="whitespace-nowrap rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-bold text-indigo-700">قيد السداد</span>
-            <button type="button" data-invoice-edit-cost-id="${invoice.id}" class="invoice-cost-edit-btn inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700" title="تعديل التكلفة الإجمالية"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"></path></svg><span>تعديل التكلفة</span></button>
-            <button type="button" data-invoice-delete-id="${invoice.id}" class="invoice-cost-delete-btn inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-rose-200 bg-white px-2.5 py-1 text-[11px] font-bold text-rose-600 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700" title="حذف فاتورة العلاج"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg><span>حذف</span></button>
-          </span>
+          <span class="whitespace-nowrap rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-bold text-indigo-700">قيد السداد</span>
         </div>
         <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
           <div class="h-full rounded-full bg-gradient-to-r from-indigo-600 to-violet-600" style="width:${progressPercent.toFixed(0)}%"></div>
@@ -2084,16 +2004,6 @@
 
       attachInvoicePaymentRowListeners(card);
 
-      const editCostBtn = card.querySelector(`.invoice-cost-edit-btn[data-invoice-edit-cost-id="${invoice.id}"]`);
-      if (editCostBtn) {
-        editCostBtn.addEventListener('click', () => openInvoiceCostEditModal(invoice));
-      }
-
-      const deleteCostBtn = card.querySelector(`.invoice-cost-delete-btn[data-invoice-delete-id="${invoice.id}"]`);
-      if (deleteCostBtn) {
-        deleteCostBtn.addEventListener('click', () => requestDeleteInvoice(invoice));
-      }
-
       return card;
     }
 
@@ -2104,18 +2014,16 @@
       const isExpanded = expandedInvoiceHistoryIds.has(invoice.id);
 
       wrapper.innerHTML = `
-        <div data-toggle-invoice-history="${invoice.id}" class="flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-3 text-right transition hover:bg-slate-50">
+        <button type="button" data-toggle-invoice-history="${invoice.id}" class="flex w-full items-center justify-between gap-3 px-4 py-3 text-right">
           <span class="flex min-w-0 items-center gap-2">
             <span class="text-emerald-600"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></span>
             <span class="truncate text-sm font-bold text-slate-800">${escapeHtml(invoice.title)}</span>
           </span>
-          <span class="flex flex-shrink-0 items-center gap-2">
+          <span class="flex flex-shrink-0 items-center gap-3">
             <span class="text-[11px] text-slate-400">${escapeHtml(formatFinanceLedgerDate(invoice.created_at))}</span>
             <span class="text-xs font-extrabold text-emerald-700">${formatFinanceAmount(invoice.total_cost)} ل.س</span>
-            <button type="button" data-invoice-edit-cost-id="${invoice.id}" class="invoice-cost-edit-btn inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1 text-[10px] font-bold text-indigo-700 transition hover:bg-indigo-100" title="تعديل التكلفة الإجمالية"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"></path></svg><span>تعديل</span></button>
-            <button type="button" data-invoice-delete-id="${invoice.id}" class="invoice-cost-delete-btn inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-1 text-[10px] font-bold text-rose-700 transition hover:bg-rose-100" title="حذف فاتورة العلاج"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg><span>حذف</span></button>
           </span>
-        </div>
+        </button>
         <div data-invoice-history-body="${invoice.id}" class="${isExpanded ? '' : 'hidden'} border-t border-emerald-100 px-4 pb-3"></div>
       `;
 
@@ -2126,30 +2034,13 @@
 
       const toggleBtn = wrapper.querySelector(`[data-toggle-invoice-history="${invoice.id}"]`);
       if (toggleBtn) {
-        toggleBtn.addEventListener('click', (event) => {
-          if (event.target.closest('.invoice-cost-edit-btn') || event.target.closest('.invoice-cost-delete-btn')) return;
+        toggleBtn.addEventListener('click', () => {
           if (expandedInvoiceHistoryIds.has(invoice.id)) {
             expandedInvoiceHistoryIds.delete(invoice.id);
           } else {
             expandedInvoiceHistoryIds.add(invoice.id);
           }
           if (body) body.classList.toggle('hidden');
-        });
-      }
-
-      const editCostBtn = wrapper.querySelector(`.invoice-cost-edit-btn[data-invoice-edit-cost-id="${invoice.id}"]`);
-      if (editCostBtn) {
-        editCostBtn.addEventListener('click', (event) => {
-          event.stopPropagation();
-          openInvoiceCostEditModal(invoice);
-        });
-      }
-
-      const deleteCostBtn = wrapper.querySelector(`.invoice-cost-delete-btn[data-invoice-delete-id="${invoice.id}"]`);
-      if (deleteCostBtn) {
-        deleteCostBtn.addEventListener('click', (event) => {
-          event.stopPropagation();
-          requestDeleteInvoice(invoice);
         });
       }
 
@@ -2679,9 +2570,9 @@
         </td>
         <td class="px-3 py-3 align-top">
           <div class="flex flex-wrap items-center justify-end gap-2">
-            <button type="button" data-appointment-id="${escapeHtml(appointment?.id)}" class="edit-appointment-btn appointment-action-btn btn-edit-appointment px-4 py-2 text-xs"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"></path></svg><span>تعديل</span></button>
-            <button type="button" data-delete-appointment-id="${escapeHtml(appointment?.id)}" class="delete-appointment-btn appointment-action-btn btn-delete-appointment px-4 py-2 text-xs"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg><span>حذف</span></button>
-            <button type="button" data-whatsapp-appointment-id="${escapeHtml(appointment?.id)}" class="whatsapp-reminder-btn appointment-action-btn btn-whatsapp-reminder px-4 py-2 text-xs"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M12 2.1c-5.46 0-9.9 4.3-9.9 9.62 0 1.87.55 3.7 1.59 5.28L2 22l5.19-1.56a10.15 10.15 0 0 0 4.81 1.22c5.46 0 9.9-4.3 9.9-9.62S17.46 2.1 12 2.1Zm0 17.94c-1.49 0-2.96-.39-4.25-1.14l-.31-.18-3.08.93.96-2.96-.2-.31a8.07 8.07 0 0 1-1.25-4.34c0-4.45 3.69-8.06 8.23-8.06s8.23 3.61 8.23 8.06-3.69 8.06-8.23 8.06Zm4.52-5.9c-.25-.12-1.48-.73-1.71-.82-.23-.08-.4-.12-.57.12-.17.24-.65.82-.8.99-.15.16-.29.19-.54.06-.25-.12-1.04-.38-1.97-1.2-.73-.65-1.22-1.45-1.36-1.69-.14-.24-.01-.37.1-.49.1-.1.25-.27.37-.41.12-.14.16-.24.25-.4.08-.16.04-.31-.02-.43-.06-.12-.57-1.36-.78-1.86-.21-.49-.42-.42-.57-.43h-.49c-.17 0-.43.06-.66.31-.23.24-.86.83-.86 2.03 0 1.2.89 2.36 1.01 2.52.12.16 1.75 2.77 4.24 3.88.59.25 1.05.4 1.41.51.59.18 1.13.16 1.56.1.48-.07 1.48-.6 1.69-1.17.21-.58.21-1.08.15-1.17-.06-.1-.23-.16-.48-.28Z"/></svg><span>تذكير واتساب</span></button>
+            <button type="button" data-appointment-id="${escapeHtml(appointment?.id)}" class="edit-appointment-btn inline-flex items-center justify-center gap-2 rounded-2xl border border-violet-200 bg-gradient-to-r from-indigo-100 to-violet-100 px-4 py-2 text-xs font-bold text-indigo-800 shadow-sm transition hover:from-indigo-200 hover:to-violet-200"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"></path></svg><span>تعديل</span></button>
+            <button type="button" data-delete-appointment-id="${escapeHtml(appointment?.id)}" class="delete-appointment-btn inline-flex items-center justify-center gap-2 rounded-xl border border-rose-300 bg-gradient-to-r from-rose-500 to-red-600 px-4 py-2 text-xs font-extrabold text-white shadow-md shadow-rose-300/40 transition hover:from-rose-600 hover:to-red-700"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg><span>حذف</span></button>
+            <button type="button" data-whatsapp-appointment-id="${escapeHtml(appointment?.id)}" class="whatsapp-reminder-btn inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300 bg-gradient-to-r from-emerald-500 to-green-600 px-4 py-2 text-xs font-extrabold text-white shadow-[0_0_24px_rgba(34,197,94,0.35)] transition hover:from-emerald-600 hover:to-green-700"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M12 2.1c-5.46 0-9.9 4.3-9.9 9.62 0 1.87.55 3.7 1.59 5.28L2 22l5.19-1.56a10.15 10.15 0 0 0 4.81 1.22c5.46 0 9.9-4.3 9.9-9.62S17.46 2.1 12 2.1Zm0 17.94c-1.49 0-2.96-.39-4.25-1.14l-.31-.18-3.08.93.96-2.96-.2-.31a8.07 8.07 0 0 1-1.25-4.34c0-4.45 3.69-8.06 8.23-8.06s8.23 3.61 8.23 8.06-3.69 8.06-8.23 8.06Zm4.52-5.9c-.25-.12-1.48-.73-1.71-.82-.23-.08-.4-.12-.57.12-.17.24-.65.82-.8.99-.15.16-.29.19-.54.06-.25-.12-1.04-.38-1.97-1.2-.73-.65-1.22-1.45-1.36-1.69-.14-.24-.01-.37.1-.49.1-.1.25-.27.37-.41.12-.14.16-.24.25-.4.08-.16.04-.31-.02-.43-.06-.12-.57-1.36-.78-1.86-.21-.49-.42-.42-.57-.43h-.49c-.17 0-.43.06-.66.31-.23.24-.86.83-.86 2.03 0 1.2.89 2.36 1.01 2.52.12.16 1.75 2.77 4.24 3.88.59.25 1.05.4 1.41.51.59.18 1.13.16 1.56.1.48-.07 1.48-.6 1.69-1.17.21-.58.21-1.08.15-1.17-.06-.1-.23-.16-.48-.28Z"/></svg><span>تذكير واتساب</span></button>
           </div>
         </td>
       `;
@@ -3335,145 +3226,6 @@
       }, 180);
     }
 
-    // 2026-08-29: يفتح نافذة تصحيح التكلفة الإجمالية لفاتورة علاج قائمة (بعد
-    // خطأ إدخال مثلاً)، دون المساس بأي دفعة مسجَّلة عليها.
-    function openInvoiceCostEditModal(invoice) {
-      if (!invoice) return;
-
-      activeInvoiceForCostEdit = invoice;
-      const titleEl = document.getElementById('invoiceCostEditTitle');
-      const input = document.getElementById('invoiceCostEditInput');
-      const modal = document.getElementById('invoiceCostEditModal');
-
-      if (titleEl) {
-        titleEl.textContent = invoice.title
-          ? `تصحيح التكلفة الإجمالية -- ${invoice.title}`
-          : 'تصحيح التكلفة الإجمالية';
-      }
-      if (input) {
-        const rawCost = Number(invoice.total_cost);
-        input.value = Number.isFinite(rawCost) ? String(rawCost) : '';
-      }
-
-      if (!modal) return;
-      if (invoiceCostEditModalCloseTimer) {
-        window.clearTimeout(invoiceCostEditModalCloseTimer);
-        invoiceCostEditModalCloseTimer = null;
-      }
-
-      modal.classList.remove('hidden');
-      modal.classList.add('flex');
-      requestAnimationFrame(() => {
-        modal.classList.remove('opacity-0');
-        const panel = modal.firstElementChild;
-        if (panel) panel.classList.remove('scale-95');
-      });
-
-      window.setTimeout(() => {
-        if (input) input.focus();
-      }, 60);
-    }
-
-    function closeInvoiceCostEditModal() {
-      activeInvoiceForCostEdit = null;
-      const modal = document.getElementById('invoiceCostEditModal');
-      if (!modal) return;
-
-      modal.classList.add('opacity-0');
-      const panel = modal.firstElementChild;
-      if (panel) panel.classList.add('scale-95');
-
-      invoiceCostEditModalCloseTimer = window.setTimeout(() => {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-        invoiceCostEditModalCloseTimer = null;
-      }, 180);
-    }
-
-    async function submitInvoiceCostEdit(event) {
-      event.preventDefault();
-      if (!activeInvoiceForCostEdit) return;
-
-      const input = document.getElementById('invoiceCostEditInput');
-      const saveButton = document.getElementById('saveInvoiceCostEditBtn');
-      const newCost = parseCurrencyNumber(input ? input.value : '');
-
-      if (!(newCost > 0)) {
-        showToast('يرجى إدخال تكلفة إجمالية صحيحة أكبر من صفر.', 'error');
-        return;
-      }
-
-      const patientId = getPatientIdFromUrl();
-      if (!patientId) {
-        showToast('تعذر تحديد معرف المريض من الرابط.', 'error');
-        return;
-      }
-
-      if (saveButton) {
-        saveButton.disabled = true;
-        saveButton.textContent = 'جاري الحفظ...';
-      }
-
-      try {
-        const response = await fetch(getInvoiceCostUpdateEndpoint(patientId, activeInvoiceForCostEdit.id), {
-          method: 'PATCH',
-          headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({ total_cost: newCost }),
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to update invoice cost');
-        }
-
-        await loadPatientInvoices();
-        showFinanceSuccessAlert('تم تحديث التكلفة الإجمالية بنجاح ✨');
-        closeInvoiceCostEditModal();
-      } catch (error) {
-        showToast('تعذر تحديث التكلفة الإجمالية الآن. يرجى المحاولة لاحقاً.', 'error');
-      } finally {
-        if (saveButton) {
-          saveButton.disabled = false;
-          saveButton.textContent = 'حفظ التكلفة الجديدة';
-        }
-      }
-    }
-
-    // 2026-08-29: حذف فاتورة علاج بالكامل (وليس فقط تصحيح تكلفتها) -- مثلاً
-    // فاتورة أُنشئت بالخطأ من الأساس. الباك إند يحذف تلقائياً كل الدفعات
-    // المرتبطة بها (cascade)، لذا التحذير هنا صريح قبل التنفيذ.
-    async function deleteInvoiceById(patientId, invoiceId) {
-      const response = await fetch(getInvoiceCostUpdateEndpoint(patientId, invoiceId), {
-        method: 'DELETE',
-        headers: getDoctorAuthHeaders(),
-      });
-
-      if (!response.ok) {
-        throw new Error('تعذر حذف فاتورة العلاج حالياً.');
-      }
-
-      await loadPatientInvoices();
-      showFinanceSuccessAlert('تم حذف فاتورة العلاج بنجاح');
-    }
-
-    function requestDeleteInvoice(invoice) {
-      if (!invoice) return;
-
-      const patientId = getPatientIdFromUrl();
-      if (!patientId) {
-        showToast('تعذر تحديد معرف المريض من الرابط.', 'error');
-        return;
-      }
-
-      const invoiceTitle = String(invoice.title || 'فاتورة العلاج').trim();
-      openDeleteConfirmModal({
-        title: 'حذف فاتورة العلاج',
-        message: `هل أنت متأكد من حذف فاتورة "${invoiceTitle}" نهائياً؟ سيتم حذف كل الدفعات المسجَّلة عليها أيضاً، ولا يمكن التراجع عن هذا الإجراء.`,
-        action: async () => {
-          await deleteInvoiceById(patientId, invoice.id);
-        },
-      });
-    }
-
     function applyFinanceRowUpdate(transactionId, nextAmount, nextDescription, nextIsOpeningBalance) {
       const transactionIdValue = String(transactionId);
       currentFinanceLedger = currentFinanceLedger.map((record) => (
@@ -3999,14 +3751,6 @@
       }
     });
     document.getElementById('financeEditForm').addEventListener('submit', submitFinanceEdit);
-    document.getElementById('closeInvoiceCostEditModalBtn').addEventListener('click', closeInvoiceCostEditModal);
-    document.getElementById('cancelInvoiceCostEditBtn').addEventListener('click', closeInvoiceCostEditModal);
-    document.getElementById('invoiceCostEditModal').addEventListener('click', (event) => {
-      if (event.target && event.target.id === 'invoiceCostEditModal') {
-        closeInvoiceCostEditModal();
-      }
-    });
-    document.getElementById('invoiceCostEditForm').addEventListener('submit', submitInvoiceCostEdit);
     document.getElementById('deleteConfirmCancelBtn').addEventListener('click', () => {
       closeDeleteConfirmModal();
     });

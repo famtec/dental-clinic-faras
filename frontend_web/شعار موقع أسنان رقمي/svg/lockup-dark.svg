@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="220" viewBox="0 0 440 110" fill="none">
+  <title>digital clinc — horizontal lockup</title>
+  <rect width="440" height="110" fill="#0d0b1a"></rect>
+  <g transform="translate(20,15) scale(0.5)">
+    <rect x="4" y="4" width="152" height="152" rx="36" fill="#221c4a"></rect>
+    <path d="M80 38 C64 38 56 32 48 36 C36 42 36 62 42 78 C47 92 48 106 51 122 C53 134 57 142 63 142 C70 142 72 130 74 118 C75 110 77 106 80 106 C83 106 85 110 86 118 C88 130 90 142 97 142 C103 142 107 134 109 122 C112 106 113 92 118 78 C124 62 124 42 112 36 C104 32 96 38 80 38 Z" fill="#8b7bf7"></path>
+    <g opacity="0.5" fill="#221c4a"><rect x="52" y="52" width="7" height="7" rx="1.5"></rect><rect x="64" y="52" width="7" height="7" rx="1.5"></rect><rect x="76" y="64" width="7" height="7" rx="1.5"></rect><rect x="88" y="64" width="7" height="7" rx="1.5"></rect></g>
+  </g>
+  <text x="110" y="58" font-family="Space Grotesk, Helvetica, Arial, sans-serif" font-size="34" font-weight="700" letter-spacing="-0.5" fill="#eeecfb">digital <tspan fill="#8b7bf7">clinc</tspan></text>
+  <text x="112" y="78" font-family="JetBrains Mono, monospace" font-size="11" letter-spacing="3.2" fill="#837db3">DENTAL CARE ONLINE</text>
+</svg>

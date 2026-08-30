@@ -29,7 +29,7 @@ environment:
 # versions available, run `flutter pub outdated`.
 dependencies:
   http: ^1.1.0
-  flutter: 
+  flutter:
     sdk: flutter
 
   # The following adds the Cupertino Icons font to your application.
@@ -43,6 +43,27 @@ dependencies:
   shared_preferences: ^2.3.0
   intl: ^0.19.0
   url_launcher: ^6.3.0
+
+  # -- الهوية البصرية الجديدة (مطابقة لموقع العيادة) 2026-08-29 --
+  google_fonts: ^6.2.1
+
+  # -- تغيير صورة الحساب من شاشة "حسابي" (مطابقة profile.html) 2026-08-29 --
+  image_picker: ^1.1.2
+
+  # -- أرشيف ملفات المريض في صفحة "حالة المريض" (مطابقة أرشيف ملفات المريض
+  # في patient_record.html) 2026-08-30 -- image_picker وحده لا يختار ملفات
+  # PDF (الموقع يسمح برفع PNG/JPG/JPEG/PDF)، فأُضيف file_picker خصيصاً
+  # لاختيار مستندات PDF فقط؛ اختيار الصور يبقى عبر image_picker الموجود أصلاً.
+  file_picker: ^8.1.6
+
+  # -- الوصفات الطبية القابلة للطباعة الفورية في صفحة "حالة المريض" (مطابقة
+  # زر "طباعة" في patient_record.html، الذي يفتح نافذة طباعة المتصفح على
+  # قالب #prescriptionPrintTemplate) 2026-08-30 -- لا يوجد "طباعة متصفح" على
+  # الجوال، فالبديل القياسي في Flutter هو توليد PDF (حزمة pdf) ثم فتح
+  # حوار الطباعة/المشاركة عبر نظام التشغيل (حزمة printing:
+  # Printing.layoutPdf). كلتا الحزمتين من نفس فريق الصيانة ومتكاملتان.
+  pdf: ^3.11.1
+  printing: ^5.13.4
 
 dev_dependencies:
   flutter_test:
