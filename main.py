@@ -138,17 +138,10 @@ def seed_default_activation_key() -> None:
 # --- محرّك تجديد الاشتراك الشهري (Renewal Retention Engine) ---------------
 
 def generate_renewal_activation_code(tier: str = "premium") -> str:
-    # يولّد كوداً عشوائياً عالي الإنتروبيا بصيغة "PM-xxxxxxxxxxxxx" (فخمة/شهرية)،
-    # "STD-xxxxxxxxxxxxx" (قياسية)، أو "TRIAL-xxxxxxxxxxxxx" (تجربة مجانية
-    # مؤقتة -- أُضيفت 2026-08-30، تمنح صلاحيات premium كاملة لكن بكود مميّز
-    # الشكل وبمدة قصيرة كي يسهل تتبعها إدارياً)، باستخدام وحدة secrets (وليس
-    # random العادية) لأنه سيُستخدم كتوكن دفع فعلي -- يجب ألا يكون قابلاً للتخمين.
-    if tier == "premium":
-        prefix = "PM"
-    elif tier == "trial":
-        prefix = "TRIAL"
-    else:
-        prefix = "STD"
+    # يولّد كوداً عشوائياً عالي الإنتروبيا بصيغة "PM-xxxxxxxxxxxxx" (فخمة/شهرية)
+    # أو "STD-xxxxxxxxxxxxx" (قياسية)، باستخدام وحدة secrets (وليس random العادية)
+    # لأنه سيُستخدم كتوكن دفع فعلي -- يجب ألا يكون قابلاً للتخمين.
+    prefix = "PM" if tier == "premium" else "STD"
     alphabet = string.ascii_letters + string.digits
     suffix = "".join(secrets.choice(alphabet) for _ in range(13))
     return f"{prefix}-{suffix}"
@@ -2675,6 +2668,27 @@ def delete_appointment(
     return {"message": "تم حذف الموعد بنجاح"}
 
 
+# مسار لجلب عدد طلبات الحجز الواردة عبر صفحة الحجز العامة (booking.html) التي
+# لا تزال بانتظار رد الطبيب (status = pending_confirmation) -- يُستخدم لإظهار
+# شارة تنبيه حمراء متوهجة فوق زر "المواعيد اليومية" في شريط التنقل عند تصفح
+# أي صفحة أخرى غير صفحة المواعيد نفسها (انظر notification-badge.js في
+# frontend_web، 2026-08-30).
+@app.get("/api/appointments/pending-count")
+def get_pending_appointments_count(
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_active_doctor_user),
+):
+    count = (
+        db.query(models.Appointment)
+        .filter(
+            models.Appointment.doctor_email == current_user.email,
+            models.Appointment.status == "pending_confirmation",
+        )
+        .count()
+    )
+    return {"count": count}
+
+
 # 7. مسار لجلب قائمة بجميع المواعيد المحجوزة [GET]
 @app.get("/api/appointments", response_model=List[AppointmentResponse])
 def get_all_appointments(
@@ -2933,7 +2947,6 @@ def _month_bounds(year: int, month: int):
 def get_finance_summary(
     year: Optional[int] = Query(None),
     month: Optional[int] = Query(None),
-    day: Optional[int] = Query(None),
     all_time: bool = Query(False),
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(require_active_doctor_user),
@@ -2942,8 +2955,6 @@ def get_finance_summary(
     # بداية الاستخدام -- إن لم يُرسل year/month يُستخدم الشهر الحالي بتوقيت
     # KEEP_ALIVE_TIMEZONE (نفس منطقة "اليوم/الآن" المعتمدة في باقي الملف)،
     # وإن أُرسل all_time=true يعود السلوك القديم (إجمالي كل الحركات).
-    # 2026-08-29: أُضيف day اختياري لدعم خيار "اليوم" في finance.html -- إن
-    # أُرسل مع year/month يُضيَّق النطاق ليوم واحد فقط بدل الشهر كاملاً.
     income_query = (
         db.query(func.coalesce(func.sum(models.FinancialTransaction.amount), 0))
         .filter(models.FinancialTransaction.type == "income")
@@ -2957,37 +2968,26 @@ def get_finance_summary(
 
     resolved_year = None
     resolved_month = None
-    resolved_day = None
     if not all_time:
         now_local = _damascus_now()
         resolved_year = year if year is not None else now_local.year
         resolved_month = month if month is not None else now_local.month
         if resolved_month < 1 or resolved_month > 12:
             raise HTTPException(status_code=400, detail="الشهر يجب أن يكون رقماً بين 1 و 12.")
-        if day is not None:
-            resolved_day = day
-            if resolved_day < 1 or resolved_day > 31:
-                raise HTTPException(status_code=400, detail="اليوم يجب أن يكون رقماً بين 1 و 31.")
-            try:
-                period_start = datetime(resolved_year, resolved_month, resolved_day)
-            except ValueError:
-                raise HTTPException(status_code=400, detail="تاريخ اليوم المطلوب غير صالح.")
-            period_end = period_start + timedelta(days=1)
-        else:
-            period_start, period_end = _month_bounds(resolved_year, resolved_month)
+        month_start, month_end = _month_bounds(resolved_year, resolved_month)
         # 2026-08-25: أي حركة is_opening_balance=True (رصيد افتتاحي/سابق مُرحّل)
         # تُستبعد دوماً من تقرير شهر محدد -- لا تنتمي فعلياً لهذا الشهر، انظر
         # شرح كامل عند FinancialTransaction.is_opening_balance في models.py.
         # في وضع all_time=true تبقى محتسبة (لا فلترة هنا) لأنها أموال حقيقية
         # فعلاً محصّلة.
         income_query = income_query.filter(
-            models.FinancialTransaction.created_at >= period_start,
-            models.FinancialTransaction.created_at < period_end,
+            models.FinancialTransaction.created_at >= month_start,
+            models.FinancialTransaction.created_at < month_end,
             models.FinancialTransaction.is_opening_balance.is_(False),
         )
         expense_query = expense_query.filter(
-            models.FinancialTransaction.created_at >= period_start,
-            models.FinancialTransaction.created_at < period_end,
+            models.FinancialTransaction.created_at >= month_start,
+            models.FinancialTransaction.created_at < month_end,
             models.FinancialTransaction.is_opening_balance.is_(False),
         )
 
@@ -3019,7 +3019,6 @@ def get_finance_summary(
         "all_time": all_time,
         "year": resolved_year,
         "month": resolved_month,
-        "day": resolved_day,
     }
 
 
@@ -4041,16 +4040,7 @@ def activate_account(request: ActivationRequest, db: Session = Depends(database.
     # مدته 30 يوماً فقط، فكان سيُصنَّف خطأً كـ"standard" تحت الشرط القديم
     # (duration_days >= 365) لولا هذا التفضيل.
     explicit_tier = (getattr(activation_key, "intended_tier", None) or "").strip().lower()
-    # أكواد التجربة المجانية ("trial") تُفعّل الحساب بكامل صلاحيات premium --
-    # لا توجد رتبة "trial" منفصلة في عمود users.tier أو في أي مكان آخر من
-    # الكود (frontend أو backend) عمداً، تقليلاً للمخاطر وتفادياً لتعديل كل
-    # أماكن الفحص premium/standard المنتشرة في المشروع. التمييز الإداري وحده
-    # يكفي: بادئة الكود "TRIAL-" وعمود intended_tier="trial" المحفوظ على
-    # نفس صف ActivationKey حتى بعد استخدامه.
-    is_trial_code = explicit_tier == "trial"
-    if is_trial_code:
-        target_tier = "premium"
-    elif explicit_tier in ("premium", "standard"):
+    if explicit_tier in ("premium", "standard"):
         target_tier = explicit_tier
     else:
         target_tier = (
@@ -4087,12 +4077,7 @@ def activate_account(request: ActivationRequest, db: Session = Depends(database.
         db.commit()
         db.refresh(user)
 
-        if is_trial_code:
-            success_message = (
-                f"🎁 تم تفعيل فترتك التجريبية المجانية بنجاح لمدة {activation_key.duration_days} يوماً، "
-                "بكامل مزايا الباقة الفخمة (Premium)!"
-            )
-        elif is_renewal:
+        if is_renewal:
             success_message = (
                 f"🎉 تم تجديد اشتراكك بنجاح والعودة فوراً إلى باقة ({target_tier})! "
                 "جميع سجلات مرضاك ومواعيدك ومخزون عيادتك كما تركتها تماماً."
@@ -4113,11 +4098,8 @@ def activate_account(request: ActivationRequest, db: Session = Depends(database.
 
 
 class RenewalKeyGenerateRequest(BaseModel):
-    tier: Literal["premium", "standard", "trial"] = "premium"
-    # None = استخدم القيمة الافتراضية الذكية حسب الرتبة (30 يوماً لـ
-    # premium/standard كالمعتاد، 7 أيام لـ trial) -- المدير ما يزال يقدر
-    # يمرّر أي قيمة صريحة فيتجاوز هذا الافتراضي.
-    duration_days: int | None = None
+    tier: Literal["premium", "standard"] = "premium"
+    duration_days: int = 30
     count: int = 1
 
 
@@ -4136,11 +4118,7 @@ def generate_renewal_keys(
 
     if request.count < 1 or request.count > 20:
         raise HTTPException(status_code=400, detail="يمكن توليد بين 1 و20 كوداً في كل مرة.")
-
-    duration_days = request.duration_days
-    if duration_days is None:
-        duration_days = 7 if request.tier == "trial" else 30
-    if duration_days < 1:
+    if request.duration_days < 1:
         raise HTTPException(status_code=400, detail="مدة الكود يجب أن تكون يوماً واحداً على الأقل.")
 
     generated_keys: list[str] = []
@@ -4163,7 +4141,7 @@ def generate_renewal_keys(
             db.add(
                 models.ActivationKey(
                     key_code=candidate_code,
-                    duration_days=duration_days,
+                    duration_days=request.duration_days,
                     intended_tier=request.tier,
                     is_used=False,
                     used_by_email=None,
@@ -4182,7 +4160,7 @@ def generate_renewal_keys(
     return {
         "generated_keys": generated_keys,
         "tier": request.tier,
-        "duration_days": duration_days,
+        "duration_days": request.duration_days,
     }
 
 

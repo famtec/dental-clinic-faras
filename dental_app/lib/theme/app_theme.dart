@@ -35,6 +35,11 @@ class AppColors {
   static const rose50 = Color(0xFFFFF1F2);
   static const rose100 = Color(0xFFFFE4E6);
   static const rose200 = Color(0xFFFECDD3);
+  // 2026-08-30: rose500/red600 -- نفس لوني تدرّج أزرار "رفض"/"حذف" الحمراء
+  // المملوءة في الموقع (from-rose-500 to-red-600 في appointments.html/
+  // patient_record.html)، أُضيفا لبناء dangerButtonGradient أدناه.
+  static const rose500 = Color(0xFFF43F5E);
+  static const red600 = Color(0xFFDC2626);
   static const rose700text = Color(0xFFBE123C);
   static const rose800text = Color(0xFF9F1239);
 
@@ -54,6 +59,20 @@ class AppColors {
   static const slate100 = Color(0xFFF1F5F9);
   static const pageBg = Color(0xFFF8FAFC);
   static const indigo50 = Color(0xFFEEF2FF);
+  // 2026-08-30: indigo100/indigo200 -- درجتا الإندگو الفاتحتان المستخدمتان في
+  // خلفية/حدود كبسولة أزرار appointment-action-btn (تعديل/حذف) في
+  // appointments.html بالموقع (eef2ff -> e0e7ff بحدود c7d2fe)، بعد توحيد
+  // الموقع لتصميم هذين الزرين 2026-08-29 على نفس عائلة الإندگو بدل التدرج
+  // الأحمر/الأخضر الصريح السابق.
+  static const indigo100 = Color(0xFFE0E7FF);
+  static const indigo200 = Color(0xFFC7D2FE);
+  // emerald200 + emerald700 (Tailwind emerald-700 الحقيقي #047857) -- لون
+  // حدود/نص زر "تذكير واتساب" appointment-action-btn في الموقع تماماً. لا
+  // علاقة لها بـ emerald700text القائم أصلاً (قيمته 065F46 فعلياً، وهي
+  // emerald-800 رغم الاسم، ومستخدَمة في سياقات أخرى غير هذا الزر -- تُركت
+  // كما هي دون تعديل).
+  static const emerald200 = Color(0xFFA7F3D0);
+  static const emerald700 = Color(0xFF047857);
 
   // السماوي (توهّج التبويب النشط في شريط التنقل السفلي + شارات "Live") --
   // مضاف بعد تدقيق تصميم الموقع 2026-08-29: كان غائباً عن لوحة التطبيق رغم
@@ -97,10 +116,40 @@ class AppColors {
     colors: [emerald500, emerald600],
   );
 
+  /// تدرّج أزرار "رفض"/"تخلّف عن الموعد" المملوءة -- مطابق تماماً لأزرار
+  /// accept-request-btn/reject-request-btn في appointments.html بالموقع
+  /// (from-rose-500 to-red-600)، أُضيف 2026-08-30 لاستبدال الزر المحدَّد
+  /// الفارغ الذي كان مستخدَماً سابقاً في AppointmentActionButtons ولا يطابق
+  /// تصميم الموقع الفعلي لهذه الأزرار.
+  static const dangerButtonGradient = LinearGradient(
+    begin: Alignment.centerRight,
+    end: Alignment.centerLeft,
+    colors: [rose500, red600],
+  );
+
   static const loginBackgroundGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [navy900, indigo800, Color(0xFF5B21B6)],
+  );
+
+  /// تدرّج خلفية كبسولتَي "تعديل"/"حذف" الفاتحتين -- مطابق تماماً لِـ
+  /// .btn-edit-appointment/.btn-delete-appointment في appointments.html
+  /// بالموقع (from #eef2ff to #e0e7ff)، أُضيف 2026-08-30 لتطبيق شكل الموقع
+  /// نفسه على أزرار إجراءات بطاقة الموعد في تبويب "المواعيد" بالتطبيق.
+  static const appointmentUtilityGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [indigo50, indigo100],
+  );
+
+  /// تدرّج خلفية كبسولة "تذكير واتساب" الفاتحة -- مطابق تماماً لِـ
+  /// .btn-whatsapp-reminder في appointments.html بالموقع (from #ecfdf5 to
+  /// #d1fae5)، نفس تاريخ الإضافة أعلاه.
+  static const appointmentWhatsappGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [emerald50, emerald100],
   );
 }
 

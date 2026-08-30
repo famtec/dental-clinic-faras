@@ -12,16 +12,6 @@
 			background: rgba(255, 255, 255, 0.92);
 			backdrop-filter: blur(12px);
 		}
-		/* 2026-08-30: نفس إصلاح z-index/stacking-context المطبّق على index.html --
-		   backdrop-filter في .panel-soft ينشئ سياق تكديس خاص به، فالقائمة المنسدلة
-		   بداخله (z-index:40) تتنافس فقط ضمن هذا السياق، بينما الصندوق نفسه يُرسم
-		   بترتيب DOM العادي مقارنة بالقسم التالي (بطاقات الإيرادات/المصروفات/الأرباح)
-		   الذي يظهر فوقه لأنه لاحق في DOM. الحل: تموضع صريح + z-index أعلى على
-		   غلاف القائمة نفسه. */
-		.dropdown-toolbar {
-			position: relative;
-			z-index: 20;
-		}
 		.badge-premium {
 			background: linear-gradient(130deg, #fef08a 0%, #f59e0b 45%, #fde68a 100%);
 			color: #5b3400;
@@ -234,7 +224,7 @@
 					</div>
 				</section>
 
-				<section class="panel-soft dropdown-toolbar mb-6 rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/70 sm:p-6">
+				<section class="panel-soft mb-6 rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/70 sm:p-6">
 					<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 						<div>
 							<h3 class="text-sm font-bold text-indigo-900">عرض التقرير المالي لشهر</h3>
@@ -334,6 +324,7 @@
 
 	<script src="api-config.js"></script>
 	<script src="clinic-loader.js"></script>
+	<script src="notification-badge.js"></script>
 
 	<script>
 		function showFinanceToast(message) {

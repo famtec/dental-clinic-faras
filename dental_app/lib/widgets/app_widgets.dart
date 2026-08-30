@@ -193,9 +193,17 @@ class InitialsAvatar extends StatelessWidget {
 
 /// أزرار إجراء الموعد حسب حالته الفعلية المقبولة من الـ backend:
 /// - pending_confirmation (طلب حجز عام وارد من صفحة الحجز): قبول/رفض عبر
-///   respondToBooking (decision: accept/reject).
+///   respondToBooking (decision: accept/reject) -- تظهر دائماً، لأنها إجراء
+///   مختلف تماماً عن مجرد تغيير حالة (تحوّل طلب الحجز إلى موعد حقيقي)، ولا
+///   تُغطّى بورقة "تغيير حالة الموعد" أدناه.
 /// - pending (موعد عادي بانتظار الدوام): دخل العيادة/تخلّف عبر
-///   updateAppointmentStatus (status: checked_in/no_show).
+///   updateAppointmentStatus (status: checked_in/no_show) -- تُعرض فقط عند
+///   [showPendingActions] (افتراضياً true). عُطِّلت 2026-08-30 في
+///   today_schedule_screen.dart تحديداً بعد إضافة ورقة "تغيير حالة الموعد"
+///   التي تفتح بالضغط على اسم المريض وتغطي نفس الخيارين تماماً (أصبح
+///   الزرّان الظاهران دوماً تكراراً بلا فائدة إضافية هناك حسب طلب
+///   المستخدم)؛ تُركت true افتراضياً حتى تبقى dashboard_screen.dart (التي
+///   لا تملك ورقة تغيير الحالة هذه) تعمل دون أي تغيير.
 /// أي حالة أخرى (checked_in/no_show/rejected/...) نهائية ولا تعرض أزراراً.
 /// هذا المكوّن هو مصدر الحقيقة الوحيد لمفردات الحالة حتى لا تتكرر (ولا
 /// ينحرف بعضها عن بعض كما حدث سابقاً حين استخدمت الشاشة القديمة قيماً غير
@@ -207,6 +215,7 @@ class AppointmentActionButtons extends StatelessWidget {
   final VoidCallback onNoShow;
   final VoidCallback onAccept;
   final VoidCallback onReject;
+  final bool showPendingActions;
 
   const AppointmentActionButtons({
     super.key,
@@ -216,6 +225,7 @@ class AppointmentActionButtons extends StatelessWidget {
     required this.onNoShow,
     required this.onAccept,
     required this.onReject,
+    this.showPendingActions = true,
   });
 
   @override
@@ -228,21 +238,14 @@ class AppointmentActionButtons extends StatelessWidget {
     }
     final normalized = status.toLowerCase();
     if (normalized == 'pending_confirmation') {
+      // ترتيب وتلوين مطابقان تماماً لِـ accept-request-btn/reject-request-btn
+      // في appointments.html بالموقع: زرّان مملوءان بتدرّج لوني (لا حدود
+      // فارغة)، "قبول" أخضر أولاً/على اليمين، "رفض" أحمر ثانياً/على اليسار
+      // (نفس ترتيب DOM في الموقع، الذي يضع زر القبول أولاً).
       return Padding(
         padding: const EdgeInsets.only(top: 10),
         child: Row(
           children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: onReject,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.rose700text,
-                  side: const BorderSide(color: AppColors.rose200),
-                ),
-                child: const Text('رفض'),
-              ),
-            ),
-            const SizedBox(width: 8),
             Expanded(
               child: GradientButton(
                 label: 'قبول',
@@ -250,26 +253,28 @@ class AppointmentActionButtons extends StatelessWidget {
                 gradient: AppColors.successButtonGradient,
               ),
             ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: GradientButton(
+                label: 'رفض',
+                onPressed: onReject,
+                gradient: AppColors.dangerButtonGradient,
+              ),
+            ),
           ],
         ),
       );
     }
-    if (normalized == 'pending') {
+    if (normalized == 'pending' && showPendingActions) {
+      // نفس منطق الأزرار المملوءة أعلاه، بترتيب مماثل (الإجراء الإيجابي
+      // "دخل العيادة" أولاً/على اليمين) -- الموقع نفسه يستخدم هنا قائمة
+      // منسدلة واحدة بدل زرين (renderAppointmentStatusSelect في
+      // appointments.html)، لكن زرين واضحين أنسب للمس على الجوال؛ الألوان
+      // والتعبئة مطابقة لنفس نظام الموقع اللوني (أخضر للنجاح، أحمر للتخلف).
       return Padding(
         padding: const EdgeInsets.only(top: 10),
         child: Row(
           children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: onNoShow,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.rose700text,
-                  side: const BorderSide(color: AppColors.rose200),
-                ),
-                child: const Text('تخلّف عن الموعد'),
-              ),
-            ),
-            const SizedBox(width: 8),
             Expanded(
               child: GradientButton(
                 label: 'دخل العيادة',
@@ -277,11 +282,105 @@ class AppointmentActionButtons extends StatelessWidget {
                 gradient: AppColors.successButtonGradient,
               ),
             ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: GradientButton(
+                label: 'تخلّف عن الموعد',
+                onPressed: onNoShow,
+                gradient: AppColors.dangerButtonGradient,
+              ),
+            ),
           ],
         ),
       );
     }
     return const SizedBox.shrink();
+  }
+}
+
+/// نمط زر إجراء موعد كبسولي فاتح -- [neutral] لـ"تعديل"/"حذف" (كلاهما نفس
+/// عائلة الإندگو الفاتحة، تطابقاً مع توحيد الموقع 2026-08-29 لهذين الزرين
+/// على لون واحد بدل الأحمر/الأخضر الصريح)، و[whatsapp] وحده أخضر (استثناء
+/// هوية علامة تجارية حقيقية، نفس مبدأ contact_developer_screen.dart).
+enum AppointmentUtilityStyle { neutral, whatsapp }
+
+/// زر إجراء صغير بشكل كبسولة فاتحة اللون -- مطابق تماماً لأزرار
+/// .appointment-action-btn (تعديل/حذف/تذكير واتساب) في appointments.html
+/// بالموقع: خلفية متدرجة فاتحة + حدود ملونة + أيقونة ونص بلون داكن من نفس
+/// العائلة، بدل OutlinedButton الفارغ المستخدم سابقاً لهذه الإجراءات.
+/// أُضيف 2026-08-30، ويُستخدم في today_schedule_screen.dart لبطاقة الموعد.
+class AppointmentUtilityButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final AppointmentUtilityStyle style;
+  final bool isLoading;
+
+  const AppointmentUtilityButton({
+    super.key,
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    this.style = AppointmentUtilityStyle.neutral,
+    this.isLoading = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isWhatsapp = style == AppointmentUtilityStyle.whatsapp;
+    final gradient = isWhatsapp
+        ? AppColors.appointmentWhatsappGradient
+        : AppColors.appointmentUtilityGradient;
+    final borderColor = isWhatsapp ? AppColors.emerald200 : AppColors.indigo200;
+    final contentColor = isWhatsapp ? AppColors.emerald700 : AppColors.indigoAccent;
+    final disabled = onPressed == null || isLoading;
+
+    return Opacity(
+      opacity: disabled && !isLoading ? 0.6 : 1,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: disabled ? null : onPressed,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            decoration: BoxDecoration(
+              gradient: gradient,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: borderColor),
+            ),
+            child: isLoading
+                ? SizedBox(
+                    width: 15,
+                    height: 15,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation(contentColor),
+                    ),
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(icon, size: 15, color: contentColor),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          label,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: contentColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

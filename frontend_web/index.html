@@ -19,18 +19,6 @@
       background: rgba(255, 255, 255, 0.92);
       backdrop-filter: blur(12px);
     }
-    /* 2026-08-30: .panel-soft's backdrop-filter creates its own stacking context,
-       so a popover inside it (like #patientSortMenu) only ranks against ITS z-index
-       among its own siblings -- the whole .panel-soft box still paints in normal
-       DOM order relative to LATER sibling sections, so a later section with no
-       z-index of its own (default z-index:auto, but still "above" a non-positioned
-       predecessor once it's a later stacking context) can visually cover the open
-       dropdown menu. Fix: give the toolbar wrapper itself an explicit positioned
-       stacking context that outranks any later sibling section. */
-    .dropdown-toolbar {
-      position: relative;
-      z-index: 20;
-    }
     .badge-premium {
       background: linear-gradient(130deg, #fef08a 0%, #f59e0b 45%, #fde68a 100%);
       color: #5b3400;
@@ -223,7 +211,7 @@
     </div>
 
     <main class="mx-auto min-w-0 w-full max-w-[1400px] flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8 xl:p-10">
-      <div class="panel-soft dropdown-toolbar mb-6 rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/70 sm:p-6">
+      <div class="panel-soft mb-6 rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/70 sm:p-6">
         <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <div class="inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-bold tracking-[0.22em] text-indigo-700">PATIENTS HUB</div>
@@ -434,6 +422,7 @@
 
   <script src="api-config.js"></script>
   <script src="clinic-loader.js"></script>
+  <script src="notification-badge.js"></script>
   <script>
     const doctorName = localStorage.getItem('doctor_name');
     const doctorEmail = localStorage.getItem('user_email') || 'fareshalawi17@gmail.com';

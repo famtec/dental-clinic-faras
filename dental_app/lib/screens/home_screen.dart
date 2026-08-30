@@ -8,7 +8,7 @@ import 'more_menu_screen.dart';
 import 'patients_list_screen.dart';
 import 'today_schedule_screen.dart';
 
-/// القشرة الرئيسية بشريط تنقل من 4 تبويبات: الرئيسية / الجدول / المرضى /
+/// القشرة الرئيسية بشريط تنقل من 4 تبويبات: الرئيسية / المواعيد / المرضى /
 /// المزيد (بوابة التقارير المالية، مخزن المواد، حسابي، وتواصل مع المطور) --
 /// بلا AppBar عام لأن كل شاشة لها رأسها المتدرّج الخاص المطابق للموقع.
 class HomeScreen extends StatefulWidget {
@@ -84,7 +84,7 @@ class HomeScreenState extends State<HomeScreen> {
         onTap: (index) => setState(() => _currentIndex = index),
         items: const [
           GlassNavItem(icon: Icons.home_outlined, activeIcon: Icons.home, label: 'الرئيسية'),
-          GlassNavItem(icon: Icons.today_outlined, activeIcon: Icons.today, label: 'الجدول'),
+          GlassNavItem(icon: Icons.today_outlined, activeIcon: Icons.today, label: 'المواعيد'),
           GlassNavItem(icon: Icons.people_outline, activeIcon: Icons.people, label: 'المرضى'),
           GlassNavItem(icon: Icons.apps_outlined, activeIcon: Icons.apps, label: 'المزيد'),
         ],
