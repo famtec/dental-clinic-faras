@@ -74,6 +74,30 @@ class AppColors {
   static const emerald200 = Color(0xFFA7F3D0);
   static const emerald700 = Color(0xFF047857);
 
+  // 2026-08-30: ألوان بطاقات نافذة "تحديث حالة السن" الثماني (تسوس/حشوة/
+  // فينير/تاج تلبيسة/لبية عصب/جسر/زراعة/مقلوع) -- منقولة بالحرف من ألوان
+  // Tailwind الفعلية لهذه البطاقات في toothStatusModal بـ patient_record.html
+  // بالموقع (كل بطاقة bg-*-50 + border-*-200|300 + text-*-700)، حتى تُطابق
+  // شبكة البطاقات الملوّنة الجديدة في نافذة اختيار حالة السن بالتطبيق تصميم
+  // الموقع تماماً. لا علاقة لهذه الألوان بألوان النقاط التمييزية
+  // (decay/filling/...) في dental_chart.dart، فتلك بالفعل مطابقة أصلاً.
+  static const red50 = Color(0xFFFEF2F2);
+  static const red200 = Color(0xFFFECACA);
+  static const red700 = Color(0xFFB91C1C);
+  static const blue50 = Color(0xFFEFF6FF);
+  static const blue200 = Color(0xFFBFDBFE);
+  static const blue700 = Color(0xFF1D4ED8);
+  static const amber300 = Color(0xFFFCD34D);
+  static const amber700 = Color(0xFFB45309);
+  static const purple700 = Color(0xFF7E22CE);
+  static const orange50 = Color(0xFFFFF7ED);
+  static const orange300 = Color(0xFFFDBA74);
+  static const orange700 = Color(0xFFC2410C);
+  static const pink50 = Color(0xFFFDF2F8);
+  static const pink200 = Color(0xFFFBCFE8);
+  static const pink700 = Color(0xFFBE185D);
+  static const slate700 = Color(0xFF334155);
+
   // السماوي (توهّج التبويب النشط في شريط التنقل السفلي + شارات "Live") --
   // مضاف بعد تدقيق تصميم الموقع 2026-08-29: كان غائباً عن لوحة التطبيق رغم
   // أنه لون التمييز الأساسي لكل عنصر تنقل نشط في نسخة الويب.

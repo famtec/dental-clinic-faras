@@ -74,15 +74,19 @@ class ToothCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final option = toothStatusByKey(statusKey);
-    final fill = option?.color.withValues(alpha: 0.28) ?? toothDefaultFill;
-    final stroke = option?.color ?? toothDefaultStroke;
+    // 2026-08-30: يحلّ الحالة عبر resolveToothStatus بدل toothStatusByKey
+    // مباشرة، حتى يُلوَّن السن أيضاً عندما يحمل حالة "مخصصة" (اسم ولون من
+    // اختيار الطبيب) أو قيمة لون قديمة موروثة من نسخة سابقة من الموقع، لا
+    // فقط إحدى الحالات الثابتة الثمانية.
+    final resolved = resolveToothStatus(statusKey);
+    final fill = resolved?.color.withValues(alpha: 0.28) ?? toothDefaultFill;
+    final stroke = resolved?.color ?? toothDefaultStroke;
     final number = Text(
       '$fdiNumber',
       style: TextStyle(
         fontSize: 9.5,
         fontWeight: FontWeight.w700,
-        color: option != null ? stroke : const Color(0xFF94A3B8),
+        color: resolved != null ? stroke : const Color(0xFF94A3B8),
       ),
     );
     final shape = SizedBox(

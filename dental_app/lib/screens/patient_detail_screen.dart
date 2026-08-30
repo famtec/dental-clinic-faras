@@ -773,9 +773,16 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
 
   /// تحديث حالة سن واحد -- يبني خريطة chart_state الكاملة (الحالية + التعديل)
   /// لأن الـ backend يستبدل القيمة المخزَّنة بالكامل بما يُرسل، لا يدمجها.
-  Future<void> _updateTooth(int fdiNumber, String? statusKey) async {
+  ///
+  /// 2026-08-30: يعيد الآن true عند نجاح الحفظ الفعلي وfalse عند أي فشل --
+  /// القيمة المُعادة تُستخدم من قسم "الحالة المخصصة" الجديد في
+  /// _openToothPicker لتقرير ما إذا كانت الورقة السفلية تُغلَق تلقائياً
+  /// (نجاح) أو تبقى مفتوحة مع رسالة خطأ (فشل)، تماماً كسلوك toothStatusModal
+  /// في الموقع. استدعاءات اختيار حالة جاهزة/إزالة الحالة تتجاهل القيمة
+  /// المُعادة كما كانت (سلوكهما لم يتغيّر).
+  Future<bool> _updateTooth(int fdiNumber, String? statusKey) async {
     final palmerKey = fdiToPalmer[fdiNumber];
-    if (palmerKey == null) return;
+    if (palmerKey == null) return false;
     final updatedMap = Map<String, String>.from(_patient.chartState);
     if (statusKey == null) {
       updatedMap.remove(palmerKey);
@@ -783,14 +790,16 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
       updatedMap[palmerKey] = statusKey;
     }
     setState(() => _savingToothKey = palmerKey);
+    var success = false;
     try {
       final updatedPatient = await widget.apiService.updatePatientChart(_patient.id, updatedMap);
-      if (!mounted) return;
+      if (!mounted) return false;
       setState(() => _patient = updatedPatient);
+      success = true;
     } on ApiException catch (e) {
       if (e.isSessionExpired) {
         widget.onSessionExpired();
-        return;
+        return false;
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
@@ -803,62 +812,225 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
     } finally {
       if (mounted) setState(() => _savingToothKey = null);
     }
+    return success;
   }
 
+  /// نافذة "تحديث حالة السن" -- أُعيد تصميمها بالكامل 2026-08-30 لتطابق
+  /// toothStatusModal في patient_record.html بالموقع بالضبط: شبكة من 8
+  /// بطاقات ملوّنة (نفس ألوان/ترتيب/تسميات TOOTH_STATUS_OPTIONS)، ثم قسم
+  /// "حالة مخصصة" باسم حر ولون من نفس اللوحة، محفوظ بنفس صيغة الموقع
+  /// (custom:<اسم>|<لون>) حتى تتوافق الحالة أياً كانت الجهة التي أنشأتها.
+  /// "إزالة الحالة الحالية" ليست موجودة في نافذة الموقع أصلاً، لكن أُبقيت
+  /// هنا (بشكل ثانوي أسفل النافذة) لأنها ميزة مفيدة قائمة سلفاً في التطبيق
+  /// ولا تعارض التصميم المطلوب مطابقته.
   void _openToothPicker(int fdiNumber) {
     final palmerKey = fdiToPalmer[fdiNumber];
     final currentKey = palmerKey == null ? null : _patient.chartState[palmerKey];
-    showModalBottomSheet(
+    final customEntry = decodeCustomToothStatus(currentKey);
+    final customLabelController = TextEditingController(text: customEntry?.label ?? '');
+    ToothStatusOption? selectedCustomColorOption =
+        customEntry != null ? toothStatusByHex(customEntry.hex) : null;
+    var isSavingCustom = false;
+    var hintText = 'اختر الحالة السنية المناسبة وسيتم حفظها فورًا على الملف السحابي.';
+
+    showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (sheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'حالة السن رقم $fdiNumber',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-                ),
-                const SizedBox(height: 14),
-                ...toothStatusOptions.map((option) {
-                  final selected = option.key == currentKey;
-                  return ListTile(
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      _updateTooth(fdiNumber, option.key);
-                    },
-                    leading: Container(
-                      width: 18,
-                      height: 18,
-                      decoration: BoxDecoration(color: option.color, shape: BoxShape.circle),
-                    ),
-                    title: Text(option.label),
-                    trailing: selected ? const Icon(Icons.check, color: AppColors.indigo600) : null,
-                  );
-                }),
-                if (currentKey != null)
-                  ListTile(
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      _updateTooth(fdiNumber, null);
-                    },
-                    leading: const Icon(Icons.close, color: AppColors.slate500),
-                    title: const Text('إزالة الحالة'),
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            Future<void> handlePresetTap(String key) async {
+              Navigator.of(sheetContext).pop();
+              await _updateTooth(fdiNumber, key);
+            }
+
+            Future<void> handleRemove() async {
+              Navigator.of(sheetContext).pop();
+              await _updateTooth(fdiNumber, null);
+            }
+
+            Future<void> handleSaveCustom() async {
+              final label = customLabelController.text.trim();
+              if (label.isEmpty) {
+                setSheetState(() => hintText = 'يرجى إدخال اسم الحالة أولاً.');
+                return;
+              }
+              final colorOption = selectedCustomColorOption;
+              if (colorOption == null) {
+                setSheetState(() => hintText = 'يرجى اختيار لون للحالة المخصصة.');
+                return;
+              }
+              setSheetState(() {
+                isSavingCustom = true;
+                hintText = 'جاري حفظ التحديث...';
+              });
+              final ok = await _updateTooth(
+                  fdiNumber, encodeCustomToothStatus(label, colorOption.hex));
+              if (ok) {
+                Navigator.of(sheetContext).pop();
+              } else {
+                setSheetState(() {
+                  isSavingCustom = false;
+                  hintText = 'تعذر الحفظ الآن. أعد المحاولة بعد قليل.';
+                });
+              }
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                    20, 18, 20, MediaQuery.of(sheetContext).viewInsets.bottom + 18),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'تحديث حالة السن',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.indigoAccent,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'السن $fdiNumber',
+                                  style: const TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w900,
+                                    color: AppColors.slate900,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Material(
+                            color: AppColors.slate100,
+                            borderRadius: BorderRadius.circular(999),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(999),
+                              onTap: () => Navigator.of(sheetContext).pop(),
+                              child: const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                                child: Text(
+                                  'إغلاق',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.slate600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'اختر الحالة السنية المناسبة وسيتم حفظها فورًا على الملف السحابي.',
+                        style: TextStyle(fontSize: 13, height: 1.6, color: AppColors.slate600),
+                      ),
+                      const SizedBox(height: 18),
+                      GridView.count(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        crossAxisCount: 3,
+                        mainAxisSpacing: 10,
+                        crossAxisSpacing: 10,
+                        childAspectRatio: 1.05,
+                        children: toothStatusOptions
+                            .map((option) => _ToothStatusCard(
+                                  option: option,
+                                  onTap: () => handlePresetTap(option.key),
+                                ))
+                            .toList(),
+                      ),
+                      const SizedBox(height: 18),
+                      Container(height: 1, color: AppColors.slate100),
+                      const SizedBox(height: 14),
+                      const Text(
+                        'أو أضف حالة مخصصة باسم ولون من اختيارك',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.slate600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: customLabelController,
+                        maxLength: 40,
+                        textAlign: TextAlign.right,
+                        decoration: const InputDecoration(
+                          hintText: 'مثال: كسر، تنظيف، تلميع...',
+                          counterText: '',
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: toothStatusOptions
+                            .map((option) => _CustomColorSwatch(
+                                  color: option.color,
+                                  selected: selectedCustomColorOption?.key == option.key,
+                                  onTap: () => setSheetState(
+                                      () => selectedCustomColorOption = option),
+                                ))
+                            .toList(),
+                      ),
+                      const SizedBox(height: 14),
+                      GradientButton(
+                        label: 'حفظ الحالة المخصصة',
+                        isLoading: isSavingCustom,
+                        onPressed: isSavingCustom ? null : handleSaveCustom,
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        hintText,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.slate500,
+                        ),
+                      ),
+                      if (currentKey != null) ...[
+                        const SizedBox(height: 4),
+                        Center(
+                          child: TextButton.icon(
+                            onPressed: handleRemove,
+                            icon: const Icon(Icons.close, size: 16, color: AppColors.slate500),
+                            label: const Text(
+                              'إزالة الحالة الحالية',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.slate500,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                const SizedBox(height: 4),
-              ],
-            ),
-          ),
+                ),
+              ),
+            );
+          },
         );
       },
-    );
+    ).whenComplete(customLabelController.dispose);
   }
 
   Future<void> _openCreateInvoiceDialog() async {
@@ -2584,6 +2756,96 @@ class _InvoiceDetailSheetState extends State<_InvoiceDetailSheet> {
                 gradient: AppColors.successButtonGradient,
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// بطاقة حالة سن واحدة ضمن شبكة نافذة "تحديث حالة السن" -- مطابقة تماماً
+/// لِـ [data-tooth-status] buttons في toothStatusModal بـ patient_record.html
+/// بالموقع (bg-*-50 + border-*-200|300 + text-*-700 + rounded-2xl). النص
+/// ملفوف بـ FittedBox حتى يتقلّص تلقائياً بدل أن يفيض من البطاقة على
+/// الشاشات الأضيق من سطح المكتب (كانت هذه فعلياً نقطة الطفح "BOTTOM
+/// OVERFLOWED" في نسخة النافذة السابقة).
+class _ToothStatusCard extends StatelessWidget {
+  final ToothStatusOption option;
+  final VoidCallback onTap;
+
+  const _ToothStatusCard({required this.option, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            color: option.cardBackground,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: option.cardBorder),
+          ),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              option.label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: option.cardText,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// دائرة لون واحدة ضمن لوحة "أضف حالة مخصصة" -- مطابقة لِـ
+/// #customToothColorSwatches في الموقع (دائرة 32px، حدّ أبيض بسماكة 2px
+/// بشكل افتراضي يتحوّل إلى إندگو-800 مع توهّج خفيف عند الاختيار).
+class _CustomColorSwatch extends StatelessWidget {
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _CustomColorSwatch({
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      customBorder: const CircleBorder(),
+      onTap: onTap,
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: selected ? AppColors.indigo800 : Colors.white,
+            width: 2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: selected
+                  ? AppColors.indigo800.withValues(alpha: 0.35)
+                  : Colors.black.withValues(alpha: 0.25),
+              blurRadius: selected ? 0 : 3,
+              spreadRadius: selected ? 2 : 0,
+            ),
           ],
         ),
       ),
