@@ -1059,6 +1059,36 @@ def health_check():
     return {"status": "ok"}
 
 
+def resolve_activation_key_tier(activation_key: "models.ActivationKey", activation_code: str) -> str:
+    """يحدّد فئة (premium/standard) كود تفعيل واحد -- نقطة الحقيقة الوحيدة
+    المستخدمة الآن من الأماكن الثلاثة التي تحتاج هذا التصنيف: التسجيل
+    (register_user)، الترقية الفورية (upgrade_user_tier)، والتفعيل/التجديد
+    (activate_account). قبل 2026-08-30 كان كل مسار يعيد تنفيذ نفس المنطق
+    بشكل منفصل ومتفاوت، وهذا بالضبط ما سبّب خللاً حقيقياً: كود Premium شهري
+    صحيح بصيغة "PM-...." رُفض في مسار الترقية وأُسيء تصنيفه في مسار
+    التسجيل، لأن عمود intended_tier لم يكن يُفحَص إلا في مسار
+    التفعيل/التجديد وحده. أي تعديل مستقبلي على قواعد التصنيف (بادئة جديدة،
+    فئة جديدة، ...) يكفي تطبيقه هنا مرة واحدة بدل ثلاث مرات متفرقة.
+
+    يُفضَّل عمود intended_tier الصريح إن وُجد (كل الأكواد الحديثة المولَّدة
+    عبر /api/admin/renewal-keys/generate تضبطه)، ويُلجَأ للتخمين النصي
+    القديم فقط للأكواد القديمة التي لا تملك هذا العمود إطلاقاً.
+    """
+    explicit_tier = (getattr(activation_key, "intended_tier", None) or "").strip().lower()
+    if explicit_tier in ("premium", "standard"):
+        return explicit_tier
+
+    upper_code = activation_code.upper()
+    is_premium = (
+        activation_key.duration_days >= 365
+        or "-Y-" in upper_code
+        or "PREMIUM" in upper_code
+        or "VIP" in upper_code
+        or upper_code.startswith("PRM-")
+    )
+    return "premium" if is_premium else "standard"
+
+
 @app.post("/api/auth/register")
 def register_user(register_request: RegisterRequest, db: Session = Depends(database.get_db)):
     try:
@@ -1087,25 +1117,10 @@ def register_user(register_request: RegisterRequest, db: Session = Depends(datab
                 detail="كود التفعيل خاطئ، منتهي، أو تم استخدامه مسبقاً! يرجى التواصل مع المهندس فارس حلاوي لشراء كود جديد.",
             )
 
-        # نُفضّل عمود intended_tier الصريح إن وُجد (نفس الإصلاح المطبَّق في
-        # /api/activate أدناه) -- التخمين النصي القديم وحده كان يرفض تصنيف أي
-        # كود Premium شهري حقيقي بصيغة "PM-...." (مدته 30 يوماً فقط) كـpremium،
-        # لأنه لا يحتوي حرفياً على "PREMIUM"/"VIP"/"PRM-" ومدته أقل من 365 يوماً.
-        explicit_tier = (getattr(activation_key, "intended_tier", None) or "").strip().lower()
-        if explicit_tier in ("premium", "standard"):
-            user_tier = explicit_tier
-        else:
-            user_tier = (
-                "premium"
-                if (
-                    activation_key.duration_days >= 365
-                    or "-Y-" in activation_code.upper()
-                    or "PREMIUM" in activation_code.upper()
-                    or "VIP" in activation_code.upper()
-                    or activation_code.upper().startswith("PRM-")
-                )
-                else "standard"
-            )
+        # نقطة الحقيقة الوحيدة لتصنيف الكود -- انظر resolve_activation_key_tier
+        # أعلاه (2026-08-30: كانت هذه الفحوصات مكررة ومتفاوتة بين ثلاثة مسارات
+        # مختلفة، وهذا بالضبط ما سبّب رفض/إساءة تصنيف كود Premium شهري حقيقي).
+        user_tier = resolve_activation_key_tier(activation_key, activation_code)
 
         existing_user = db.query(models.User).filter(models.User.email == normalized_email).first()
         if existing_user:
@@ -1305,20 +1320,10 @@ def upgrade_user_tier(upgrade_request: UpgradeTierRequest, db: Session = Depends
     if not activation_key or activation_key.is_used:
         raise HTTPException(status_code=400, detail="كود الترقية غير صالح أو مستخدم مسبقاً.")
 
-    # نُفضّل عمود intended_tier الصريح إن وُجد (نفس الإصلاح المطبَّق في
-    # /api/activate) -- هذا يصلح خللاً حقيقياً كان يرفض أي كود Premium شهري
-    # صحيح بصيغة "PM-...." (مدته 30 يوماً) لأنه لا يحتوي حرفياً على
-    # "PREMIUM"/"VIP" ومدته أقل من 365 يوماً (2026-08-30).
-    explicit_tier = (getattr(activation_key, "intended_tier", None) or "").strip().lower()
-    if explicit_tier in ("premium", "standard"):
-        is_premium_key = explicit_tier == "premium"
-    else:
-        is_premium_key = (
-            activation_key.duration_days >= 365
-            or "PREMIUM" in activation_code.upper()
-            or "VIP" in activation_code.upper()
-        )
-    if not is_premium_key:
+    # نقطة الحقيقة الوحيدة لتصنيف الكود -- انظر resolve_activation_key_tier
+    # أعلاه (2026-08-30: كانت هذه الفحوصات مكررة ومتفاوتة بين ثلاثة مسارات
+    # مختلفة، وهذا بالضبط ما سبّب رفض كود Premium شهري حقيقي هنا تحديداً).
+    if resolve_activation_key_tier(activation_key, activation_code) != "premium":
         raise HTTPException(status_code=400, detail="هذا الكود لا يفعّل باقة Premium.")
 
     user = None
@@ -4049,25 +4054,10 @@ def activate_account(request: ActivationRequest, db: Session = Depends(database.
     if not activation_key or activation_key.is_used:
         raise HTTPException(status_code=400, detail="كود التفعيل خاطئ، منتهي، أو تم استخدامه مسبقاً!")
 
-    # نُفضّل عمود intended_tier الصريح إن وُجد (كل أكواد التجديد الشهرية
-    # الجديدة التي يولّدها /api/admin/renewal-keys/generate تضبطه دائماً) --
-    # ونلجأ فقط للتخمين النصي القديم كخط رجوع للأكواد الثابتة القديمة التي لا
-    # تملك هذا العمود. هذا يصلح خللاً كامناً حقيقياً: كود شهري بصيغة "PM-...."
-    # مدته 30 يوماً فقط، فكان سيُصنَّف خطأً كـ"standard" تحت الشرط القديم
-    # (duration_days >= 365) لولا هذا التفضيل.
-    explicit_tier = (getattr(activation_key, "intended_tier", None) or "").strip().lower()
-    if explicit_tier in ("premium", "standard"):
-        target_tier = explicit_tier
-    else:
-        target_tier = (
-            "premium"
-            if (
-                activation_key.duration_days >= 365
-                or "PREMIUM" in activation_code.upper()
-                or "VIP" in activation_code.upper()
-            )
-            else "standard"
-        )
+    # نقطة الحقيقة الوحيدة لتصنيف الكود -- انظر resolve_activation_key_tier أعلاه
+    # (2026-08-30: هذا المنطق نُقل إلى دالة مشتركة بعد أن تسبّب تكراره بشكل
+    # متفاوت في مسارين آخرين برفض/إساءة تصنيف كود Premium شهري حقيقي).
+    target_tier = resolve_activation_key_tier(activation_key, activation_code)
 
     # 2. البحث عن الطبيب المستهدف في جدول قاعدة البيانات لتعديل رتبته
     user = db.query(models.User).filter(models.User.email == normalized_email).first()
