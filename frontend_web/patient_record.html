@@ -1777,6 +1777,52 @@
       return getArchiveEndpoint(patientId);
     }
 
+    function getArchiveDeleteEndpoint(patientId, archiveId) {
+      return `${getArchiveEndpoint(patientId)}/${encodeURIComponent(String(archiveId))}`;
+    }
+
+    // 2026-08-31: حذف ملف من أرشيف المريض -- يطابق DELETE
+    // /api/patients/{id}/archive/{archive_id} الموجود مسبقاً في main.py
+    // (delete_patient_archive)، لم يكن له زر في الموقع حتى الآن.
+    async function deleteArchiveFileById(patientId, archiveId) {
+      const response = await fetch(getArchiveDeleteEndpoint(patientId, archiveId), {
+        method: 'DELETE',
+        headers: getDoctorAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error('تعذر حذف الملف الطبي حالياً.');
+      }
+    }
+
+    function requestDeleteArchiveFile(archiveId, fileName, cardElement) {
+      if (!archiveId) return;
+
+      const patientId = getPatientIdFromUrl();
+      if (!patientId) {
+        showToast('تعذر تحديد معرف المريض من الرابط.', 'error');
+        return;
+      }
+
+      const safeName = String(fileName || 'هذا الملف').trim();
+      openDeleteConfirmModal({
+        title: 'حذف الملف الطبي',
+        message: `هل أنت متأكد من حذف "${safeName}" نهائياً؟ لا يمكن التراجع عن هذا الإجراء.`,
+        action: async () => {
+          await deleteArchiveFileById(patientId, archiveId);
+          if (cardElement) cardElement.remove();
+
+          const gallery = document.getElementById('xrayGallery');
+          const remaining = gallery ? gallery.querySelectorAll('[data-xray-card="1"]').length : 0;
+          updateXRayGalleryCount(remaining);
+          const emptyState = document.getElementById('xrayGalleryEmpty');
+          if (emptyState && remaining === 0) emptyState.classList.remove('hidden');
+
+          showXRaySuccessAlert('تم حذف الملف الطبي بنجاح');
+        },
+      });
+    }
+
     function resolveXRayImageUrl(imageUrl) {
       const raw = String(imageUrl || '').trim();
       if (!raw) return '';
@@ -3061,6 +3107,15 @@
       const fileUrl = normalizedRecord?.file_url || '';
       const fileName = normalizedRecord?.file_name || 'archive';
 
+      const archiveId = normalizedRecord?.id ?? '';
+      // 2026-08-31: زر حذف الملف الطبي -- بطلب المستخدم "اضف زر حذف لهذه
+      // الملفات في الموقع ايضا" (بعد إضافة ميزة مماثلة للتطبيق عبر الضغط
+      // المطوّل)، مطابق تماماً لتصميم أزرار حذف الفاتورة
+      // (.invoice-cost-delete-btn) المستخدمة مسبقاً في نفس الصفحة. التنفيذ
+      // عبر مربع تأكيد الحذف الموحّد openDeleteConfirmModal/deleteConfirmModal
+      // (نفس المستخدم لحذف الموعد/الفاتورة) للحفاظ على تناسق التصميم.
+      const deleteBtnHtml = `<button type="button" data-archive-delete-id="${archiveId}" data-archive-delete-name="${escapeHtml(fileName)}" class="archive-delete-btn inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-white px-2.5 py-1 text-[11px] font-bold text-rose-600 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700" title="حذف الملف الطبي"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg><span>حذف</span></button>`;
+
       if (fileType === 'pdf') {
         card.innerHTML = `
           <div class="flex h-full flex-col justify-between gap-4 bg-[linear-gradient(160deg,_rgba(255,255,255,0.96),_rgba(239,246,255,0.95))] p-5">
@@ -3072,13 +3127,16 @@
                 <p class="mt-2 text-xs font-semibold text-slate-400">${escapeHtml(uploadedAt)}</p>
               </div>
             </div>
-            <a href="${escapeHtml(fileUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center gap-2 rounded-2xl border border-violet-200 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-3 text-sm font-extrabold text-white shadow-lg shadow-violet-300/35 transition hover:-translate-y-0.5 hover:from-violet-700 hover:to-indigo-700"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg><span>فتح المستند</span></a>
+            <div class="flex items-center gap-2">
+              <a href="${escapeHtml(fileUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-violet-200 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-3 text-sm font-extrabold text-white shadow-lg shadow-violet-300/35 transition hover:-translate-y-0.5 hover:from-violet-700 hover:to-indigo-700"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg><span>فتح المستند</span></a>
+              <button type="button" data-archive-delete-id="${archiveId}" data-archive-delete-name="${escapeHtml(fileName)}" class="archive-delete-btn inline-flex h-[46px] w-[46px] flex-shrink-0 items-center justify-center rounded-2xl border border-rose-200 bg-white text-rose-600 shadow-sm transition hover:border-rose-300 hover:bg-rose-50" title="حذف الملف الطبي"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>
+            </div>
           </div>
         `;
       } else {
         const imageSrc = resolveXRayImageUrl(normalizedRecord?.image_url || fileUrl);
         card.innerHTML = `
-          <button type="button" class="group block text-right" data-archive-image-card="1" data-archive-image-url="${escapeHtml(imageSrc)}" data-archive-image-title="${escapeHtml(fileName)}">
+          <div class="group block cursor-pointer text-right" data-archive-image-card="1" data-archive-image-url="${escapeHtml(imageSrc)}" data-archive-image-title="${escapeHtml(fileName)}">
             <div class="aspect-[4/3] w-full overflow-hidden bg-slate-100">
               <img src="${imageSrc}" alt="${escapeHtml(fileName)}" class="h-full w-full object-cover transition duration-300 group-hover:scale-105" loading="lazy" />
             </div>
@@ -3087,7 +3145,8 @@
               <p class="mt-1 line-clamp-2 text-xs text-slate-500">${escapeHtml(description)}</p>
               <p class="mt-1 text-xs text-slate-400">${escapeHtml(uploadedAt)}</p>
             </div>
-          </button>
+          </div>
+          <div class="flex items-center justify-end border-t border-slate-100 px-3 py-2">${deleteBtnHtml}</div>
         `;
       }
 
@@ -3571,6 +3630,16 @@
           if (imageUrl) {
             openArchiveImageModal(imageUrl, imageTitle || 'معاينة الصورة');
           }
+        });
+      });
+
+      gallery.querySelectorAll('.archive-delete-btn').forEach((deleteBtn) => {
+        deleteBtn.addEventListener('click', (event) => {
+          event.stopPropagation();
+          const archiveId = deleteBtn.getAttribute('data-archive-delete-id');
+          const fileName = deleteBtn.getAttribute('data-archive-delete-name');
+          const cardElement = deleteBtn.closest('[data-xray-card="1"]');
+          requestDeleteArchiveFile(archiveId, fileName, cardElement);
         });
       });
     }
