@@ -273,7 +273,7 @@
       </div>
       </div>
 
-        <section class="mb-6 grid gap-4 md:grid-cols-3">
+        <section class="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <article class="relative overflow-hidden rounded-[28px] border border-white/15 bg-[linear-gradient(160deg,_rgba(31,41,55,0.96),_rgba(49,46,129,0.95),_rgba(76,29,149,0.94))] p-5 text-white shadow-[0_18px_60px_rgba(67,56,202,0.24)] backdrop-blur-xl">
             <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(34,211,238,0.22),_transparent_34%),radial-gradient(circle_at_bottom_left,_rgba(168,85,247,0.2),_transparent_28%)]"></div>
             <div class="relative flex items-start justify-between gap-4">
@@ -325,6 +325,24 @@
                 <p class="mt-1 text-xs font-medium text-slate-300">القيمة المتبقية غير المسددة من الزيارات</p>
               </div>
               <span class="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-bold text-emerald-100">Balance</span>
+            </div>
+          </article>
+
+          <article id="recallStatCard" role="button" tabindex="0" class="group relative cursor-pointer overflow-hidden rounded-[28px] border border-white/15 bg-[linear-gradient(160deg,_rgba(69,26,3,0.96),_rgba(146,64,14,0.94),_rgba(180,83,9,0.92))] p-5 text-white shadow-[0_18px_60px_rgba(217,119,6,0.22)] backdrop-blur-xl transition hover:-translate-y-0.5">
+            <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(251,191,36,0.24),_transparent_34%),radial-gradient(circle_at_bottom_left,_rgba(251,146,60,0.18),_transparent_28%)]"></div>
+            <div class="relative flex items-start justify-between gap-4">
+              <div>
+                <p class="text-xs font-bold tracking-[0.22em] text-amber-200/80">PATIENT RECALL</p>
+                <h3 class="mt-2 text-base font-extrabold text-white">مرضى بحاجة لمتابعة</h3>
+              </div>
+              <div class="flex h-12 w-12 items-center justify-center rounded-2xl border border-amber-300/25 bg-amber-400/10 text-amber-100 shadow-[0_0_24px_rgba(251,191,36,0.2)]"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg></div>
+            </div>
+            <div class="relative mt-6 flex items-end justify-between gap-3">
+              <div>
+                <div id="statsRecallDue" class="stats-value text-4xl font-black tracking-tight text-amber-100">--</div>
+                <p id="recallCardSubtext" class="mt-1 text-xs font-medium text-amber-100/80">مرضى لم يزوروا العيادة منذ فترة طويلة</p>
+              </div>
+              <span id="recallCardBadge" class="rounded-full border border-amber-300/20 bg-amber-400/10 px-3 py-1 text-[11px] font-bold text-amber-100">اضغط للعرض</span>
             </div>
           </article>
         </section>
@@ -414,6 +432,36 @@
       <div class="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
         <button id="cancelDeletePatientBtn" type="button" class="rounded-xl border border-slate-300/45 bg-slate-200/20 px-4 py-2.5 text-sm font-semibold text-slate-100 transition hover:bg-slate-200/30">إلغاء</button>
         <button id="confirmDeletePatientBtn" type="button" class="rounded-xl bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 px-4 py-2.5 text-sm font-extrabold text-white shadow-lg shadow-rose-900/40 transition hover:from-rose-700 hover:via-red-700 hover:to-rose-800">تأكيد الحذف النهائي</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="recallModal" class="fixed inset-0 z-[55] hidden items-center justify-center bg-indigo-950/75 p-3 opacity-0 backdrop-blur-md transition-opacity duration-200 sm:p-4">
+    <div class="max-h-[88vh] w-full max-w-2xl scale-95 overflow-y-auto rounded-[26px] border border-amber-200/20 bg-[linear-gradient(160deg,_rgba(69,26,3,0.98),_rgba(120,53,15,0.97),_rgba(146,64,14,0.97))] p-5 text-amber-50 shadow-2xl shadow-amber-950/70 transition-transform duration-200 sm:p-6">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <p class="text-xs font-bold tracking-[0.2em] text-amber-200/80">PATIENT RECALL · PREMIUM</p>
+          <h3 class="mt-1 text-lg font-extrabold text-white">مرضى بحاجة لمتابعة</h3>
+          <p id="recallModalSubtitle" class="mt-2 text-sm leading-6 text-amber-100/85">
+            هؤلاء المرضى تجاوزوا الفترة المعتادة منذ آخر زيارة لهم دون حجز موعد جديد. أرسل لهم تذكيراً عبر واتساب ليعودوا.
+          </p>
+        </div>
+        <button id="closeRecallModalBtn" type="button" class="shrink-0 rounded-full bg-white/10 px-3 py-1 text-sm text-amber-50 transition hover:bg-white/20">إغلاق</button>
+      </div>
+
+      <div id="recallModalLockedState" class="mt-5 hidden rounded-2xl border border-amber-200/25 bg-white/5 p-5 text-center">
+        <p class="text-sm font-bold leading-7 text-amber-50">ميزة استرجاع المرضى التلقائي متاحة حصرياً لمشتركي الباقة الفخمة (Premium).</p>
+        <p class="mt-1 text-xs text-amber-100/75">فعّل الباقة الفخمة من صفحة "حسابي" للاستفادة من الاسترجاع التلقائي عبر واتساب.</p>
+        <a href="profile.html" class="mt-4 inline-flex rounded-2xl border border-amber-200/70 bg-gradient-to-r from-amber-300 via-yellow-300 to-amber-400 px-5 py-2.5 text-sm font-extrabold text-amber-950 shadow-lg shadow-amber-900/30 transition hover:-translate-y-0.5">الترقية إلى Premium</a>
+      </div>
+
+      <div id="recallModalBody">
+        <div class="mt-4 flex items-center justify-between gap-2">
+          <span id="recallModalCount" class="text-sm font-semibold text-amber-100">0 مريض</span>
+          <button id="recallSendAllBtn" type="button" class="rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 px-4 py-2 text-sm font-extrabold text-amber-950 shadow-lg shadow-amber-900/30 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50">إرسال تذكير للجميع</button>
+        </div>
+        <div id="recallModalEmptyState" class="mt-4 hidden rounded-2xl border border-amber-200/20 bg-white/5 p-5 text-center text-sm text-amber-100/80">لا يوجد حالياً أي مريض بحاجة لتذكير متابعة 🎉</div>
+        <ul id="recallPatientsList" class="mt-4 space-y-2"></ul>
       </div>
     </div>
   </div>
@@ -546,12 +594,26 @@
     const toast = document.getElementById('toast');
     const savePatientBtn = document.getElementById('savePatientBtn');
     const patientsTableSection = document.getElementById('patientsTableSection');
+    const recallStatCard = document.getElementById('recallStatCard');
+    const statsRecallDue = document.getElementById('statsRecallDue');
+    const recallCardSubtext = document.getElementById('recallCardSubtext');
+    const recallCardBadge = document.getElementById('recallCardBadge');
+    const recallModal = document.getElementById('recallModal');
+    const closeRecallModalBtn = document.getElementById('closeRecallModalBtn');
+    const recallModalLockedState = document.getElementById('recallModalLockedState');
+    const recallModalBody = document.getElementById('recallModalBody');
+    const recallModalCount = document.getElementById('recallModalCount');
+    const recallModalEmptyState = document.getElementById('recallModalEmptyState');
+    const recallPatientsList = document.getElementById('recallPatientsList');
+    const recallSendAllBtn = document.getElementById('recallSendAllBtn');
 
     // Utility: show/hide modal
     let toastTimer = null;
     let modalCloseTimer = null;
     let deleteModalCloseTimer = null;
+    let recallModalCloseTimer = null;
     let pendingDeletePatientId = null;
+    let recallDuePatients = [];
 
     function openModal() {
       if (modalCloseTimer) {
@@ -863,6 +925,176 @@
       }
     }
 
+    // --- نظام استرجاع المرضى التلقائي (Patient Recall) -- 2026-09-01 ---
+    function formatRecallDate(isoDateString) {
+      if (!isoDateString) return '';
+      const parsedDate = new Date(isoDateString);
+      if (Number.isNaN(parsedDate.getTime())) return '';
+      return parsedDate.toLocaleDateString('en-GB');
+    }
+
+    async function loadRecallStats() {
+      if (!statsRecallDue) return;
+
+      if (userTier !== 'premium') {
+        statsRecallDue.textContent = '🔒';
+        if (recallCardSubtext) recallCardSubtext.textContent = 'ميزة حصرية لباقة Premium';
+        if (recallCardBadge) recallCardBadge.textContent = 'ترقية';
+        recallDuePatients = [];
+        return;
+      }
+
+      try {
+        const response = await fetch(apiUrl('/api/recall/due-patients'), {
+          method: 'GET',
+          headers: getDoctorAuthHeaders(),
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const data = await response.json();
+        recallDuePatients = Array.isArray(data?.patients) ? data.patients : [];
+        animateCount(statsRecallDue, 0, recallDuePatients.length, 900, (value) => String(Math.round(value)));
+        if (recallCardSubtext) recallCardSubtext.textContent = 'مرضى لم يزوروا العيادة منذ فترة طويلة';
+        if (recallCardBadge) recallCardBadge.textContent = 'اضغط للعرض';
+      } catch (error) {
+        console.error('loadRecallStats error:', error);
+        statsRecallDue.textContent = '--';
+      }
+    }
+
+    function renderRecallPatientsList() {
+      if (!recallPatientsList) return;
+
+      recallPatientsList.innerHTML = '';
+
+      if (recallModalCount) {
+        recallModalCount.textContent = `${recallDuePatients.length} مريض`;
+      }
+      if (recallSendAllBtn) {
+        recallSendAllBtn.disabled = recallDuePatients.length === 0;
+      }
+      if (recallModalEmptyState) {
+        recallModalEmptyState.classList.toggle('hidden', recallDuePatients.length !== 0);
+      }
+
+      recallDuePatients.forEach((patient) => {
+        const item = document.createElement('li');
+        item.className = 'flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200/15 bg-white/5 px-4 py-3';
+        item.innerHTML = `
+          <div>
+            <p class="text-sm font-bold text-white">${patient.full_name || 'مريض بلا اسم'}</p>
+            <p class="mt-0.5 text-xs text-amber-100/75">آخر زيارة: ${formatRecallDate(patient.last_visit_date) || 'غير معروفة'} · متأخر ${patient.days_since_last_visit} يوماً</p>
+          </div>
+          <button type="button" data-patient-id="${patient.patient_id}" class="recall-send-btn shrink-0 rounded-xl border border-amber-200/30 bg-amber-400/15 px-3 py-2 text-xs font-bold text-amber-50 transition hover:bg-amber-400/25 disabled:cursor-not-allowed disabled:opacity-50">إرسال تذكير</button>
+        `;
+        recallPatientsList.appendChild(item);
+      });
+    }
+
+    function openRecallModal() {
+      if (!recallModal) return;
+
+      const isPremium = userTier === 'premium';
+      if (recallModalLockedState) recallModalLockedState.classList.toggle('hidden', isPremium);
+      if (recallModalBody) recallModalBody.classList.toggle('hidden', !isPremium);
+      if (isPremium) renderRecallPatientsList();
+
+      if (recallModalCloseTimer) {
+        window.clearTimeout(recallModalCloseTimer);
+        recallModalCloseTimer = null;
+      }
+      recallModal.classList.remove('hidden');
+      recallModal.classList.add('flex');
+      requestAnimationFrame(() => {
+        recallModal.classList.remove('opacity-0');
+        const panel = recallModal.firstElementChild;
+        if (panel) panel.classList.remove('scale-95');
+      });
+    }
+
+    function closeRecallModal() {
+      if (!recallModal) return;
+
+      recallModal.classList.add('opacity-0');
+      const panel = recallModal.firstElementChild;
+      if (panel) panel.classList.add('scale-95');
+
+      recallModalCloseTimer = window.setTimeout(() => {
+        recallModal.classList.add('hidden');
+        recallModal.classList.remove('flex');
+        recallModalCloseTimer = null;
+      }, 180);
+    }
+
+    async function sendSingleRecallMessage(patientId, buttonEl) {
+      if (buttonEl) {
+        buttonEl.disabled = true;
+        buttonEl.textContent = 'جارٍ الإرسال...';
+      }
+
+      try {
+        const response = await fetch(apiUrl(`/api/recall/send/${patientId}`), {
+          method: 'POST',
+          headers: getDoctorAuthHeaders(),
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(data?.detail || `HTTP ${response.status}`);
+        }
+
+        if (data?.sent) {
+          showToast(data.message || 'تم إرسال رسالة الاسترجاع بنجاح.', 'success');
+          recallDuePatients = recallDuePatients.filter((patient) => patient.patient_id !== patientId);
+          renderRecallPatientsList();
+          if (statsRecallDue) statsRecallDue.textContent = String(recallDuePatients.length);
+        } else {
+          showToast(data?.message || 'تعذر إرسال الرسالة الآن.', 'error');
+          if (buttonEl) {
+            buttonEl.disabled = false;
+            buttonEl.textContent = 'إرسال تذكير';
+          }
+        }
+      } catch (error) {
+        console.error('sendSingleRecallMessage error:', error);
+        showToast(`تعذر إرسال رسالة الاسترجاع: ${error.message || 'خطأ غير معروف'}`, 'error');
+        if (buttonEl) {
+          buttonEl.disabled = false;
+          buttonEl.textContent = 'إرسال تذكير';
+        }
+      }
+    }
+
+    async function sendAllRecallMessages() {
+      if (!recallSendAllBtn) return;
+
+      recallSendAllBtn.disabled = true;
+      const originalLabel = recallSendAllBtn.textContent;
+      recallSendAllBtn.textContent = 'جارٍ الإرسال...';
+
+      try {
+        const response = await fetch(apiUrl('/api/recall/send-all'), {
+          method: 'POST',
+          headers: getDoctorAuthHeaders(),
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(data?.detail || `HTTP ${response.status}`);
+        }
+
+        showToast(`تم إرسال ${data.sent} من أصل ${data.attempted} رسالة استرجاع بنجاح.`, data.sent > 0 ? 'success' : 'error');
+        await loadRecallStats();
+        renderRecallPatientsList();
+      } catch (error) {
+        console.error('sendAllRecallMessages error:', error);
+        showToast(`تعذر إرسال رسائل الاسترجاع: ${error.message || 'خطأ غير معروف'}`, 'error');
+      } finally {
+        recallSendAllBtn.disabled = recallDuePatients.length === 0;
+        recallSendAllBtn.textContent = originalLabel;
+      }
+    }
+
     // Fetch and render patients.
     // Render's free-tier server sleeps after inactivity and can take 20-40s to wake up,
     // so the very first request after a refresh can fail (network error / 502/503) even
@@ -890,6 +1122,7 @@
         renderPatients(allPatients, searchInput.value.trim());
         await loadAppointmentsForStats();
         await loadPatientStats();
+        loadRecallStats();
       }catch(err){
         console.error('fetchPatients error:', err);
 
@@ -916,6 +1149,7 @@
         emptyFeedback.textContent = `حدث خطأ أثناء تحميل بيانات المرضى. ${reason}`;
         showToast(`فشل تحميل بيانات المرضى: ${reason}`, 'error');
         await loadPatientStats();
+        loadRecallStats();
       }
     }
 
@@ -974,6 +1208,7 @@
         );
         renderPatients(allPatients, searchInput ? searchInput.value.trim() : '');
         await loadPatientStats();
+        loadRecallStats();
         showToast('تم حذف المريض بنجاح.', 'success');
         pendingDeletePatientId = null;
         closeDeletePatientModal();
@@ -1305,6 +1540,36 @@
         closeDeletePatientModal();
       }
     });
+
+    if (recallStatCard) {
+      recallStatCard.addEventListener('click', openRecallModal);
+      recallStatCard.addEventListener('keydown', function(event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          openRecallModal();
+        }
+      });
+    }
+    if (closeRecallModalBtn) closeRecallModalBtn.addEventListener('click', closeRecallModal);
+    if (recallModal) {
+      recallModal.addEventListener('click', function(event) {
+        if (event.target && event.target.id === 'recallModal') {
+          closeRecallModal();
+        }
+      });
+    }
+    if (recallSendAllBtn) recallSendAllBtn.addEventListener('click', sendAllRecallMessages);
+    if (recallPatientsList) {
+      recallPatientsList.addEventListener('click', function(event) {
+        const button = event.target.closest('.recall-send-btn');
+        if (!button) return;
+        const patientId = Number(button.getAttribute('data-patient-id'));
+        if (Number.isFinite(patientId)) {
+          sendSingleRecallMessage(patientId, button);
+        }
+      });
+    }
+
     searchInput.addEventListener('input', function(){
       const query = this.value.trim();
       renderPatients(allPatients, query);

@@ -50,12 +50,12 @@ ADMIN_SECRET_KEY = os.getenv("ADMIN_SECRET_KEY", "change-me-fares-admin-2026")
 SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "change-me-fares-session-2026")
 SESSION_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30  # صلاحية 30 يوماً لكل جلسة دخول
 
-# بيانات اعتماد Green API لإرسال تذكيرات واتساب تلقائية (اختياري -- إن تُركت
-# فارغة، محرك التذكيرات بالأسفل يتحقق من عدم وجودها ولا يحاول الإرسال، بلا أي
-# خطأ). يجب ضبطهما كمتغيّري بيئة حقيقيين على Render بعد إنشاء instance على
-# green-api.com وربطه برقم واتساب العيادة عبر مسح رمز QR.
-GREEN_API_INSTANCE_ID = os.getenv("GREEN_API_INSTANCE_ID", "")
-GREEN_API_TOKEN = os.getenv("GREEN_API_TOKEN", "")
+# ملاحظة معمارية (2026-09-01): بيانات اعتماد Green API لم تعد متغيّري بيئة
+# عامّين للمنصة كلها -- كل طبيب يربط حساب Green API/واتساب الخاص به من صفحة
+# "حسابي" (users.green_api_instance_id/green_api_token، انظر models.py)،
+# ويُقرآن دائماً من سجل الطبيب نفسه عبر send_whatsapp_message_for_doctor()
+# بالأسفل. هذا يمنع تصاعد تكلفة/إدارة حساب Green API واحد مشترك مع كل طبيب
+# جديد ينضم للمنصة، ويجعل رسائل كل عيادة تصل لمرضاها من رقم عيادتها الفعلي.
 
 # بيانات اعتماد Firebase Cloud Messaging لإرسال إشعارات Push لتطبيق الطبيب على
 # أندرويد (اختياري -- إن تُركت فارغة، send_push_notification_to_doctor ترجع بصمت
@@ -269,9 +269,10 @@ async def _start_keep_alive_task() -> None:
 # --- محرك تذكيرات واتساب التلقائية للمواعيد (أُضيف 2026-08-23) ---
 # يفحص دورياً المواعيد المستحقة خلال REMINDER_LEAD_HOURS ساعة تقريباً ولم يُرسَل
 # لها تذكير بعد، ويرسل رسالة واتساب تلقائية عبر Green API (green-api.com).
-# لا يعمل هذا المحرك فعلياً إلا بعد ضبط GREEN_API_INSTANCE_ID وGREEN_API_TOKEN
-# كمتغيّري بيئة حقيقيين على Render -- طالما هما فارغان، send_whatsapp_message_via_green_api
-# ترجع False بصمت دون أي محاولة اتصال أو خطأ.
+# لا يعمل هذا المحرك فعلياً لطبيب معيّن إلا بعد أن يربط ذاك الطبيب حساب Green
+# API/واتساب الخاص به من صفحة "حسابي" (2026-09-01، انظر
+# send_whatsapp_message_for_doctor) -- طالما لم يربطه بعد، الإرسال له يُتجاهَل
+# بصمت دون أي محاولة اتصال أو خطأ.
 REMINDER_LEAD_HOURS = int(os.getenv("REMINDER_LEAD_HOURS", "24"))
 REMINDER_WINDOW_HOURS = 1  # نافذة التقاط بساعة على كل جهة، لتفادي تفويت موعد بسبب فارق توقيت التشغيل
 REMINDER_CHECK_INTERVAL_SECONDS = 30 * 60
@@ -299,15 +300,18 @@ def normalize_whatsapp_phone(phone: str | None) -> str:
     return digits
 
 
-def send_whatsapp_message_via_green_api(phone: str, message: str) -> bool:
-    if not GREEN_API_INSTANCE_ID or not GREEN_API_TOKEN:
+def send_whatsapp_message_via_green_api(instance_id: str | None, token: str | None, phone: str, message: str) -> bool:
+    # مستوى منخفض بلا معرفة بأي طبيب -- يستقبل بيانات اعتماد Green API صراحة
+    # بدل قراءتها من متغيّرات بيئة عامة (2026-09-01). استخدم
+    # send_whatsapp_message_for_doctor() بالأسفل في أي كود جديد بدل هذه مباشرة.
+    if not instance_id or not token:
         return False
 
     normalized_phone = normalize_whatsapp_phone(phone)
     if not normalized_phone:
         return False
 
-    url = f"https://api.green-api.com/waInstance{GREEN_API_INSTANCE_ID}/sendMessage/{GREEN_API_TOKEN}"
+    url = f"https://api.green-api.com/waInstance{instance_id}/sendMessage/{token}"
     payload = {"chatId": f"{normalized_phone}@c.us", "message": message}
 
     try:
@@ -316,6 +320,23 @@ def send_whatsapp_message_via_green_api(phone: str, message: str) -> bool:
     except Exception as exc:
         print(f"⚠️ [WHATSAPP REMINDER] فشل إرسال الرسالة عبر Green API: {exc}")
         return False
+
+
+def send_whatsapp_message_for_doctor(doctor: "models.User | None", phone: str, message: str) -> bool:
+    # نقطة الدخول الموحّدة الوحيدة التي يجب أن يستخدمها أي كود بالمشروع لإرسال
+    # واتساب -- تقرأ بيانات اعتماد Green API الخاصة بهذا الطبيب تحديداً
+    # (users.green_api_instance_id/green_api_token) بدل أي إعداد مشترك للمنصة.
+    # ترجع False بصمت (بلا أي استثناء) إن لم يربط الطبيب حساب واتساب خاص به
+    # بعد -- نفس نمط best-effort المتّبع بكل ميزات واتساب بالمشروع.
+    if doctor is None:
+        return False
+
+    return send_whatsapp_message_via_green_api(
+        getattr(doctor, "green_api_instance_id", None),
+        getattr(doctor, "green_api_token", None),
+        phone,
+        message,
+    )
 
 
 _firebase_credentials_cache: dict = {"credentials": None}
@@ -396,6 +417,10 @@ def send_due_appointment_reminders() -> int:
             .all()
         )
 
+        # كاش بسيط بذاكرة العملية لتفادي إعادة جلب نفس الطبيب من القاعدة لكل موعد
+        # ضمن نفس الدورة (عدة مواعيد مستحقة لنفس الطبيب أمر شائع).
+        doctors_by_email: dict[str, models.User] = {}
+
         for appointment in due_appointments:
             patient = None
             if appointment.patient_id:
@@ -426,6 +451,16 @@ def send_due_appointment_reminders() -> int:
             if not patient or not patient.phone:
                 continue
 
+            if not appointment.doctor_email:
+                continue
+            doctor = doctors_by_email.get(appointment.doctor_email)
+            if doctor is None:
+                doctor = db.query(models.User).filter(models.User.email == appointment.doctor_email).first()
+                if doctor is not None:
+                    doctors_by_email[appointment.doctor_email] = doctor
+            if doctor is None:
+                continue
+
             doctor_label = (patient.doctor_name or "").strip() or "عيادتك الرقمية"
             appointment_date_label = appointment.appointment_date.strftime("%Y-%m-%d") if appointment.appointment_date else ""
             appointment_time_label = appointment.appointment_time or ""
@@ -437,7 +472,7 @@ def send_due_appointment_reminders() -> int:
                 "نتمنى لكم دوام الصحة والعافية. 🦷✨"
             )
 
-            was_sent = send_whatsapp_message_via_green_api(patient.phone, message)
+            was_sent = send_whatsapp_message_for_doctor(doctor, patient.phone, message)
             if was_sent:
                 appointment.reminder_sent = True
                 sent_count += 1
@@ -469,6 +504,164 @@ async def _appointment_reminder_loop() -> None:
 @app.on_event("startup")
 async def _start_appointment_reminder_task() -> None:
     asyncio.create_task(_appointment_reminder_loop())
+
+
+# --- نظام استرجاع المرضى التلقائي (Patient Recall Engine) -- أُضيف 2026-09-01 ---
+# الميزة الأقوى للاحتفاظ بالمرضى ورفع دخل العيادة: يفحص دورياً مرضى كل طبيب
+# (Premium فقط) الذين مرّت مدة RECALL_INTERVAL_DAYS يوماً منذ آخر زيارة فعلية
+# (موعد بحالة "checked_in") لهم دون أن يحجزوا موعداً جديداً بعدها، ويرسل لهم
+# تلقائياً رسالة واتساب تذكيرية بأهمية المتابعة الدورية مع رابط الحجز المباشر.
+# مثل محرك تذكيرات المواعيد أعلاه تماماً، هذا المحرك best-effort بالكامل: طالما
+# الطبيب لم يربط حساب Green API/واتساب الخاص به بعد من صفحة "حسابي"،
+# send_whatsapp_message_for_doctor ترجع False بصمت ولا يُحدَّث last_recall_sent_at.
+RECALL_INTERVAL_DAYS = int(os.getenv("RECALL_INTERVAL_DAYS", "180"))
+RECALL_CHECK_INTERVAL_SECONDS = int(os.getenv("RECALL_CHECK_INTERVAL_SECONDS", str(6 * 60 * 60)))
+PRODUCTION_SITE_URL = os.getenv("PRODUCTION_SITE_URL", "https://dental-clinic-faras.onrender.com")
+
+
+def get_recall_candidates(db: Session, doctor_email: str, interval_days: int) -> list[dict]:
+    """يُرجع قائمة مرضى هذا الطبيب المستحقين لتذكير استرجاع: لديهم زيارة فعلية
+    واحدة على الأقل (موعد "checked_in")، مرّت عليها interval_days يوماً أو أكثر،
+    وليس لديهم حالياً موعد قادم محجوز (pending/pending_confirmation) بعدها --
+    فلا داعي لتذكير مريض حجز موعده أصلاً. مُرتَّبة تنازلياً حسب عدد أيام التأخر."""
+    now = datetime.utcnow()
+    cutoff = now - timedelta(days=interval_days)
+
+    last_visit_subquery = (
+        db.query(
+            models.Appointment.patient_id.label("patient_id"),
+            func.max(models.Appointment.appointment_date).label("last_visit_date"),
+        )
+        .filter(
+            models.Appointment.doctor_email == doctor_email,
+            models.Appointment.status == "checked_in",
+            models.Appointment.patient_id.isnot(None),
+            models.Appointment.appointment_date.isnot(None),
+        )
+        .group_by(models.Appointment.patient_id)
+        .subquery()
+    )
+
+    upcoming_patient_ids = {
+        row[0]
+        for row in (
+            db.query(models.Appointment.patient_id)
+            .filter(
+                models.Appointment.doctor_email == doctor_email,
+                models.Appointment.status.in_(["pending", "pending_confirmation"]),
+                models.Appointment.appointment_date.isnot(None),
+                models.Appointment.appointment_date >= now,
+                models.Appointment.patient_id.isnot(None),
+            )
+            .all()
+        )
+    }
+
+    rows = (
+        db.query(models.Patient, last_visit_subquery.c.last_visit_date)
+        .join(last_visit_subquery, last_visit_subquery.c.patient_id == models.Patient.id)
+        .filter(
+            models.Patient.doctor_email == doctor_email,
+            last_visit_subquery.c.last_visit_date <= cutoff,
+        )
+        .all()
+    )
+
+    candidates = []
+    for patient, last_visit_date in rows:
+        if patient.id in upcoming_patient_ids:
+            continue
+        candidates.append(
+            {
+                "patient": patient,
+                "last_visit_date": last_visit_date,
+                "days_since_last_visit": (now - last_visit_date).days,
+            }
+        )
+
+    candidates.sort(key=lambda candidate: candidate["days_since_last_visit"], reverse=True)
+    return candidates
+
+
+def build_recall_whatsapp_message(doctor: "models.User", patient: "models.Patient") -> str:
+    doctor_label = (getattr(doctor, "clinic_name", None) or doctor.doctor_name or "").strip() or "عيادتك الرقمية"
+    patient_label = (patient.full_name or "").strip() or "عزيزنا المريض"
+
+    booking_line = ""
+    if doctor.public_booking_enabled and doctor.booking_slug:
+        booking_line = f"\nيمكنكم حجز موعدكم مباشرة عبر هذا الرابط: {PRODUCTION_SITE_URL}/d/{doctor.booking_slug}"
+
+    return (
+        f"مرحباً سيد/ة {patient_label}، مرّت فترة منذ آخر زيارة لكم إلى عيادة {doctor_label}. "
+        f"نذكّركم بأهمية المتابعة الدورية للحفاظ على صحة أسنانكم.{booking_line}\n"
+        "نتمنى لكم دوام الصحة والعافية. 🦷✨"
+    )
+
+
+def send_recall_message_to_patient(db: Session, doctor: "models.User", patient: "models.Patient") -> bool:
+    if not patient.phone:
+        return False
+
+    message = build_recall_whatsapp_message(doctor, patient)
+    was_sent = send_whatsapp_message_for_doctor(doctor, patient.phone, message)
+    if was_sent:
+        patient.last_recall_sent_at = datetime.utcnow()
+        db.commit()
+
+    return was_sent
+
+
+def send_due_recall_messages() -> int:
+    db = database.SessionLocal()
+    sent_count = 0
+    try:
+        now = datetime.utcnow()
+        recall_cooldown_cutoff = now - timedelta(days=RECALL_INTERVAL_DAYS)
+
+        # الاسترجاع التلقائي (بلا أي إجراء من الطبيب) حصري لباقة Premium -- نفس
+        # منطق باقي مزايا Premium الحصرية بالمشروع (require_premium_user_by_email).
+        doctors = db.query(models.User).filter(models.User.tier == "premium").all()
+
+        for doctor in doctors:
+            if not doctor.email or not doctor.is_active:
+                continue
+            # لا إرسال لأي طبيب انتهى اشتراكه فعلياً، حتى لو بقيت قيمة tier "premium"
+            # بانتظار دورة sweep_expired_subscriptions التالية.
+            if doctor.subscription_expires_at and doctor.subscription_expires_at < now:
+                continue
+
+            candidates = get_recall_candidates(db, doctor.email, RECALL_INTERVAL_DAYS)
+            for candidate in candidates:
+                patient = candidate["patient"]
+                if patient.last_recall_sent_at and patient.last_recall_sent_at > recall_cooldown_cutoff:
+                    continue  # أُرسلت له رسالة استرجاع خلال نفس فترة RECALL_INTERVAL_DAYS بالفعل
+                if send_recall_message_to_patient(db, doctor, patient):
+                    sent_count += 1
+    except Exception as exc:
+        db.rollback()
+        print(f"⚠️ [PATIENT RECALL] فشل فحص مرضى الاسترجاع: {exc}")
+    finally:
+        db.close()
+
+    return sent_count
+
+
+async def _patient_recall_loop() -> None:
+    while True:
+        await asyncio.sleep(RECALL_CHECK_INTERVAL_SECONDS)
+        if not _is_within_clinic_hours():
+            continue
+        try:
+            sent_count = await asyncio.to_thread(send_due_recall_messages)
+            if sent_count:
+                print(f"📲 [PATIENT RECALL] تم إرسال {sent_count} رسالة استرجاع مريض تلقائية.")
+        except Exception as exc:
+            print(f"⚠️ [PATIENT RECALL] خطأ غير متوقع بحلقة الاسترجاع: {exc}")
+
+
+@app.on_event("startup")
+async def _start_patient_recall_task() -> None:
+    asyncio.create_task(_patient_recall_loop())
 
 
 # 2. تفعيل نظام CORS للسماح لموقع الويب وتطبيق الأندرويد بالاتصال بالـ API دون قيود أمنية ومتصفح
@@ -1605,6 +1798,112 @@ def update_booking_settings(
     return serialize_booking_settings(user)
 
 
+# ====================================================================
+# ربط حساب واتساب/Green API الخاص بكل طبيب (profile.html "حسابي") -- 2026-09-01
+# ====================================================================
+# كل طبيب يربط حساب Green API الخاص بعيادته من هنا (idInstance/apiTokenInstance
+# من console.green-api.com بعد مسح رمز QR)، بدل الاعتماد على حساب مشترك واحد
+# للمنصة كلها -- انظر شرح القرار المعماري كاملاً عند models.User.green_api_instance_id.
+# تُستخدَم بيانات الاعتماد هذه من قِبل كل ميزات واتساب بالمشروع (تذكير
+# المواعيد، إشعارات طلبات الحجز، استرجاع المرضى) عبر send_whatsapp_message_for_doctor().
+def mask_green_api_token(token: str | None) -> str | None:
+    if not token:
+        return None
+    trimmed = token.strip()
+    if len(trimmed) <= 4:
+        return "••••"
+    return f"••••{trimmed[-4:]}"
+
+
+def serialize_whatsapp_settings(user: models.User) -> dict:
+    return {
+        "connected": bool(user.green_api_instance_id and user.green_api_token),
+        "green_api_instance_id": user.green_api_instance_id,
+        # التوكن الفعلي لا يُرجَع أبداً للواجهة الأمامية بعد الحفظ (نفس منطق
+        # كلمة السر بـ serialize_doctor_profile) -- فقط آخر 4 خانات منه للتأكيد
+        # البصري أن هناك قيمة محفوظة فعلاً دون كشفها كاملة.
+        "green_api_token_masked": mask_green_api_token(user.green_api_token),
+    }
+
+
+class WhatsAppSettingsUpdate(BaseModel):
+    green_api_instance_id: Optional[str] = None
+    green_api_token: Optional[str] = None
+
+
+@app.get("/api/auth/whatsapp-settings")
+def get_whatsapp_settings(
+    db: Session = Depends(database.get_db),
+    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+):
+    user = get_current_doctor_user(db, doctor_email=doctor_email, authorization=authorization)
+    return serialize_whatsapp_settings(user)
+
+
+@app.put("/api/auth/whatsapp-settings")
+def update_whatsapp_settings(
+    settings_update: WhatsAppSettingsUpdate,
+    db: Session = Depends(database.get_db),
+    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+):
+    user = get_current_doctor_user(db, doctor_email=doctor_email, authorization=authorization)
+
+    # قيمة نصية فارغة تعني فك الربط عمداً (إعادة الحقل لـ NULL)، وليس تجاهل
+    # التحديث -- نفس نمط clinic_phone/clinic_name بـ update_doctor_profile أعلاه.
+    if settings_update.green_api_instance_id is not None:
+        user.green_api_instance_id = settings_update.green_api_instance_id.strip() or None
+
+    if settings_update.green_api_token is not None:
+        user.green_api_token = settings_update.green_api_token.strip() or None
+
+    try:
+        db.commit()
+        db.refresh(user)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر حفظ إعدادات واتساب. حاول مرة أخرى.")
+
+    return serialize_whatsapp_settings(user)
+
+
+class WhatsAppTestMessageRequest(BaseModel):
+    phone: Optional[str] = None
+
+
+@app.post("/api/auth/whatsapp-settings/test")
+def send_whatsapp_test_message(
+    test_request: WhatsAppTestMessageRequest,
+    db: Session = Depends(database.get_db),
+    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+):
+    user = get_current_doctor_user(db, doctor_email=doctor_email, authorization=authorization)
+
+    if not user.green_api_instance_id or not user.green_api_token:
+        raise HTTPException(status_code=400, detail="يرجى حفظ بيانات Green API أولاً قبل إرسال رسالة تجريبية.")
+
+    target_phone = (test_request.phone or user.clinic_phone or "").strip()
+    if not target_phone:
+        raise HTTPException(
+            status_code=400,
+            detail="أدخل رقم هاتف لإرسال الرسالة التجريبية إليه، أو احفظ رقم واتساب العيادة أولاً.",
+        )
+
+    doctor_label = (user.clinic_name or user.doctor_name or "").strip() or "عيادتك الرقمية"
+    message = f"✅ رسالة تجريبية من {doctor_label} -- تم ربط حساب واتساب عيادتك بنجاح مع نظام عيادتي الرقمية!"
+
+    was_sent = send_whatsapp_message_for_doctor(user, target_phone, message)
+    if not was_sent:
+        return {
+            "sent": False,
+            "message": "تعذر إرسال الرسالة. تأكد من صحة idInstance/apiTokenInstance وأن حالة الـ Instance \"مصرَّح\" (Authorized) على console.green-api.com.",
+        }
+
+    return {"sent": True, "message": f"تم إرسال رسالة تجريبية بنجاح إلى {target_phone}."}
+
+
 def validate_avatar_file(file: UploadFile) -> str:
     original_name = file.filename or "avatar"
     _, ext = os.path.splitext(original_name)
@@ -2656,7 +2955,7 @@ def respond_to_booking_request(
                 f"تأكيد موعدكم بتاريخ {appointment_date_label} الساعة {appointment.appointment_time}. "
                 "يرجى التواصل مع العيادة أو تجربة موعد آخر عبر رابط الحجز."
             )
-        send_whatsapp_message_via_green_api(appointment.patient_phone, patient_message)
+        send_whatsapp_message_for_doctor(current_user, appointment.patient_phone, patient_message)
 
     return {
         "message": "تم إرسال الرد بنجاح.",
@@ -3789,6 +4088,106 @@ def delete_inventory_item(
     return {"message": "تم حذف مادة المستودع بنجاح"}
 
 
+# --- واجهات API لنظام استرجاع المرضى التلقائي (Patient Recall Engine) -- 2026-09-01 ---
+# ميزة Premium حصرية: تعرض للطبيب قائمة مرضاه المستحقين لتذكير متابعة (راجع
+# get_recall_candidates أعلاه)، وتسمح له بإرسال رسالة استرجاع فورية لمريض واحد
+# أو لكل المستحقين دفعة واحدة، بالإضافة لمحرك الإرسال التلقائي الدوري بلا أي
+# تدخل من الطبيب (send_due_recall_messages أعلاه).
+class RecallPatientEntry(BaseModel):
+    patient_id: int
+    full_name: str
+    phone: str
+    last_visit_date: Optional[datetime] = None
+    days_since_last_visit: int
+    last_recall_sent_at: Optional[datetime] = None
+
+
+class RecallDuePatientsResponse(BaseModel):
+    count: int
+    interval_days: int
+    patients: List[RecallPatientEntry]
+
+
+@app.get("/api/recall/due-patients", response_model=RecallDuePatientsResponse)
+def get_due_recall_patients(
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    db: Session = Depends(database.get_db),
+):
+    user = require_premium_user_by_email(db, authorization)
+
+    candidates = get_recall_candidates(db, user.email, RECALL_INTERVAL_DAYS)
+    patients_payload = [
+        RecallPatientEntry(
+            patient_id=candidate["patient"].id,
+            full_name=candidate["patient"].full_name or "",
+            phone=candidate["patient"].phone or "",
+            last_visit_date=candidate["last_visit_date"],
+            days_since_last_visit=candidate["days_since_last_visit"],
+            last_recall_sent_at=candidate["patient"].last_recall_sent_at,
+        )
+        for candidate in candidates
+    ]
+
+    return RecallDuePatientsResponse(
+        count=len(patients_payload),
+        interval_days=RECALL_INTERVAL_DAYS,
+        patients=patients_payload,
+    )
+
+
+@app.post("/api/recall/send/{patient_id}")
+def send_single_recall_message(
+    patient_id: int,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    db: Session = Depends(database.get_db),
+):
+    user = require_premium_user_by_email(db, authorization)
+
+    patient = (
+        db.query(models.Patient)
+        .filter(models.Patient.id == patient_id, models.Patient.doctor_email == user.email)
+        .first()
+    )
+    if not patient:
+        raise HTTPException(status_code=404, detail="المريض غير موجود")
+    if not patient.phone:
+        raise HTTPException(status_code=400, detail="لا يوجد رقم هاتف مسجّل لهذا المريض")
+
+    # إرسال يدوي بطلب صريح من الطبيب -- لا يخضع لسقف RECALL_INTERVAL_DAYS
+    # (cooldown) المطبَّق فقط على المحرك التلقائي send_due_recall_messages.
+    was_sent = send_recall_message_to_patient(db, user, patient)
+    if not was_sent:
+        return {
+            "sent": False,
+            "message": "تعذر إرسال رسالة واتساب الآن -- تأكد من إعداد خدمة واتساب (Green API) من إعدادات الحساب.",
+        }
+
+    return {"sent": True, "message": f"تم إرسال رسالة الاسترجاع لـ {patient.full_name} بنجاح."}
+
+
+class RecallSendAllResponse(BaseModel):
+    attempted: int
+    sent: int
+    failed: int
+
+
+@app.post("/api/recall/send-all", response_model=RecallSendAllResponse)
+def send_all_recall_messages(
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    db: Session = Depends(database.get_db),
+):
+    user = require_premium_user_by_email(db, authorization)
+
+    candidates = get_recall_candidates(db, user.email, RECALL_INTERVAL_DAYS)
+    attempted = len(candidates)
+    sent = 0
+    for candidate in candidates:
+        if send_recall_message_to_patient(db, user, candidate["patient"]):
+            sent += 1
+
+    return RecallSendAllResponse(attempted=attempted, sent=sent, failed=attempted - sent)
+
+
 @app.get("/api/patients/{patient_id}/treatments", response_model=List[TreatmentResponse])
 def get_patient_treatments(
     patient_id: int,
@@ -4448,7 +4847,7 @@ def create_public_booking_request(
             f"بتاريخ {parsed_date.isoformat()} الساعة {trimmed_time}. "
             "يرجى مراجعة صفحة المواعيد للقبول أو الرفض."
         )
-        send_whatsapp_message_via_green_api(doctor.clinic_phone, doctor_message)
+        send_whatsapp_message_for_doctor(doctor, doctor.clinic_phone, doctor_message)
 
     # إشعار Push فوري لتطبيق الطبيب على أندرويد (best-effort مثل واتساب أعلاه
     # تماماً -- مستقل عنه، يعمل حتى لو واتساب غير مضبوط أو فشل إرساله)

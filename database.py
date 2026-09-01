@@ -338,6 +338,35 @@ def init_db():
                     {"invoice_id": new_invoice_id, "pid": legacy_patient_id},
                 )
 
+    # ====================================================================
+    # نظام استرجاع المرضى التلقائي (Patient Recall Engine) -- 2026-09-01
+    # ====================================================================
+    # last_recall_sent_at يسجّل آخر مرة أُرسلت فيها رسالة واتساب تلقائية/يدوية
+    # لتذكير مريض متأخر عن موعد متابعته بالحجز مجدداً، لمنع إرسال نفس الرسالة
+    # له بشكل متكرر كل دورة فحص. بلا شرط نوع قاعدة البيانات (خلافاً لكتلة
+    # SQLite بالأعلى)، لنفس السبب الموثّق مراراً في هذا الملف: الإنتاج الحقيقي
+    # على Render يستخدم Supabase Postgres وليس SQLite.
+    if "patients" in inspector.get_table_names():
+        recall_columns = {column["name"] for column in inspector.get_columns("patients")}
+        if "last_recall_sent_at" not in recall_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE patients ADD COLUMN last_recall_sent_at DATETIME"))
+
+    # ====================================================================
+    # بيانات اتصال Green API الخاصة بكل طبيب (users.green_api_instance_id/
+    # green_api_token) -- 2026-09-01. انظر شرح كامل عند models.User أعلاه.
+    # بلا شرط نوع قاعدة البيانات (خلافاً لكتلة SQLite بالأعلى)، لنفس السبب
+    # الموثّق مراراً في هذا الملف: الإنتاج الحقيقي على Render يستخدم Supabase
+    # Postgres وليس SQLite.
+    if "users" in inspector.get_table_names():
+        green_api_columns = {column["name"] for column in inspector.get_columns("users")}
+        if "green_api_instance_id" not in green_api_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN green_api_instance_id VARCHAR"))
+        if "green_api_token" not in green_api_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN green_api_token VARCHAR"))
+
 
 def get_db():
     db = SessionLocal()

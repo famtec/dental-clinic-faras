@@ -31,6 +31,17 @@ class User(Base):
     work_start_time = Column(String, nullable=True)  # "HH:MM"
     work_end_time = Column(String, nullable=True)  # "HH:MM"
     slot_duration_minutes = Column(Integer, nullable=False, default=30, server_default=text("30"))
+    # بيانات اتصال Green API الخاصة بكل طبيب على حدة (أُضيفت 2026-09-01) --
+    # كل طبيب يربط حساب واتساب/Green API الخاص به (رقم عيادته هو)، بدل الاعتماد
+    # على حساب واحد مشترك للمنصة كلها -- قرار معماري مقصود: تكلفة/إدارة حساب
+    # مشترك واحد كانت ستتصاعد مع كل طبيب جديد ينضم للمنصة (خطة Green API
+    # Business تُدفع لكل Instance على حدة أصلاً)، وأيضاً رسائل كل عيادة تصل
+    # لمرضاها من رقم عيادتها الفعلي بدل رقم منصة مشترك غريب عنهم. انظر
+    # send_whatsapp_message_for_doctor() بالأسفل -- القيمة NULL تعني ببساطة أن
+    # هذا الطبيب لم يربط حساب واتساب خاص به بعد، فتُتجاهَل أي محاولة إرسال له
+    # بصمت (نفس نمط best-effort المستخدم بكل ميزات واتساب بالمشروع).
+    green_api_instance_id = Column(String, nullable=True)
+    green_api_token = Column(String, nullable=True)
     # رمز جهاز Firebase Cloud Messaging لتطبيق الطبيب على أندرويد (أُضيف 2026-08-24)
     # -- يُخزَّن هنا آخر توكن FCM سجّله تطبيق الطبيب بعد تسجيل الدخول (جهاز واحد
     # لكل طبيب حالياً، يُستبدل بالأحدث عند كل POST /api/auth/register-device)،
@@ -73,6 +84,11 @@ class Patient(Base):
     medical_history = Column(String, nullable=True)
     total_treatment_cost = Column(Float, nullable=False, default=0.0, server_default=text("0.0"))
     chart_state = Column(Text, nullable=True)
+    # آخر مرة أُرسلت فيها رسالة "استرجاع مريض" (تذكير متابعة دورية عبر واتساب)
+    # لهذا المريض، تلقائياً كانت أو يدوياً (2026-09-01) -- تمنع إعادة إرسال نفس
+    # الرسالة له في كل دورة فحص لمحرك الاسترجاع التلقائي. انظر main.py:
+    # get_due_recall_patients/send_due_recall_messages.
+    last_recall_sent_at = Column(DateTime, nullable=True)
 
     visits = relationship("Visit", back_populates="patient", cascade="all, delete-orphan")
     treatments = relationship("Treatment", back_populates="patient", cascade="all, delete-orphan")

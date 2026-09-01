@@ -315,6 +315,48 @@
 						</div>
 					</form>
 				</section>
+
+				<section class="panel-soft rounded-[28px] border border-white/70 bg-white/90 p-4 shadow-xl shadow-slate-200/70 sm:p-6">
+					<div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+						<div>
+							<h3 class="inline-flex items-center gap-2 text-xl font-bold text-indigo-900"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg><span>ربط واتساب العيادة (Green API)</span></h3>
+							<p class="mt-1 text-sm text-slate-500">اربط حساب واتساب عيادتك الخاص ليصل كل تذكير موعد وإشعار حجز ورسالة استرجاع مريض من رقمك أنت مباشرة.</p>
+						</div>
+						<span id="whatsappConnectionBadge" class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-500">جاري التحقق...</span>
+					</div>
+
+					<form id="whatsappSettingsForm" class="grid gap-4 md:grid-cols-2">
+						<label class="block md:col-span-1">
+							<span class="mb-2 block text-sm font-semibold text-slate-700">idInstance</span>
+							<input id="greenApiInstanceIdInput" type="text" placeholder="1101xxxxxx" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" dir="ltr" />
+						</label>
+
+						<label class="block md:col-span-1">
+							<span class="mb-2 block text-sm font-semibold text-slate-700">apiTokenInstance</span>
+							<input id="greenApiTokenInput" type="password" placeholder="اتركه فارغاً للإبقاء على القيمة المحفوظة" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" dir="ltr" />
+							<p id="greenApiTokenHint" class="mt-1.5 text-xs text-slate-400"></p>
+						</label>
+
+						<div class="md:col-span-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+							<p id="whatsappStatusMsg" class="text-sm font-medium text-slate-500">جاري التحميل...</p>
+							<div class="flex flex-wrap gap-2">
+								<button id="testWhatsappBtn" type="button" class="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-bold text-indigo-700 transition hover:bg-indigo-100">إرسال رسالة تجريبية</button>
+								<button id="saveWhatsappSettingsBtn" type="submit" class="rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:from-emerald-700 hover:to-teal-700">حفظ بيانات واتساب</button>
+							</div>
+						</div>
+					</form>
+
+					<details class="mt-5 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4 text-sm text-slate-700">
+						<summary class="cursor-pointer select-none font-bold text-indigo-800">كيف أحصل على idInstance وapiTokenInstance؟</summary>
+						<ol class="mt-3 list-decimal space-y-2 pr-5 leading-6">
+							<li>ثبّت واتساب أو واتساب بزنس على هاتف مخصص لعيادتك.</li>
+							<li>سجّل حساباً على <a href="https://console.green-api.com" target="_blank" rel="noopener" class="font-semibold text-indigo-600 hover:underline" dir="ltr">console.green-api.com</a> ببريدك الإلكتروني.</li>
+							<li>أنشئ Instance جديد واختر خطة Business (الخطة المجانية محدودة بـ3 محادثات فقط ولا تكفي لمرضاك).</li>
+							<li>اضغط "Get QR" داخل الـ Instance، وامسح الرمز من واتساب هاتفك: الإعدادات ← الأجهزة المرتبطة ← ربط جهاز.</li>
+							<li>انسخ قيمتي <span class="font-mono" dir="ltr">idInstance</span> و<span class="font-mono" dir="ltr">apiTokenInstance</span> الظاهرتين بلوحة تحكم الـ Instance، والصقهما هنا واحفظ.</li>
+						</ol>
+					</details>
+				</section>
 			</div>
 
 			<footer class="mt-8 text-center text-xs font-mono tracking-wide text-indigo-500/90">
@@ -851,6 +893,131 @@
 		}
 
 		loadBookingSettings();
+
+		// ====================================================================
+		// ربط واتساب العيادة الخاص (Green API) -- 2026-09-01
+		// ====================================================================
+		const whatsappConnectionBadge = document.getElementById('whatsappConnectionBadge');
+		const whatsappSettingsForm = document.getElementById('whatsappSettingsForm');
+		const greenApiInstanceIdInput = document.getElementById('greenApiInstanceIdInput');
+		const greenApiTokenInput = document.getElementById('greenApiTokenInput');
+		const greenApiTokenHint = document.getElementById('greenApiTokenHint');
+		const whatsappStatusMsg = document.getElementById('whatsappStatusMsg');
+		const saveWhatsappSettingsBtn = document.getElementById('saveWhatsappSettingsBtn');
+		const testWhatsappBtn = document.getElementById('testWhatsappBtn');
+
+		function applyWhatsappSettings(settings) {
+			if (whatsappConnectionBadge) {
+				if (settings.connected) {
+					whatsappConnectionBadge.textContent = 'متصل ✅';
+					whatsappConnectionBadge.className = 'rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700';
+				} else {
+					whatsappConnectionBadge.textContent = 'غير متصل';
+					whatsappConnectionBadge.className = 'rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700';
+				}
+			}
+			if (greenApiInstanceIdInput) greenApiInstanceIdInput.value = settings.green_api_instance_id || '';
+			if (greenApiTokenHint) {
+				greenApiTokenHint.textContent = settings.green_api_token_masked
+					? `القيمة المحفوظة حالياً: ${settings.green_api_token_masked}`
+					: 'لم يُحفَظ أي توكن بعد.';
+			}
+		}
+
+		async function loadWhatsappSettings() {
+			if (!whatsappStatusMsg) return;
+			whatsappStatusMsg.textContent = 'جاري تحميل إعدادات واتساب...';
+			try {
+				const response = await fetch(apiUrl('/api/auth/whatsapp-settings'), {
+					headers: getDoctorAuthHeaders(),
+				});
+				const data = await response.json().catch(() => ({}));
+
+				if (!response.ok) {
+					whatsappStatusMsg.textContent = `تعذر تحميل إعدادات واتساب: ${data.detail || response.status}`;
+					return;
+				}
+
+				applyWhatsappSettings(data);
+				whatsappStatusMsg.textContent = 'أدخل بيانات Green API الخاصة بعيادتك ثم احفظ.';
+			} catch (error) {
+				whatsappStatusMsg.textContent = 'تعذر الاتصال بالخادم. تحقق من اتصالك بالإنترنت.';
+			}
+		}
+
+		if (whatsappSettingsForm) {
+			whatsappSettingsForm.addEventListener('submit', async (event) => {
+				event.preventDefault();
+
+				const payload = {};
+				if (greenApiInstanceIdInput) payload.green_api_instance_id = greenApiInstanceIdInput.value.trim();
+				// حقل التوكن يُترك فارغاً عمداً بعد كل حفظ ناجح (لا يُعاد عرضه أبداً) --
+				// لا نرسله ضمن التحديث إلا لو المستخدم كتب قيمة جديدة فعلاً، حتى لا
+				// نمحو التوكن المحفوظ سابقاً بالخطأ بإرسال حقل فارغ.
+				if (greenApiTokenInput && greenApiTokenInput.value.trim()) {
+					payload.green_api_token = greenApiTokenInput.value.trim();
+				}
+
+				saveWhatsappSettingsBtn.disabled = true;
+				saveWhatsappSettingsBtn.classList.add('opacity-60');
+				whatsappStatusMsg.textContent = 'جاري حفظ إعدادات واتساب...';
+
+				try {
+					const response = await fetch(apiUrl('/api/auth/whatsapp-settings'), {
+						method: 'PUT',
+						headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
+						body: JSON.stringify(payload),
+					});
+					const data = await response.json().catch(() => ({}));
+
+					if (!response.ok) {
+						whatsappStatusMsg.textContent = `تعذر حفظ إعدادات واتساب: ${data.detail || response.status}`;
+						return;
+					}
+
+					applyWhatsappSettings(data);
+					if (greenApiTokenInput) greenApiTokenInput.value = '';
+					whatsappStatusMsg.textContent = 'تم حفظ إعدادات واتساب بنجاح.';
+					showToast('تم حفظ بيانات واتساب العيادة ✅');
+				} catch (error) {
+					whatsappStatusMsg.textContent = 'تعذر الاتصال بالخادم. حاول مرة أخرى.';
+				} finally {
+					saveWhatsappSettingsBtn.disabled = false;
+					saveWhatsappSettingsBtn.classList.remove('opacity-60');
+				}
+			});
+		}
+
+		if (testWhatsappBtn) {
+			testWhatsappBtn.addEventListener('click', async () => {
+				testWhatsappBtn.disabled = true;
+				const originalLabel = testWhatsappBtn.textContent;
+				testWhatsappBtn.textContent = 'جاري الإرسال...';
+
+				try {
+					const response = await fetch(apiUrl('/api/auth/whatsapp-settings/test'), {
+						method: 'POST',
+						headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
+						body: JSON.stringify({}),
+					});
+					const data = await response.json().catch(() => ({}));
+
+					if (!response.ok) {
+						showToast(data.detail || 'تعذر إرسال الرسالة التجريبية.');
+						return;
+					}
+
+					showToast(data.message || (data.sent ? 'تم الإرسال بنجاح ✅' : 'تعذر الإرسال.'));
+				} catch (error) {
+					showToast('تعذر الاتصال بالخادم. حاول مرة أخرى.');
+				} finally {
+					testWhatsappBtn.disabled = false;
+					testWhatsappBtn.textContent = originalLabel;
+				}
+			});
+		}
+
+		loadWhatsappSettings();
 
 		function openAvatarPicker() {
 			avatarFileInput.click();
