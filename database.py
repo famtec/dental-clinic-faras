@@ -350,7 +350,13 @@ def init_db():
         recall_columns = {column["name"] for column in inspector.get_columns("patients")}
         if "last_recall_sent_at" not in recall_columns:
             with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE patients ADD COLUMN last_recall_sent_at DATETIME"))
+                # TIMESTAMP وليس DATETIME عمداً: DATETIME نوع صالح بـ SQLite فقط (type
+                # affinity)، بينما PostgreSQL لا يعرف نوعاً اسمه DATETIME إطلاقاً ويرفضه
+                # بخطأ "type \"datetime\" does not exist" -- وهذا بالضبط ما كسر أول
+                # نشر حقيقي لهذا العمود على Render/Supabase (2026-09-02، commit 08116f6،
+                # راجع dental_project_patient_recall_engine.md). TIMESTAMP نوع صالح
+                # ومتوافق بكلا قاعدتي البيانات.
+                connection.execute(text("ALTER TABLE patients ADD COLUMN last_recall_sent_at TIMESTAMP"))
 
     # ====================================================================
     # بيانات اتصال Green API الخاصة بكل طبيب (users.green_api_instance_id/
