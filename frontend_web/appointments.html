@@ -20,7 +20,65 @@
            العتبة 767.98px لتوافق شريط التنقّل السفلي، والجدول الكامل يعود
            كما هو فوقها.
            --------------------------------------------------------------- */
+        /* شريط أيام الأسبوع -- عرض الجوال وحده. على الحاسوب تبقى القائمة
+           كاملة كما كانت (الصفحة كانت ولا تزال تعرض كل المواعيد هناك). */
+        #weekStrip { display: none; }
+
         @media (max-width: 767.98px) {
+            #weekStrip {
+                display: flex;
+                gap: 6px;
+                margin-bottom: 13px;
+            }
+            .week-day {
+                flex: 1 1 0;
+                min-width: 0;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 3px;
+                min-height: 56px;
+                padding: 0 2px;
+                border-radius: 16px;
+                border: 1px solid #e2e8f0;
+                background: rgba(255, 255, 255, 0.85);
+                color: #334155;
+                font-family: inherit;
+                cursor: pointer;
+                -webkit-tap-highlight-color: transparent;
+            }
+            .week-day[data-active="1"] {
+                border-color: transparent;
+                background: linear-gradient(160deg, #4f46e5, #7c3aed);
+                box-shadow: 0 10px 22px rgba(79, 70, 229, 0.35);
+            }
+            .week-day-name { font-size: 10px; font-weight: 700; color: #94a3b8; }
+            .week-day-num { font-size: 15px; font-weight: 800; }
+            .week-day[data-active="1"] .week-day-name { color: rgba(255, 255, 255, 0.85); }
+            .week-day[data-active="1"] .week-day-num { color: #ffffff; }
+            .week-day-dot { width: 5px; height: 5px; border-radius: 999px; background: transparent; }
+            .week-day[data-busy="1"] .week-day-dot { background: #818cf8; }
+            .week-day[data-active="1"][data-busy="1"] .week-day-dot { background: #ffffff; }
+
+            /* قائمة الحالة تبقى قائمة عاملة (يغيّر بها الطبيب الحالة) لكن
+               بمظهر شارة ملوّنة حسب الحالة الحالية، بدل مستطيل رمادي. */
+            .appointment-row .ap-cell-status select {
+                border-radius: 999px !important;
+                min-width: 0 !important;
+                font-weight: 800 !important;
+                text-align: center;
+            }
+            .appointment-row[data-appointment-status="pending"] .ap-cell-status select {
+                background: #eef2ff !important; border-color: #c7d2fe !important; color: #4338ca !important;
+            }
+            .appointment-row[data-appointment-status="checked_in"] .ap-cell-status select {
+                background: #ecfdf5 !important; border-color: #a7f3d0 !important; color: #047857 !important;
+            }
+            .appointment-row[data-appointment-status="no_show"] .ap-cell-status select {
+                background: #fff1f2 !important; border-color: #fecdd3 !important; color: #be123c !important;
+            }
+
             #appointmentsTable { display: block; }
             #appointmentsTable thead { display: none; }
             #appointmentsTableBody { display: block; }
@@ -265,10 +323,15 @@
             </section>
 
             <section class="rounded-3xl border border-slate-200 bg-white p-4 shadow-xl sm:p-6">
-                <div class="mb-4 flex items-center justify-between">
-                    <h3 class="text-xl font-bold text-indigo-900">المواعيد</h3>
+                <div class="mb-4 flex items-center justify-between gap-3">
+                    <div class="flex items-baseline gap-2">
+                        <h3 class="text-xl font-bold text-indigo-900">المواعيد</h3>
+                        <span id="appointmentsCount" class="text-xs font-bold text-slate-500"></span>
+                    </div>
                     <span class="rounded-full bg-indigo-50 px-3 py-1 text-sm font-medium text-indigo-700">محدث تلقائيًا</span>
                 </div>
+
+                <div id="weekStrip" role="tablist" aria-label="أيام الأسبوع"></div>
 
                 <div class="overflow-x-auto">
                     <table id="appointmentsTable" class="min-w-full border-collapse text-right">
@@ -621,6 +684,12 @@
         let appointmentModalCloseTimer = null;
         let allPatients = [];
         let currentAppointments = [];
+        // كل المواعيد العادية كما وصلت من الخادم، قبل فلترة يوم الجوال --
+        // شريط الأيام يفلتر هذه النسخة محلياً بلا أي طلب إضافي للخادم.
+        let allNormalAppointments = [];
+        // '' تعني "كل المواعيد" (سلوك الحاسوب وسلوك الصفحة قبل هذا الشريط).
+        let selectedDayKey = '';
+        let appointmentsDayInitialised = false;
         let currentBookingRequests = [];
         let activeAppointment = null;
         let toastTimer = null;
@@ -1059,8 +1128,90 @@
             }
         }
 
+        // مفتاح يوم محلي (YYYY-MM-DD) من appointment_date. نبنيه من مكوّنات
+        // التاريخ المحلية لا من toISOString() لأن الأخير يحوّل إلى UTC فينقل
+        // مواعيد المساء إلى اليوم التالي.
+        function localDayKey(value) {
+            const parsed = value instanceof Date ? value : new Date(value);
+            if (Number.isNaN(parsed.getTime())) return '';
+            const month = String(parsed.getMonth() + 1).padStart(2, '0');
+            const day = String(parsed.getDate()).padStart(2, '0');
+            return `${parsed.getFullYear()}-${month}-${day}`;
+        }
+
+        function appointmentDayKey(appointment) {
+            return localDayKey(appointment?.appointment_date);
+        }
+
+        function isMobileAppointmentsViewport() {
+            return window.matchMedia('(max-width: 767.98px)').matches;
+        }
+
+        function renderWeekStrip() {
+            const strip = document.getElementById('weekStrip');
+            if (!strip) return;
+
+            const busyDays = new Set(allNormalAppointments.map(appointmentDayKey).filter(Boolean));
+            const dayNames = ['أحد', 'إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت'];
+
+            strip.innerHTML = '';
+
+            const allChip = document.createElement('button');
+            allChip.type = 'button';
+            allChip.className = 'week-day';
+            allChip.setAttribute('data-active', selectedDayKey === '' ? '1' : '0');
+            allChip.innerHTML = '<span class="week-day-name">عرض</span><span class="week-day-num" style="font-size:12px">الكل</span><span class="week-day-dot"></span>';
+            allChip.addEventListener('click', () => {
+                selectedDayKey = '';
+                applyAppointmentsDayFilter();
+            });
+            strip.appendChild(allChip);
+
+            // نافذة من سبعة أيام تبدأ من الأمس، فيبقى اليوم الحالي ظاهراً
+            // قرب البداية مع إمكانية رؤية موعد الأمس المتأخر.
+            const start = new Date();
+            start.setDate(start.getDate() - 1);
+
+            for (let i = 0; i < 6; i++) {
+                const date = new Date(start);
+                date.setDate(start.getDate() + i);
+                const key = localDayKey(date);
+
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'week-day';
+                chip.setAttribute('data-active', selectedDayKey === key ? '1' : '0');
+                if (busyDays.has(key)) chip.setAttribute('data-busy', '1');
+                chip.innerHTML = `
+                    <span class="week-day-name">${dayNames[date.getDay()]}</span>
+                    <span class="week-day-num">${String(date.getDate()).padStart(2, '0')}</span>
+                    <span class="week-day-dot"></span>
+                `;
+                chip.addEventListener('click', () => {
+                    selectedDayKey = key;
+                    applyAppointmentsDayFilter();
+                });
+                strip.appendChild(chip);
+            }
+        }
+
+        function applyAppointmentsDayFilter() {
+            const filtered = selectedDayKey
+                ? allNormalAppointments.filter((appointment) => appointmentDayKey(appointment) === selectedDayKey)
+                : allNormalAppointments;
+            renderAppointments(filtered);
+            renderWeekStrip();
+        }
+
+        function updateAppointmentsCount(count) {
+            const badge = document.getElementById('appointmentsCount');
+            if (!badge) return;
+            badge.textContent = count === 1 ? 'موعد واحد' : `${count} مواعيد`;
+        }
+
         function renderAppointments(appointments) {
             currentAppointments = Array.isArray(appointments) ? appointments : [];
+            updateAppointmentsCount(currentAppointments.length);
 
             if (!currentAppointments.length) {
                 tableBody.innerHTML = `
@@ -1268,7 +1419,15 @@
                 });
 
                 renderBookingRequests(bookingRequests);
-                renderAppointments(normalAppointments);
+
+                allNormalAppointments = normalAppointments;
+                // أول تحميل على الجوال يفتح على اليوم الحالي؛ الحاسوب يبقى
+                // على "الكل" كما كانت الصفحة دائماً.
+                if (selectedDayKey === '' && isMobileAppointmentsViewport() && !appointmentsDayInitialised) {
+                    appointmentsDayInitialised = true;
+                    selectedDayKey = localDayKey(new Date());
+                }
+                applyAppointmentsDayFilter();
             } catch (error) {
                 console.error(error);
                 tableBody.innerHTML = `

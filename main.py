@@ -3263,10 +3263,47 @@ def _month_bounds(year: int, month: int):
     return start, end
 
 
+def _day_bounds(year: int, month: int, day: int):
+    # حدود يوم واحد [00:00, اليوم التالي 00:00) بنفس أسلوب _month_bounds.
+    start = datetime(year, month, day)
+    return start, start + timedelta(days=1)
+
+
+def _resolve_finance_period(year, month, day, all_time):
+    """يوحّد حساب نطاق التقرير المالي بين /api/finance/summary و
+    /api/finance/transactions حتى لا تنحرف القائمة عن المجاميع المعروضة
+    فوقها. يعيد (start, end, resolved_year, resolved_month, resolved_day)
+    و(None, None, ...) في وضع all_time."""
+    if all_time:
+        return None, None, None, None, None
+
+    now_local = _damascus_now()
+    resolved_year = year if year is not None else now_local.year
+    resolved_month = month if month is not None else now_local.month
+    if resolved_month < 1 or resolved_month > 12:
+        raise HTTPException(status_code=400, detail="الشهر يجب أن يكون رقماً بين 1 و 12.")
+
+    resolved_day = day
+    if resolved_day is not None:
+        try:
+            start, end = _day_bounds(resolved_year, resolved_month, resolved_day)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="اليوم المطلوب غير صالح لهذا الشهر.")
+    else:
+        start, end = _month_bounds(resolved_year, resolved_month)
+
+    return start, end, resolved_year, resolved_month, resolved_day
+
+
 @app.get("/api/finance/summary")
 def get_finance_summary(
     year: Optional[int] = Query(None),
     month: Optional[int] = Query(None),
+    # 2026-09-02: أُعيد هذا المعامل بعد اكتشاف أن الواجهة (finance.html) ترسل
+    # day عند اختيار "اليوم" بينما الدالة هنا لم تكن تستقبله إطلاقاً --
+    # وFastAPI يتجاهل أي معامل غير معرّف بصمت، فكان خيار "اليوم" يعرض
+    # مجاميع الشهر كامل بلا أي رسالة خطأ.
+    day: Optional[int] = Query(None),
     all_time: bool = Query(False),
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(require_active_doctor_user),
@@ -3286,15 +3323,11 @@ def get_finance_summary(
         .filter(models.FinancialTransaction.doctor_email == current_user.email)
     )
 
-    resolved_year = None
-    resolved_month = None
+    period_start, period_end, resolved_year, resolved_month, resolved_day = _resolve_finance_period(
+        year, month, day, all_time
+    )
     if not all_time:
-        now_local = _damascus_now()
-        resolved_year = year if year is not None else now_local.year
-        resolved_month = month if month is not None else now_local.month
-        if resolved_month < 1 or resolved_month > 12:
-            raise HTTPException(status_code=400, detail="الشهر يجب أن يكون رقماً بين 1 و 12.")
-        month_start, month_end = _month_bounds(resolved_year, resolved_month)
+        month_start, month_end = period_start, period_end
         # 2026-08-25: أي حركة is_opening_balance=True (رصيد افتتاحي/سابق مُرحّل)
         # تُستبعد دوماً من تقرير شهر محدد -- لا تنتمي فعلياً لهذا الشهر، انظر
         # شرح كامل عند FinancialTransaction.is_opening_balance في models.py.
@@ -3339,7 +3372,54 @@ def get_finance_summary(
         "all_time": all_time,
         "year": resolved_year,
         "month": resolved_month,
+        "day": resolved_day,
     }
+
+
+@app.get("/api/finance/transactions", response_model=List[FinancialTransactionResponse])
+def list_finance_transactions(
+    year: Optional[int] = Query(None),
+    month: Optional[int] = Query(None),
+    day: Optional[int] = Query(None),
+    all_time: bool = Query(False),
+    limit: int = Query(10, ge=1, le=100),
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_active_doctor_user),
+):
+    """آخر الحركات المالية للفترة نفسها التي يعرضها /api/finance/summary.
+
+    الصفحة المالية كانت تعرض ثلاثة مجاميع فقط بلا أي وسيلة لرؤية الحركات
+    التي كوّنتها -- والوسيلة الوحيدة المتاحة كانت /api/finance/backup الذي
+    يُنزّل كل المرضى والمواعيد والحركات كملف CSV، وهو ثقيل جداً لعرض خمسة
+    أسطر في الواجهة.
+
+    يستخدم نفس _resolve_finance_period ونفس استثناء is_opening_balance
+    المعتمدين في المجاميع، فلا يمكن أن تعرض القائمة حركات خارج الفترة
+    المعروضة فوقها.
+    """
+    period_start, period_end, _, _, _ = _resolve_finance_period(year, month, day, all_time)
+
+    query = db.query(models.FinancialTransaction).filter(
+        models.FinancialTransaction.doctor_email == current_user.email
+    )
+
+    if not all_time:
+        query = query.filter(
+            models.FinancialTransaction.created_at >= period_start,
+            models.FinancialTransaction.created_at < period_end,
+            models.FinancialTransaction.is_opening_balance.is_(False),
+        )
+
+    transactions = (
+        query.order_by(
+            models.FinancialTransaction.created_at.desc(),
+            models.FinancialTransaction.id.desc(),
+        )
+        .limit(limit)
+        .all()
+    )
+
+    return transactions
 
 
 @app.get("/api/finance/available-months")
