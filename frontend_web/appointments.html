@@ -8,6 +8,99 @@
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
     <style>
         body { font-family: 'Tajawal', sans-serif; }
+
+        /* ---------------------------------------------------------------
+           عرض الجوال لجدول المواعيد
+           ---------------------------------------------------------------
+           الصفوف أصلاً تتحوّل إلى بطاقات تحت 640px عبر block/sm:table-row،
+           لكنها كانت ستة أسطر بنمط "عنوان: قيمة" بارتفاع ~330px للموعد
+           الواحد. هذه القواعد تعيد ترتيب البطاقة نفسها (بلا أي تغيير في
+           بنية الجدول) إلى: شارة وقت ملوّنة + اسم المريض عنواناً + الإجراء
+           سطراً تحته + قائمة الحالة + ثلاثة أزرار بأيقونات.
+           العتبة 767.98px لتوافق شريط التنقّل السفلي، والجدول الكامل يعود
+           كما هو فوقها.
+           --------------------------------------------------------------- */
+        @media (max-width: 767.98px) {
+            #appointmentsTable { display: block; }
+            #appointmentsTable thead { display: none; }
+            #appointmentsTableBody { display: block; }
+
+            .appointment-row {
+                display: grid !important;
+                grid-template-columns: 62px minmax(0, 1fr);
+                grid-template-areas:
+                    "time  name"
+                    "time  proc"
+                    "state state"
+                    "acts  acts";
+                align-items: center;
+                gap: 4px 11px;
+                padding: 12px !important;
+                border-radius: 22px !important;
+                border: 1px solid rgba(255, 255, 255, 0.8) !important;
+                background: rgba(255, 255, 255, 0.94);
+                box-shadow: 0 10px 26px rgba(148, 163, 184, 0.18) !important;
+                margin-bottom: 9px;
+            }
+            .appointment-row > td {
+                display: block !important;
+                border: 0 !important;
+                padding: 0 !important;
+            }
+            .appointment-row .ap-label { display: none !important; }
+
+            /* رقم الموعد لا يفيد الطبيب على شاشة صغيرة، والوقت يغني عنه. */
+            .appointment-row .ap-cell-id { display: none !important; }
+
+            .appointment-row .ap-cell-time {
+                grid-area: time;
+                align-self: stretch;
+                display: flex !important;
+                align-items: center;
+                justify-content: center;
+                border-radius: 17px;
+                background: linear-gradient(160deg, #4f46e5, #7c3aed);
+                color: #ffffff !important;
+                font-size: 14px;
+                font-weight: 800;
+                min-height: 58px;
+                text-align: center;
+                line-height: 1.2;
+            }
+            .appointment-row .ap-cell-name {
+                grid-area: name;
+                font-size: 14.5px !important;
+                font-weight: 800 !important;
+                color: #0f172a !important;
+                align-self: end;
+            }
+            .appointment-row .ap-cell-proc {
+                grid-area: proc;
+                font-size: 11.5px !important;
+                font-weight: 600;
+                color: #64748b !important;
+                align-self: start;
+            }
+            .appointment-row .ap-cell-status { grid-area: state; margin-top: 4px; }
+            .appointment-row .ap-cell-status select { width: 100%; }
+            /* renderAppointmentStatusSelect() يضيف داخل <label> عنواناً
+               "حالة الموعد" وسطراً يكرّر الحالة، وكلاهما sm:hidden أي أنهما
+               يظهران تحت 640px. القائمة المنسدلة نفسها تعرض الحالة، فنخفيهما
+               هنا بدل تعديل الدالة المشتركة مع عرض سطح المكتب. */
+            .appointment-row .ap-cell-status label > span { display: none !important; }
+            .appointment-row .ap-cell-status label { gap: 0 !important; }
+            .appointment-row .ap-cell-actions { grid-area: acts; margin-top: 2px; }
+            .appointment-row .ap-cell-actions > div { gap: 6px !important; }
+
+            /* أزرار بأيقونات فقط: النصوص الثلاثة كانت تلتف على ثلاثة أسطر. */
+            .appointment-row .appointment-action-btn {
+                width: 40px;
+                height: 40px;
+                padding: 0 !important;
+                justify-content: center;
+            }
+            .appointment-row .appointment-action-btn > span { display: none; }
+        }
         @keyframes toastIn {
             0% { opacity: 0; transform: translate(-50%, -16px) scale(0.96); filter: blur(2px); }
             100% { opacity: 1; transform: translate(-50%, 0) scale(1); filter: blur(0); }
@@ -178,7 +271,7 @@
                 </div>
 
                 <div class="overflow-x-auto">
-                    <table class="min-w-full border-collapse text-right">
+                    <table id="appointmentsTable" class="min-w-full border-collapse text-right">
                         <thead>
                             <tr class="border-b border-slate-200 bg-slate-50 text-sm text-slate-600">
                                 <th class="px-4 py-3 font-semibold">ID</th>
@@ -985,28 +1078,28 @@
 
                 return `
                     <tr data-appointment-id="${appointment.id ?? ''}" data-appointment-status="${normalizedStatus}" class="${rowClass}">
-                        <td class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-sm text-slate-600 last:border-b-0 sm:table-cell sm:border-b-0">
-                            <span class="text-xs font-semibold text-slate-400 sm:hidden">ID</span>
+                        <td class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 ap-cell ap-cell-id text-sm text-slate-600 last:border-b-0 sm:table-cell sm:border-b-0">
+                            <span class="ap-label text-xs font-semibold text-slate-400 sm:hidden">ID</span>
                             <span>${appointment.id ?? '-'}</span>
                         </td>
-                        <td class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 last:border-b-0 sm:table-cell sm:border-b-0">
-                            <span class="text-xs font-semibold text-slate-400 sm:hidden">اسم المريض</span>
+                        <td class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 ap-cell ap-cell-name text-sm font-semibold text-slate-700 last:border-b-0 sm:table-cell sm:border-b-0">
+                            <span class="ap-label text-xs font-semibold text-slate-400 sm:hidden">اسم المريض</span>
                             <span>${appointment.patient_name || '—'}</span>
                         </td>
-                        <td class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-sm text-slate-600 last:border-b-0 sm:table-cell sm:border-b-0">
-                            <span class="text-xs font-semibold text-slate-400 sm:hidden">الوقت</span>
+                        <td class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 ap-cell ap-cell-time text-sm text-slate-600 last:border-b-0 sm:table-cell sm:border-b-0">
+                            <span class="ap-label text-xs font-semibold text-slate-400 sm:hidden">الوقت</span>
                             <span>${appointment.appointment_time || '—'}</span>
                         </td>
-                        <td class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-sm text-slate-600 last:border-b-0 sm:table-cell sm:border-b-0">
-                            <span class="text-xs font-semibold text-slate-400 sm:hidden">الإجراء</span>
+                        <td class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 ap-cell ap-cell-proc text-sm text-slate-600 last:border-b-0 sm:table-cell sm:border-b-0">
+                            <span class="ap-label text-xs font-semibold text-slate-400 sm:hidden">الإجراء</span>
                             <span>${appointment.procedure_type || '—'}</span>
                         </td>
-                        <td class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-sm last:border-b-0 sm:table-cell sm:border-b-0">
-                            <span class="text-xs font-semibold text-slate-400 sm:hidden">حالة الموعد</span>
+                        <td class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 ap-cell ap-cell-status text-sm last:border-b-0 sm:table-cell sm:border-b-0">
+                            <span class="ap-label text-xs font-semibold text-slate-400 sm:hidden">حالة الموعد</span>
                             ${renderAppointmentStatusSelect(normalizedStatus, appointment.id)}
                         </td>
-                        <td class="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 text-sm last:border-b-0 sm:table-cell sm:border-b-0">
-                            <span class="text-xs font-semibold text-slate-400 sm:hidden">إجراءات</span>
+                        <td class="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 ap-cell ap-cell-actions text-sm last:border-b-0 sm:table-cell sm:border-b-0">
+                            <span class="ap-label text-xs font-semibold text-slate-400 sm:hidden">إجراءات</span>
                             <div class="flex flex-wrap items-center gap-2">
                                 <button type="button" data-edit-appointment-id="${appointment.id ?? ''}" class="edit-appointment-btn appointment-action-btn btn-edit-appointment px-3 py-2 text-xs"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"></path></svg><span>تعديل</span></button>
                                 <button type="button" data-delete-appointment-id="${appointment.id ?? ''}" class="delete-appointment-btn appointment-action-btn btn-delete-appointment px-3 py-2 text-xs"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg><span>حذف</span></button>

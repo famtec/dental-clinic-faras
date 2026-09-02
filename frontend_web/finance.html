@@ -8,6 +8,84 @@
 	<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
 	<style>
 		body { font-family: 'Tajawal', sans-serif; }
+
+		/* ---------------------------------------------------------------
+		   عرض الجوال للملخّص المالي
+		   ---------------------------------------------------------------
+		   على الحاسوب تبقى البطاقات الثلاث الفاتحة بجانب بعضها كما هي. تحت
+		   768px تتقدّم بطاقة صافي الربح وتتحوّل إلى بطاقة داكنة واحدة كبيرة
+		   (نفس تدرّج بطاقات الإحصائيات في لوحة المرضى) وتحتها الإيرادات
+		   والمصاريف في عمودين، لأن ثلاث بطاقات فوق بعضها كانت تدفع باقي
+		   الصفحة خارج الشاشة.
+		   كل القواعد هنا مرتبطة بالمعرّفات (id) وليس بالأصناف، لأن
+		   setMetrics() تعيد كتابة className لبطاقة الربح بالكامل عند كل
+		   تحديث فتضيع أي فئة نضيفها.
+		   --------------------------------------------------------------- */
+		#financeSummarySection .finance-mobile-only { display: none; }
+
+		@media (max-width: 767.98px) {
+			#financeSummarySection {
+				display: grid;
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+				gap: 10px;
+			}
+			#financeSummarySection .finance-mobile-only { display: block; }
+
+			#profitCard {
+				order: -1;
+				grid-column: 1 / -1;
+				border-radius: 26px !important;
+				border: 1px solid rgba(255, 255, 255, 0.15) !important;
+				background: linear-gradient(160deg, rgba(31, 41, 55, 0.96), rgba(49, 46, 129, 0.95), rgba(76, 29, 149, 0.94)) !important;
+				box-shadow: 0 18px 50px rgba(67, 56, 202, 0.28) !important;
+				padding: 16px 18px !important;
+			}
+			#profitCard[data-negative="1"] {
+				background: linear-gradient(160deg, rgba(69, 10, 10, 0.96), rgba(136, 19, 55, 0.95), rgba(76, 29, 149, 0.92)) !important;
+				box-shadow: 0 18px 50px rgba(190, 18, 60, 0.28) !important;
+			}
+			#profitCard > p:first-child { color: #c7d2fe !important; font-size: 12px !important; }
+			#profitValue {
+				margin-top: 8px !important;
+				font-size: 30px !important;
+				color: #ffffff !important;
+				line-height: 1.1;
+			}
+
+			#financeRatioBar {
+				margin-top: 14px;
+				height: 8px;
+				border-radius: 999px;
+				background: rgba(255, 255, 255, 0.12);
+				overflow: hidden;
+				display: flex;
+			}
+			#financeRatioIncome { background: linear-gradient(to left, #34d399, #10b981); transition: width .25s ease; }
+			#financeRatioExpense { background: linear-gradient(to left, #fb7185, #f43f5e); transition: width .25s ease; }
+			#financeRatioLegend {
+				margin-top: 9px;
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 10px;
+				font-size: 11px;
+				font-weight: 700;
+			}
+			.finance-ratio-chip { display: flex; align-items: center; gap: 6px; }
+			.finance-ratio-chip span:first-child { width: 8px; height: 8px; border-radius: 999px; }
+
+			#financeSummarySection > article:not(#profitCard) {
+				border-radius: 22px !important;
+				padding: 13px 14px !important;
+			}
+			#financeSummarySection > article:not(#profitCard) > p:first-child { font-size: 11px !important; }
+			#revenueValue,
+			#expenseValue {
+				margin-top: 6px !important;
+				font-size: 18px !important;
+				line-height: 1.2;
+			}
+		}
 		.panel-soft {
 			background: rgba(255, 255, 255, 0.92);
 			backdrop-filter: blur(12px);
@@ -256,7 +334,7 @@
 					</div>
 				</section>
 
-				<section class="mb-6 grid gap-4 md:grid-cols-3">
+				<section id="financeSummarySection" class="mb-6 grid gap-4 md:grid-cols-3">
 					<article class="panel-soft rounded-3xl border border-emerald-100 p-5 shadow-xl shadow-emerald-100/60">
 						<p class="text-xs font-bold text-emerald-700">إجمالي الإيرادات</p>
 						<p id="revenueValue" class="mt-3 text-3xl font-extrabold text-emerald-600">0 ل.س</p>
@@ -268,6 +346,16 @@
 					<article id="profitCard" class="panel-soft rounded-3xl border border-violet-100 bg-gradient-to-br from-violet-50 to-indigo-50 p-5 shadow-xl shadow-violet-100/70">
 						<p class="text-xs font-bold text-violet-700">صافي أرباح العيادة</p>
 						<p id="profitValue" class="mt-3 text-3xl font-extrabold text-violet-700">0 ل.س</p>
+						<div class="finance-mobile-only">
+							<div id="financeRatioBar">
+								<div id="financeRatioIncome" style="width: 50%"></div>
+								<div id="financeRatioExpense" style="width: 50%"></div>
+							</div>
+							<div id="financeRatioLegend">
+								<div class="finance-ratio-chip" style="color:#a7f3d0"><span style="background:#10b981"></span><span id="financeRatioIncomeLabel">واردات</span></div>
+								<div class="finance-ratio-chip" style="color:#fecdd3"><span style="background:#f43f5e"></span><span id="financeRatioExpenseLabel">مصاريف</span></div>
+							</div>
+						</div>
 					</article>
 				</section>
 
@@ -646,17 +734,46 @@
 			expenseValue.textContent = formatCurrency(expensesValue);
 			profitValue.textContent = formatCurrency(netProfitValue);
 
+			updateFinanceRatioBar(incomeValue, expensesValue);
+
 			if (netProfitValue < 0) {
+				// data-negative يبقى بعد إعادة كتابة className أدناه، وعليه
+				// تعتمد قاعدة CSS التي تصبغ البطاقة بالأحمر على الجوال.
+				if (profitCard) profitCard.dataset.negative = '1';
 				profitValue.className = 'mt-3 text-3xl font-extrabold text-rose-700';
 				if (profitCard) {
 					profitCard.className = 'panel-soft rounded-3xl border border-rose-200 bg-gradient-to-br from-rose-50 to-red-50 p-5 shadow-xl shadow-rose-100/70';
 				}
 			} else {
+				if (profitCard) delete profitCard.dataset.negative;
 				profitValue.className = 'mt-3 text-3xl font-extrabold text-violet-700';
 				if (profitCard) {
 					profitCard.className = 'panel-soft rounded-3xl border border-violet-100 bg-gradient-to-br from-violet-50 to-indigo-50 p-5 shadow-xl shadow-violet-100/70';
 				}
 			}
+		}
+
+		// شريط نسبة الواردات إلى المصاريف داخل بطاقة صافي الربح -- يظهر على
+		// الجوال وحده (‎.finance-mobile-only) ويقرأ نفس الأرقام التي تُكتب في
+		// البطاقات الثلاث، فلا يوجد مصدر بيانات ثانٍ يمكن أن يتعارض معها.
+		function updateFinanceRatioBar(incomeValue, expensesValue) {
+			const incomeBar = document.getElementById('financeRatioIncome');
+			const expenseBar = document.getElementById('financeRatioExpense');
+			if (!incomeBar || !expenseBar) return;
+
+			const income = Math.max(0, Number(incomeValue) || 0);
+			const expenses = Math.max(0, Number(expensesValue) || 0);
+			const total = income + expenses;
+			const incomeShare = total > 0 ? Math.round((income / total) * 100) : 50;
+			const expenseShare = total > 0 ? 100 - incomeShare : 50;
+
+			incomeBar.style.width = incomeShare + '%';
+			expenseBar.style.width = expenseShare + '%';
+
+			const incomeLabel = document.getElementById('financeRatioIncomeLabel');
+			const expenseLabel = document.getElementById('financeRatioExpenseLabel');
+			if (incomeLabel) incomeLabel.textContent = total > 0 ? `واردات ${incomeShare}%` : 'واردات';
+			if (expenseLabel) expenseLabel.textContent = total > 0 ? `مصاريف ${expenseShare}%` : 'مصاريف';
 		}
 
 		function setExpenseStatus(message, type = 'normal') {
