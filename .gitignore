@@ -1,0 +1,30 @@
+﻿# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# قواعد البيانات المحلية
+*.db
+*.sqlite
+*.sqlite3
+
+# نسخ احتياطية قديمة
+*.bak
+
+# اكواد التفعيل (بيانات حساسة)
+activation_codes_*.json
+رموز_التفعيل_*
+
+# ملفات بناء فلاتر
+dental_app/build/
+dental_app/.dart_tool/
+dental_app/.flutter-plugins
+dental_app/.flutter-plugins-dependencies
+
+# ملفات النظام
+.DS_Store
+Thumbs.db
+
+# الملفات المرفوعة من المستخدمين (صور اشعة وغيرها)
+uploads/
