@@ -9,6 +9,7 @@ import '../services/api_service.dart';
 import '../services/auth_storage.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
+import '../widgets/booking_qr_card.dart';
 
 const _weekdayLabels = [
   (value: 0, label: 'الإثنين'),
@@ -581,7 +582,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Text('رمز QR لعيادتك',
                     style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5)),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
+              // نفس نص profile.html بالموقع بالحرف.
+              const Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  'اطبع هذا الرمز وعلّقه بعيادتك -- أي مريض يمسحه بكاميرا هاتفه يوصله مباشرة لصفحة حجز موعده معك.',
+                  textAlign: TextAlign.right,
+                  style: TextStyle(fontSize: 11, color: AppColors.slate500),
+                ),
+              ),
+              const SizedBox(height: 10),
               if (_fullBookingUrl.isEmpty)
                 Container(
                   width: double.infinity,
@@ -598,24 +609,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 )
               else
-                Center(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: Container(
-                      color: Colors.white,
-                      padding: const EdgeInsets.all(8),
-                      child: Image.network(
-                        'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${Uri.encodeComponent(_fullBookingUrl)}',
-                        width: 140,
-                        height: 140,
-                        errorBuilder: (context, error, stackTrace) => const SizedBox(
-                          width: 140,
-                          height: 140,
-                          child: Icon(Icons.qr_code_2, size: 50, color: AppColors.slate400),
-                        ),
-                      ),
-                    ),
-                  ),
+                BookingQrCard(
+                  doctorName: _nameController.text,
+                  bookingUrl: _fullBookingUrl,
                 ),
               const SizedBox(height: 18),
               TextFormField(
@@ -718,11 +714,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: ListView(
             padding: EdgeInsets.zero,
             children: [
-              Container(
-                width: double.infinity,
+              AnimatedHeroHeader(
                 padding: EdgeInsets.fromLTRB(
                     12, MediaQuery.of(context).padding.top + 8, 20, 40),
-                decoration: const BoxDecoration(gradient: AppColors.heroGradient),
                 child: Column(
                   children: [
                     // زر رجوع -- انظر نفس التعليق في finance_screen.dart.

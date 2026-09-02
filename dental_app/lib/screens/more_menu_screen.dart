@@ -57,11 +57,9 @@ class _MoreMenuScreenState extends State<MoreMenuScreen> {
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            Container(
-              width: double.infinity,
+            AnimatedHeroHeader(
               padding: EdgeInsets.fromLTRB(
                   20, MediaQuery.of(context).padding.top + 20, 20, 30),
-              decoration: const BoxDecoration(gradient: AppColors.heroGradient),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [

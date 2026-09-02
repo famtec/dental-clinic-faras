@@ -30,6 +30,14 @@ class Appointment {
   // من booking.html التي لم تُقبَل بعد.
   final int? patientId;
 
+  /// حالة المزامنة مع السيرفر -- 'synced' دائماً لأي موعد قادم فعلياً من
+  /// الـ backend (fromJson). القيم الأخرى ('pending_create' / 'pending_update'
+  /// / 'pending_delete') لا تظهر إلا لموعد أُنشئ/عُدِّل/حُذف أوفلاين وما زال
+  /// بانتظار الاتصال بالإنترنت ليصل فعلياً للسيرفر -- انظر
+  /// OfflineAwareApiService وLocalDb. أُضيف 2026-08-31 كجزء من دعم العمل بدون
+  /// إنترنت (تجربة أولى بشاشة المواعيد).
+  final String syncStatus;
+
   const Appointment({
     required this.id,
     required this.patientName,
@@ -40,7 +48,10 @@ class Appointment {
     this.notes,
     this.patientPhone,
     this.patientId,
+    this.syncStatus = 'synced',
   });
+
+  bool get isPendingSync => syncStatus != 'synced';
 
   String get statusLabel =>
       appointmentStatusLabelsAr[status.toLowerCase()] ?? status;
@@ -70,6 +81,32 @@ class Appointment {
       status: (json['status'] as String?)?.trim() ?? 'pending',
       patientPhone: json['patient_phone'] as String?,
       patientId: json['patient_id'] as int?,
+    );
+  }
+
+  Appointment copyWith({
+    int? id,
+    String? patientName,
+    DateTime? appointmentDate,
+    String? appointmentTime,
+    String? procedureType,
+    String? notes,
+    String? status,
+    String? patientPhone,
+    int? patientId,
+    String? syncStatus,
+  }) {
+    return Appointment(
+      id: id ?? this.id,
+      patientName: patientName ?? this.patientName,
+      appointmentDate: appointmentDate ?? this.appointmentDate,
+      appointmentTime: appointmentTime ?? this.appointmentTime,
+      procedureType: procedureType ?? this.procedureType,
+      notes: notes ?? this.notes,
+      status: status ?? this.status,
+      patientPhone: patientPhone ?? this.patientPhone,
+      patientId: patientId ?? this.patientId,
+      syncStatus: syncStatus ?? this.syncStatus,
     );
   }
 }

@@ -1,0 +1,9 @@
+# انسخ هذا الملف باسم key.properties (بدون .example) في نفس هذا المجلد
+# android/ ثم املأ القيم بعد تنفيذ أمر keytool (راجع رسالتي بالمحادثة).
+# هذا الملف (key.properties) مُتجاهَل أصلاً في android/.gitignore ولا يجب
+# رفعه لأي مكان أبداً -- فيه كلمات مرور مفتاح التوقيع الرسمي للتطبيق.
+
+storePassword=ضع_كلمة_مرور_الملف_هنا
+keyPassword=ضع_كلمة_مرور_المفتاح_هنا
+keyAlias=upload
+storeFile=C:\\Users\\HP\\upload-keystore.jks

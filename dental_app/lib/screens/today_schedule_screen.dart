@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/appointment.dart';
 import '../models/patient.dart';
 import '../services/api_service.dart';
+import '../services/offline_sync_status.dart';
 import '../theme/app_theme.dart';
 import '../utils/appointment_status.dart';
 import '../widgets/app_widgets.dart';
@@ -76,6 +77,72 @@ Widget _statusOptionTile({
   );
 }
 
+/// شريط رفيع أعلى شاشة المواعيد يعكس حالة المزامنة الأوفلاين (انظر
+/// OfflineSyncStatus/OfflineAwareApiService) -- يظهر فقط عند وجود ما
+/// يستحق إخبار الطبيب به (عمليات بانتظار الاتصال، أو عمليات رفضها السيرفر
+/// رفضاً حقيقياً)، ويختفي تلقائياً بعد اكتمال المزامنة. أُضيف 2026-08-31.
+class _OfflineSyncBanner extends StatelessWidget {
+  const _OfflineSyncBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<int>(
+      valueListenable: OfflineSyncStatus.instance.pendingCount,
+      builder: (context, pending, _) {
+        return ValueListenableBuilder<int>(
+          valueListenable: OfflineSyncStatus.instance.failedCount,
+          builder: (context, failed, _) {
+            if (pending == 0 && failed == 0) return const SizedBox.shrink();
+            return ValueListenableBuilder<bool>(
+              valueListenable: OfflineSyncStatus.instance.isOnline,
+              builder: (context, online, _) {
+                final messages = <String>[];
+                if (pending > 0) {
+                  messages.add(online
+                      ? 'جارٍ مزامنة $pending ${pending == 1 ? 'عملية' : 'عمليات'}...'
+                      : 'غير متصل بالإنترنت -- $pending ${pending == 1 ? 'عملية' : 'عمليات'} ستُرفَع تلقائياً عند عودة الاتصال');
+                }
+                if (failed > 0) {
+                  messages.add(
+                      'تعذّرت مزامنة $failed ${failed == 1 ? 'عملية' : 'عمليات'} بسبب رفض من السيرفر');
+                }
+                final isWarning = failed > 0 || !online;
+                return Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                  color: isWarning ? AppColors.amber50 : AppColors.slate100,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        online ? Icons.sync : Icons.cloud_off_outlined,
+                        size: 15,
+                        color: isWarning ? AppColors.amber900 : AppColors.slate600,
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          messages.join(' -- '),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: isWarning ? AppColors.amber900 : AppColors.slate600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
 class TodayScheduleScreen extends StatefulWidget {
   final ApiService apiService;
   final VoidCallback onSessionExpired;
@@ -92,6 +159,10 @@ class TodayScheduleScreen extends StatefulWidget {
 
 class TodayScheduleScreenState extends State<TodayScheduleScreen> {
   List<Appointment>? _appointments;
+  // طلبات الحجز العام (pending_confirmation) -- بلا قيد تاريخ اليوم (تماماً
+  // كـ bookingRequests في appointments.html بالموقع)، لها لوحتها الخاصة
+  // بالأعلى (انظر _buildBookingRequestsSection). أُضيف 2026-08-31.
+  List<Appointment> _bookingRequests = [];
   String? _errorMessage;
   bool _isSubscriptionBlocked = false;
   bool _isLoading = true;
@@ -113,11 +184,29 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
     });
     try {
       final all = await widget.apiService.fetchAppointments();
-      final today = all.where((appointment) => appointment.isToday).toList()
+      // نفس فلترة loadAppointments() في appointments.html بالموقع تماماً:
+      // طلبات pending_confirmation تُستبعد من الجدول العادي ولها لوحتها
+      // الخاصة (بأي تاريخ، وليس اليوم فقط -- طلب وصل لموعد الأسبوع القادم
+      // ما زال يحتاج رداً الآن)، وrejected تختفي كلياً من العمل اليومي.
+      final bookingRequests = all
+          .where((appointment) => appointment.status.toLowerCase() == 'pending_confirmation')
+          .toList()
+        ..sort((a, b) {
+          final dateCompare =
+              (a.appointmentDate ?? DateTime(0)).compareTo(b.appointmentDate ?? DateTime(0));
+          return dateCompare != 0
+              ? dateCompare
+              : a.appointmentTime.compareTo(b.appointmentTime);
+        });
+      final today = all.where((appointment) {
+        final status = appointment.status.toLowerCase();
+        return appointment.isToday && status != 'pending_confirmation' && status != 'rejected';
+      }).toList()
         ..sort((a, b) => a.appointmentTime.compareTo(b.appointmentTime));
       if (!mounted) return;
       setState(() {
         _appointments = today;
+        _bookingRequests = bookingRequests;
         _isLoading = false;
       });
     } on ApiException catch (e) {
@@ -535,10 +624,8 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
       children: [
         Column(
           children: [
-            Container(
-              width: double.infinity,
+            AnimatedHeroHeader(
               padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 18, 20, 18),
-              decoration: const BoxDecoration(gradient: AppColors.heroGradient),
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -549,6 +636,7 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
                 ],
               ),
             ),
+            const _OfflineSyncBanner(),
             Expanded(
               child: AtmosphereBackground(
                 child: LoadingErrorEmpty(
@@ -571,165 +659,446 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
     );
   }
 
+  /// القائمة الكاملة القابلة للتمرير: لوحة "طلبات حجز جديدة" الكهرمانية
+  /// بالأعلى، ثم إطار "المواعيد" الأبيض تحتها -- طبق الأصل عن ترتيب
+  /// bookingRequestsSection وقسم "المواعيد" في appointments.html بالموقع
+  /// (نفس الحدود/الخلفيات/العناوين)، بدل القائمة المسطّحة السابقة التي كانت
+  /// تخلط طلبات الحجز مع المواعيد العادية بلا تمييز بصري. أُعيد تنظيمه
+  /// 2026-08-31.
   Widget _buildList() {
     final appointments = _appointments ?? [];
 
     return RefreshIndicator(
       onRefresh: refresh,
-      child: appointments.isEmpty
-          ? ListView(
-              children: const [
-                SizedBox(height: 120),
-                Icon(Icons.event_available_outlined, size: 56, color: AppColors.slate400),
-                SizedBox(height: 12),
-                Text('لا توجد مواعيد اليوم', textAlign: TextAlign.center),
-              ],
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-              itemCount: appointments.length,
-              itemBuilder: (context, index) {
-                final appointment = appointments[index];
-                final isUpdating = _updatingIds.contains(appointment.id);
-                final isDeleting = _deletingIds.contains(appointment.id);
-                final style = appointmentStatusStyle(appointment.status);
-                final normalizedStatus = appointment.status.toLowerCase();
-                // نفس شرط استثناء الموقع في appointments.html
-                // (loadAppointments -> normalAppointments): طلبات الحجز
-                // pending_confirmation لها لوحتها الخاصة أعلاه (قبول/رفض)،
-                // والمرفوضة rejected حالة نهائية -- لا يظهر لهما صف
-                // الإجراءات (تعديل/حذف/تذكير واتساب) ولا قائمة تغيير الحالة
-                // عند الضغط على الاسم، تماماً كجدول الموقع الرئيسي.
-                final showTableActions =
-                    normalizedStatus != 'pending_confirmation' && normalizedStatus != 'rejected';
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+        children: [
+          _buildBookingRequestsSection(),
+          const SizedBox(height: 16),
+          _buildAppointmentsFrame(appointments),
+        ],
+      ),
+    );
+  }
 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: SectionCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+  /// لوحة "طلبات حجز جديدة" -- طبق الأصل عن bookingRequestsSection في
+  /// appointments.html بالموقع (نفس الحدود/الخلفية الكهرمانية، نفس نص
+  /// العنوان والوصف وشارة العدد، وتظهر دائماً حتى عند عدم وجود طلبات -- مع
+  /// نص "لا توجد طلبات حجز جديدة حالياً." تماماً كالموقع، بدل إخفاء اللوحة
+  /// كلياً). أزرار قبول/رفض في [_BookingRequestCard] بنفس ألوان
+  /// btn-accept-request/btn-reject-request الحقيقية (كبسولة فاتحة -- التدرج
+  /// المملوء هناك حالة :hover لماوس سطح مكتب فقط، لا تنطبق على تطبيق جوّال).
+  Widget _buildBookingRequestsSection() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.amber50.withValues(alpha: .6),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.amber200),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.slate900.withValues(alpha: .08),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    const Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Row(
-                          children: [
-                            StatusBadge(
-                              label: appointment.statusLabel,
-                              background: style.background,
-                              foreground: style.foreground,
-                            ),
-                            const Spacer(),
-                            Container(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppColors.indigo50,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                appointment.appointmentTime,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w800, color: AppColors.indigo700),
-                              ),
-                            ),
-                          ],
+                        Icon(Icons.notifications_outlined, size: 18, color: AppColors.amber900),
+                        SizedBox(width: 8),
+                        Text(
+                          'طلبات حجز جديدة',
+                          style: TextStyle(
+                              color: AppColors.amber900,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 18),
                         ),
-                        const SizedBox(height: 10),
-                        // اسم المريض قابل للضغط لمن لهم صف إجراءات (انظر
-                        // showTableActions أعلاه) -- يفتح ورقة "تغيير حالة
-                        // الموعد" بدل القائمة المنسدلة الدائمة الظهور في
-                        // الموقع، حسب طلب المستخدم صراحةً.
-                        if (showTableActions)
-                          Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(8),
-                              onTap: () => _openStatusPicker(appointment),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      appointment.patientName,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w800, fontSize: 16),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  const Icon(Icons.unfold_more,
-                                      size: 17, color: AppColors.indigo600),
-                                ],
-                              ),
-                            ),
-                          )
-                        else
-                          Text(
-                            appointment.patientName,
-                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-                          ),
-                        if (appointment.procedureType.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Text(appointment.procedureType,
-                                style: const TextStyle(color: AppColors.slate500)),
-                          ),
-                        AppointmentActionButtons(
-                          status: appointment.status,
-                          isUpdating: isUpdating,
-                          onCheckIn: () => _setStatus(appointment, 'checked_in'),
-                          onNoShow: () => _setStatus(appointment, 'no_show'),
-                          onAccept: () => _respond(appointment, 'accept'),
-                          onReject: () => _respond(appointment, 'reject'),
-                          // زرا "دخل العيادة"/"تخلّف عن الموعد" ألغيا هنا
-                          // بطلب المستخدم 2026-08-30 -- أصبحا تكراراً بلا
-                          // فائدة بعد إضافة ورقة "تغيير حالة الموعد" التي
-                          // تفتح بالضغط على اسم المريض وتغطي هذين الخيارين
-                          // بالضبط. طلبات pending_confirmation (قبول/رفض)
-                          // غير متأثرة، تبقى ظاهرة كما هي.
-                          showPendingActions: false,
-                        ),
-                        // صف "تعديل/حذف/تذكير واتساب" -- كبسولات فاتحة
-                        // مطابقة تماماً لأزرار appointment-action-btn في
-                        // appointments.html بالموقع (edit/delete بلون
-                        // الإندگو الموحَّد، وواتساب وحده أخضر).
-                        if (showTableActions) ...[
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: AppointmentUtilityButton(
-                                  label: 'تعديل',
-                                  icon: Icons.edit_outlined,
-                                  onPressed: () => _openEditAppointmentSheet(appointment),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: AppointmentUtilityButton(
-                                  label: 'حذف',
-                                  icon: Icons.delete_outline,
-                                  isLoading: isDeleting,
-                                  onPressed: isDeleting
-                                      ? null
-                                      : () => _confirmDeleteAppointment(appointment),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: AppointmentUtilityButton(
-                                  label: 'واتساب',
-                                  icon: Icons.chat_bubble_outline,
-                                  style: AppointmentUtilityStyle.whatsapp,
-                                  onPressed: () => _sendWhatsappReminder(appointment),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
                       ],
                     ),
+                    const SizedBox(height: 5),
+                    Text(
+                      'طلبات وصلت من صفحة الحجز العامة وبانتظار ردّك (قبول أو رفض).',
+                      textAlign: TextAlign.right,
+                      // amber900text قيمته فعلياً amber-700 الحقيقي (انظر
+                      // تعليقها في app_theme.dart) -- هذا هو استخدامها الصحيح.
+                      style: TextStyle(
+                          color: AppColors.amber900text.withValues(alpha: .8), fontSize: 12.5),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: AppColors.amber100,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '${_bookingRequests.length}',
+                  style: const TextStyle(
+                      color: AppColors.amber800text, fontWeight: FontWeight.w800, fontSize: 13.5),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (_bookingRequests.isEmpty)
+            const Text(
+              'لا توجد طلبات حجز جديدة حالياً.',
+              style: TextStyle(color: AppColors.slate500, fontSize: 13.5),
+            )
+          else
+            Column(
+              children: [
+                for (final request in _bookingRequests) ...[
+                  _BookingRequestCard(
+                    appointment: request,
+                    isUpdating: _updatingIds.contains(request.id),
+                    onAccept: () => _respond(request, 'accept'),
+                    onReject: () => _respond(request, 'reject'),
                   ),
-                );
-              },
+                  if (request != _bookingRequests.last) const SizedBox(height: 10),
+                ],
+              ],
             ),
+        ],
+      ),
+    );
+  }
+
+  /// إطار "المواعيد" الأبيض -- طبق الأصل عن القسم الثاني في
+  /// appointments.html بالموقع (بطاقة بيضاء بحدود slate-200 وعنوان + شارة
+  /// "محدث تلقائيًا")؛ يحتوي بطاقات مواعيد اليوم (نفس تصميم SectionCard
+  /// المعتمد لكل موعد، انظر [_buildAppointmentCard]).
+  Widget _buildAppointmentsFrame(List<Appointment> appointments) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.slate200),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.slate900.withValues(alpha: .06),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              // نفس text-indigo-900 الحقيقي في الموقع (indigo800 هنا قيمته
+              // فعلياً indigo-900 رغم اسمها -- انظر تعليقها في app_theme.dart).
+              const Text(
+                'المواعيد',
+                style: TextStyle(
+                    color: AppColors.indigo800, fontWeight: FontWeight.w800, fontSize: 18),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: AppColors.indigo50,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Text(
+                  'محدث تلقائيًا',
+                  style: TextStyle(
+                      color: AppColors.indigo700, fontWeight: FontWeight.w600, fontSize: 12.5),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (appointments.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 28),
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(Icons.event_available_outlined, size: 44, color: AppColors.slate400),
+                    SizedBox(height: 10),
+                    Text('لا توجد مواعيد اليوم'),
+                  ],
+                ),
+              ),
+            )
+          else
+            Column(
+              children: [
+                for (final appointment in appointments) ...[
+                  _buildAppointmentCard(appointment),
+                  if (appointment != appointments.last) const SizedBox(height: 10),
+                ],
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// بطاقة موعد واحد داخل إطار "المواعيد" -- بلا تغيير عن التصميم المعتمد
+  /// سابقاً، استُخرجت فقط إلى دالة مستقلة لاستخدامها من [_buildAppointmentsFrame].
+  /// pending_confirmation/rejected لم يعودا يصلان إلى هنا إطلاقاً بعد فلترة
+  /// [refresh] الجديدة (لهما لوحتهما/حالتهما الخاصة)، لذا صف
+  /// تعديل/حذف/واتساب وقائمة تغيير الحالة تظهر دائماً لكل بطاقة هنا -- تماماً
+  /// كجدول الموقع الرئيسي بعد استبعاد normalAppointments لهاتين الحالتين.
+  Widget _buildAppointmentCard(Appointment appointment) {
+    final isUpdating = _updatingIds.contains(appointment.id);
+    final isDeleting = _deletingIds.contains(appointment.id);
+    final style = appointmentStatusStyle(appointment.status);
+
+    return SectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              StatusBadge(
+                label: appointment.statusLabel,
+                background: style.background,
+                foreground: style.foreground,
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.indigo50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  appointment.appointmentTime,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w800, color: AppColors.indigo700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // اسم المريض قابل للضغط -- يفتح ورقة "تغيير حالة الموعد" بدل
+          // القائمة المنسدلة الدائمة الظهور في الموقع.
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => _openStatusPicker(appointment),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      appointment.patientName,
+                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.unfold_more, size: 17, color: AppColors.indigo600),
+                  // موعد أُنشئ/عُدِّل أوفلاين وما زال بانتظار الاتصال بالإنترنت
+                  // ليصل فعلياً للسيرفر -- انظر OfflineAwareApiService.
+                  if (appointment.isPendingSync) ...[
+                    const SizedBox(width: 6),
+                    const Icon(Icons.cloud_off_outlined,
+                        size: 15, color: AppColors.amber900),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          if (appointment.procedureType.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(appointment.procedureType,
+                  style: const TextStyle(color: AppColors.slate500)),
+            ),
+          AppointmentActionButtons(
+            status: appointment.status,
+            isUpdating: isUpdating,
+            onCheckIn: () => _setStatus(appointment, 'checked_in'),
+            onNoShow: () => _setStatus(appointment, 'no_show'),
+            onAccept: () => _respond(appointment, 'accept'),
+            onReject: () => _respond(appointment, 'reject'),
+            // زرا "دخل العيادة"/"تخلّف عن الموعد" ألغيا هنا بطلب المستخدم
+            // 2026-08-30 -- أصبحا تكراراً بلا فائدة بعد إضافة ورقة "تغيير
+            // حالة الموعد" أعلاه التي تفتح بالضغط على اسم المريض وتغطي هذين
+            // الخيارين بالضبط.
+            showPendingActions: false,
+          ),
+          // صف "تعديل/حذف/تذكير واتساب" -- كبسولات فاتحة مطابقة تماماً
+          // لأزرار appointment-action-btn في appointments.html بالموقع.
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: AppointmentUtilityButton(
+                  label: 'تعديل',
+                  icon: Icons.edit_outlined,
+                  onPressed: () => _openEditAppointmentSheet(appointment),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: AppointmentUtilityButton(
+                  label: 'حذف',
+                  icon: Icons.delete_outline,
+                  isLoading: isDeleting,
+                  onPressed:
+                      isDeleting ? null : () => _confirmDeleteAppointment(appointment),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: AppointmentUtilityButton(
+                  label: 'واتساب',
+                  icon: Icons.chat_bubble_outline,
+                  style: AppointmentUtilityStyle.whatsapp,
+                  onPressed: () => _sendWhatsappReminder(appointment),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// بطاقة طلب حجز واحد داخل لوحة "طلبات حجز جديدة" -- طبق الأصل عن العنصر
+/// الذي يبنيه renderBookingRequests() في appointments.html بالموقع: اسم
+/// المريض ورقم هاتفه، تاريخ ووقت الطلب، ملاحظاته إن وُجدت، ثم زرّا قبول/رفض
+/// (كبسولتان فاتحتان -- انظر AppointmentUtilityStyle.whatsapp/reject).
+/// أُضيف 2026-08-31.
+class _BookingRequestCard extends StatelessWidget {
+  final Appointment appointment;
+  final bool isUpdating;
+  final VoidCallback onAccept;
+  final VoidCallback onReject;
+
+  const _BookingRequestCard({
+    required this.appointment,
+    required this.isUpdating,
+    required this.onAccept,
+    required this.onReject,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final date = appointment.appointmentDate;
+    final dateLabel = date != null
+        ? '${date.day} ${_scheduleArabicMonthNames[date.month - 1]} ${date.year}'
+        : '—';
+    final phone = appointment.patientPhone?.trim();
+    final notes = appointment.notes?.trim();
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.amber200),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.slate900.withValues(alpha: .04),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Wrap(
+            alignment: WrapAlignment.end,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            children: [
+              Text(
+                appointment.patientName,
+                style: const TextStyle(
+                    fontWeight: FontWeight.w800, fontSize: 14.5, color: AppColors.slate900),
+              ),
+              if (phone != null && phone.isNotEmpty)
+                Text(
+                  phone,
+                  textDirection: TextDirection.ltr,
+                  style: const TextStyle(fontSize: 12.5, color: AppColors.slate500),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.calendar_today_outlined, size: 13, color: AppColors.slate600),
+              const SizedBox(width: 5),
+              Text(dateLabel, style: const TextStyle(fontSize: 12.5, color: AppColors.slate600)),
+              const SizedBox(width: 8),
+              const Text('—', style: TextStyle(fontSize: 12.5, color: AppColors.slate600)),
+              const SizedBox(width: 8),
+              const Icon(Icons.schedule, size: 13, color: AppColors.slate600),
+              const SizedBox(width: 5),
+              Text(appointment.appointmentTime,
+                  style: const TextStyle(fontSize: 12.5, color: AppColors.slate600)),
+            ],
+          ),
+          if (notes != null && notes.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.description_outlined, size: 12, color: AppColors.slate500),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Text(
+                    notes,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(fontSize: 11.5, color: AppColors.slate500),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 12),
+          if (isUpdating)
+            const LinearProgressIndicator(minHeight: 3)
+          else
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                AppointmentUtilityButton(
+                  label: 'قبول',
+                  icon: Icons.check,
+                  style: AppointmentUtilityStyle.whatsapp,
+                  onPressed: onAccept,
+                ),
+                const SizedBox(width: 8),
+                AppointmentUtilityButton(
+                  label: 'رفض',
+                  icon: Icons.close,
+                  style: AppointmentUtilityStyle.reject,
+                  onPressed: onReject,
+                ),
+              ],
+            ),
+        ],
+      ),
     );
   }
 }
@@ -827,6 +1196,11 @@ class _AddAppointmentSheetState extends State<_AddAppointmentSheet> {
         date: _formattedDate,
         time: _formattedTime,
         description: description,
+        // تُستخدَم فقط إن تعذّر الوصول للسيرفر الآن (بلا إنترنت) لعرض اسم/
+        // هاتف المريض على الموعد المؤقت ريثما تصل المزامنة -- لا تأثير لهما
+        // على المسار المتصل بالإنترنت العادي.
+        patientNameHint: patient.fullName,
+        patientPhoneHint: patient.phone,
       );
       if (!mounted) return;
       Navigator.of(context).pop(appointment);

@@ -127,6 +127,346 @@
       margin: 2px 0;
       background: linear-gradient(to right, transparent, rgba(244, 63, 94, 0.28), transparent);
     }
+
+    /* ---------------------------------------------------------------
+       عرض الجوال: مخطط بالأرباع + شاشة سنّ كاملة
+       ---------------------------------------------------------------
+       على الشاشات الصغيرة كان المخطط الكامل يفرض سحباً أفقياً (min-w 640px)
+       وأهداف لمس أصغر من 44px، وكانت نافذة حالة السن أطول من الشاشة. هذه
+       القواعد تعمل تحت 768px فقط ولا تمسّ عرض سطح المكتب إطلاقاً.
+       --------------------------------------------------------------- */
+    #mobileChartPanel { display: none; }
+
+    @media (max-width: 767.98px) {
+      #mobileChartPanel { display: block; }
+      #desktopChartScroller,
+      .mobile-swipe-hint { display: none !important; }
+    }
+
+    .mchart-overview {
+      padding: 10px 8px 9px;
+      border-radius: 20px;
+      background: linear-gradient(to bottom, #f8fafc, #ffffff);
+      border: 1px solid #eef2f7;
+    }
+    .mchart-overview-title {
+      margin: 0 0 8px;
+      text-align: center;
+      font-size: 10.5px;
+      font-weight: 800;
+      color: #94a3b8;
+    }
+    .mchart-arch { display: flex; gap: 7px; }
+    .mchart-quad {
+      flex: 1 1 0;
+      display: grid;
+      grid-template-columns: repeat(8, minmax(0, 1fr));
+      gap: 2px;
+      padding: 4px;
+      border-radius: 12px;
+      background: transparent;
+      transition: background 0.2s ease, box-shadow 0.2s ease;
+    }
+    .mchart-quad[data-active="1"] {
+      background: #e0e7ff;
+      box-shadow: inset 0 0 0 1.5px #a5b4fc;
+    }
+    .mchart-chip {
+      height: 22px;
+      border-radius: 6px;
+      background: #fffbf2;
+      border: 1px solid #eddcc0;
+    }
+    .mchart-chip[data-filled="1"] { border-color: transparent; opacity: 0.85; }
+    .mchart-gumline {
+      height: 1px;
+      margin: 7px 2px;
+      background: linear-gradient(to right, transparent, rgba(244, 63, 94, 0.28), transparent);
+    }
+
+    .mchart-tabs {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 5px;
+      padding: 4px;
+      border-radius: 18px;
+      background: #f1f5f9;
+    }
+    .mchart-tab {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      border: none;
+      border-radius: 14px;
+      background: transparent;
+      color: #64748b;
+      font-family: inherit;
+      font-size: 11.5px;
+      font-weight: 800;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .mchart-tab[data-active="1"] {
+      background: linear-gradient(to left, #4f46e5, #7c3aed);
+      color: #ffffff;
+      box-shadow: 0 6px 16px rgba(79, 70, 229, 0.32);
+    }
+
+    .mchart-detail {
+      margin-top: 12px;
+      padding: 10px 4px 8px;
+      border-radius: 20px;
+      background: linear-gradient(to bottom, #fbfcfe, #ffffff);
+      border: 1px solid #eef2f7;
+    }
+    .mchart-detail-row {
+      display: grid;
+      grid-template-columns: repeat(8, minmax(0, 1fr));
+      gap: 3px;
+    }
+    .mchart-cell {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      padding: 4px 0;
+      border-radius: 14px;
+    }
+    .mchart-cell .tooth-svg { height: 62px; }
+    .mchart-cell .tooth-btn { padding: 0; }
+    .mchart-cell-number {
+      font-size: 10.5px;
+      font-weight: 800;
+      color: #94a3b8;
+    }
+    .mchart-detail-hint {
+      margin: 5px 0 0;
+      text-align: center;
+      font-size: 10.5px;
+      font-weight: 700;
+      color: #94a3b8;
+    }
+
+    /* ---- شاشة السن الكاملة (الجوال فقط) ---- */
+    #toothFullScreen {
+      position: fixed;
+      inset: 0;
+      z-index: 90;
+      display: flex;
+      flex-direction: column;
+      background: #ffffff;
+      overflow-y: auto;
+    }
+    #toothFullScreen.hidden { display: none; }
+    @media (min-width: 768px) {
+      #toothFullScreen { display: none !important; }
+    }
+
+    .tfs-hero {
+      position: relative;
+      padding: 16px 16px 26px;
+      background: linear-gradient(160deg, rgba(31, 41, 55, 0.98), rgba(49, 46, 129, 0.97), rgba(76, 29, 149, 0.96));
+      box-shadow: 0 18px 60px rgba(67, 56, 202, 0.24);
+      padding-top: calc(18px + env(safe-area-inset-top, 0px));
+    }
+    .tfs-hero-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .tfs-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      height: 44px;
+      padding: 0 16px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255, 255, 0.10);
+      color: #e0e7ff;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .tfs-fdi {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.18em;
+      color: #a5b4fc;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      padding: 6px 11px;
+    }
+    .tfs-stage {
+      margin-top: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .tfs-arrow {
+      width: 46px;
+      height: 46px;
+      flex-shrink: 0;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.08);
+      color: #c7d2fe;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .tfs-tooth { flex-grow: 1; display: flex; align-items: center; justify-content: center; }
+    .tfs-tooth-svg { width: 100px; height: 168px; overflow: visible; display: block; }
+    .tfs-meta {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 7px;
+    }
+    .tfs-number { font-size: 25px; font-weight: 800; color: #ffffff; line-height: 1; }
+    .tfs-name { font-size: 13px; font-weight: 600; color: #c7d2fe; text-align: center; }
+    .tfs-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      border-radius: 999px;
+      padding: 6px 13px;
+      font-size: 12.5px;
+      font-weight: 800;
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+    .tfs-dot { width: 9px; height: 9px; border-radius: 999px; background: rgba(255, 255, 255, 0.45); }
+
+    .tfs-sheet {
+      position: relative;
+      z-index: 2;
+      flex-grow: 1;
+      margin-top: -22px;
+      border-radius: 28px 28px 0 0;
+      background: #ffffff;
+      padding: 26px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .tfs-sheet-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 13px;
+      font-weight: 800;
+      color: #334155;
+    }
+    #toothFullScreenHint { font-size: 11px; font-weight: 600; color: #94a3b8; }
+    .tfs-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+    .tfs-option {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-height: 50px;
+      padding: 0 12px;
+      border-radius: 16px;
+      border: 1.5px solid #e2e8f0;
+      background: #f8fafc;
+      color: #334155;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 800;
+      text-align: start;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .tfs-option-dot { width: 12px; height: 12px; border-radius: 999px; flex-shrink: 0; }
+    .tfs-option-label { flex-grow: 1; }
+    .tfs-option-check { display: none; flex-shrink: 0; }
+    .tfs-option[data-active="1"] .tfs-option-check { display: block; }
+
+    .tfs-ghost {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      min-height: 48px;
+      border-radius: 18px;
+      border: 1.5px solid #e2e8f0;
+      background: #f8fafc;
+      color: #64748b;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .tfs-ghost-indigo {
+      border-style: dashed;
+      border-color: #c7d2fe;
+      background: #f8faff;
+      color: #4338ca;
+    }
+    .tfs-custom { display: flex; flex-direction: column; gap: 10px; }
+    .tfs-custom.hidden { display: none; }
+    .tfs-custom input {
+      width: 100%;
+      box-sizing: border-box;
+      border-radius: 16px;
+      border: 1px solid #cbd5e1;
+      background: #ffffff;
+      padding: 12px 14px;
+      font-family: inherit;
+      font-size: 13px;
+      outline: none;
+    }
+    .tfs-custom input:focus { border-color: #4f46e5; box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.12); }
+    .tfs-swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+    .tfs-swatch {
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      border: 2px solid #ffffff;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25);
+      cursor: pointer;
+      padding: 0;
+    }
+    .tfs-swatch[data-active="1"] {
+      border-color: #312e81;
+      box-shadow: 0 0 0 2px rgba(49, 46, 129, 0.35);
+    }
+    .tfs-primary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 48px;
+      padding: 0 20px;
+      border: none;
+      border-radius: 18px;
+      background: linear-gradient(to left, #4f46e5, #7c3aed);
+      color: #ffffff;
+      font-family: inherit;
+      font-size: 13.5px;
+      font-weight: 800;
+      box-shadow: 0 10px 24px rgba(79, 70, 229, 0.32);
+      cursor: pointer;
+    }
+    .tfs-foot {
+      position: sticky;
+      bottom: calc(-18px - env(safe-area-inset-bottom, 0px));
+      margin-top: auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 0 calc(10px + env(safe-area-inset-bottom, 0px));
+      border-top: 1px solid #f1f5f9;
+      background: #ffffff;
+    }
+    #toothFullScreenNextLabel { font-size: 11.5px; font-weight: 700; color: #94a3b8; }
     .modal-pop {
       animation: financeToastIn 220ms ease-out;
     }
@@ -234,7 +574,32 @@
         </div>
 
         <div class="rounded-[24px] border border-slate-100 bg-gradient-to-b from-slate-50 to-white p-3 shadow-inner shadow-slate-100 sm:p-5">
-          <div class="w-full overflow-x-auto scrollbar-thin select-none">
+          <!-- عرض الجوال: خريطة مصغّرة للفم كامل + تبويب أرباع يعرض 8 أسنان
+               بحجم لمس مريح، بدل إجبار الطبيب على السحب الأفقي. مخفي تماماً
+               على الشاشات المكتبية (‎#mobileChartPanel { display: none }). -->
+          <div id="mobileChartPanel">
+            <div class="mchart-overview">
+              <p class="mchart-overview-title">الفم كاملاً — الربع المحدَّد مؤطَّر</p>
+              <div class="mchart-arch" dir="ltr">
+                <div class="mchart-quad" data-quad="1"></div>
+                <div class="mchart-quad" data-quad="2"></div>
+              </div>
+              <div class="mchart-gumline"></div>
+              <div class="mchart-arch" dir="ltr">
+                <div class="mchart-quad" data-quad="4"></div>
+                <div class="mchart-quad" data-quad="3"></div>
+              </div>
+            </div>
+
+            <div class="mchart-tabs" id="mobileChartTabs" role="tablist" aria-label="أرباع الفم"></div>
+
+            <div class="mchart-detail">
+              <div class="mchart-detail-row" id="mobileChartDetail" dir="ltr"></div>
+              <p class="mchart-detail-hint">اضغط أي سن لفتح لوحة الحالة</p>
+            </div>
+          </div>
+
+          <div id="desktopChartScroller" class="w-full overflow-x-auto scrollbar-thin select-none">
             <div id="dentalChartStage" dir="ltr" class="mx-auto min-w-[640px] max-w-[860px] md:min-w-0"></div>
           </div>
           <p class="mobile-swipe-hint mt-2 text-center text-[11px] font-semibold text-slate-400 md:hidden">
@@ -563,6 +928,70 @@
     </div>
   </div>
 
+  <!-- شاشة السن الكاملة — بديل نافذة حالة السن على الجوال وحده.
+       النافذة المنبثقة (‎#toothStatusModal) تبقى كما هي لسطح المكتب، و
+       openToothStatusModal() هي التي تختار بينهما حسب عرض الشاشة. -->
+  <div id="toothFullScreen" class="hidden" role="dialog" aria-modal="true" aria-label="تحديث حالة السن">
+    <div class="tfs-hero">
+      <div class="tfs-hero-top">
+        <button type="button" id="toothFullScreenBack" class="tfs-back">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+          <span>عودة للمخطط</span>
+        </button>
+        <span class="tfs-fdi">FDI</span>
+      </div>
+
+      <div class="tfs-stage">
+        <button type="button" id="toothFullScreenNext" class="tfs-arrow" aria-label="السن التالي">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+        </button>
+        <div class="tfs-tooth" id="toothFullScreenTooth"></div>
+        <button type="button" id="toothFullScreenPrev" class="tfs-arrow" aria-label="السن السابق">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>
+        </button>
+      </div>
+
+      <div class="tfs-meta">
+        <div class="tfs-number">السن <span id="toothFullScreenNumber">0</span></div>
+        <div class="tfs-name" id="toothFullScreenName"></div>
+        <div class="tfs-chip" id="toothFullScreenChip">
+          <span class="tfs-dot"></span>
+          <span class="tfs-chip-label">بدون حالة مسجّلة</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="tfs-sheet">
+      <div class="tfs-sheet-head">
+        <span>الحالة العلاجية</span>
+        <span id="toothFullScreenHint">تُحفظ فورًا على الملف السحابي</span>
+      </div>
+
+      <div class="tfs-options" id="toothFullScreenOptions"></div>
+
+      <button type="button" id="toothFullScreenCustomToggle" class="tfs-ghost tfs-ghost-indigo">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+        <span>حالة مخصصة باسم ولون</span>
+      </button>
+
+      <div id="toothFullScreenCustom" class="tfs-custom hidden">
+        <input id="toothFullScreenCustomInput" type="text" maxlength="40" placeholder="مثال: كسر، تنظيف، تلميع..." />
+        <div id="toothFullScreenSwatches" class="tfs-swatches"></div>
+        <button type="button" id="toothFullScreenCustomSave" class="tfs-primary">حفظ الحالة المخصصة</button>
+      </div>
+
+      <button type="button" id="toothFullScreenClear" class="tfs-ghost">مسح حالة هذا السن</button>
+
+      <div class="tfs-foot">
+        <span id="toothFullScreenNextLabel"></span>
+        <button type="button" id="toothFullScreenNextBtn" class="tfs-primary">
+          <span>السن التالي</span>
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div id="appointmentEditModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 p-4 opacity-0 backdrop-blur-sm transition-opacity duration-200">
     <div class="modal-pop w-full max-w-2xl scale-95 rounded-[28px] border border-violet-300/25 bg-[linear-gradient(155deg,_rgba(30,27,75,0.95),_rgba(49,46,129,0.94),_rgba(76,29,149,0.93))] p-5 text-violet-50 shadow-2xl shadow-indigo-950/70 transition-transform duration-200 sm:p-6">
       <div class="flex items-start justify-between gap-4">
@@ -719,6 +1148,7 @@
   <script src="api-config.js"></script>
   <script src="clinic-loader.js"></script>
   <script src="notification-badge.js"></script>
+  <script src="mobile-shell.js"></script>
   <script>
     const clinicTitle = document.getElementById('clinicTitle');
     const mobileClinicTitle = document.getElementById('mobileClinicTitle');
@@ -1510,7 +1940,11 @@
       });
       button.addEventListener('pointerleave', hidePalmerTooltip);
 
-      toothElements[tooth.palmerCode] = { button, crownPath, rootPaths, tooth };
+      // نسخة السن قد تظهر مرّتين معاً (المخطط المكتبي + عرض الأرباع على
+      // الجوال)، لذا نحتفظ بقائمة لكل سن بدل عنصر واحد حتى تتحدّث النسختان
+      // معاً عند أي تغيير للحالة.
+      if (!toothElements[tooth.palmerCode]) toothElements[tooth.palmerCode] = [];
+      toothElements[tooth.palmerCode].push({ button, crownPath, rootPaths, tooth });
       return button;
     }
 
@@ -1557,6 +1991,7 @@
       stage.appendChild(buildNumberRow(lowerFDI));
 
       renderChartLegend();
+      renderMobileChart();
       refreshChartFromState();
     }
 
@@ -1608,7 +2043,11 @@
     }
 
     function refreshChartFromState() {
-      Object.values(toothElements).forEach(applyToothVisual);
+      Object.values(toothElements).forEach((entries) => {
+        (entries || []).forEach(applyToothVisual);
+      });
+      renderMobileChartOverview();
+      if (toothPanelMode === 'fullscreen') renderToothFullScreen();
     }
 
     function getPatientAppointmentDateValue(appointment) {
@@ -2511,6 +2950,363 @@
       }
     }
 
+    // =================================================================
+    // عرض الجوال: مخطط بالأرباع + شاشة سنّ كاملة
+    // -----------------------------------------------------------------
+    // لا شيء هنا يعمل على سطح المكتب: كل الدوال إمّا محميّة بـ
+    // isMobileChartViewport() وإمّا تكتب في عناصر مخفيّة بـ CSS فوق 768px.
+    // المخطط المكتبي ونافذة حالة السن المنبثقة بقيا كما هما تماماً.
+    // =================================================================
+
+    const MOBILE_CHART_QUERY = '(max-width: 767.98px)';
+
+    // ترتيب المرور بين الأسنان بأسهم الشاشة الكاملة — نفس ترتيب صفوف
+    // المخطط المكتبي، فالانتقال يتبع القوس كما يراه الطبيب.
+    const TOOTH_WALK_ORDER = [
+      18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28,
+      48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38,
+    ];
+
+    const QUADRANT_TABS = [
+      { digit: 1, label: 'علوي يمين' },
+      { digit: 2, label: 'علوي يسار' },
+      { digit: 3, label: 'سفلي يسار' },
+      { digit: 4, label: 'سفلي يمين' },
+    ];
+
+    let activeQuadrant = 1;
+    // 'modal' لسطح المكتب، 'fullscreen' لشاشة الجوال — تحدّد أين تُكتب
+    // رسائل الحفظ وهل تُغلق اللوحة بعد نجاح الحفظ أم تبقى مفتوحة.
+    let toothPanelMode = 'modal';
+    let fullScreenCustomColor = null;
+
+    function isMobileChartViewport() {
+      return window.matchMedia(MOBILE_CHART_QUERY).matches;
+    }
+
+    function quadrantFdiList(digit) {
+      const list = [1, 2, 3, 4, 5, 6, 7, 8].map((order) => digit * 10 + order);
+      // الربعان الأيمنان يُقرآن تنازلياً (18←11 و48←41) تماماً كما في
+      // صفوف المخطط المكتبي، والحاويات هنا dir="ltr" لنفس السبب.
+      return digit === 1 || digit === 4 ? list.reverse() : list;
+    }
+
+    // أزرار الأسنان قد توجد مرّتين في الصفحة (المخطط المكتبي + عرض الأرباع)،
+    // وعند تبديل الربع تُحذف أزرار الربع السابق من الـ DOM. هذه الدالة
+    // تُنظّف تلك المراجع المعلّقة حتى لا تتراكم في toothElements.
+    function pruneDetachedToothElements() {
+      Object.keys(toothElements).forEach((code) => {
+        const kept = (toothElements[code] || []).filter((entry) => entry.button.isConnected);
+        if (kept.length) {
+          toothElements[code] = kept;
+        } else {
+          delete toothElements[code];
+        }
+      });
+    }
+
+    function renderMobileChartOverview() {
+      const panel = document.getElementById('mobileChartPanel');
+      if (!panel) return;
+
+      panel.querySelectorAll('.mchart-quad').forEach((group) => {
+        const digit = Number.parseInt(group.getAttribute('data-quad'), 10);
+        group.setAttribute('data-active', digit === activeQuadrant ? '1' : '0');
+        group.innerHTML = '';
+
+        quadrantFdiList(digit).forEach((fdiNumber) => {
+          const info = buildToothInfo(fdiNumber);
+          const rawValue = currentChartState[info.palmerCode];
+          const chip = document.createElement('span');
+          chip.className = 'mchart-chip';
+          chip.title = `السن ${fdiNumber}`;
+          if (rawValue) {
+            chip.style.background = resolveToothColor(rawValue);
+            chip.setAttribute('data-filled', '1');
+          }
+          group.appendChild(chip);
+        });
+      });
+    }
+
+    function renderMobileChartTabs() {
+      const tabs = document.getElementById('mobileChartTabs');
+      if (!tabs) return;
+      tabs.innerHTML = '';
+
+      QUADRANT_TABS.forEach((quad) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'mchart-tab';
+        button.textContent = quad.label;
+        button.setAttribute('role', 'tab');
+        button.setAttribute('data-active', quad.digit === activeQuadrant ? '1' : '0');
+        button.setAttribute('aria-selected', quad.digit === activeQuadrant ? 'true' : 'false');
+        button.addEventListener('click', () => {
+          if (activeQuadrant === quad.digit) return;
+          activeQuadrant = quad.digit;
+          renderMobileChartTabs();
+          renderMobileChartDetail();
+        });
+        tabs.appendChild(button);
+      });
+    }
+
+    function renderMobileChartDetail() {
+      const holder = document.getElementById('mobileChartDetail');
+      if (!holder) return;
+
+      holder.innerHTML = '';
+      pruneDetachedToothElements();
+
+      quadrantFdiList(activeQuadrant).forEach((fdiNumber) => {
+        const cell = document.createElement('div');
+        cell.className = 'mchart-cell';
+
+        // نفس createToothButton المستخدمة في المخطط المكتبي: نفس الأشكال
+        // ونفس معالج الضغط ونفس التسجيل في toothElements، فلا يوجد منطق
+        // مكرّر للألوان أو للحالات.
+        cell.appendChild(createToothButton(fdiNumber));
+
+        const number = document.createElement('span');
+        number.className = 'mchart-cell-number';
+        number.textContent = String(fdiNumber);
+        cell.appendChild(number);
+
+        holder.appendChild(cell);
+      });
+
+      refreshChartFromState();
+    }
+
+    function renderMobileChart() {
+      renderMobileChartTabs();
+      renderMobileChartDetail();
+    }
+
+    // ---- شاشة السن الكاملة ----
+
+    function setToothPanelHint(text) {
+      const id = toothPanelMode === 'fullscreen' ? 'toothFullScreenHint' : 'toothStatusSavingHint';
+      const element = document.getElementById(id);
+      if (element) element.textContent = text;
+    }
+
+    function openToothFullScreen(tooth) {
+      const panel = document.getElementById('toothFullScreen');
+      if (!panel || !tooth) return;
+
+      activeTooth = tooth;
+      toothPanelMode = 'fullscreen';
+      fullScreenCustomColor = null;
+
+      const customBox = document.getElementById('toothFullScreenCustom');
+      if (customBox) customBox.classList.add('hidden');
+      const customInput = document.getElementById('toothFullScreenCustomInput');
+      if (customInput) customInput.value = '';
+
+      // يفتح المخطط على ربع السن المضغوط حتى تكون العودة منطقية.
+      activeQuadrant = Math.floor(tooth.fdi / 10);
+      renderMobileChartTabs();
+      renderMobileChartDetail();
+
+      renderToothFullScreen();
+      setToothPanelHint('تُحفظ فورًا على الملف السحابي');
+      panel.classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeToothFullScreen() {
+      const panel = document.getElementById('toothFullScreen');
+      if (panel) panel.classList.add('hidden');
+      document.body.style.overflow = '';
+      toothPanelMode = 'modal';
+      activeTooth = null;
+      hidePalmerTooltip();
+    }
+
+    function goToAdjacentTooth(step) {
+      if (!activeTooth) return;
+      const index = TOOTH_WALK_ORDER.indexOf(activeTooth.fdi);
+      if (index === -1) return;
+
+      const nextFdi = TOOTH_WALK_ORDER[(index + step + TOOTH_WALK_ORDER.length) % TOOTH_WALK_ORDER.length];
+      activeTooth = buildToothInfo(nextFdi);
+      fullScreenCustomColor = null;
+
+      const customBox = document.getElementById('toothFullScreenCustom');
+      if (customBox) customBox.classList.add('hidden');
+      const customInput = document.getElementById('toothFullScreenCustomInput');
+      if (customInput) customInput.value = '';
+
+      activeQuadrant = Math.floor(nextFdi / 10);
+      renderMobileChartTabs();
+      renderMobileChartDetail();
+
+      renderToothFullScreen();
+      setToothPanelHint('تُحفظ فورًا على الملف السحابي');
+    }
+
+    function renderFullScreenSwatches() {
+      const container = document.getElementById('toothFullScreenSwatches');
+      if (!container) return;
+      container.innerHTML = '';
+
+      CUSTOM_STATUS_COLOR_PALETTE.forEach((color) => {
+        const swatch = document.createElement('button');
+        swatch.type = 'button';
+        swatch.className = 'tfs-swatch';
+        swatch.setAttribute('aria-label', color);
+        swatch.setAttribute('data-active', fullScreenCustomColor === color ? '1' : '0');
+        swatch.style.background = color;
+        swatch.addEventListener('click', () => {
+          fullScreenCustomColor = color;
+          renderFullScreenSwatches();
+        });
+        container.appendChild(swatch);
+      });
+    }
+
+    function renderToothFullScreen() {
+      const panel = document.getElementById('toothFullScreen');
+      if (!panel || !activeTooth) return;
+
+      const rawValue = currentChartState[activeTooth.palmerCode];
+      const statusKey = rawValue ? resolveStatusKey(rawValue) : null;
+      const color = rawValue ? resolveToothColor(rawValue) : '';
+
+      const numberElement = document.getElementById('toothFullScreenNumber');
+      if (numberElement) numberElement.textContent = String(activeTooth.fdi);
+
+      const nameElement = document.getElementById('toothFullScreenName');
+      if (nameElement) nameElement.textContent = activeTooth.palmerLabel;
+
+      const stage = document.getElementById('toothFullScreenTooth');
+      if (stage) {
+        stage.innerHTML = '';
+        const { svg, crownPath, rootPaths } = createToothSvg(activeTooth.shapeKey, activeTooth.isLower);
+        svg.setAttribute('class', `tfs-tooth-svg${activeTooth.isLower ? ' tooth-flip' : ''}`);
+
+        if (statusKey === 'extracted') {
+          crownPath.style.fill = 'none';
+          crownPath.style.stroke = '#94a3b8';
+          crownPath.style.strokeDasharray = '3 3';
+          rootPaths.forEach((rootPath) => {
+            rootPath.style.fill = 'none';
+            rootPath.style.stroke = '#94a3b8';
+            rootPath.style.strokeDasharray = '3 3';
+          });
+        } else if (color) {
+          crownPath.style.fill = color;
+          rootPaths.forEach((rootPath) => { rootPath.style.fill = color; });
+        }
+
+        stage.appendChild(svg);
+      }
+
+      const chip = document.getElementById('toothFullScreenChip');
+      if (chip) {
+        const dot = chip.querySelector('.tfs-dot');
+        const label = chip.querySelector('.tfs-chip-label');
+        if (label) label.textContent = rawValue ? getToothStatusLabel(rawValue) : 'بدون حالة مسجّلة';
+        if (dot) dot.style.background = color || 'rgba(255, 255, 255, 0.45)';
+      }
+
+      const options = document.getElementById('toothFullScreenOptions');
+      if (options) {
+        options.innerHTML = '';
+        Object.entries(TOOTH_STATUS_OPTIONS).forEach(([key, config]) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'tfs-option';
+          button.setAttribute('data-active', statusKey === key ? '1' : '0');
+          // تدرّج شفاف من لون الحالة نفسها بدل جدول ألوان ثانٍ يحتاج
+          // مزامنة مع TOOTH_STATUS_OPTIONS كلما تغيّرت الألوان.
+          button.style.background = `${config.color}14`;
+          button.style.borderColor = statusKey === key ? config.color : `${config.color}55`;
+          if (statusKey === key) {
+            button.style.borderWidth = '2px';
+            button.style.boxShadow = `0 0 0 3px ${config.color}20`;
+          }
+          button.innerHTML = `
+            <span class="tfs-option-dot" style="background:${config.color}"></span>
+            <span class="tfs-option-label">${escapeHtml(config.label)}</span>
+            <svg class="tfs-option-check" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="${config.color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+          `;
+          button.addEventListener('click', () => saveToothStatus(key));
+          options.appendChild(button);
+        });
+      }
+
+      const nextIndex = (TOOTH_WALK_ORDER.indexOf(activeTooth.fdi) + 1) % TOOTH_WALK_ORDER.length;
+      const nextLabel = document.getElementById('toothFullScreenNextLabel');
+      if (nextLabel) nextLabel.textContent = `التالي: السن ${TOOTH_WALK_ORDER[nextIndex]}`;
+
+      renderFullScreenSwatches();
+    }
+
+    async function saveFullScreenCustomStatus() {
+      const input = document.getElementById('toothFullScreenCustomInput');
+      const label = String(input?.value || '').trim();
+
+      if (!label) {
+        setToothPanelHint('يرجى إدخال اسم الحالة أولاً.');
+        input?.focus();
+        return;
+      }
+      if (!fullScreenCustomColor) {
+        setToothPanelHint('يرجى اختيار لون للحالة المخصصة.');
+        return;
+      }
+
+      await persistToothStatusValue(encodeCustomStatusValue(label, fullScreenCustomColor), label);
+    }
+
+    // مسح الحالة يحذف مفتاح السن من الحالة بالكامل بدل إرسال قيمة فارغة:
+    // normalizeToothStateValue() في الواجهة تحوّل السلسلة الفارغة إلى
+    // 'decay'، والخادم يستبدل chart_state كاملاً بما نرسله، فحذف المفتاح
+    // هو الطريقة الصحيحة الوحيدة لإفراغ السن.
+    async function clearActiveToothStatus() {
+      if (!activeTooth) return;
+      await persistToothStatusValue(null, 'بدون حالة', { clear: true });
+    }
+
+    function initMobileToothPanels() {
+      document.getElementById('toothFullScreenBack')?.addEventListener('click', closeToothFullScreen);
+      document.getElementById('toothFullScreenPrev')?.addEventListener('click', () => goToAdjacentTooth(-1));
+      document.getElementById('toothFullScreenNext')?.addEventListener('click', () => goToAdjacentTooth(1));
+      document.getElementById('toothFullScreenNextBtn')?.addEventListener('click', () => goToAdjacentTooth(1));
+      document.getElementById('toothFullScreenClear')?.addEventListener('click', clearActiveToothStatus);
+      document.getElementById('toothFullScreenCustomSave')?.addEventListener('click', saveFullScreenCustomStatus);
+
+      document.getElementById('toothFullScreenCustomToggle')?.addEventListener('click', () => {
+        const box = document.getElementById('toothFullScreenCustom');
+        if (!box) return;
+        box.classList.toggle('hidden');
+        if (!box.classList.contains('hidden')) {
+          renderFullScreenSwatches();
+          document.getElementById('toothFullScreenCustomInput')?.focus();
+        }
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && toothPanelMode === 'fullscreen') closeToothFullScreen();
+      });
+
+      // لو انتقل المستخدم من عرض الجوال إلى عرض سطح المكتب (تدوير الجهاز
+      // أو تكبير النافذة) بينما الشاشة الكاملة مفتوحة، نُغلقها لأن
+      // النافذة المنبثقة هي واجهة سطح المكتب.
+      const mediaQuery = window.matchMedia(MOBILE_CHART_QUERY);
+      const onViewportChange = (event) => {
+        if (!event.matches && toothPanelMode === 'fullscreen') closeToothFullScreen();
+      };
+      if (typeof mediaQuery.addEventListener === 'function') {
+        mediaQuery.addEventListener('change', onViewportChange);
+      } else if (typeof mediaQuery.addListener === 'function') {
+        mediaQuery.addListener(onViewportChange);
+      }
+    }
+
     function initDentalChart() {
       renderDentalChart();
     }
@@ -2551,7 +3347,15 @@
     function openToothStatusModal(tooth) {
       if (!tooth) return;
 
+      // على الجوال تُفتح شاشة السن الكاملة بدل النافذة المنبثقة التي كانت
+      // أطول من الشاشة (ثمانية أزرار بعرض كامل فوق بعضها).
+      if (isMobileChartViewport()) {
+        openToothFullScreen(tooth);
+        return;
+      }
+
       activeTooth = tooth;
+      toothPanelMode = 'modal';
       const toothNumberElement = document.getElementById('toothStatusNumber');
       const modal = document.getElementById('toothStatusModal');
       const hint = document.getElementById('toothStatusSavingHint');
@@ -2593,21 +3397,25 @@
       hidePalmerTooltip();
     }
 
-    async function persistToothStatusValue(value, toastLabel) {
+    async function persistToothStatusValue(value, toastLabel, options) {
       if (!activeTooth) return;
 
       const patientId = getPatientIdFromUrl();
       if (!patientId) return;
 
+      const clearStatus = Boolean(options && options.clear);
       const palmerCode = activeTooth.palmerCode;
       const previousChartState = { ...currentChartState };
 
-      currentChartState[palmerCode] = value;
+      if (clearStatus) {
+        delete currentChartState[palmerCode];
+      } else {
+        currentChartState[palmerCode] = value;
+      }
       currentChartState = buildPalmerChartPayload(currentChartState);
       refreshChartFromState();
 
-      const hint = document.getElementById('toothStatusSavingHint');
-      if (hint) hint.textContent = 'جاري حفظ التحديث...';
+      setToothPanelHint('جاري حفظ التحديث...');
 
       try {
         const chartPayload = buildPalmerChartPayload(currentChartState);
@@ -2625,11 +3433,17 @@
         currentPatient = updatedPatient;
         setPatientChartState(updatedPatient.chart_state || currentChartState);
         createMedicalToast(`تم تحديث السن ${activeTooth.fdi} إلى ${toastLabel}`);
-        closeToothStatusModal();
+        if (toothPanelMode === 'fullscreen') {
+          // الشاشة الكاملة تبقى مفتوحة بعد الحفظ حتى يتمكّن الطبيب من
+          // تسجيل عدة أسنان متتالية دون إعادة فتحها في كل مرة.
+          setToothPanelHint('تم حفظ الحالة');
+        } else {
+          closeToothStatusModal();
+        }
       } catch (error) {
         currentChartState = previousChartState;
         refreshChartFromState();
-        if (hint) hint.textContent = 'تعذر الحفظ الآن. أعد المحاولة بعد قليل.';
+        setToothPanelHint('تعذر الحفظ الآن. أعد المحاولة بعد قليل.');
       }
     }
 
@@ -3990,6 +4804,7 @@
 
     document.getElementById('editProfileBtn').addEventListener('click', () => toggleProfileEditMode(true));
     document.getElementById('saveProfileBtn').addEventListener('click', savePatientProfile);
+    initMobileToothPanels();
     document.getElementById('closeToothStatusModalBtn').addEventListener('click', closeToothStatusModal);
     document.getElementById('toothStatusModal').addEventListener('click', (event) => {
       if (event.target && event.target.id === 'toothStatusModal') {

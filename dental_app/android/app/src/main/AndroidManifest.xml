@@ -5,6 +5,10 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- إذن عرض الإشعارات (مطلوب صراحة على أندرويد 13+ / API 33+)، أُضيف 2026 08 24 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- مطلوب لحزمة connectivity_plus حتى تكتشف عودة/انقطاع الشبكة فعلياً في
+         نسخة release (نفس قصة إذن INTERNET أعلاه: Flutter لا يضيفه تلقائياً
+         هنا)، جزء من دعم العمل بدون إنترنت للمواعيد. أُضيف 2026-08-31. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <application
         android:label="My Digital Clinic"
         android:name="${applicationName}"

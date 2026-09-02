@@ -9,6 +9,7 @@ import '../models/finance_summary.dart';
 import '../models/inventory_item.dart';
 import '../models/patient.dart';
 import '../models/patient_archive_file.dart';
+import '../models/patient_stats.dart';
 import '../models/prescription.dart';
 import '../models/treatment_invoice.dart';
 import 'auth_storage.dart';
@@ -103,6 +104,46 @@ class ApiService {
     return decoded as Map<String, dynamic>;
   }
 
+  /// تفعيل حساب جديد -- نفس نداء POST /api/auth/register الذي يستخدمه
+  /// register.html بالموقع بالحرف (نفس أسماء الحقول الأربعة ونفس منطق قراءة
+  /// رسالة الخطأ: detail أو message أو error). يرجع خريطة تحتوي token/tier
+  /// عند النجاح (status 200) تماماً كما يقرأها سكربت الموقع.
+  Future<Map<String, dynamic>> register({
+    required String doctorName,
+    required String email,
+    required String password,
+    required String activationCode,
+  }) async {
+    late http.Response response;
+    try {
+      response = await http
+          .post(
+            Uri.parse('${AppConfig.apiBaseUrl}/api/auth/register'),
+            headers: const {'Content-Type': 'application/json'},
+            body: json.encode({
+              'doctor_name': doctorName,
+              'email': email,
+              'password': password,
+              'activation_code': activationCode,
+            }),
+          )
+          .timeout(const Duration(seconds: 25));
+    } catch (_) {
+      throw const ApiException('تعذر الاتصال بالخادم الآن. يرجى المحاولة لاحقًا.');
+    }
+
+    final decoded = _decodeBody(response);
+    if (response.statusCode != 200) {
+      String fallback = 'تعذر إتمام التسجيل الآن. تحقق من البيانات ثم حاول مرة أخرى.';
+      if (decoded is Map) {
+        final message = decoded['message'] ?? decoded['detail'] ?? decoded['error'];
+        if (message is String && message.isNotEmpty) fallback = message;
+      }
+      throw ApiException(fallback, statusCode: response.statusCode);
+    }
+    return decoded as Map<String, dynamic>;
+  }
+
   Future<List<Patient>> fetchPatients() async {
     final headers = await _authHeaders();
     late http.Response response;
@@ -120,6 +161,26 @@ class ApiService {
     return decoded
         .map((item) => Patient.fromJson(item as Map<String, dynamic>))
         .toList();
+  }
+
+  /// إحصائيات بطاقات "الرئيسية" الثلاث -- GET /api/patients/stats، نفس نقطة
+  /// النهاية التي يستخدمها index.html بالموقع لتعبئة statsTotalPatients/
+  /// statsActiveAppointments/pendingBalancesCounter (انظر PatientStats
+  /// لتفاصيل الحقول). أُضيف 2026-08-31 مع تحديث هوية الشاشة الرئيسية.
+  Future<PatientStats> fetchPatientStats() async {
+    final headers = await _authHeaders();
+    late http.Response response;
+    try {
+      response = await http
+          .get(Uri.parse('${AppConfig.apiBaseUrl}/api/patients/stats'), headers: headers)
+          .timeout(const Duration(seconds: 25));
+    } catch (_) {
+      throw const ApiException('تعذر الاتصال بالسيرفر. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.');
+    }
+    if (response.statusCode != 200) {
+      _throwForResponse(response, 'تعذر تحميل الإحصائيات.');
+    }
+    return PatientStats.fromJson(_decodeBody(response) as Map<String, dynamic>);
   }
 
   /// إنشاء مريض جديد -- نفس مسار POST /api/patients الذي يستخدمه زر "إضافة
@@ -191,6 +252,13 @@ class ApiService {
     required String date,
     required String time,
     required String description,
+    // اسم/هاتف المريض -- غير مستخدَمين هنا (المسار الحقيقي عبر السيرفر يعرف
+    // المريض من patientId مباشرة)، موجودان فقط ليطابق التوقيع نسخة
+    // OfflineAwareApiService.createAppointment التي تحتاجهما لبناء موعد
+    // مؤقت معروض للطبيب أثناء انتظار المزامنة حين لا يوجد إنترنت. أُضيفا
+    // 2026-08-31.
+    String? patientNameHint,
+    String? patientPhoneHint,
   }) async {
     final headers = await _authHeaders();
     late http.Response response;
@@ -937,6 +1005,29 @@ class ApiService {
       _throwForResponse(response, 'تعذر رفع الملف الطبي.');
     }
     return PatientArchiveFile.fromJson(_decodeBody(response) as Map<String, dynamic>);
+  }
+
+  /// حذف ملف من أرشيف مريض -- يطابق DELETE
+  /// /api/patients/{patient_id}/archive/{archive_id} الموجود مسبقاً في
+  /// main.py (delete_patient_archive: يحذف السجل من قاعدة البيانات ثم
+  /// الملف الفعلي من القرص إن وُجد). يُستدعى من الضغط المطوّل على بطاقة
+  /// الملف في أرشيف المريض بالتطبيق.
+  Future<void> deletePatientArchiveFile(int patientId, int archiveId) async {
+    final headers = await _authHeaders();
+    late http.Response response;
+    try {
+      response = await http
+          .delete(
+            Uri.parse('${AppConfig.apiBaseUrl}/api/patients/$patientId/archive/$archiveId'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 25));
+    } catch (_) {
+      throw const ApiException('تعذر الاتصال بالسيرفر. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.');
+    }
+    if (response.statusCode != 200) {
+      _throwForResponse(response, 'تعذر حذف الملف الطبي.');
+    }
   }
 
   /// الوصفات الطبية لمريض معيّن (مرتّبة الأحدث أولاً من طرف السيرفر) -- تطابق

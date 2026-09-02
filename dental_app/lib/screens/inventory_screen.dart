@@ -136,11 +136,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
               child: ListView(
                 padding: EdgeInsets.zero,
                 children: [
-                  Container(
-                    width: double.infinity,
+                  AnimatedHeroHeader(
                     padding: EdgeInsets.fromLTRB(
                         20, MediaQuery.of(context).padding.top + 8, 20, 26),
-                    decoration: const BoxDecoration(gradient: AppColors.heroGradient),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [

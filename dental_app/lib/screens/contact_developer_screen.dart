@@ -36,11 +36,9 @@ class ContactDeveloperScreen extends StatelessWidget {
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            Container(
-              width: double.infinity,
+            AnimatedHeroHeader(
               padding:
                   EdgeInsets.fromLTRB(12, MediaQuery.of(context).padding.top + 8, 20, 30),
-              decoration: const BoxDecoration(gradient: AppColors.heroGradient),
               child: Column(
                 children: [
                   // زر رجوع -- انظر نفس التعليق في finance_screen.dart.

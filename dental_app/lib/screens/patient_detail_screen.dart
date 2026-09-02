@@ -104,6 +104,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
   String? _archiveError;
   bool _isLoadingArchive = true;
   bool _isUploadingArchive = false;
+  int? _deletingArchiveId;
   final _archiveDescriptionController = TextEditingController();
   final ImagePicker _archiveImagePicker = ImagePicker();
 
@@ -394,6 +395,60 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
 
   String _formatArchiveDate(DateTime date) {
     return '${date.year}/${date.month}/${date.day}';
+  }
+
+  /// حذف ملف من أرشيف المريض بعد تأكيد -- يُستدعى بالضغط المطوّل على بطاقة
+  /// الملف (صورة/أشعة أو PDF)، بنفس أسلوب مربع تأكيد الحذف المستخدم مسبقاً
+  /// في التطبيق (انظر _confirmDeleteAppointment أعلاه) للحفاظ على تناسق
+  /// التصميم. يستدعي DELETE /api/patients/{id}/archive/{archive_id} في
+  /// main.py (delete_patient_archive) الموجود مسبقاً في الـ backend.
+  Future<void> _confirmDeleteArchiveFile(PatientArchiveFile file) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('حذف الملف الطبي'),
+        content: Text(
+          'هل أنت متأكد من حذف "${file.fileName}" نهائياً؟ لا يمكن التراجع عن هذا الإجراء.',
+          textAlign: TextAlign.right,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('حذف', style: TextStyle(color: AppColors.rose700text)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _deletingArchiveId = file.id);
+    try {
+      await widget.apiService.deletePatientArchiveFile(_patient.id, file.id);
+      if (!mounted) return;
+      setState(() {
+        _archiveFiles = (_archiveFiles ?? []).where((f) => f.id != file.id).toList();
+        _deletingArchiveId = null;
+      });
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('تم حذف الملف الطبي بنجاح')));
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (e.isSessionExpired) {
+        widget.onSessionExpired();
+        return;
+      }
+      setState(() => _deletingArchiveId = null);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _deletingArchiveId = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تعذر حذف الملف الطبي الآن. يرجى المحاولة لاحقاً.')));
+    }
   }
 
   Future<void> _loadPrescriptions() async {
@@ -882,147 +937,162 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
             return SafeArea(
               child: Padding(
                 padding: EdgeInsets.fromLTRB(
-                    20, 18, 20, MediaQuery.of(sheetContext).viewInsets.bottom + 18),
+                    18, 16, 18, MediaQuery.of(sheetContext).viewInsets.bottom + 16),
                 child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                  // 2026-08-30 (تصغير/ترتيب): يُحدَّد أقصى عرض للمحتوى ويُوضع
+                  // في المنتصف -- على شاشة هاتف حقيقية هذا لا يُغيّر شيئاً
+                  // (العرض المتاح أصلاً أضيق من الحد الأقصى)، لكنه يمنع
+                  // الورقة من التمدد لتملأ نافذة متصفح سطح مكتب عريضة أثناء
+                  // اختبار `flutter run -d chrome` فتبدو البطاقات ضخمة --
+                  // بهذا تبقى نسب التصميم كما لو كانت على هاتف دائماً.
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 380),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'تحديث حالة السن',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.indigoAccent,
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'تحديث حالة السن',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.indigoAccent,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      'السن $fdiNumber',
+                                      style: const TextStyle(
+                                        fontSize: 19,
+                                        fontWeight: FontWeight.w900,
+                                        color: AppColors.slate900,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Material(
+                                color: AppColors.slate100,
+                                borderRadius: BorderRadius.circular(999),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(999),
+                                  onTap: () => Navigator.of(sheetContext).pop(),
+                                  child: const Padding(
+                                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                    child: Text(
+                                      'إغلاق',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.slate600,
+                                      ),
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'السن $fdiNumber',
-                                  style: const TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w900,
-                                    color: AppColors.slate900,
-                                  ),
-                                ),
-                              ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'اختر الحالة السنية المناسبة وسيتم حفظها فورًا على الملف السحابي.',
+                            style: TextStyle(fontSize: 12, height: 1.5, color: AppColors.slate600),
+                          ),
+                          const SizedBox(height: 12),
+                          GridView.count(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            crossAxisCount: 3,
+                            mainAxisSpacing: 8,
+                            crossAxisSpacing: 8,
+                            childAspectRatio: 1.5,
+                            children: toothStatusOptions
+                                .map((option) => _ToothStatusCard(
+                                      option: option,
+                                      onTap: () => handlePresetTap(option.key),
+                                    ))
+                                .toList(),
+                          ),
+                          const SizedBox(height: 14),
+                          Container(height: 1, color: AppColors.slate100),
+                          const SizedBox(height: 10),
+                          const Text(
+                            'أو أضف حالة مخصصة باسم ولون من اختيارك',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.slate600,
                             ),
                           ),
-                          Material(
-                            color: AppColors.slate100,
-                            borderRadius: BorderRadius.circular(999),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(999),
-                              onTap: () => Navigator.of(sheetContext).pop(),
-                              child: const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                                child: Text(
-                                  'إغلاق',
+                          const SizedBox(height: 6),
+                          TextField(
+                            controller: customLabelController,
+                            maxLength: 40,
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(fontSize: 13),
+                            decoration: const InputDecoration(
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              hintText: 'مثال: كسر، تنظيف، تلميع...',
+                              counterText: '',
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 7,
+                            runSpacing: 7,
+                            children: toothStatusOptions
+                                .map((option) => _CustomColorSwatch(
+                                      color: option.color,
+                                      selected: selectedCustomColorOption?.key == option.key,
+                                      onTap: () => setSheetState(
+                                          () => selectedCustomColorOption = option),
+                                    ))
+                                .toList(),
+                          ),
+                          const SizedBox(height: 12),
+                          GradientButton(
+                            label: 'حفظ الحالة المخصصة',
+                            isLoading: isSavingCustom,
+                            onPressed: isSavingCustom ? null : handleSaveCustom,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            hintText,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.slate500,
+                            ),
+                          ),
+                          if (currentKey != null) ...[
+                            const SizedBox(height: 2),
+                            Center(
+                              child: TextButton.icon(
+                                onPressed: handleRemove,
+                                icon: const Icon(Icons.close,
+                                    size: 15, color: AppColors.slate500),
+                                label: const Text(
+                                  'إزالة الحالة الحالية',
                                   style: TextStyle(
-                                    fontSize: 13,
+                                    fontSize: 11.5,
                                     fontWeight: FontWeight.w700,
-                                    color: AppColors.slate600,
+                                    color: AppColors.slate500,
                                   ),
                                 ),
                               ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'اختر الحالة السنية المناسبة وسيتم حفظها فورًا على الملف السحابي.',
-                        style: TextStyle(fontSize: 13, height: 1.6, color: AppColors.slate600),
-                      ),
-                      const SizedBox(height: 18),
-                      GridView.count(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        crossAxisCount: 3,
-                        mainAxisSpacing: 10,
-                        crossAxisSpacing: 10,
-                        childAspectRatio: 1.05,
-                        children: toothStatusOptions
-                            .map((option) => _ToothStatusCard(
-                                  option: option,
-                                  onTap: () => handlePresetTap(option.key),
-                                ))
-                            .toList(),
-                      ),
-                      const SizedBox(height: 18),
-                      Container(height: 1, color: AppColors.slate100),
-                      const SizedBox(height: 14),
-                      const Text(
-                        'أو أضف حالة مخصصة باسم ولون من اختيارك',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.slate600,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: customLabelController,
-                        maxLength: 40,
-                        textAlign: TextAlign.right,
-                        decoration: const InputDecoration(
-                          hintText: 'مثال: كسر، تنظيف، تلميع...',
-                          counterText: '',
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: toothStatusOptions
-                            .map((option) => _CustomColorSwatch(
-                                  color: option.color,
-                                  selected: selectedCustomColorOption?.key == option.key,
-                                  onTap: () => setSheetState(
-                                      () => selectedCustomColorOption = option),
-                                ))
-                            .toList(),
-                      ),
-                      const SizedBox(height: 14),
-                      GradientButton(
-                        label: 'حفظ الحالة المخصصة',
-                        isLoading: isSavingCustom,
-                        onPressed: isSavingCustom ? null : handleSaveCustom,
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        hintText,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.slate500,
-                        ),
-                      ),
-                      if (currentKey != null) ...[
-                        const SizedBox(height: 4),
-                        Center(
-                          child: TextButton.icon(
-                            onPressed: handleRemove,
-                            icon: const Icon(Icons.close, size: 16, color: AppColors.slate500),
-                            label: const Text(
-                              'إزالة الحالة الحالية',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.slate500,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -1200,10 +1270,8 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
   }
 
   Widget _buildHeader(BuildContext context) {
-    return Container(
-      width: double.infinity,
+    return AnimatedHeroHeader(
       padding: EdgeInsets.fromLTRB(12, MediaQuery.of(context).padding.top + 6, 12, 56),
-      decoration: const BoxDecoration(gradient: AppColors.heroGradient),
       child: Row(
         children: [
           IconButton(
@@ -1243,11 +1311,18 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                 icon: const Icon(Icons.edit_outlined, color: AppColors.indigo600),
               ),
               Expanded(
+                // CrossAxisAlignment.start -- تحت اتجاه RTL العام للتطبيق
+                // (main.dart) "start" = يمين، وليس .end كما كان سابقاً (.end
+                // = يسار فعلياً) -- كان هذا سبب ظهور اسم المريض وهاتفه
+                // ملتصقين بالحافة اليسرى لعمود Expanded الواسع بدل حافته
+                // اليمنى الملاصقة لأيقونة التعديل، فيبدوان "مكتوبين من
+                // اليسار لليمين". أُصلح 2026-08-31.
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       _patient.fullName,
+                      textAlign: TextAlign.right,
                       style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
                     ),
                     const SizedBox(height: 3),
@@ -1256,6 +1331,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                         if (_patient.phone.isNotEmpty) _patient.phone,
                         if (subtitleParts.isNotEmpty) subtitleParts.join(' · '),
                       ].join(' · '),
+                      textAlign: TextAlign.right,
                       style: const TextStyle(color: AppColors.slate500, fontSize: 12.5),
                     ),
                   ],
@@ -1452,7 +1528,17 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
           const SizedBox(height: 10),
           Row(
             children: [
-              const Spacer(),
+              if (files.isNotEmpty)
+                const Expanded(
+                  child: Text(
+                    'اضغط مطوّلاً على أي ملف لحذفه',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(fontSize: 10.5, color: AppColors.slate400),
+                  ),
+                )
+              else
+                const Spacer(),
+              const SizedBox(width: 8),
               Text(
                 '${files.length} ملف',
                 style: const TextStyle(fontSize: 11.5, color: AppColors.slate500, fontWeight: FontWeight.w700),
@@ -1507,115 +1593,154 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
 
   Widget _buildArchiveCard(PatientArchiveFile file) {
     final uploadedAt = _formatArchiveDate(file.uploadedAt);
+    final isDeleting = _deletingArchiveId == file.id;
 
     if (file.isPdf) {
-      return Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        child: InkWell(
+      return _wrapArchiveCardWithDeleteOverlay(
+        isDeleting: isDeleting,
+        child: Material(
+          color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          onTap: () => _openArchiveDocument(file),
-          child: Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColors.slate200),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: AppColors.rose700text,
-                    borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: isDeleting ? null : () => _openArchiveDocument(file),
+            onLongPress: isDeleting ? null : () => _confirmDeleteArchiveFile(file),
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: AppColors.slate200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppColors.rose700text,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.picture_as_pdf_outlined, color: Colors.white, size: 20),
                   ),
-                  child: const Icon(Icons.picture_as_pdf_outlined, color: Colors.white, size: 20),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  file.fileName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  file.description ?? 'بدون وصف',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(fontSize: 10.5, color: AppColors.slate500),
-                ),
-                const Spacer(),
-                Text(uploadedAt, style: const TextStyle(fontSize: 9.5, color: AppColors.slate400)),
-              ],
+                  const SizedBox(height: 8),
+                  Text(
+                    file.fileName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    file.description ?? 'بدون وصف',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(fontSize: 10.5, color: AppColors.slate500),
+                  ),
+                  const Spacer(),
+                  Text(uploadedAt, style: const TextStyle(fontSize: 9.5, color: AppColors.slate400)),
+                ],
+              ),
             ),
           ),
         ),
       );
     }
 
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => _openArchiveImagePreview(file),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            AspectRatio(
-              aspectRatio: 4 / 3,
-              child: Image.network(
-                file.resolvedImageUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stack) => Container(
-                  color: AppColors.slate100,
-                  alignment: Alignment.center,
-                  child: const Icon(Icons.broken_image_outlined, color: AppColors.slate400),
-                ),
-                loadingBuilder: (context, child, progress) {
-                  if (progress == null) return child;
-                  return Container(
+    return _wrapArchiveCardWithDeleteOverlay(
+      isDeleting: isDeleting,
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: isDeleting ? null : () => _openArchiveImagePreview(file),
+          onLongPress: isDeleting ? null : () => _confirmDeleteArchiveFile(file),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AspectRatio(
+                aspectRatio: 4 / 3,
+                child: Image.network(
+                  file.resolvedImageUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stack) => Container(
                     color: AppColors.slate100,
                     alignment: Alignment.center,
-                    child: const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                    child: const Icon(Icons.broken_image_outlined, color: AppColors.slate400),
+                  ),
+                  loadingBuilder: (context, child, progress) {
+                    if (progress == null) return child;
+                    return Container(
+                      color: AppColors.slate100,
+                      alignment: Alignment.center,
+                      child: const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(8),
+                // .start = يمين تحت RTL العام (انظر تعليق _buildProfileCard
+                // أعلاه لنفس الإصلاح) -- كانت .end السابقة تدفع اسم/تاريخ
+                // الملف لليسار.
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      file.fileName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5),
                     ),
-                  );
-                },
+                    const SizedBox(height: 2),
+                    Text(
+                      uploadedAt,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(fontSize: 9.5, color: AppColors.slate400),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    file.fileName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    uploadedAt,
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(fontSize: 9.5, color: AppColors.slate400),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  /// طبقة شفافة فوق بطاقة الملف أثناء تنفيذ الحذف (بعد تأكيد المستخدم) --
+  /// نفس فكرة تعطيل الزر + إظهار مؤشّر تحميل مكانه المستخدمة في بطاقة
+  /// الموعد (انظر _buildAppointmentCard/isDeleting)، هنا كطبقة فوق الصورة
+  /// كاملةً لأن بطاقة الأرشيف لا تملك زر حذف منفصل -- الحذف يتم بالضغط
+  /// المطوّل مباشرةً على البطاقة.
+  Widget _wrapArchiveCardWithDeleteOverlay({required bool isDeleting, required Widget child}) {
+    if (!isDeleting) return child;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        child,
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          alignment: Alignment.center,
+          child: const SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1727,10 +1852,14 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
+                // .start = يمين تحت RTL العام (انظر تعليق _buildProfileCard
+                // أعلاه لنفس الإصلاح).
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('الوصفات الطبية', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
+                    const Text('الوصفات الطبية',
+                        textAlign: TextAlign.right,
+                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
                     const SizedBox(height: 3),
                     Text(
                       'أصدر وصفة جديدة للمريض واحتفظ بسجلها مع إمكانية الطباعة الفورية.',
@@ -2222,10 +2351,13 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
+                // .start = يمين تحت RTL العام (انظر تعليق _buildProfileCard
+                // أعلاه لنفس الإصلاح).
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text('إدارة مواعيد هذا المريض',
+                        textAlign: TextAlign.right,
                         style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
                     const SizedBox(height: 3),
                     const Text(
@@ -2780,16 +2912,16 @@ class _ToothStatusCard extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(13),
         onTap: onTap,
         child: Container(
           decoration: BoxDecoration(
             color: option.cardBackground,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(13),
             border: Border.all(color: option.cardBorder),
           ),
           alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
           child: FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
@@ -2797,7 +2929,7 @@ class _ToothStatusCard extends StatelessWidget {
               textAlign: TextAlign.center,
               maxLines: 2,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: FontWeight.w800,
                 color: option.cardText,
               ),
@@ -2810,7 +2942,7 @@ class _ToothStatusCard extends StatelessWidget {
 }
 
 /// دائرة لون واحدة ضمن لوحة "أضف حالة مخصصة" -- مطابقة لِـ
-/// #customToothColorSwatches في الموقع (دائرة 32px، حدّ أبيض بسماكة 2px
+/// #customToothColorSwatches في الموقع (دائرة 28px، حدّ أبيض بسماكة 2px
 /// بشكل افتراضي يتحوّل إلى إندگو-800 مع توهّج خفيف عند الاختيار).
 class _CustomColorSwatch extends StatelessWidget {
   final Color color;
@@ -2829,8 +2961,8 @@ class _CustomColorSwatch extends StatelessWidget {
       customBorder: const CircleBorder(),
       onTap: onTap,
       child: Container(
-        width: 32,
-        height: 32,
+        width: 28,
+        height: 28,
         decoration: BoxDecoration(
           color: color,
           shape: BoxShape.circle,

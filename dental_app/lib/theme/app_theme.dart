@@ -30,6 +30,12 @@ class AppColors {
   static const amber200 = Color(0xFFFDE68A);
   static const amber800text = Color(0xFF92400E);
   static const amber900text = Color(0xFFB45309);
+  // 2026-08-31: amber-900 الحقيقي في Tailwind (amber900text أعلاه قيمته
+  // فعلياً amber-700 رغم اسمها -- أُبقيت كما هي دون تعديل تفادياً لكسر أي
+  // استخدام قائم لها، وأُضيف هذا اللون الجديد بدلاً من إعادة تسميتها).
+  // مستخدَم في عنوان لوحة "طلبات حجز جديدة" (bookingRequestsSection) لمطابقة
+  // text-amber-900 في appointments.html بالموقع بدقّة.
+  static const amber900 = Color(0xFF78350F);
 
   // الوردي/الأحمر (إلغاء / تخلف / نقص مخزون).
   static const rose50 = Color(0xFFFFF1F2);
@@ -103,6 +109,31 @@ class AppColors {
   // أنه لون التمييز الأساسي لكل عنصر تنقل نشط في نسخة الويب.
   static const cyan300 = Color(0xFF67E8F9);
   static const cyan400 = Color(0xFF22D3EE);
+  // 2026-08-31: cyan500 -- Tailwind cyan-500 الحقيقي (#06B6D4)، مستخدَم في
+  // شريط قوة كلمة المرور (password strength bar) بمرحلة "جيدة" في
+  // register.html بالموقع تماماً (bg-cyan-500). لا علاقة له بـ cyan400
+  // القائم أصلاً (توهّج التبويب النشط).
+  static const cyan500 = Color(0xFF06B6D4);
+
+  // 2026-08-31: مجموعة ألوان جديدة لإعادة تصميم شاشتَي تسجيل الدخول/تفعيل
+  // الحساب في تطبيق الجوال لتطابق login.html/register.html بالموقع بالحرف --
+  // منقولة مباشرة من قيم Tailwind الفعلية المستخدمة في هذين الملفين
+  // (حقول الإدخال، شريط قوة كلمة المرور، تنبيه Caps Lock).
+  static const indigo500 = Color(0xFF6366F1); // focus:border-indigo-500
+  static const rose400 = Color(0xFFFB7185); // شريط القوة: ضعيفة
+  static const rose600 = Color(0xFFE11D48); // نص "كلمة المرور ضعيفة"
+  static const amber400 = Color(0xFFFBBF24); // شريط القوة: متوسطة
+  static const amber600 = Color(0xFFD97706); // نص "Caps Lock مفعل" + "متوسطة"
+
+  /// تدرّج رأس بطاقة تسجيل الدخول/التفعيل الأبيض -- مطابق تماماً لِـ
+  /// bg-gradient-to-r from-indigo-900 via-indigo-800 to-violet-700 في
+  /// login.html/register.html بالموقع (فيزيائياً القيمة الأولى تظهر يساراً
+  /// والأخيرة يميناً بغضّ النظر عن اتجاه RTL، تماماً كما تُرسم في CSS).
+  static const authCardHeaderGradient = LinearGradient(
+    begin: Alignment.centerLeft,
+    end: Alignment.centerRight,
+    colors: [indigo800, indigo700, violet700],
+  );
 
   /// خلفية شريط التنقل السفلي الزجاجية الداكنة -- نفس عمق [navy900] لكن
   /// بتدرّج رأسي خفيف يحاكي أسلوب الهيدر العلوي/القائمة المنسدلة في الموقع
@@ -174,6 +205,18 @@ class AppColors {
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
     colors: [emerald50, emerald100],
+  );
+
+  /// تدرّج خلفية زر "رفض" الفاتح -- مطابق تماماً لِـ .btn-reject-request في
+  /// appointments.html بالموقع (from #fff1f2 to #ffe4e6). أُضيف 2026-08-31
+  /// لبطاقات "طلبات حجز جديدة" الجديدة في تبويب "المواعيد" بالتطبيق --
+  /// الحالة الافتراضية الحقيقية لهذا الزر بالموقع هي كبسولة فاتحة كهذه، لا
+  /// التدرج المملوء الأحمر (ذاك فقط حالة :hover لماوس سطح مكتب، لا تنطبق
+  /// على تطبيق جوّال باللمس).
+  static const appointmentRejectGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [rose50, rose100],
   );
 }
 

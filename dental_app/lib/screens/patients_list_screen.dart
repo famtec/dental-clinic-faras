@@ -119,10 +119,8 @@ class _PatientsListScreenState extends State<PatientsListScreen> {
       children: [
         Column(
           children: [
-            Container(
-              width: double.infinity,
+            AnimatedHeroHeader(
               padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 18, 20, 16),
-              decoration: const BoxDecoration(gradient: AppColors.heroGradient),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -226,16 +224,25 @@ class _PatientsListScreenState extends State<PatientsListScreen> {
                                 onPressed: () => _callPatient(patient.phone),
                               ),
                             Expanded(
+                              // CrossAxisAlignment.start -- تحت اتجاه RTL العام
+                              // للتطبيق (main.dart) "start" = يمين، وليس .end
+                              // كما كان سابقاً (.end = يسار فعلياً) -- كان هذا
+                              // هو سبب ظهور اسم/هاتف المريض ملتصقين بالحافة
+                              // اليسرى لعمود Expanded الواسع بدل حافته اليمنى
+                              // الملاصقة لبقية الصف، فيبدوان "مكتوبين من
+                              // اليسار لليمين". أُصلح 2026-08-31.
                               child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     patient.fullName,
+                                    textAlign: TextAlign.right,
                                     style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
                                     patient.phone.isEmpty ? 'بدون رقم هاتف' : patient.phone,
+                                    textAlign: TextAlign.right,
                                     style: const TextStyle(color: AppColors.slate500, fontSize: 12.5),
                                   ),
                                 ],

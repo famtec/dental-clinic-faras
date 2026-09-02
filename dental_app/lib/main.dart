@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/splash_screen.dart';
 import 'screens/today_schedule_screen.dart';
 import 'services/api_service.dart';
 import 'services/auth_storage.dart';
+import 'services/offline_aware_api_service.dart';
 import 'services/push_notification_service.dart';
 import 'theme/app_theme.dart';
 
@@ -26,7 +28,12 @@ class DentalDoctorApp extends StatefulWidget {
 
 class _DentalDoctorAppState extends State<DentalDoctorApp> {
   final AuthStorage _authStorage = AuthStorage();
-  late final ApiService _apiService = ApiService(_authStorage);
+  // OfflineAwareApiService بدل ApiService العادية -- تُبقي شاشة "المواعيد"
+  // عاملة بلا إنترنت (عرض/إضافة/تعديل/حذف/تحديث حالة) مع مزامنة تلقائية
+  // بمجرد عودة الاتصال (تجربة أولى 2026-08-31، بقية الشاشات ما زالت تحتاج
+  // اتصالاً كالمعتاد). النوع المُعلَن يبقى ApiService حتى تستمر كل الشاشات
+  // الأخرى بالعمل بلا أي تعديل عليها.
+  late final ApiService _apiService = OfflineAwareApiService(_authStorage);
   late final PushNotificationService _pushService =
       PushNotificationService(_apiService);
 
@@ -99,8 +106,10 @@ class _DentalDoctorAppState extends State<DentalDoctorApp> {
       // يدوياً بالعربي أصلاً وليست نصوص إطار عمل مترجَمة تلقائياً.
       builder: (context, child) =>
           Directionality(textDirection: TextDirection.rtl, child: child!),
+      // 2026-08-31: شاشة تحميل افتتاحية بهوية العيادة (شعار + رسالة ترحيب +
+      // حلقة تحميل بنفس أسلوب الموقع) بدل مؤشر تحميل رمادي افتراضي بلا هوية.
       home: _checkingSession
-          ? const Scaffold(body: Center(child: CircularProgressIndicator()))
+          ? const SplashScreen()
           : _isLoggedIn
               ? HomeScreen(
                   key: _homeScreenKey,
