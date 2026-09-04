@@ -1,13 +1,16 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>لوحة المرضى — عيادتي الرقمية</title>
-  <link rel="stylesheet" href="/tailwind.css" />
-  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
-  <style>
-    body { font-family: 'Tajawal', sans-serif; }
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+ <title>لوحة المرضى — عيادتي الرقمية</title>
+ <link rel="stylesheet" href="/tailwind.css" />
+ <link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet" />
+ <style>
+    body { font-family: 'Noto Sans Arabic', 'Segoe UI', Tahoma, system-ui, sans-serif; }
+		h1, h2, h3, .stats-value, .modal-title, .tfs-name {
+			font-family: 'Noto Kufi Arabic', 'Segoe UI', Tahoma, system-ui, sans-serif;
+		}
 
     /* ---------------------------------------------------------------
        عرض الجوال للوحة المرضى
@@ -66,7 +69,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background: linear-gradient(160deg, #4f46e5, #7c3aed);
+        background: linear-gradient(160deg, #4f46e5, #4f46e5);
         color: #ffffff;
         font-size: 14px;
         font-weight: 800;
@@ -123,7 +126,7 @@
         padding: 0 20px;
         border: none;
         border-radius: 20px;
-        background: linear-gradient(to left, #4f46e5, #7c3aed);
+        background: linear-gradient(to left, #4f46e5, #4f46e5);
         color: #ffffff;
         font-family: inherit;
         font-size: 14px;
@@ -161,14 +164,14 @@
       backdrop-filter: blur(12px);
     }
     .badge-premium {
-      background: linear-gradient(130deg, #fef08a 0%, #f59e0b 45%, #fde68a 100%);
-      color: #5b3400;
-      box-shadow: 0 8px 28px rgba(245, 158, 11, 0.45);
+      background: #fef3c7;
+      border: 1px solid #fde68a;
+      color: #78350f;
     }
     .badge-standard {
-      background: linear-gradient(130deg, #4338ca 0%, #6366f1 100%);
-      color: #e0e7ff;
-      box-shadow: 0 8px 22px rgba(67, 56, 202, 0.35);
+      background: #eef2ff;
+      border: 1px solid #c7d2fe;
+      color: #3730a3;
     }
 
     /* أزرار إجراءات صف المريض -- نفس عائلة الإندگو/البنفسجي بدرجتين
@@ -203,7 +206,7 @@
       box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
     }
     .btn-delete-patient:hover {
-      background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
+      background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
       color: #ffffff;
       border-color: transparent;
       transform: translateY(-2px);
@@ -283,295 +286,295 @@
     .sort-dropdown-option[aria-selected="true"] { background: #eef2ff; color: #4338ca; }
     .sort-dropdown-option[aria-selected="true"] .option-icon { color: #4338ca; }
     .sort-dropdown-option[aria-selected="true"] .check-icon { opacity: 1; transform: scale(1); }
-  </style>
+ </style>
   	<link rel="icon" type="image/svg+xml" href="favicon.svg" />
 	<link rel="alternate icon" type="image/png" href="favicon.png" />
 	<link rel="apple-touch-icon" href="favicon.png" />
 </head>
-<body class="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.22),_transparent_30%),linear-gradient(135deg,_#f8fafc_0%,_#eef2ff_45%,_#e0e7ff_100%)] text-slate-800 transition-opacity duration-300">
-  <div class="pointer-events-none absolute inset-0 overflow-hidden">
-    <div class="absolute right-[10%] top-16 h-40 w-40 rounded-full bg-indigo-200/30 blur-3xl"></div>
-    <div class="absolute left-[6%] top-[22%] h-56 w-56 rounded-full bg-violet-200/20 blur-3xl"></div>
-  </div>
+<body class="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.22),_transparent_30%),linear-gradient(135deg,_#f8fafc_0%,_#eef2ff_45%,_#e0e7ff_100%)] text-ink-800 transition-opacity duration-300">
+ <div class="pointer-events-none absolute inset-0 overflow-hidden">
+ <div class="absolute right-[10%] top-16 h-40 w-40 rounded-full bg-brand-200/30 blur-3xl"></div>
+ <div class="absolute left-[6%] top-[22%] h-56 w-56 rounded-full bg-brand-200/20 blur-3xl"></div>
+ </div>
 
-  <div id="patientRecordApp" class="relative mx-auto flex min-h-screen w-full max-w-[1400px] flex-col overflow-x-hidden px-4 pt-24 pb-6 sm:px-6 sm:pt-32 md:pt-32 lg:px-8 lg:pt-32 xl:px-10">
-    <header class="fixed inset-x-0 top-0 z-50 hidden w-full border-b border-white/15 bg-[#1e1b4b]/85 shadow-2xl shadow-indigo-950/35 backdrop-blur-2xl md:block">
-      <div class="mx-auto flex w-full max-w-none flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8 xl:px-10">
-        <div class="flex items-center gap-3 text-white">
-          <img id="clinicLogoImg" src="logo.png" alt="شعار العيادة" class="h-12 w-12 rounded-xl border border-white/10 bg-white/10 object-contain p-2 shadow-lg shadow-indigo-950/25" />
-          <div class="flex items-center gap-3">
-            <p id="clinicTitle" class="text-lg font-extrabold tracking-tight text-white sm:text-xl">عيادة الطبيب</p>
-            <span id="tierBadge" class="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Standard</span>
-          </div>
-        </div>
+ <div id="patientRecordApp" class="relative mx-auto flex min-h-screen w-full max-w-[1400px] flex-col overflow-x-hidden px-4 pt-24 pb-6 sm:px-6 sm:pt-32 md:pt-32 lg:px-8 lg:pt-32 xl:px-10">
+ <header class="fixed inset-x-0 top-0 z-50 hidden w-full border-b border-white/15 bg-[#1e1b4b]/85 shadow-2xl shadow-brand-950/35 backdrop-blur-2xl md:block">
+ <div class="mx-auto flex w-full max-w-none flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8 xl:px-10">
+ <div class="flex items-center gap-3 text-white">
+ <img id="clinicLogoImg" src="logo.png" alt="شعار العيادة" class="h-12 w-12 rounded-xl border border-white/10 bg-white/10 object-contain p-2 shadow-lg shadow-brand-950/25" />
+ <div class="flex items-center gap-3">
+ <p id="clinicTitle" class="text-lg font-extrabold tracking-tight text-white sm:text-xl">عيادة الطبيب</p>
+ <span id="tierBadge" class="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Standard</span>
+ </div>
+ </div>
 
-        <div class="flex flex-wrap items-center gap-2 lg:flex-1 lg:justify-center">
-          <a href="index.html" class="inline-flex items-center gap-2 rounded-2xl border border-cyan-300/30 bg-cyan-500/15 px-4 py-2 text-sm font-extrabold text-cyan-50 shadow-[0_0_24px_rgba(34,211,238,0.14)] transition hover:-translate-y-0.5 hover:border-cyan-200/50 hover:bg-cyan-400/20 hover:shadow-[0_0_28px_rgba(34,211,238,0.26)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span>لوحة المرضى</span></a>
-          <a href="appointments.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg><span>المواعيد اليومية</span></a>
-          <a href="finance.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg><span>التقارير المالية</span></a>
-          <a href="inventory.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg><span>مخزن المواد</span></a>
-          <a href="contact_developer.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg><span>تواصل مع المطور</span></a>
-          <a href="profile.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg><span>حسابي</span></a>
-          <button id="logoutBtn" type="button" class="inline-flex items-center gap-2 rounded-2xl border border-rose-300/30 bg-rose-500/15 px-4 py-2 text-sm font-bold text-rose-100 transition hover:-translate-y-0.5 hover:border-rose-200/50 hover:bg-rose-500/25 hover:shadow-[0_0_24px_rgba(244,63,94,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg><span>تسجيل الخروج</span></button>
-        </div>
-      </div>
-    </header>
+ <div class="flex flex-wrap items-center gap-2 lg:flex-1 lg:justify-center">
+ <a href="index.html" class="inline-flex items-center gap-2 rounded-2xl border border-info-300/30 bg-info-500/15 px-4 py-2 text-sm font-extrabold text-info-50 shadow-[0_0_24px_rgba(56,189,248,0.14)] transition hover:-translate-y-0.5 hover:border-info-200/50 hover:bg-info-400/20 hover:shadow-[0_0_28px_rgba(56,189,248,0.26)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span>لوحة المرضى</span></a>
+ <a href="appointments.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg><span>المواعيد اليومية</span></a>
+ <a href="finance.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg><span>التقارير المالية</span></a>
+ <a href="inventory.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg><span>مخزن المواد</span></a>
+ <a href="contact_developer.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg><span>تواصل مع المطور</span></a>
+ <a href="profile.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg><span>حسابي</span></a>
+ <button id="logoutBtn" type="button" class="inline-flex items-center gap-2 rounded-2xl border border-danger-300/30 bg-danger-500/15 px-4 py-2 text-sm font-bold text-danger-100 transition hover:-translate-y-0.5 hover:border-danger-200/50 hover:bg-danger-500/25 hover:shadow-[0_0_24px_rgba(244,63,94,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg><span>تسجيل الخروج</span></button>
+ </div>
+ </div>
+ </header>
 
-    <div class="fixed inset-x-0 top-0 z-[60] border-b border-white/15 bg-[#1e1b4b]/90 shadow-2xl shadow-indigo-950/35 backdrop-blur-2xl md:hidden">
-      <div class="relative mx-auto flex w-full max-w-none items-center justify-between gap-3 px-4 py-3 sm:px-6">
-        <div class="flex min-w-0 items-center gap-3 text-white">
-          <img id="mobileClinicLogoImg" src="logo.png" alt="شعار العيادة" class="h-10 w-10 rounded-xl border border-white/10 bg-white/10 object-contain p-1.5 shadow-lg shadow-indigo-950/25" />
-          <div class="min-w-0">
-            <div class="flex min-w-0 items-center gap-2">
-              <p id="mobileClinicTitle" class="truncate text-sm font-extrabold tracking-tight text-white">عيادة الطبيب</p>
-              <span id="mobileTierBadge" class="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[11px] font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Standard</span>
-            </div>
-          </div>
-        </div>
+ <div class="fixed inset-x-0 top-0 z-[60] border-b border-white/15 bg-[#1e1b4b]/90 shadow-2xl shadow-brand-950/35 backdrop-blur-2xl md:hidden">
+ <div class="relative mx-auto flex w-full max-w-none items-center justify-between gap-3 px-4 py-3 sm:px-6">
+ <div class="flex min-w-0 items-center gap-3 text-white">
+ <img id="mobileClinicLogoImg" src="logo.png" alt="شعار العيادة" class="h-10 w-10 rounded-xl border border-white/10 bg-white/10 object-contain p-1.5 shadow-lg shadow-brand-950/25" />
+ <div class="min-w-0">
+ <div class="flex min-w-0 items-center gap-2">
+ <p id="mobileClinicTitle" class="truncate text-sm font-extrabold tracking-tight text-white">عيادة الطبيب</p>
+ <span id="mobileTierBadge" class="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[11px] font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Standard</span>
+ </div>
+ </div>
+ </div>
 
-        <button id="mobileMenuToggle" type="button" class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white shadow-lg shadow-indigo-950/20 transition hover:bg-white/15" aria-expanded="false" aria-controls="mobileMenuDropdown">
-          <svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <path d="M4 7h16"></path>
-            <path d="M4 12h16"></path>
-            <path d="M4 17h16"></path>
-          </svg>
-        </button>
+ <button id="mobileMenuToggle" type="button" class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white shadow-lg shadow-brand-950/20 transition hover:bg-white/15" aria-expanded="false" aria-controls="mobileMenuDropdown">
+ <svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+ <path d="M4 7h16"></path>
+ <path d="M4 12h16"></path>
+ <path d="M4 17h16"></path>
+ </svg>
+ </button>
 
-        <div id="mobileMenuDropdown" class="absolute left-0 right-0 top-full hidden border-t border-white/10 bg-[#1e1b4b] px-4 py-3 shadow-2xl shadow-indigo-950/35 md:hidden">
-          <div class="mx-auto flex w-full max-w-none flex-col gap-2 sm:px-2">
-            <a href="index.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span>لوحة المرضى</span></a>
-            <a href="appointments.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg><span>المواعيد اليومية</span></a>
-            <a href="finance.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg><span>التقارير المالية</span></a>
-            <a href="inventory.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg><span>مخزن المواد</span></a>
-            <a href="contact_developer.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg><span>تواصل مع المطور</span></a>
-            <a href="profile.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg><span>حسابي</span></a>
-            <button id="mobileLogoutBtn" type="button" class="inline-flex items-center gap-2 rounded-2xl border border-rose-300/30 bg-rose-500/15 px-4 py-3 text-right text-sm font-bold text-rose-100 transition hover:bg-rose-500/25"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg><span>تسجيل الخروج</span></button>
-          </div>
-        </div>
-      </div>
-    </div>
+ <div id="mobileMenuDropdown" class="absolute left-0 right-0 top-full hidden border-t border-white/10 bg-[#1e1b4b] px-4 py-3 shadow-2xl shadow-brand-950/35 md:hidden">
+ <div class="mx-auto flex w-full max-w-none flex-col gap-2 sm:px-2">
+ <a href="index.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span>لوحة المرضى</span></a>
+ <a href="appointments.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg><span>المواعيد اليومية</span></a>
+ <a href="finance.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg><span>التقارير المالية</span></a>
+ <a href="inventory.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg><span>مخزن المواد</span></a>
+ <a href="contact_developer.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg><span>تواصل مع المطور</span></a>
+ <a href="profile.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg><span>حسابي</span></a>
+ <button id="mobileLogoutBtn" type="button" class="inline-flex items-center gap-2 rounded-2xl border border-danger-300/30 bg-danger-500/15 px-4 py-3 text-right text-sm font-bold text-danger-100 transition hover:bg-danger-500/25"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg><span>تسجيل الخروج</span></button>
+ </div>
+ </div>
+ </div>
+ </div>
 
-    <main class="mx-auto min-w-0 w-full max-w-[1400px] flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8 xl:p-10">
-      <div class="panel-soft mb-6 rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/70 sm:p-6">
-        <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <div class="inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-bold tracking-[0.22em] text-indigo-700">PATIENTS HUB</div>
-          <h2 class="mt-3 text-2xl font-extrabold text-slate-800 sm:text-3xl">قائمة المرضى الإلكترونية</h2>
-          <p class="mt-1 text-sm text-slate-500">إدارة ملفات المرضى واستقبل بياناتهم بسهولة ضمن نفس الهوية البصرية للعيادة.</p>
-        </div>
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <button id="addPatientBtn" class="w-full rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 font-bold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700 sm:w-auto">+ إضافة مريض جديد</button>
-          <div class="relative w-full sm:w-64 md:w-72 lg:w-80">
-            <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg></span><input id="searchInput" type="search" placeholder="ابحث عن مريض..." class="w-full rounded-2xl border border-slate-300 bg-white py-3 pr-10 pl-4 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
-          </div>
-          <div id="patientSortWrap" class="sort-dropdown-wrap relative w-full sm:w-auto">
-            <button
+ <main class="mx-auto min-w-0 w-full max-w-[1400px] flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8 xl:p-10">
+ <div class="panel-soft mb-6 rounded-[28px] border border-white/70 p-5 shadow-xl shadow-ink-200/70 sm:p-6">
+ <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+ <div>
+ <div class="inline-flex rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-bold tracking-[0.22em] text-brand-700">PATIENTS HUB</div>
+ <h2 class="mt-3 text-2xl font-extrabold text-ink-800 sm:text-3xl">قائمة المرضى الإلكترونية</h2>
+ <p class="mt-1 text-sm text-ink-500">إدارة ملفات المرضى واستقبل بياناتهم بسهولة ضمن نفس الهوية البصرية للعيادة.</p>
+ </div>
+ <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+ <button id="addPatientBtn" class="w-full rounded-2xl bg-gradient-to-r from-brand-600 to-brand-800 px-5 py-3 font-bold text-white shadow-lg transition hover:from-brand-700 hover:to-brand-700 sm:w-auto">+ إضافة مريض جديد</button>
+ <div class="relative w-full sm:w-64 md:w-72 lg:w-80">
+ <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-ink-400"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg></span><input id="searchInput" type="search" placeholder="ابحث عن مريض..." class="w-full rounded-2xl border border-ink-300 bg-white py-3 pr-10 pl-4 text-sm outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100" />
+ </div>
+ <div id="patientSortWrap" class="sort-dropdown-wrap relative w-full sm:w-auto">
+ <button
               type="button"
               id="patientSortTrigger"
-              class="sort-dropdown-trigger w-full rounded-2xl border border-slate-300 bg-white py-3 px-4 text-sm font-semibold text-slate-600 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 sm:w-auto"
+              class="sort-dropdown-trigger w-full rounded-2xl border border-ink-300 bg-white py-3 px-4 text-sm font-semibold text-ink-600 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100 sm:w-auto"
               title="فرز قائمة المرضى"
               aria-haspopup="listbox"
               aria-expanded="false"
             >
-              <span class="option-main">
-                <svg class="option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l4-4 4 4"></path><path d="M16 15l-4 4-4-4"></path></svg>
-                <span id="patientSortTriggerLabel">الترتيب الافتراضي</span>
-              </span>
-              <svg class="chevron-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
-            </button>
+ <span class="option-main">
+ <svg class="option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l4-4 4 4"></path><path d="M16 15l-4 4-4-4"></path></svg>
+ <span id="patientSortTriggerLabel">الترتيب الافتراضي</span>
+ </span>
+ <svg class="chevron-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
+ </button>
 
-            <div id="patientSortMenu" class="sort-dropdown-menu" role="listbox">
-              <button type="button" class="sort-dropdown-option" role="option" aria-selected="true" data-sort-value="default" data-sort-label="الترتيب الافتراضي">
-                <span class="option-main">
-                  <svg class="option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l4-4 4 4"></path><path d="M16 15l-4 4-4-4"></path></svg>
-                  <span>الترتيب الافتراضي</span>
-                </span>
-                <svg class="check-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
-              </button>
-              <button type="button" class="sort-dropdown-option" role="option" aria-selected="false" data-sort-value="name" data-sort-label="فرز حسب: الاسم">
-                <span class="option-main">
-                  <svg class="option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"></path><path d="M4 12h10"></path><path d="M4 18h6"></path></svg>
-                  <span>فرز حسب: الاسم</span>
-                </span>
-                <svg class="check-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
-              </button>
-              <button type="button" class="sort-dropdown-option" role="option" aria-selected="false" data-sort-value="birth_date" data-sort-label="فرز حسب: تاريخ الميلاد">
-                <span class="option-main">
-                  <svg class="option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg>
-                  <span>فرز حسب: تاريخ الميلاد</span>
-                </span>
-                <svg class="check-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
-              </button>
-            </div>
+ <div id="patientSortMenu" class="sort-dropdown-menu" role="listbox">
+ <button type="button" class="sort-dropdown-option" role="option" aria-selected="true" data-sort-value="default" data-sort-label="الترتيب الافتراضي">
+ <span class="option-main">
+ <svg class="option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l4-4 4 4"></path><path d="M16 15l-4 4-4-4"></path></svg>
+ <span>الترتيب الافتراضي</span>
+ </span>
+ <svg class="check-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+ </button>
+ <button type="button" class="sort-dropdown-option" role="option" aria-selected="false" data-sort-value="name" data-sort-label="فرز حسب: الاسم">
+ <span class="option-main">
+ <svg class="option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"></path><path d="M4 12h10"></path><path d="M4 18h6"></path></svg>
+ <span>فرز حسب: الاسم</span>
+ </span>
+ <svg class="check-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+ </button>
+ <button type="button" class="sort-dropdown-option" role="option" aria-selected="false" data-sort-value="birth_date" data-sort-label="فرز حسب: تاريخ الميلاد">
+ <span class="option-main">
+ <svg class="option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg>
+ <span>فرز حسب: تاريخ الميلاد</span>
+ </span>
+ <svg class="check-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+ </button>
+ </div>
 
-            <select id="patientSortSelect" class="hidden" tabindex="-1" aria-hidden="true">
-              <option value="default">الترتيب الافتراضي</option>
-              <option value="name">فرز حسب: الاسم</option>
-              <option value="birth_date">فرز حسب: تاريخ الميلاد</option>
-            </select>
-          </div>
-        </div>
-      </div>
-      </div>
+ <select id="patientSortSelect" class="hidden" tabindex="-1" aria-hidden="true">
+ <option value="default">الترتيب الافتراضي</option>
+ <option value="name">فرز حسب: الاسم</option>
+ <option value="birth_date">فرز حسب: تاريخ الميلاد</option>
+ </select>
+ </div>
+ </div>
+ </div>
+ </div>
 
-        <section id="statsSection" class="mb-6 grid gap-4 md:grid-cols-3">
-          <article class="relative overflow-hidden rounded-[28px] border border-white/15 bg-[linear-gradient(160deg,_rgba(31,41,55,0.96),_rgba(49,46,129,0.95),_rgba(76,29,149,0.94))] p-5 text-white shadow-[0_18px_60px_rgba(67,56,202,0.24)] backdrop-blur-xl">
-            <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(34,211,238,0.22),_transparent_34%),radial-gradient(circle_at_bottom_left,_rgba(168,85,247,0.2),_transparent_28%)]"></div>
-            <div class="relative flex items-start justify-between gap-4">
-              <div>
-                <p class="stats-eyebrow text-xs font-bold tracking-[0.22em] text-cyan-200/80">SMART STAT</p>
-                <h3 class="mt-2 text-base font-extrabold text-white">إجمالي المرضى بالعيادة</h3>
-              </div>
-              <div class="stats-icon flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-300/25 bg-cyan-400/10 text-cyan-100 shadow-[0_0_24px_rgba(34,211,238,0.18)]"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></div>
-            </div>
-            <div class="stats-foot relative mt-6 flex items-end justify-between gap-3">
-              <div>
-                <div id="statsTotalPatients" class="stats-value text-4xl font-black tracking-tight text-white">--</div>
-                <p class="stats-note mt-1 text-xs font-medium text-slate-300">يتم التحديث مباشرة من قاعدة البيانات</p>
-              </div>
-              <span class="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-bold text-cyan-100">Live</span>
-            </div>
-          </article>
+ <section id="statsSection" class="mb-6 grid gap-4 md:grid-cols-3">
+ <article class="relative overflow-hidden rounded-[28px] border border-white/15 bg-[linear-gradient(160deg,_rgba(31,41,55,0.96),_rgba(49,46,129,0.95),_rgba(49,46,129,0.94))] p-5 text-white shadow-[0_18px_60px_rgba(67,56,202,0.24)] backdrop-blur-xl">
+ <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(56,189,248,0.22),_transparent_34%),radial-gradient(circle_at_bottom_left,_rgba(99,102,241,0.2),_transparent_28%)]"></div>
+ <div class="relative flex items-start justify-between gap-4">
+ <div>
+ <p class="stats-eyebrow text-xs font-bold tracking-[0.22em] text-info-200/80">SMART STAT</p>
+ <h3 class="mt-2 text-base font-extrabold text-white">إجمالي المرضى بالعيادة</h3>
+ </div>
+ <div class="stats-icon flex h-12 w-12 items-center justify-center rounded-2xl border border-info-300/25 bg-info-400/10 text-info-100 shadow-[0_0_24px_rgba(56,189,248,0.18)]"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></div>
+ </div>
+ <div class="stats-foot relative mt-6 flex items-end justify-between gap-3">
+ <div>
+ <div id="statsTotalPatients" class="stats-value text-4xl font-black tracking-tight text-white">--</div>
+ <p class="stats-note mt-1 text-xs font-medium text-ink-300">يتم التحديث مباشرة من قاعدة البيانات</p>
+ </div>
+ <span class="rounded-full border border-info-300/20 bg-info-400/10 px-3 py-1 text-[11px] font-bold text-info-100">Live</span>
+ </div>
+ </article>
 
-          <article class="relative overflow-hidden rounded-[28px] border border-white/15 bg-[linear-gradient(160deg,_rgba(17,24,39,0.96),_rgba(79,70,229,0.94),_rgba(88,28,135,0.96))] p-5 text-white shadow-[0_18px_60px_rgba(139,92,246,0.2)] backdrop-blur-xl">
-            <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.18),_transparent_32%),radial-gradient(circle_at_bottom_right,_rgba(34,197,94,0.12),_transparent_30%)]"></div>
-            <div class="relative flex items-start justify-between gap-4">
-              <div>
-                <p class="stats-eyebrow text-xs font-bold tracking-[0.22em] text-violet-200/80">SMART STAT</p>
-                <h3 class="mt-2 text-base font-extrabold text-white">المواعيد النشطة والمعلقة</h3>
-              </div>
-              <div class="stats-icon flex h-12 w-12 items-center justify-center rounded-2xl border border-violet-300/25 bg-violet-400/10 text-violet-100 shadow-[0_0_24px_rgba(168,85,247,0.16)]"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg></div>
-            </div>
-            <div class="stats-foot relative mt-6 flex items-end justify-between gap-3">
-              <div>
-                <div id="statsActiveAppointments" class="stats-value text-4xl font-black tracking-tight text-white">--</div>
-                <p class="stats-note mt-1 text-xs font-medium text-slate-300">المواعيد القادمة أو ذات الحالة Pending</p>
-              </div>
-              <span class="rounded-full border border-violet-300/20 bg-violet-400/10 px-3 py-1 text-[11px] font-bold text-violet-100">Realtime</span>
-            </div>
-          </article>
+ <article class="relative overflow-hidden rounded-[28px] border border-white/15 bg-[linear-gradient(160deg,_rgba(17,24,39,0.96),_rgba(79,70,229,0.94),_rgba(49,46,129,0.96))] p-5 text-white shadow-[0_18px_60px_rgba(99,102,241,0.2)] backdrop-blur-xl">
+ <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.18),_transparent_32%),radial-gradient(circle_at_bottom_right,_rgba(34,197,94,0.12),_transparent_30%)]"></div>
+ <div class="relative flex items-start justify-between gap-4">
+ <div>
+ <p class="stats-eyebrow text-xs font-bold tracking-[0.22em] text-brand-200/80">SMART STAT</p>
+ <h3 class="mt-2 text-base font-extrabold text-white">المواعيد النشطة والمعلقة</h3>
+ </div>
+ <div class="stats-icon flex h-12 w-12 items-center justify-center rounded-2xl border border-brand-300/25 bg-brand-400/10 text-brand-50 shadow-[0_0_24px_rgba(99,102,241,0.16)]"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg></div>
+ </div>
+ <div class="stats-foot relative mt-6 flex items-end justify-between gap-3">
+ <div>
+ <div id="statsActiveAppointments" class="stats-value text-4xl font-black tracking-tight text-white">--</div>
+ <p class="stats-note mt-1 text-xs font-medium text-ink-300">المواعيد القادمة أو ذات الحالة Pending</p>
+ </div>
+ <span class="rounded-full border border-brand-300/20 bg-brand-400/10 px-3 py-1 text-[11px] font-bold text-brand-50">Realtime</span>
+ </div>
+ </article>
 
-          <article class="relative overflow-hidden rounded-[28px] border border-white/15 bg-[linear-gradient(160deg,_rgba(15,23,42,0.96),_rgba(30,41,59,0.94),_rgba(88,28,135,0.94))] p-5 text-white shadow-[0_18px_60px_rgba(16,185,129,0.12)] backdrop-blur-xl">
-            <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(250,204,21,0.16),_transparent_30%),radial-gradient(circle_at_bottom_left,_rgba(16,185,129,0.18),_transparent_30%)]"></div>
-            <div class="relative flex items-start justify-between gap-4">
-              <div>
-                <p class="stats-eyebrow text-xs font-bold tracking-[0.22em] text-emerald-200/80">SMART STAT</p>
-                <h3 class="mt-2 text-base font-extrabold text-white">المستحقات المالية بالخارج</h3>
-              </div>
-              <div class="stats-icon flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-300/20 bg-emerald-400/10 text-emerald-100 shadow-[0_0_24px_rgba(16,185,129,0.18)]"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg></div>
-            </div>
-            <div class="stats-foot relative mt-6 flex items-end justify-between gap-3">
-              <div>
-                <div id="pendingBalancesCounter" class="stats-value text-4xl font-black tracking-tight text-emerald-200">--</div>
-                <p class="stats-note mt-1 text-xs font-medium text-slate-300">القيمة المتبقية غير المسددة من الزيارات</p>
-              </div>
-              <span class="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-bold text-emerald-100">Balance</span>
-            </div>
-          </article>
+ <article class="relative overflow-hidden rounded-[28px] border border-white/15 bg-[linear-gradient(160deg,_rgba(15,23,42,0.96),_rgba(30,41,59,0.94),_rgba(49,46,129,0.94))] p-5 text-white shadow-[0_18px_60px_rgba(16,185,129,0.12)] backdrop-blur-xl">
+ <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(250,204,21,0.16),_transparent_30%),radial-gradient(circle_at_bottom_left,_rgba(16,185,129,0.18),_transparent_30%)]"></div>
+ <div class="relative flex items-start justify-between gap-4">
+ <div>
+ <p class="stats-eyebrow text-xs font-bold tracking-[0.22em] text-success-200/80">SMART STAT</p>
+ <h3 class="mt-2 text-base font-extrabold text-white">المستحقات المالية بالخارج</h3>
+ </div>
+ <div class="stats-icon flex h-12 w-12 items-center justify-center rounded-2xl border border-success-300/20 bg-success-400/10 text-success-100 shadow-[0_0_24px_rgba(16,185,129,0.18)]"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg></div>
+ </div>
+ <div class="stats-foot relative mt-6 flex items-end justify-between gap-3">
+ <div>
+ <div id="pendingBalancesCounter" class="stats-value text-4xl font-black tracking-tight text-success-200">--</div>
+ <p class="stats-note mt-1 text-xs font-medium text-ink-300">القيمة المتبقية غير المسددة من الزيارات</p>
+ </div>
+ <span class="rounded-full border border-success-300/20 bg-success-400/10 px-3 py-1 text-[11px] font-bold text-success-100">Balance</span>
+ </div>
+ </article>
 
-        </section>
+ </section>
 
-      <section id="patientsTableSection" class="panel-soft rounded-[28px] border border-white/70 bg-white/90 p-4 shadow-xl shadow-slate-200/70 sm:p-6">
-        <div class="mb-4 flex items-center justify-between">
-          <h3 class="text-xl font-bold text-indigo-900">المرضى</h3>
-          <span class="rounded-full bg-indigo-50 px-3 py-1 text-sm font-medium text-indigo-700">محدث تلقائيًا</span>
-        </div>
+ <section id="patientsTableSection" class="panel-soft rounded-[28px] border border-white/70 bg-white/90 p-4 shadow-xl shadow-ink-200/70 sm:p-6">
+ <div class="mb-4 flex items-center justify-between">
+ <h3 class="text-xl font-bold text-brand-900">المرضى</h3>
+ <span class="rounded-full bg-brand-50 px-3 py-1 text-sm font-medium text-brand-700">محدث تلقائيًا</span>
+ </div>
 
-        <div class="hidden overflow-x-auto md:block">
-          <table class="min-w-full border-collapse text-right">
-            <thead>
-              <tr class="border-b border-slate-200 bg-slate-50 text-sm text-slate-600">
-                <th class="px-4 py-3 font-semibold">الرقم ID</th>
-                <th class="px-4 py-3 font-semibold">الاسم الكامل</th>
-                <th class="px-4 py-3 font-semibold">رقم الهاتف</th>
-                <th class="px-4 py-3 font-semibold">العمر</th>
-                <th class="px-4 py-3 font-semibold">التاريخ الطبي</th>
-                <th class="px-4 py-3 font-semibold">الإجراءات</th>
-              </tr>
-            </thead>
-            <tbody id="patientsTableBody" class="divide-y divide-slate-100">
-            </tbody>
-          </table>
-        </div>
+ <div class="hidden overflow-x-auto md:block">
+ <table class="min-w-full border-collapse text-right">
+ <thead>
+ <tr class="border-b border-ink-200 bg-ink-50 text-sm text-ink-600">
+ <th class="px-4 py-3 font-semibold">الرقم ID</th>
+ <th class="px-4 py-3 font-semibold">الاسم الكامل</th>
+ <th class="px-4 py-3 font-semibold">رقم الهاتف</th>
+ <th class="px-4 py-3 font-semibold">العمر</th>
+ <th class="px-4 py-3 font-semibold">التاريخ الطبي</th>
+ <th class="px-4 py-3 font-semibold">الإجراءات</th>
+ </tr>
+ </thead>
+ <tbody id="patientsTableBody" class="divide-y divide-ink-100">
+ </tbody>
+ </table>
+ </div>
 
-        <div id="patientsMobileList" class="grid gap-3 md:hidden"></div>
+ <div id="patientsMobileList" class="grid gap-3 md:hidden"></div>
 
-        <div id="emptyFeedback" class="hidden text-center text-slate-500 py-12">
+ <div id="emptyFeedback" class="hidden text-center text-ink-500 py-12">
           لا يوجد مرضى حتى الآن. استخدم "إضافة مريض جديد" لبدء القائمة.
-        </div>
-      </section>
-    </main>
-  </div>
+ </div>
+ </section>
+ </main>
+ </div>
 
-  <div id="addPatientModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/60 p-3 opacity-0 backdrop-blur-sm transition-opacity duration-200 sm:p-4">
-    <div class="w-full max-w-[95vw] rounded-[28px] border border-white/70 bg-white p-4 shadow-2xl shadow-slate-900/20 sm:max-w-2xl sm:p-6">
-      <div class="mb-5 flex items-start justify-between">
-        <div>
-          <p class="text-sm font-semibold text-indigo-600">إضافة مريض جديد</p>
-          <h3 class="text-2xl font-bold text-slate-800">ملف المريض</h3>
-        </div>
-        <button id="closeModalBtn" type="button" class="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600 transition hover:bg-slate-200">إغلاق</button>
-      </div>
+ <div id="addPatientModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-ink-950/60 p-3 opacity-0 backdrop-blur-sm transition-opacity duration-200 sm:p-4">
+ <div class="w-full max-w-[95vw] rounded-[28px] border border-white/70 bg-white p-4 shadow-2xl shadow-ink-900/20 sm:max-w-2xl sm:p-6">
+ <div class="mb-5 flex items-start justify-between">
+ <div>
+ <p class="text-sm font-semibold text-brand-600">إضافة مريض جديد</p>
+ <h3 class="text-2xl font-bold text-ink-800">ملف المريض</h3>
+ </div>
+ <button id="closeModalBtn" type="button" class="rounded-full bg-ink-100 px-3 py-1 text-sm text-ink-600 transition hover:bg-ink-200">إغلاق</button>
+ </div>
 
-      <form id="patientForm" class="space-y-4">
-        <div class="grid gap-4 sm:grid-cols-2">
-          <label class="block">
-            <div class="text-xs text-slate-600 mb-1">الاسم الكامل</div>
-            <input name="full_name" required class="w-full rounded-2xl border border-slate-300 px-3 py-3 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
-          </label>
-          <label class="block">
-            <div class="text-xs text-slate-600 mb-1">رقم الهاتف</div>
-            <input name="phone" required class="w-full rounded-2xl border border-slate-300 px-3 py-3 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
-          </label>
-          <label class="block">
-            <div class="text-xs text-slate-600 mb-1">العمر (اختياري)</div>
-            <input name="age" type="number" min="0" max="150" placeholder="مثال: 30" class="w-full rounded-2xl border border-slate-300 px-3 py-3 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" />
-          </label>
-        </div>
-        <label>
-          <div class="text-xs text-slate-600 mb-1">التاريخ الطبي</div>
-          <textarea name="medical_history" rows="4" class="w-full rounded-2xl border border-slate-300 px-3 py-3 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"></textarea>
-        </label>
+ <form id="patientForm" class="space-y-4">
+ <div class="grid gap-4 sm:grid-cols-2">
+ <label class="block">
+ <div class="text-xs text-ink-600 mb-1">الاسم الكامل</div>
+ <input name="full_name" required class="w-full rounded-2xl border border-ink-300 px-3 py-3 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100" />
+ </label>
+ <label class="block">
+ <div class="text-xs text-ink-600 mb-1">رقم الهاتف</div>
+ <input name="phone" required class="w-full rounded-2xl border border-ink-300 px-3 py-3 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100" />
+ </label>
+ <label class="block">
+ <div class="text-xs text-ink-600 mb-1">العمر (اختياري)</div>
+ <input name="age" type="number" min="0" max="150" placeholder="مثال: 30" class="w-full rounded-2xl border border-ink-300 px-3 py-3 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100" />
+ </label>
+ </div>
+ <label>
+ <div class="text-xs text-ink-600 mb-1">التاريخ الطبي</div>
+ <textarea name="medical_history" rows="4" class="w-full rounded-2xl border border-ink-300 px-3 py-3 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100"></textarea>
+ </label>
 
-        <div class="flex items-center justify-between mt-2">
-          <div class="text-sm text-slate-500">ستُستخدم حقول افتراضية للبينات الإضافية.</div>
-          <div class="flex gap-2">
-            <button type="button" id="cancelBtn" class="rounded-2xl border border-slate-300 px-4 py-2 text-sm">إلغاء</button>
-            <button type="submit" id="savePatientBtn" class="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 text-sm text-white hover:from-indigo-700 hover:to-violet-700">حفظ المريض</button>
-          </div>
-        </div>
-      </form>
-    </div>
-  </div>
+ <div class="flex items-center justify-between mt-2">
+ <div class="text-sm text-ink-500">ستُستخدم حقول افتراضية للبينات الإضافية.</div>
+ <div class="flex gap-2">
+ <button type="button" id="cancelBtn" class="rounded-2xl border border-ink-300 px-4 py-2 text-sm">إلغاء</button>
+ <button type="submit" id="savePatientBtn" class="rounded-2xl bg-gradient-to-r from-brand-600 to-brand-800 px-4 py-2 text-sm text-white hover:from-brand-700 hover:to-brand-700">حفظ المريض</button>
+ </div>
+ </div>
+ </form>
+ </div>
+ </div>
 
-  <div id="deletePatientModal" class="fixed inset-0 z-[55] hidden items-center justify-center bg-indigo-950/75 p-3 opacity-0 backdrop-blur-md transition-opacity duration-200 sm:p-4">
-    <div class="w-full max-w-md scale-95 rounded-[26px] border border-indigo-200/20 bg-[linear-gradient(160deg,_rgba(30,27,75,0.96),_rgba(49,46,129,0.95),_rgba(67,56,202,0.94))] p-5 text-indigo-50 shadow-2xl shadow-indigo-950/70 transition-transform duration-200 sm:p-6">
-      <div class="flex items-start gap-3">
-        <div class="rounded-2xl bg-rose-500/20 px-3 py-2 text-2xl leading-none">⚠️</div>
-        <div>
-          <h3 class="text-lg font-extrabold text-white">تأكيد حذف المريض</h3>
-          <p class="mt-2 text-sm leading-7 text-indigo-100">هل أنت متأكد من حذف هذا المريض نهائياً؟ لا يمكن التراجع عن هذا الإجراء.</p>
-        </div>
-      </div>
-      <div class="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
-        <button id="cancelDeletePatientBtn" type="button" class="rounded-xl border border-slate-300/45 bg-slate-200/20 px-4 py-2.5 text-sm font-semibold text-slate-100 transition hover:bg-slate-200/30">إلغاء</button>
-        <button id="confirmDeletePatientBtn" type="button" class="rounded-xl bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 px-4 py-2.5 text-sm font-extrabold text-white shadow-lg shadow-rose-900/40 transition hover:from-rose-700 hover:via-red-700 hover:to-rose-800">تأكيد الحذف النهائي</button>
-      </div>
-    </div>
-  </div>
+ <div id="deletePatientModal" class="fixed inset-0 z-[55] hidden items-center justify-center bg-brand-950/75 p-3 opacity-0 backdrop-blur-md transition-opacity duration-200 sm:p-4">
+ <div class="w-full max-w-md scale-95 rounded-[26px] border border-brand-200/20 bg-[linear-gradient(160deg,_rgba(30,27,75,0.96),_rgba(49,46,129,0.95),_rgba(67,56,202,0.94))] p-5 text-brand-50 shadow-2xl shadow-brand-950/70 transition-transform duration-200 sm:p-6">
+ <div class="flex items-start gap-3">
+ <div class="rounded-2xl bg-danger-500/20 px-3 py-2 leading-none text-danger-600"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg></div>
+ <div>
+ <h3 class="text-lg font-extrabold text-white">تأكيد حذف المريض</h3>
+ <p class="mt-2 text-sm leading-7 text-brand-50">هل أنت متأكد من حذف هذا المريض نهائياً؟ لا يمكن التراجع عن هذا الإجراء.</p>
+ </div>
+ </div>
+ <div class="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+ <button id="cancelDeletePatientBtn" type="button" class="rounded-xl border border-ink-300/45 bg-ink-200/20 px-4 py-2.5 text-sm font-semibold text-ink-100 transition hover:bg-ink-200/30">إلغاء</button>
+ <button id="confirmDeletePatientBtn" type="button" class="rounded-xl bg-gradient-to-r from-danger-600 via-danger-600 to-danger-700 px-4 py-2.5 text-sm font-extrabold text-white shadow-lg shadow-danger-900/40 transition hover:from-danger-700 hover:via-danger-700 hover:to-danger-800">تأكيد الحذف النهائي</button>
+ </div>
+ </div>
+ </div>
 
-  <button id="addPatientFab" type="button" aria-label="إضافة مريض جديد">
-    <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
-    <span>مريض جديد</span>
-  </button>
+ <button id="addPatientFab" type="button" aria-label="إضافة مريض جديد">
+ <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+ <span>مريض جديد</span>
+ </button>
 
-  <div id="toast" class="pointer-events-none fixed left-1/2 top-5 z-[60] hidden w-[min(92vw,24rem)] -translate-x-1/2 -translate-y-2 rounded-2xl border border-rose-200 bg-white/95 px-4 py-3 text-sm font-medium text-rose-700 opacity-0 shadow-xl shadow-rose-200/60 backdrop-blur transition duration-200"></div>
+ <div id="toast" class="pointer-events-none fixed left-1/2 top-5 z-[60] hidden w-[min(92vw,24rem)] -translate-x-1/2 -translate-y-2 rounded-2xl border border-danger-200 bg-white/95 px-4 py-3 text-sm font-medium text-danger-700 opacity-0 shadow-xl shadow-danger-200/60 backdrop-blur transition duration-200"></div>
 
-  <script src="api-config.js"></script>
-  <script src="clinic-loader.js"></script>
-  <script src="notification-badge.js"></script>
-  <script src="mobile-shell.js"></script>
-  <script>
+ <script src="api-config.js"></script>
+ <script src="clinic-loader.js"></script>
+ <script src="notification-badge.js"></script>
+ <script src="mobile-shell.js"></script>
+ <script>
     const doctorName = localStorage.getItem('doctor_name');
     const doctorEmail = localStorage.getItem('user_email') || 'fareshalawi17@gmail.com';
     const doctorId = localStorage.getItem('doctor_id');
@@ -604,7 +607,7 @@
         tierBadge.className = 'badge-premium rounded-full px-3 py-1 text-xs font-extrabold tracking-wide';
         tierBadge.textContent = 'Premium';
         if (mobileTierBadge) {
-          mobileTierBadge.className = 'shrink-0 rounded-full border border-emerald-300/30 bg-emerald-400/15 px-2 py-1 text-[11px] font-extrabold tracking-wide text-emerald-50 shadow-[0_0_18px_rgba(52,211,153,0.18)]';
+          mobileTierBadge.className = 'shrink-0 rounded-full border border-success-300/30 bg-success-400/15 px-2 py-1 text-[11px] font-extrabold tracking-wide text-success-50 shadow-[0_0_18px_rgba(52,211,153,0.18)]';
           mobileTierBadge.textContent = 'Premium';
         }
         return;
@@ -759,9 +762,9 @@
     }
 
     const TOAST_TONE_CLASSES = {
-      error: ['border-rose-200', 'text-rose-700', 'shadow-rose-200/60'],
-      success: ['border-emerald-200', 'text-emerald-700', 'shadow-emerald-200/60'],
-      info: ['border-indigo-200', 'text-indigo-700', 'shadow-indigo-200/60'],
+      error: ['border-danger-200', 'text-danger-700', 'shadow-danger-200/60'],
+      success: ['border-success-200', 'text-success-700', 'shadow-success-200/60'],
+      info: ['border-brand-200', 'text-brand-700', 'shadow-brand-200/60'],
     };
     const TOAST_TONE_CLASS_LIST = Object.values(TOAST_TONE_CLASSES).flat();
 
@@ -803,8 +806,8 @@
       const email = String(localStorage.getItem('user_email') || doctorEmail || '').trim();
       const token = String(localStorage.getItem('authToken') || '').trim();
       const headers = {
-        'Content-Type': 'application/json',
-        'X-Doctor-Email': email,
+ 'Content-Type': 'application/json',
+ 'X-Doctor-Email': email,
       };
       if (token) {
         headers.Authorization = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
@@ -817,8 +820,8 @@
       const token = String(localStorage.getItem('authToken') || '').trim();
 
       const headers = {
-        'Content-Type': 'application/json',
-        'X-Doctor-Email': email,
+ 'Content-Type': 'application/json',
+ 'X-Doctor-Email': email,
       };
 
       if (token) {
@@ -1187,44 +1190,44 @@
 
         const tr = document.createElement('tr');
         tr.className = matched
-          ? 'transition hover:bg-emerald-50/70 bg-emerald-50/30'
-          : 'transition hover:bg-slate-50';
+          ? 'transition hover:bg-success-50/70 bg-success-50/30'
+          : 'transition hover:bg-ink-50';
 
         tr.innerHTML = `
-          <td class="px-4 py-3 text-sm text-slate-600">
-            <span>${escapeHtml(patient.id ?? '')}</span>
-          </td>
-          <td class="px-4 py-3 text-sm font-semibold text-slate-700">
-            <span>${escapeHtml(patient.full_name ?? '')}</span>
-          </td>
-          <td class="px-4 py-3 text-sm text-slate-600">
-            <span>${escapeHtml(patient.phone ?? '')}</span>
-          </td>
-          <td class="px-4 py-3 text-sm text-slate-600">
-            <span>${escapeHtml(calculateAge(patient.birth_date))}</span>
-          </td>
-          <td class="px-4 py-3 text-sm text-slate-600">
-            <span class="line-clamp-1 max-w-[14rem]">${escapeHtml(patient.medical_history ?? '')}</span>
-          </td>
-          <td class="px-4 py-3 text-sm">
-            <div class="flex flex-wrap items-center justify-end gap-2">
-              <button
+ <td class="px-4 py-3 text-sm text-ink-600">
+ <span>${escapeHtml(patient.id ?? '')}</span>
+ </td>
+ <td class="px-4 py-3 text-sm font-semibold text-ink-700">
+ <span>${escapeHtml(patient.full_name ?? '')}</span>
+ </td>
+ <td class="px-4 py-3 text-sm text-ink-600">
+ <span>${escapeHtml(patient.phone ?? '')}</span>
+ </td>
+ <td class="px-4 py-3 text-sm text-ink-600">
+ <span>${escapeHtml(calculateAge(patient.birth_date))}</span>
+ </td>
+ <td class="px-4 py-3 text-sm text-ink-600">
+ <span class="line-clamp-1 max-w-[14rem]">${escapeHtml(patient.medical_history ?? '')}</span>
+ </td>
+ <td class="px-4 py-3 text-sm">
+ <div class="flex flex-wrap items-center justify-end gap-2">
+ <button
                 type="button"
                 class="row-action-btn btn-open-file inline-flex items-center gap-1.5 px-4 py-2.5 text-sm"
                 onclick="window.location.href = \`patient_record.html?id=${patient.id}\`;"
               >
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg><span>فتح الملف الطبي</span>
-              </button>
-              <button
+ <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg><span>فتح الملف الطبي</span>
+ </button>
+ <button
                 type="button"
                 class="row-action-btn btn-delete-patient inline-flex items-center gap-1.5 px-4 py-2.5 text-sm"
                 onclick="deletePatient(event, ${Number(patient.id ?? 0)})"
               >
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg><span>حذف</span>
-              </button>
-            </div>
-          </td>
-        `;
+ <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg><span>حذف</span>
+ </button>
+ </div>
+ </td>
+ `;
         patientsTableBody.appendChild(tr);
 
         if (patientsMobileList) {
@@ -1233,33 +1236,33 @@
           if (matched) card.setAttribute('data-matched', '1');
 
           card.innerHTML = `
-            <div class="patient-card-avatar">${escapeHtml(getPatientInitials(patient.full_name))}</div>
-            <div class="patient-card-main">
-              <div class="patient-card-name">${escapeHtml(patient.full_name ?? '')}</div>
-              <div class="patient-card-meta">${escapeHtml(calculateAge(patient.birth_date))} · ${escapeHtml(String(patient.phone ?? '—').replace(/\s+/g, ''))}</div>
+ <div class="patient-card-avatar">${escapeHtml(getPatientInitials(patient.full_name))}</div>
+ <div class="patient-card-main">
+ <div class="patient-card-name">${escapeHtml(patient.full_name ?? '')}</div>
+ <div class="patient-card-meta">${escapeHtml(calculateAge(patient.birth_date))} · ${escapeHtml(String(patient.phone ?? '—').replace(/\s+/g, ''))}</div>
               ${renderPatientVisitPill(patient)}
-            </div>
-            <div class="patient-card-actions">
-              <button
+ </div>
+ <div class="patient-card-actions">
+ <button
                 type="button"
                 class="patient-card-btn patient-card-open"
                 aria-label="فتح الملف الطبي"
                 title="فتح الملف الطبي"
                 onclick="window.location.href = \`patient_record.html?id=${patient.id}\`;"
               >
-                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
-              </button>
-              <button
+ <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+ </button>
+ <button
                 type="button"
                 class="patient-card-btn patient-card-delete"
                 aria-label="حذف المريض"
                 title="حذف المريض"
                 onclick="deletePatient(event, ${Number(patient.id ?? 0)})"
               >
-                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-              </button>
-            </div>
-          `;
+ <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+ </button>
+ </div>
+ `;
 
           patientsMobileList.appendChild(card);
         }
@@ -1558,37 +1561,37 @@ userTier = localStorage.getItem("user_tier");
 if (userTier === "pending_activation") {
     // مسح واجهة الموقع بالكامل وحقن شاشة القفل الفخمة باسمك ورقمك
     document.body.innerHTML = `
-        <div class="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6 font-sans" dir="rtl">
-            <div class="max-w-xl w-full bg-indigo-950/40 backdrop-blur-xl border border-indigo-500/20 p-8 rounded-3xl shadow-2xl text-center space-y-6">
-                <!-- أيقونة القفل الذهبي المتوهج -->
-                <div class="w-20 h-20 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-center mx-auto text-4xl shadow-lg shadow-amber-500/5 animate-pulse">
-                    🔒
-                </div>
+ <div class="min-h-screen bg-ink-950 text-white flex flex-col items-center justify-center p-6 font-sans" dir="rtl">
+ <div class="max-w-xl w-full bg-brand-950/40 backdrop-blur-xl border border-brand-500/20 p-8 rounded-3xl shadow-2xl text-center space-y-6">
+ <!-- أيقونة القفل الذهبي المتوهج -->
+ <div class="w-20 h-20 bg-warning-500/10 border border-warning-500/30 rounded-2xl flex items-center justify-center mx-auto text-4xl shadow-lg shadow-warning-500/5 animate-pulse">
+ <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10.5" width="16" height="10.5" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>
+ </div>
                 
-                <h1 class="text-2xl font-bold text-amber-400">حسابك قيد التفعيل ⏳</h1>
+ <h1 class="text-2xl font-bold text-warning-400">حسابك قيد التفعيل ⏳</h1>
                 
-                <p class="text-slate-300 leading-relaxed text-sm">
+ <p class="text-ink-300 leading-relaxed text-sm">
                     مرحباً بك في المنصة السحابية الشاملة للعيادات الرقمية. للبَدء في استخدام البرنامج وأرشفة المرضى والمواعيد والمخزن، يرجى تفعيل عيادتك الرقمية عبر إدخال كود التفعيل السنوي المعتمد.
-                </p>
+ </p>
                 
-                <div class="bg-indigo-950/60 border border-indigo-500/10 p-4 rounded-2xl text-xs text-slate-400 space-y-2">
-                    <p class="font-semibold text-slate-300">📞 للتفعيل الفوري واستلام كود التشغيل كاش، يرجى التواصل مع مطور المنصة:</p>
-                    <p class="text-sm text-indigo-400 font-bold">المهندس فارس حلاوي: 0956907698 🛠️</p>
-                </div>
+ <div class="bg-brand-950/60 border border-brand-500/10 p-4 rounded-2xl text-xs text-ink-400 space-y-2">
+ <p class="font-semibold text-ink-300"> للتفعيل الفوري واستلام كود التشغيل كاش، يرجى التواصل مع مطور المنصة:</p>
+ <p class="text-sm text-brand-400 font-bold">المهندس فارس حلاوي: 0956907698 </p>
+ </div>
                 
-                <!-- نموذج إدخال الكود الفوري -->
-                <div class="space-y-3">
-                    <input type="text" id="activationKeyInput" placeholder="أدخل كود التفعيل هنا (مثال: TEST-PREMIUM-365)" 
-                           class="w-full bg-slate-900 border border-indigo-500/20 rounded-xl px-4 py-3 text-center text-sm focus:outline-none focus:border-purple-500 transition-colors text-white placeholder-slate-500" />
+ <!-- نموذج إدخال الكود الفوري -->
+ <div class="space-y-3">
+ <input type="text" id="activationKeyInput" placeholder="أدخل كود التفعيل هنا (مثال: TEST-PREMIUM-365)" 
+                           class="w-full bg-ink-900 border border-brand-500/20 rounded-xl px-4 py-3 text-center text-sm focus:outline-none focus:border-brand-500 transition-colors text-white placeholder-ink-500" />
                     
-                    <button onclick="activateClinicAccount()" 
-                            class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-purple-600/20 active:scale-[0.98]">
-                        تفعيل الحساب الآن 🚀
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
+ <button onclick="activateClinicAccount()" 
+                            class="w-full bg-gradient-to-r from-brand-600 to-brand-800 hover:from-brand-500 hover:to-brand-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-brand-600/20 active:scale-[0.98]">
+                        تفعيل الحساب الآن 
+ </button>
+ </div>
+ </div>
+ </div>
+ `;
 }
 
 // 🔒 قفل التجديد الشهري اللطيف (Soft Paywall) لحساب "expired_subscription":
@@ -1615,32 +1618,32 @@ function renderExpiredSubscriptionLock() {
     const overlay = document.createElement('div');
     overlay.id = 'expiredSubscriptionOverlay';
     overlay.setAttribute('dir', 'rtl');
-    overlay.className = 'fixed inset-0 z-[999] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 font-sans';
+    overlay.className = 'fixed inset-0 z-[999] flex items-center justify-center bg-ink-950/80 backdrop-blur-sm p-4 font-sans';
     overlay.innerHTML = `
-        <div class="max-w-xl w-full bg-indigo-950/60 backdrop-blur-2xl border border-purple-500/25 p-8 rounded-3xl shadow-2xl shadow-purple-950/60 text-center space-y-6">
-            <div class="w-20 h-20 bg-purple-500/10 border border-purple-500/30 rounded-2xl flex items-center justify-center mx-auto text-4xl shadow-lg shadow-purple-500/10 animate-pulse">
-                🔒
-            </div>
+ <div class="max-w-xl w-full bg-brand-950/60 backdrop-blur-2xl border border-brand-500/25 p-8 rounded-3xl shadow-2xl shadow-brand-950/60 text-center space-y-6">
+ <div class="w-20 h-20 bg-brand-500/10 border border-brand-500/30 rounded-2xl flex items-center justify-center mx-auto text-4xl shadow-lg shadow-brand-500/10 animate-pulse">
+ <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10.5" width="16" height="10.5" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>
+ </div>
 
-            <h1 class="text-2xl font-bold text-purple-300">انتهت صلاحية باقتك</h1>
+ <h1 class="text-2xl font-bold text-brand-300">انتهت صلاحية باقتك</h1>
 
-            <p class="text-slate-300 leading-relaxed text-sm">
-                مرحباً يا دكتور، نود إعلامك بأن فترة صلاحية باقتك الحالية قد انتهت. سجلات مرضاك، مواعيدك، ومخزن عيادتك في أمان تام ومحفوظة أبدياً داخل السيرفر ولا تضيع أبداً 🔒. للمتابعة الفورية واستعادة صلاحيات الإدارة كاملة، يرجى إدخال كود التجديد الشهري الجديد. للدعم الفني السريع والحصول على الكود كاش، يرجى التواصل مع مطور المنصة المهندس فارس حلاوي على الرقم: 0956907698 🛠️
-            </p>
+ <p class="text-ink-300 leading-relaxed text-sm">
+                مرحباً يا دكتور، نود إعلامك بأن فترة صلاحية باقتك الحالية قد انتهت. سجلات مرضاك، مواعيدك، ومخزن عيادتك في أمان تام ومحفوظة أبدياً داخل السيرفر ولا تضيع أبداً 🔒. للمتابعة الفورية واستعادة صلاحيات الإدارة كاملة، يرجى إدخال كود التجديد الشهري الجديد. للدعم الفني السريع والحصول على الكود كاش، يرجى التواصل مع مطور المنصة المهندس فارس حلاوي على الرقم: 0956907698 
+ </p>
 
-            <div class="space-y-3">
-                <input type="text" id="renewalKeyInput" placeholder="أدخل كود التجديد الجديد هنا"
-                       class="w-full bg-slate-900 border border-purple-500/25 rounded-xl px-4 py-3 text-center text-sm focus:outline-none focus:border-purple-400 transition-colors text-white placeholder-slate-500" />
+ <div class="space-y-3">
+ <input type="text" id="renewalKeyInput" placeholder="أدخل كود التجديد الجديد هنا"
+                       class="w-full bg-ink-900 border border-brand-500/25 rounded-xl px-4 py-3 text-center text-sm focus:outline-none focus:border-brand-400 transition-colors text-white placeholder-ink-500" />
 
-                <p id="renewalStatusMsg" class="text-xs min-h-[1rem]"></p>
+ <p id="renewalStatusMsg" class="text-xs min-h-[1rem]"></p>
 
-                <button id="renewSubscriptionBtn" onclick="renewSubscription()"
-                        class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-purple-600/30 active:scale-[0.98]">
-                    تجديد الاشتراك ومتابعة العمل 🚀
-                </button>
-            </div>
-        </div>
-    `;
+ <button id="renewSubscriptionBtn" onclick="renewSubscription()"
+                        class="w-full bg-gradient-to-r from-brand-600 to-brand-800 hover:from-brand-500 hover:to-brand-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-brand-600/30 active:scale-[0.98]">
+                    تجديد الاشتراك ومتابعة العمل 
+ </button>
+ </div>
+ </div>
+ `;
     document.body.appendChild(overlay);
 }
 
@@ -1655,7 +1658,7 @@ function renewSubscription() {
     if (!keyCode) {
         if (statusEl) {
             statusEl.textContent = 'يرجى إدخال كود التجديد أولاً.';
-            statusEl.className = 'text-xs min-h-[1rem] text-rose-400';
+            statusEl.className = 'text-xs min-h-[1rem] text-danger-400';
         }
         return;
     }
@@ -1666,7 +1669,7 @@ function renewSubscription() {
     }
     if (statusEl) {
         statusEl.textContent = 'يتم الاتصال بالخادم الآن...';
-        statusEl.className = 'text-xs min-h-[1rem] text-indigo-300';
+        statusEl.className = 'text-xs min-h-[1rem] text-brand-300';
     }
 
     fetch('/api/activate', {
@@ -1689,33 +1692,33 @@ function renewSubscription() {
                 const message = (data && data.detail) || 'تعذر التحقق من الكود. حاول مرة أخرى.';
                 if (statusEl) {
                     statusEl.textContent = message;
-                    statusEl.className = 'text-xs min-h-[1rem] text-rose-400';
+                    statusEl.className = 'text-xs min-h-[1rem] text-danger-400';
                 }
                 if (btn) {
                     btn.disabled = false;
-                    btn.textContent = 'تجديد الاشتراك ومتابعة العمل 🚀';
+                    btn.textContent = 'تجديد الاشتراك ومتابعة العمل ';
                 }
                 return;
             }
 
             localStorage.setItem('user_tier', data.user_tier);
             if (statusEl) {
-                statusEl.textContent = '🎉 تم التجديد بنجاح!';
-                statusEl.className = 'text-xs min-h-[1rem] text-emerald-400';
+                statusEl.textContent = ' تم التجديد بنجاح!';
+                statusEl.className = 'text-xs min-h-[1rem] text-success-400';
             }
             // رسالة تهنئة منبثقة فورية حسب الطلب، ثم إعادة تحميل الصفحة مباشرة
             // لإظهار كامل عناصر لوحة التحكم بعد استعادة الصلاحيات.
-            showToast('🎉 تم تجديد اشتراكك بنجاح! سيتم تحديث الصفحة الآن لإظهار كامل صلاحيات لوحة التحكم.', 'success');
+            showToast(' تم تجديد اشتراكك بنجاح! سيتم تحديث الصفحة الآن لإظهار كامل صلاحيات لوحة التحكم.', 'success');
             setTimeout(() => window.location.reload(), 1800);
         })
         .catch(() => {
             if (statusEl) {
                 statusEl.textContent = 'تعذر الاتصال بالخادم. تحقق من الإنترنت وحاول مرة أخرى.';
-                statusEl.className = 'text-xs min-h-[1rem] text-rose-400';
+                statusEl.className = 'text-xs min-h-[1rem] text-danger-400';
             }
             if (btn) {
                 btn.disabled = false;
-                btn.textContent = 'تجديد الاشتراك ومتابعة العمل 🚀';
+                btn.textContent = 'تجديد الاشتراك ومتابعة العمل ';
             }
         });
 }
@@ -1743,11 +1746,11 @@ function activateClinicAccount() {
     .then(res => res.json())
     .then(data => {
         if (data.status === "success") {
-            showToast("🎉 تم تفعيل عيادتك الرقمية بنجاح باهر! جاري تحويلك للباقة...", 'success');
+            showToast(" تم تفعيل عيادتك الرقمية بنجاح باهر! جاري تحويلك للباقة...", 'success');
             localStorage.setItem("user_tier", data.user_tier);
             setTimeout(() => window.location.reload(), 1800);
         } else {
-            showToast("❌ كود التفعيل غير صحيح أو مستخدم مسبقاً! يرجى مراجعة المهندس فارس.", 'error');
+            showToast(" كود التفعيل غير صحيح أو مستخدم مسبقاً! يرجى مراجعة المهندس فارس.", 'error');
         }
     })
     .catch(err => showToast("حدث خطأ أثناء الاتصال بالسيرفر السحابي.", 'error'));

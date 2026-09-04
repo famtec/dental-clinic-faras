@@ -1,13 +1,16 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>المواعيد اليومية</title>
-    <link rel="stylesheet" href="/tailwind.css" />
-    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
-    <style>
-        body { font-family: 'Tajawal', sans-serif; }
+ <meta charset="UTF-8" />
+ <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+ <title>المواعيد اليومية</title>
+ <link rel="stylesheet" href="/tailwind.css" />
+ <link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet" />
+ <style>
+        body { font-family: 'Noto Sans Arabic', 'Segoe UI', Tahoma, system-ui, sans-serif; }
+		h1, h2, h3, .stats-value, .modal-title, .tfs-name {
+			font-family: 'Noto Kufi Arabic', 'Segoe UI', Tahoma, system-ui, sans-serif;
+		}
 
         /* ---------------------------------------------------------------
            عرض الجوال لجدول المواعيد
@@ -50,7 +53,7 @@
             }
             .week-day[data-active="1"] {
                 border-color: transparent;
-                background: linear-gradient(160deg, #4f46e5, #7c3aed);
+                background: linear-gradient(160deg, #4f46e5, #4f46e5);
                 box-shadow: 0 10px 22px rgba(79, 70, 229, 0.35);
             }
             .week-day-name { font-size: 10px; font-weight: 700; color: #94a3b8; }
@@ -87,10 +90,10 @@
                 display: grid !important;
                 grid-template-columns: 62px minmax(0, 1fr);
                 grid-template-areas:
-                    "time  name"
-                    "time  proc"
-                    "state state"
-                    "acts  acts";
+ "time  name"
+ "time  proc"
+ "state state"
+ "acts  acts";
                 align-items: center;
                 gap: 4px 11px;
                 padding: 12px !important;
@@ -117,7 +120,7 @@
                 align-items: center;
                 justify-content: center;
                 border-radius: 17px;
-                background: linear-gradient(160deg, #4f46e5, #7c3aed);
+                background: linear-gradient(160deg, #4f46e5, #4f46e5);
                 color: #ffffff !important;
                 font-size: 14px;
                 font-weight: 800;
@@ -142,7 +145,7 @@
             .appointment-row .ap-cell-status { grid-area: state; margin-top: 4px; }
             .appointment-row .ap-cell-status select { width: 100%; }
             /* renderAppointmentStatusSelect() يضيف داخل <label> عنواناً
-               "حالة الموعد" وسطراً يكرّر الحالة، وكلاهما sm:hidden أي أنهما
+ "حالة الموعد" وسطراً يكرّر الحالة، وكلاهما sm:hidden أي أنهما
                يظهران تحت 640px. القائمة المنسدلة نفسها تعرض الحالة، فنخفيهما
                هنا بدل تعديل الدالة المشتركة مع عرض سطح المكتب. */
             .appointment-row .ap-cell-status label > span { display: none !important; }
@@ -170,14 +173,14 @@
         .toast-enter { animation: toastIn 240ms cubic-bezier(0.2, 0.9, 0.2, 1) forwards; }
         .toast-exit { animation: toastOut 180ms ease-in forwards; }
         .badge-premium {
-            background: linear-gradient(130deg, #fef08a 0%, #f59e0b 45%, #fde68a 100%);
-            color: #5b3400;
-            box-shadow: 0 8px 28px rgba(245, 158, 11, 0.45);
+            background: #fef3c7;
+            border: 1px solid #fde68a;
+            color: #78350f;
         }
         .badge-standard {
-            background: linear-gradient(130deg, #4338ca 0%, #6366f1 100%);
-            color: #e0e7ff;
-            box-shadow: 0 8px 22px rgba(67, 56, 202, 0.35);
+            background: #eef2ff;
+            border: 1px solid #c7d2fe;
+            color: #3730a3;
         }
         .appointment-action-btn {
             display: inline-flex;
@@ -197,7 +200,7 @@
         }
         .btn-edit-appointment:hover,
         .btn-delete-appointment:hover {
-            background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
             color: #ffffff;
             border-color: transparent;
             transform: translateY(-2px);
@@ -231,208 +234,208 @@
             transform: translateY(-2px);
             box-shadow: 0 14px 28px rgba(244, 63, 94, 0.4);
         }
-    </style>
+ </style>
 	<link rel="icon" type="image/svg+xml" href="favicon.svg" />
 	<link rel="alternate icon" type="image/png" href="favicon.png" />
 	<link rel="apple-touch-icon" href="favicon.png" />
 </head>
-<body class="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.22),_transparent_30%),linear-gradient(135deg,_#f8fafc_0%,_#eef2ff_45%,_#e0e7ff_100%)] text-slate-800 transition-opacity duration-300">
-    <div class="pointer-events-none absolute inset-0 overflow-hidden">
-        <div class="absolute right-[10%] top-16 h-40 w-40 rounded-full bg-indigo-200/30 blur-3xl"></div>
-        <div class="absolute left-[6%] top-[22%] h-56 w-56 rounded-full bg-violet-200/20 blur-3xl"></div>
-    </div>
+<body class="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.22),_transparent_30%),linear-gradient(135deg,_#f8fafc_0%,_#eef2ff_45%,_#e0e7ff_100%)] text-ink-800 transition-opacity duration-300">
+ <div class="pointer-events-none absolute inset-0 overflow-hidden">
+ <div class="absolute right-[10%] top-16 h-40 w-40 rounded-full bg-brand-200/30 blur-3xl"></div>
+ <div class="absolute left-[6%] top-[22%] h-56 w-56 rounded-full bg-brand-200/20 blur-3xl"></div>
+ </div>
 
-    <div id="patientRecordApp" class="relative flex min-h-screen w-full flex-col overflow-x-hidden px-4 pt-24 pb-6 sm:px-6 sm:pt-32 md:pt-32 lg:px-8 lg:pt-32 xl:px-10">
-        <header class="fixed inset-x-0 top-0 z-50 hidden w-full border-b border-white/15 bg-[#1e1b4b]/85 shadow-2xl shadow-indigo-950/35 backdrop-blur-2xl md:block">
-            <div class="mx-auto flex w-full max-w-none flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8 xl:px-10">
-                <div class="flex items-center gap-3 text-white">
-                    <img id="clinicLogoImg" src="logo.png" alt="شعار العيادة" class="h-12 w-12 rounded-xl border border-white/10 bg-white/10 object-contain p-2 shadow-lg shadow-indigo-950/25" />
-                    <div class="flex items-center gap-3">
-                        <h1 id="clinicTitle" class="text-lg font-extrabold tracking-tight text-white sm:text-xl">عيادة الطبيب</h1>
-                        <span id="tierBadge" class="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Standard</span>
-                    </div>
-                </div>
-                <div class="flex flex-wrap items-center gap-2 lg:flex-1 lg:justify-center">
-                    <a href="index.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span>لوحة المرضى</span></a>
-                    <a href="appointments.html" class="inline-flex items-center gap-2 rounded-2xl border border-cyan-300/30 bg-cyan-500/15 px-4 py-2 text-sm font-extrabold text-cyan-50 shadow-[0_0_24px_rgba(34,211,238,0.14)] transition hover:-translate-y-0.5 hover:border-cyan-200/50 hover:bg-cyan-400/20 hover:shadow-[0_0_28px_rgba(34,211,238,0.26)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg><span>المواعيد اليومية</span></a>
-                    <a href="finance.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg><span>التقارير المالية</span></a>
-                    <a href="inventory.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg><span>مخزن المواد</span></a>
-                    <a href="contact_developer.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg><span>تواصل مع المطور</span></a>
-                    <a href="profile.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg><span>حسابي</span></a>
-                    <button id="logoutBtn" type="button" class="inline-flex items-center gap-2 rounded-2xl border border-rose-300/30 bg-rose-500/15 px-4 py-2 text-sm font-bold text-rose-100 transition hover:-translate-y-0.5 hover:border-rose-200/50 hover:bg-rose-500/25 hover:shadow-[0_0_24px_rgba(244,63,94,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg><span>تسجيل الخروج</span></button>
-                </div>
-            </div>
-        </header>
+ <div id="patientRecordApp" class="relative flex min-h-screen w-full flex-col overflow-x-hidden px-4 pt-24 pb-6 sm:px-6 sm:pt-32 md:pt-32 lg:px-8 lg:pt-32 xl:px-10">
+ <header class="fixed inset-x-0 top-0 z-50 hidden w-full border-b border-white/15 bg-[#1e1b4b]/85 shadow-2xl shadow-brand-950/35 backdrop-blur-2xl md:block">
+ <div class="mx-auto flex w-full max-w-none flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8 xl:px-10">
+ <div class="flex items-center gap-3 text-white">
+ <img id="clinicLogoImg" src="logo.png" alt="شعار العيادة" class="h-12 w-12 rounded-xl border border-white/10 bg-white/10 object-contain p-2 shadow-lg shadow-brand-950/25" />
+ <div class="flex items-center gap-3">
+ <h1 id="clinicTitle" class="text-lg font-extrabold tracking-tight text-white sm:text-xl">عيادة الطبيب</h1>
+ <span id="tierBadge" class="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Standard</span>
+ </div>
+ </div>
+ <div class="flex flex-wrap items-center gap-2 lg:flex-1 lg:justify-center">
+ <a href="index.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span>لوحة المرضى</span></a>
+ <a href="appointments.html" class="inline-flex items-center gap-2 rounded-2xl border border-info-300/30 bg-info-500/15 px-4 py-2 text-sm font-extrabold text-info-50 shadow-[0_0_24px_rgba(56,189,248,0.14)] transition hover:-translate-y-0.5 hover:border-info-200/50 hover:bg-info-400/20 hover:shadow-[0_0_28px_rgba(56,189,248,0.26)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg><span>المواعيد اليومية</span></a>
+ <a href="finance.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg><span>التقارير المالية</span></a>
+ <a href="inventory.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg><span>مخزن المواد</span></a>
+ <a href="contact_developer.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg><span>تواصل مع المطور</span></a>
+ <a href="profile.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg><span>حسابي</span></a>
+ <button id="logoutBtn" type="button" class="inline-flex items-center gap-2 rounded-2xl border border-danger-300/30 bg-danger-500/15 px-4 py-2 text-sm font-bold text-danger-100 transition hover:-translate-y-0.5 hover:border-danger-200/50 hover:bg-danger-500/25 hover:shadow-[0_0_24px_rgba(244,63,94,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg><span>تسجيل الخروج</span></button>
+ </div>
+ </div>
+ </header>
 
-        <div class="fixed inset-x-0 top-0 z-[60] border-b border-white/15 bg-[#1e1b4b]/90 shadow-2xl shadow-indigo-950/35 backdrop-blur-2xl md:hidden">
-            <div class="relative mx-auto flex w-full max-w-none items-center justify-between gap-3 px-4 py-3 sm:px-6">
-                <div class="flex min-w-0 items-center gap-3 text-white">
-                    <img id="mobileClinicLogoImg" src="logo.png" alt="شعار العيادة" class="h-10 w-10 rounded-xl border border-white/10 bg-white/10 object-contain p-1.5 shadow-lg shadow-indigo-950/25" />
-                    <div class="min-w-0">
-                        <div class="flex min-w-0 items-center gap-2">
-                            <p id="mobileClinicTitle" class="truncate text-sm font-extrabold tracking-tight text-white">عيادة الطبيب</p>
-                            <span id="mobileTierBadge" class="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[11px] font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Standard</span>
-                        </div>
-                    </div>
-                </div>
+ <div class="fixed inset-x-0 top-0 z-[60] border-b border-white/15 bg-[#1e1b4b]/90 shadow-2xl shadow-brand-950/35 backdrop-blur-2xl md:hidden">
+ <div class="relative mx-auto flex w-full max-w-none items-center justify-between gap-3 px-4 py-3 sm:px-6">
+ <div class="flex min-w-0 items-center gap-3 text-white">
+ <img id="mobileClinicLogoImg" src="logo.png" alt="شعار العيادة" class="h-10 w-10 rounded-xl border border-white/10 bg-white/10 object-contain p-1.5 shadow-lg shadow-brand-950/25" />
+ <div class="min-w-0">
+ <div class="flex min-w-0 items-center gap-2">
+ <p id="mobileClinicTitle" class="truncate text-sm font-extrabold tracking-tight text-white">عيادة الطبيب</p>
+ <span id="mobileTierBadge" class="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[11px] font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Standard</span>
+ </div>
+ </div>
+ </div>
 
-                <button id="mobileMenuToggle" type="button" class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white shadow-lg shadow-indigo-950/20 transition hover:bg-white/15" aria-expanded="false" aria-controls="mobileMenuDropdown">
-                    <svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                        <path d="M4 7h16"></path>
-                        <path d="M4 12h16"></path>
-                        <path d="M4 17h16"></path>
-                    </svg>
-                </button>
+ <button id="mobileMenuToggle" type="button" class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white shadow-lg shadow-brand-950/20 transition hover:bg-white/15" aria-expanded="false" aria-controls="mobileMenuDropdown">
+ <svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+ <path d="M4 7h16"></path>
+ <path d="M4 12h16"></path>
+ <path d="M4 17h16"></path>
+ </svg>
+ </button>
 
-                <div id="mobileMenuDropdown" class="absolute left-0 right-0 top-full hidden border-t border-white/10 bg-[#1e1b4b] px-4 py-3 shadow-2xl shadow-indigo-950/35 md:hidden">
-                    <div class="mx-auto flex w-full max-w-none flex-col gap-2 sm:px-2">
-                        <a href="index.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span>لوحة المرضى</span></a>
-                        <a href="appointments.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg><span>المواعيد اليومية</span></a>
-                        <a href="finance.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg><span>التقارير المالية</span></a>
-                        <a href="inventory.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg><span>مخزن المواد</span></a>
-                        <a href="contact_developer.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg><span>تواصل مع المطور</span></a>
-                        <a href="profile.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg><span>حسابي</span></a>
-                        <button id="mobileLogoutBtn" type="button" class="inline-flex items-center gap-2 rounded-2xl border border-rose-300/30 bg-rose-500/15 px-4 py-3 text-right text-sm font-bold text-rose-100 transition hover:bg-rose-500/25"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg><span>تسجيل الخروج</span></button>
-                    </div>
-                </div>
-            </div>
-        </div>
+ <div id="mobileMenuDropdown" class="absolute left-0 right-0 top-full hidden border-t border-white/10 bg-[#1e1b4b] px-4 py-3 shadow-2xl shadow-brand-950/35 md:hidden">
+ <div class="mx-auto flex w-full max-w-none flex-col gap-2 sm:px-2">
+ <a href="index.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span>لوحة المرضى</span></a>
+ <a href="appointments.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg><span>المواعيد اليومية</span></a>
+ <a href="finance.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg><span>التقارير المالية</span></a>
+ <a href="inventory.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg><span>مخزن المواد</span></a>
+ <a href="contact_developer.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg><span>تواصل مع المطور</span></a>
+ <a href="profile.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg><span>حسابي</span></a>
+ <button id="mobileLogoutBtn" type="button" class="inline-flex items-center gap-2 rounded-2xl border border-danger-300/30 bg-danger-500/15 px-4 py-3 text-right text-sm font-bold text-danger-100 transition hover:bg-danger-500/25"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg><span>تسجيل الخروج</span></button>
+ </div>
+ </div>
+ </div>
+ </div>
 
-        <main class="min-w-0 flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8 xl:p-10">
-            <div class="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                    <h2 class="text-2xl font-extrabold text-slate-800 sm:text-3xl">جدول المواعيد اليومية</h2>
-                    <p class="mt-1 text-sm text-slate-500">تابع جميع المواعيد واستقبل مواعيد جديدة بسهولة.</p>
-                </div>
-                <button id="openModalBtn" class="w-full rounded-xl bg-indigo-600 px-5 py-3 font-bold text-white shadow-lg transition hover:bg-indigo-700 sm:w-auto">
+ <main class="min-w-0 flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8 xl:p-10">
+ <div class="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+ <div>
+ <h2 class="text-2xl font-extrabold text-ink-800 sm:text-3xl">جدول المواعيد اليومية</h2>
+ <p class="mt-1 text-sm text-ink-600">تابع جميع المواعيد واستقبل مواعيد جديدة بسهولة.</p>
+ </div>
+ <button id="openModalBtn" class="w-full rounded-xl bg-brand-600 px-5 py-3 font-bold text-white shadow-lg transition hover:bg-brand-700 sm:w-auto">
                     + إضافة موعد جديد
-                </button>
-            </div>
+ </button>
+ </div>
 
-            <section id="bookingRequestsSection" class="mb-6 rounded-3xl border border-amber-200 bg-amber-50/60 p-4 shadow-xl sm:p-6">
-                <div class="mb-4 flex items-center justify-between gap-3">
-                    <div>
-                        <h3 class="inline-flex items-center gap-2 text-xl font-bold text-amber-900"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg><span>طلبات حجز جديدة</span></h3>
-                        <p class="mt-1 text-sm text-amber-700/80">طلبات وصلت من صفحة الحجز العامة وبانتظار ردّك (قبول أو رفض).</p>
-                    </div>
-                    <span id="bookingRequestsCountBadge" class="rounded-full bg-amber-100 px-3 py-1 text-sm font-bold text-amber-800">0</span>
-                </div>
-                <div id="bookingRequestsList" class="space-y-3">
-                    <p class="text-sm text-slate-500">لا توجد طلبات حجز جديدة حالياً.</p>
-                </div>
-            </section>
+ <section id="bookingRequestsSection" class="mb-6 rounded-3xl border border-warning-200 bg-warning-50/60 p-4 shadow-xl sm:p-6">
+ <div class="mb-4 flex items-center justify-between gap-3">
+ <div>
+ <h3 class="inline-flex items-center gap-2 text-xl font-bold text-warning-900"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg><span>طلبات حجز جديدة</span></h3>
+ <p class="mt-1 text-sm text-warning-700/80">طلبات وصلت من صفحة الحجز العامة وبانتظار ردّك (قبول أو رفض).</p>
+ </div>
+ <span id="bookingRequestsCountBadge" class="rounded-full bg-warning-100 px-3 py-1 text-sm font-bold text-warning-800">0</span>
+ </div>
+ <div id="bookingRequestsList" class="space-y-3">
+ <p class="text-sm text-ink-600">لا توجد طلبات حجز جديدة حالياً.</p>
+ </div>
+ </section>
 
-            <section class="rounded-3xl border border-slate-200 bg-white p-4 shadow-xl sm:p-6">
-                <div class="mb-4 flex items-center justify-between gap-3">
-                    <div class="flex items-baseline gap-2">
-                        <h3 class="text-xl font-bold text-indigo-900">المواعيد</h3>
-                        <span id="appointmentsCount" class="text-xs font-bold text-slate-500"></span>
-                    </div>
-                    <span class="rounded-full bg-indigo-50 px-3 py-1 text-sm font-medium text-indigo-700">محدث تلقائيًا</span>
-                </div>
+ <section class="rounded-3xl border border-ink-200 bg-white p-4 shadow-xl sm:p-6">
+ <div class="mb-4 flex items-center justify-between gap-3">
+ <div class="flex items-baseline gap-2">
+ <h3 class="text-xl font-bold text-brand-900">المواعيد</h3>
+ <span id="appointmentsCount" class="text-xs font-bold text-ink-500"></span>
+ </div>
+ <span class="rounded-full bg-brand-50 px-3 py-1 text-sm font-medium text-brand-700">محدث تلقائيًا</span>
+ </div>
 
-                <div id="weekStrip" role="tablist" aria-label="أيام الأسبوع"></div>
+ <div id="weekStrip" role="tablist" aria-label="أيام الأسبوع"></div>
 
-                <div class="overflow-x-auto">
-                    <table id="appointmentsTable" class="min-w-full border-collapse text-right">
-                        <thead>
-                            <tr class="border-b border-slate-200 bg-slate-50 text-sm text-slate-600">
-                                <th class="px-4 py-3 font-semibold">ID</th>
-                                <th class="px-4 py-3 font-semibold">اسم المريض</th>
-                                <th class="px-4 py-3 font-semibold">الوقت</th>
-                                <th class="px-4 py-3 font-semibold">الإجراء</th>
-                                <th class="px-4 py-3 font-semibold">حالة الموعد</th>
-                                <th class="px-4 py-3 font-semibold">إجراءات</th>
-                            </tr>
-                        </thead>
-                        <tbody id="appointmentsTableBody" class="divide-y divide-slate-100">
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-        </main>
-    </div>
+ <div class="overflow-x-auto">
+ <table id="appointmentsTable" class="min-w-full border-collapse text-right">
+ <thead>
+ <tr class="border-b border-ink-200 bg-ink-50 text-sm text-ink-600">
+ <th class="px-4 py-3 font-semibold">ID</th>
+ <th class="px-4 py-3 font-semibold">اسم المريض</th>
+ <th class="px-4 py-3 font-semibold">الوقت</th>
+ <th class="px-4 py-3 font-semibold">الإجراء</th>
+ <th class="px-4 py-3 font-semibold">حالة الموعد</th>
+ <th class="px-4 py-3 font-semibold">إجراءات</th>
+ </tr>
+ </thead>
+ <tbody id="appointmentsTableBody" class="divide-y divide-ink-100">
+ </tbody>
+ </table>
+ </div>
+ </section>
+ </main>
+ </div>
 
-    <div id="toast" class="pointer-events-none fixed left-1/2 top-6 z-[70] hidden w-[min(92vw,28rem)] -translate-x-1/2 rounded-3xl border border-white/20 bg-[linear-gradient(160deg,_rgba(15,23,42,0.96),_rgba(49,46,129,0.95),_rgba(67,56,202,0.94))] px-4 py-3 text-sm font-semibold text-white shadow-2xl shadow-indigo-950/40 backdrop-blur-xl opacity-0">
-    </div>
+ <div id="toast" class="pointer-events-none fixed left-1/2 top-6 z-[70] hidden w-[min(92vw,28rem)] -translate-x-1/2 rounded-3xl border border-white/20 bg-[linear-gradient(160deg,_rgba(15,23,42,0.96),_rgba(49,46,129,0.95),_rgba(67,56,202,0.94))] px-4 py-3 text-sm font-semibold text-white shadow-2xl shadow-brand-950/40 backdrop-blur-xl opacity-0">
+ </div>
 
-    <div id="confirmModal" class="fixed inset-0 z-[75] hidden items-center justify-center bg-slate-950/80 p-4 opacity-0 backdrop-blur-sm transition-opacity duration-200">
-        <div class="w-full max-w-sm scale-95 rounded-3xl border border-violet-300/25 bg-[linear-gradient(155deg,_rgba(30,27,75,0.95),_rgba(49,46,129,0.94),_rgba(76,29,149,0.93))] p-6 text-center text-violet-50 shadow-2xl shadow-indigo-950/70 transition-transform duration-200">
-            <div id="confirmModalIcon" class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-violet-300/40 bg-violet-500/15 text-2xl text-violet-100"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></div>
-            <h3 id="confirmModalTitle" class="text-lg font-extrabold text-white">تأكيد العملية</h3>
-            <p id="confirmModalMessage" class="mt-2 text-sm leading-relaxed text-violet-200/90"></p>
-            <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-center">
-                <button id="confirmModalCancelBtn" type="button" class="w-full rounded-2xl border border-slate-300/45 bg-slate-200/20 px-5 py-3 text-sm font-semibold text-slate-100 transition hover:bg-slate-200/30 sm:w-auto">إلغاء</button>
-                <button id="confirmModalConfirmBtn" type="button" class="w-full rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-3 text-sm font-bold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700 sm:w-auto">تأكيد</button>
-            </div>
-        </div>
-    </div>
+ <div id="confirmModal" class="fixed inset-0 z-[75] hidden items-center justify-center bg-ink-950/80 p-4 opacity-0 backdrop-blur-sm transition-opacity duration-200">
+ <div class="w-full max-w-sm scale-95 rounded-3xl border border-brand-300/25 bg-[linear-gradient(155deg,_rgba(30,27,75,0.95),_rgba(49,46,129,0.94),_rgba(49,46,129,0.93))] p-6 text-center text-brand-50 shadow-2xl shadow-brand-950/70 transition-transform duration-200">
+ <div id="confirmModalIcon" class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-brand-300/40 bg-brand-500/15 text-2xl text-brand-100"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></div>
+ <h3 id="confirmModalTitle" class="text-lg font-extrabold text-white">تأكيد العملية</h3>
+ <p id="confirmModalMessage" class="mt-2 text-sm leading-relaxed text-brand-200/90"></p>
+ <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-center">
+ <button id="confirmModalCancelBtn" type="button" class="w-full rounded-2xl border border-ink-300/45 bg-ink-200/20 px-5 py-3 text-sm font-semibold text-ink-100 transition hover:bg-ink-200/30 sm:w-auto">إلغاء</button>
+ <button id="confirmModalConfirmBtn" type="button" class="w-full rounded-full bg-gradient-to-r from-brand-600 to-brand-800 px-6 py-3 text-sm font-bold text-white shadow-lg transition hover:from-brand-700 hover:to-brand-700 sm:w-auto">تأكيد</button>
+ </div>
+ </div>
+ </div>
 
-    <div id="appointmentModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 p-4 opacity-0 backdrop-blur-sm transition-opacity duration-200">
-        <div class="w-full max-w-2xl scale-95 rounded-3xl border border-violet-300/25 bg-[linear-gradient(155deg,_rgba(30,27,75,0.95),_rgba(49,46,129,0.94),_rgba(76,29,149,0.93))] p-5 text-violet-50 shadow-2xl shadow-indigo-950/70 transition-transform duration-200 sm:p-6">
-            <div class="mb-5 flex items-start justify-between gap-4">
-                <div>
-                    <p class="text-sm font-semibold text-violet-200">إضافة موعد جديد</p>
-                    <h3 class="mt-1 text-2xl font-extrabold text-white">موعد طبي جديد</h3>
-                </div>
-                <button id="closeModalBtn" type="button" class="rounded-full border border-slate-300/45 bg-slate-200/20 px-3 py-2 text-sm font-semibold text-slate-100 transition hover:bg-slate-200/30">إغلاق</button>
-            </div>
+ <div id="appointmentModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-ink-950/80 p-4 opacity-0 backdrop-blur-sm transition-opacity duration-200">
+ <div class="w-full max-w-2xl scale-95 rounded-3xl border border-brand-300/25 bg-[linear-gradient(155deg,_rgba(30,27,75,0.95),_rgba(49,46,129,0.94),_rgba(49,46,129,0.93))] p-5 text-brand-50 shadow-2xl shadow-brand-950/70 transition-transform duration-200 sm:p-6">
+ <div class="mb-5 flex items-start justify-between gap-4">
+ <div>
+ <p class="text-sm font-semibold text-brand-200">إضافة موعد جديد</p>
+ <h3 class="mt-1 text-2xl font-extrabold text-white">موعد طبي جديد</h3>
+ </div>
+ <button id="closeModalBtn" type="button" class="rounded-full border border-ink-300/45 bg-ink-200/20 px-3 py-2 text-sm font-semibold text-ink-100 transition hover:bg-ink-200/30">إغلاق</button>
+ </div>
 
-            <form id="appointmentForm" class="space-y-4">
-                <div>
-                    <label class="mb-1 block text-xs font-semibold text-violet-100">اختر المريض</label>
-                    <div class="relative">
-                        <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-violet-200/80"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg></span>
-                        <input
+ <form id="appointmentForm" class="space-y-4">
+ <div>
+ <label class="mb-1 block text-xs font-semibold text-brand-100">اختر المريض</label>
+ <div class="relative">
+ <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-brand-200/80"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg></span>
+ <input
                             id="appointmentPatientSearch"
                             list="appointmentPatientOptions"
                             type="text"
                             required
                             placeholder="ابحث باسم المريض ثم اختره من القائمة"
-                            class="w-full rounded-2xl border border-violet-200/30 bg-white/10 py-3 pr-10 pl-4 text-sm text-white outline-none transition placeholder:text-violet-200/60 focus:border-violet-300 focus:ring-4 focus:ring-violet-300/25"
+                            class="w-full rounded-2xl border border-brand-200/30 bg-white/10 py-3 pr-10 pl-4 text-sm text-white outline-none transition placeholder:text-brand-200/60 focus:border-brand-300 focus:ring-4 focus:ring-brand-300/25"
                         />
-                        <datalist id="appointmentPatientOptions"></datalist>
-                        <input id="appointmentPatientId" type="hidden" required />
-                    </div>
-                </div>
+ <datalist id="appointmentPatientOptions"></datalist>
+ <input id="appointmentPatientId" type="hidden" required />
+ </div>
+ </div>
 
-                <div class="grid gap-4 sm:grid-cols-2">
-                    <label class="block">
-                        <span class="mb-1 block text-xs font-semibold text-violet-100">التاريخ</span>
-                        <div class="relative">
-                            <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-violet-200/80"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg></span>
-                            <input id="appointmentDate" type="date" required class="w-full rounded-2xl border border-violet-200/30 bg-white/10 py-3 pr-10 pl-4 text-sm text-white outline-none transition focus:border-violet-300 focus:ring-4 focus:ring-violet-300/25" />
-                        </div>
-                    </label>
-                    <label class="block">
-                        <span class="mb-1 block text-xs font-semibold text-violet-100">الوقت</span>
-                        <div class="relative">
-                            <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-violet-200/80"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg></span>
-                            <input id="appointmentTime" type="time" required class="w-full rounded-2xl border border-violet-200/30 bg-white/10 py-3 pr-10 pl-4 text-sm text-white outline-none transition focus:border-violet-300 focus:ring-4 focus:ring-violet-300/25" />
-                        </div>
-                    </label>
-                </div>
+ <div class="grid gap-4 sm:grid-cols-2">
+ <label class="block">
+ <span class="mb-1 block text-xs font-semibold text-brand-100">التاريخ</span>
+ <div class="relative">
+ <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-brand-200/80"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg></span>
+ <input id="appointmentDate" type="date" required class="w-full rounded-2xl border border-brand-200/30 bg-white/10 py-3 pr-10 pl-4 text-sm text-white outline-none transition focus:border-brand-300 focus:ring-4 focus:ring-brand-300/25" />
+ </div>
+ </label>
+ <label class="block">
+ <span class="mb-1 block text-xs font-semibold text-brand-100">الوقت</span>
+ <div class="relative">
+ <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-brand-200/80"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg></span>
+ <input id="appointmentTime" type="time" required class="w-full rounded-2xl border border-brand-200/30 bg-white/10 py-3 pr-10 pl-4 text-sm text-white outline-none transition focus:border-brand-300 focus:ring-4 focus:ring-brand-300/25" />
+ </div>
+ </label>
+ </div>
 
-                <label class="block">
-                    <span class="mb-1 block text-xs font-semibold text-violet-100">الوصف / الملاحظات</span>
-                    <textarea id="appointmentDescription" rows="4" required placeholder="اكتب وصف الموعد أو الإجراء الطبي..." class="w-full rounded-2xl border border-indigo-300/35 bg-white/10 px-4 py-3 text-sm text-white outline-none transition placeholder:text-violet-200/60 focus:border-violet-300 focus:ring-4 focus:ring-violet-300/25"></textarea>
-                </label>
+ <label class="block">
+ <span class="mb-1 block text-xs font-semibold text-brand-100">الوصف / الملاحظات</span>
+ <textarea id="appointmentDescription" rows="4" required placeholder="اكتب وصف الموعد أو الإجراء الطبي..." class="w-full rounded-2xl border border-brand-300/35 bg-white/10 px-4 py-3 text-sm text-white outline-none transition placeholder:text-brand-200/60 focus:border-brand-300 focus:ring-4 focus:ring-brand-300/25"></textarea>
+ </label>
 
-                <div class="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end">
-                    <button id="cancelModalBtn" type="button" class="rounded-2xl border border-slate-300/45 bg-slate-200/20 px-5 py-3 text-sm font-semibold text-slate-100 transition hover:bg-slate-200/30">إلغاء</button>
-                    <button id="appointmentSubmitBtn" type="submit" class="rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-3 text-sm font-bold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700">
+ <div class="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end">
+ <button id="cancelModalBtn" type="button" class="rounded-2xl border border-ink-300/45 bg-ink-200/20 px-5 py-3 text-sm font-semibold text-ink-100 transition hover:bg-ink-200/30">إلغاء</button>
+ <button id="appointmentSubmitBtn" type="submit" class="rounded-full bg-gradient-to-r from-brand-600 to-brand-800 px-6 py-3 text-sm font-bold text-white shadow-lg transition hover:from-brand-700 hover:to-brand-700">
                         حفظ الموعد
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
+ </button>
+ </div>
+ </form>
+ </div>
+ </div>
 
-    <script src="api-config.js"></script>
-    <script src="clinic-loader.js"></script>
-    <script src="notification-badge.js"></script>
-    <script src="mobile-shell.js"></script>
-    <script>
+ <script src="api-config.js"></script>
+ <script src="clinic-loader.js"></script>
+ <script src="notification-badge.js"></script>
+ <script src="mobile-shell.js"></script>
+ <script>
         const doctorName = localStorage.getItem('doctor_name') || localStorage.getItem('user_name');
         const userTier = localStorage.getItem('user_tier');
         // 🔒 حظر فوري ومتزامن لأي زائر لم يسجّل الدخول إطلاقاً -- بدون هذا الفحص كان أي زائر مجهول (وصل مثلاً عبر قائمة تنقل صفحة عامة مثل contact_developer.html) يتجاوز الحماية لأن userTier الفارغ (null) لا يساوي 'pending_activation'، والأخطر أن دوال جلب البيانات في هذا الملف تسقط على بريد الطبيب الاحتياطي الحقيقي عند غياب تسجيل الدخول فتعرض بياناته الفعلية لأي زائر.
@@ -464,32 +467,32 @@
                 const overlay = document.createElement('div');
                 overlay.id = 'expiredSubscriptionOverlay';
                 overlay.setAttribute('dir', 'rtl');
-                overlay.className = 'fixed inset-0 z-[999] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 font-sans';
+                overlay.className = 'fixed inset-0 z-[999] flex items-center justify-center bg-ink-950/80 backdrop-blur-sm p-4 font-sans';
                 overlay.innerHTML = `
-                        <div class="max-w-xl w-full bg-indigo-950/60 backdrop-blur-2xl border border-purple-500/25 p-8 rounded-3xl shadow-2xl shadow-purple-950/60 text-center space-y-6">
-                                <div class="w-20 h-20 bg-purple-500/10 border border-purple-500/30 rounded-2xl flex items-center justify-center mx-auto text-4xl shadow-lg shadow-purple-500/10 animate-pulse">
-                                🔒
-                                </div>
+ <div class="max-w-xl w-full bg-brand-950/60 backdrop-blur-2xl border border-brand-500/25 p-8 rounded-3xl shadow-2xl shadow-brand-950/60 text-center space-y-6">
+ <div class="w-20 h-20 bg-brand-500/10 border border-brand-500/30 rounded-2xl flex items-center justify-center mx-auto text-4xl shadow-lg shadow-brand-500/10 animate-pulse">
+ <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10.5" width="16" height="10.5" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>
+ </div>
 
-                                <h1 class="text-2xl font-bold text-purple-300">انتهت صلاحية باقتك</h1>
+ <h1 class="text-2xl font-bold text-brand-300">انتهت صلاحية باقتك</h1>
 
-                                <p class="text-slate-300 leading-relaxed text-sm">
-                                    مرحباً يا دكتور، نود إعلامك بأن فترة صلاحية باقتك الحالية قد انتهت. سجلات مرضاك، مواعيدك، ومخزن عيادتك في أمان تام ومحفوظة أبدياً داخل السيرفر ولا تضيع أبداً 🔒. للمتابعة الفورية واستعادة صلاحيات الإدارة كاملة، يرجى إدخال كود التجديد الشهري الجديد. للدعم الفني السريع والحصول على الكود كاش، يرجى التواصل مع مطور المنصة المهندس فارس حلاوي على الرقم: 0956907698 🛠️
-                                </p>
+ <p class="text-ink-300 leading-relaxed text-sm">
+                                    مرحباً يا دكتور، نود إعلامك بأن فترة صلاحية باقتك الحالية قد انتهت. سجلات مرضاك، مواعيدك، ومخزن عيادتك في أمان تام ومحفوظة أبدياً داخل السيرفر ولا تضيع أبداً 🔒. للمتابعة الفورية واستعادة صلاحيات الإدارة كاملة، يرجى إدخال كود التجديد الشهري الجديد. للدعم الفني السريع والحصول على الكود كاش، يرجى التواصل مع مطور المنصة المهندس فارس حلاوي على الرقم: 0956907698 
+ </p>
 
-                                <div class="space-y-3">
-                                    <input type="text" id="renewalKeyInput" placeholder="أدخل كود التجديد الجديد هنا"
-                                           class="w-full bg-slate-900 border border-purple-500/25 rounded-xl px-4 py-3 text-center text-sm focus:outline-none focus:border-purple-400 transition-colors text-white placeholder-slate-500" />
+ <div class="space-y-3">
+ <input type="text" id="renewalKeyInput" placeholder="أدخل كود التجديد الجديد هنا"
+                                           class="w-full bg-ink-900 border border-brand-500/25 rounded-xl px-4 py-3 text-center text-sm focus:outline-none focus:border-brand-400 transition-colors text-white placeholder-ink-500" />
 
-                                    <p id="renewalStatusMsg" class="text-xs min-h-[1rem]"></p>
+ <p id="renewalStatusMsg" class="text-xs min-h-[1rem]"></p>
 
-                                    <button id="renewSubscriptionBtn" onclick="renewSubscription()"
-                                            class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-purple-600/30 active:scale-[0.98]">
-                                        تجديد الاشتراك ومتابعة العمل 🚀
-                                    </button>
-                                </div>
-                        </div>
-                `;
+ <button id="renewSubscriptionBtn" onclick="renewSubscription()"
+                                            class="w-full bg-gradient-to-r from-brand-600 to-brand-800 hover:from-brand-500 hover:to-brand-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-brand-600/30 active:scale-[0.98]">
+                                        تجديد الاشتراك ومتابعة العمل 
+ </button>
+ </div>
+ </div>
+ `;
                 document.body.appendChild(overlay);
         }
 
@@ -504,7 +507,7 @@
                 if (!keyCode) {
                         if (statusEl) {
                                 statusEl.textContent = 'يرجى إدخال كود التجديد أولاً.';
-                                statusEl.className = 'text-xs min-h-[1rem] text-rose-400';
+                                statusEl.className = 'text-xs min-h-[1rem] text-danger-400';
                         }
                         return;
                 }
@@ -515,7 +518,7 @@
                 }
                 if (statusEl) {
                         statusEl.textContent = 'يتم الاتصال بالخادم الآن...';
-                        statusEl.className = 'text-xs min-h-[1rem] text-indigo-300';
+                        statusEl.className = 'text-xs min-h-[1rem] text-brand-300';
                 }
 
                 fetch('/api/activate', {
@@ -538,33 +541,33 @@
                                     const message = (data && data.detail) || 'تعذر التحقق من الكود. حاول مرة أخرى.';
                                     if (statusEl) {
                                         statusEl.textContent = message;
-                                        statusEl.className = 'text-xs min-h-[1rem] text-rose-400';
+                                        statusEl.className = 'text-xs min-h-[1rem] text-danger-400';
                                     }
                                     if (btn) {
                                         btn.disabled = false;
-                                        btn.textContent = 'تجديد الاشتراك ومتابعة العمل 🚀';
+                                        btn.textContent = 'تجديد الاشتراك ومتابعة العمل ';
                                     }
                                     return;
                                 }
 
                                 localStorage.setItem('user_tier', data.user_tier);
                                 if (statusEl) {
-                                    statusEl.textContent = '🎉 تم التجديد بنجاح!';
-                                    statusEl.className = 'text-xs min-h-[1rem] text-emerald-400';
+                                    statusEl.textContent = ' تم التجديد بنجاح!';
+                                    statusEl.className = 'text-xs min-h-[1rem] text-success-400';
                                 }
                                 // رسالة تهنئة منبثقة فورية حسب الطلب، ثم إعادة تحميل الصفحة
                                 // لإظهار كامل عناصر لوحة التحكم بعد استعادة الصلاحيات.
-                                showToast('🎉 تم تجديد اشتراكك بنجاح! سيتم تحديث الصفحة الآن لإظهار كامل صلاحيات لوحة التحكم.', 'success');
+                                showToast(' تم تجديد اشتراكك بنجاح! سيتم تحديث الصفحة الآن لإظهار كامل صلاحيات لوحة التحكم.', 'success');
                                 window.setTimeout(() => window.location.reload(), 1800);
                         })
                         .catch(() => {
                                 if (statusEl) {
                                     statusEl.textContent = 'تعذر الاتصال بالخادم. تحقق من الإنترنت وحاول مرة أخرى.';
-                                    statusEl.className = 'text-xs min-h-[1rem] text-rose-400';
+                                    statusEl.className = 'text-xs min-h-[1rem] text-danger-400';
                                 }
                                 if (btn) {
                                     btn.disabled = false;
-                                    btn.textContent = 'تجديد الاشتراك ومتابعة العمل 🚀';
+                                    btn.textContent = 'تجديد الاشتراك ومتابعة العمل ';
                                 }
                         });
         }
@@ -595,7 +598,7 @@
                 tierBadge.className = 'badge-premium rounded-full px-3 py-1 text-xs font-extrabold tracking-wide';
                 tierBadge.textContent = 'Premium';
                 if (mobileTierBadge) {
-                    mobileTierBadge.className = 'shrink-0 rounded-full border border-emerald-300/30 bg-emerald-400/15 px-2 py-1 text-[11px] font-extrabold tracking-wide text-emerald-50 shadow-[0_0_18px_rgba(52,211,153,0.18)]';
+                    mobileTierBadge.className = 'shrink-0 rounded-full border border-success-300/30 bg-success-400/15 px-2 py-1 text-[11px] font-extrabold tracking-wide text-success-50 shadow-[0_0_18px_rgba(52,211,153,0.18)]';
                     mobileTierBadge.textContent = 'Premium';
                 }
                 return;
@@ -699,18 +702,18 @@
         const APPOINTMENT_STATUS_OPTIONS = {
             pending: {
                 label: 'في الانتظار',
-                rowClass: 'bg-amber-50/80 ring-1 ring-amber-200/70',
-                badgeClass: 'bg-amber-100 text-amber-800 border border-amber-200',
+                rowClass: 'bg-warning-50/80 ring-1 ring-warning-200/70',
+                badgeClass: 'bg-warning-100 text-warning-800 border border-warning-200',
             },
             checked_in: {
                 label: 'دخل العيادة',
-                rowClass: 'bg-emerald-50/80 ring-1 ring-emerald-200/70',
-                badgeClass: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
+                rowClass: 'bg-success-50/80 ring-1 ring-success-200/70',
+                badgeClass: 'bg-success-100 text-success-800 border border-success-200',
             },
             no_show: {
                 label: 'تخلف عن الموعد',
-                rowClass: 'bg-rose-50/80 ring-1 ring-rose-200/70',
-                badgeClass: 'bg-rose-100 text-rose-800 border border-rose-200',
+                rowClass: 'bg-danger-50/80 ring-1 ring-danger-200/70',
+                badgeClass: 'bg-danger-100 text-danger-800 border border-danger-200',
             },
         };
 
@@ -731,9 +734,9 @@
             const normalizedStatus = normalizeAppointmentStatus(status);
             row.dataset.appointmentStatus = normalizedStatus;
             row.classList.remove(
-                'bg-amber-50/80', 'ring-1', 'ring-amber-200/70',
-                'bg-emerald-50/80', 'ring-1', 'ring-emerald-200/70',
-                'bg-rose-50/80', 'ring-1', 'ring-rose-200/70'
+ 'bg-warning-50/80', 'ring-1', 'ring-warning-200/70',
+ 'bg-success-50/80', 'ring-1', 'ring-success-200/70',
+ 'bg-danger-50/80', 'ring-1', 'ring-danger-200/70'
             );
             row.classList.add(...getAppointmentStatusMeta(normalizedStatus).rowClass.split(' '));
         }
@@ -750,9 +753,9 @@
             }
 
             const toneClasses = {
-                success: 'border-emerald-300/30 bg-[linear-gradient(160deg,_rgba(6,78,59,0.96),_rgba(16,185,129,0.9),_rgba(5,150,105,0.95))] shadow-emerald-950/30',
-                error: 'border-rose-300/30 bg-[linear-gradient(160deg,_rgba(127,29,29,0.96),_rgba(225,29,72,0.9),_rgba(190,18,60,0.95))] shadow-rose-950/30',
-                info: 'border-white/20 bg-[linear-gradient(160deg,_rgba(15,23,42,0.96),_rgba(49,46,129,0.95),_rgba(67,56,202,0.94))] shadow-indigo-950/40',
+                success: 'border-success-300/30 bg-[linear-gradient(160deg,_rgba(6,78,59,0.96),_rgba(16,185,129,0.9),_rgba(5,150,105,0.95))] shadow-success-950/30',
+                error: 'border-danger-300/30 bg-[linear-gradient(160deg,_rgba(127,29,29,0.96),_rgba(225,29,72,0.9),_rgba(190,18,60,0.95))] shadow-danger-950/30',
+                info: 'border-white/20 bg-[linear-gradient(160deg,_rgba(15,23,42,0.96),_rgba(49,46,129,0.95),_rgba(67,56,202,0.94))] shadow-brand-950/40',
             };
 
             toast.className = `pointer-events-none fixed left-1/2 top-6 z-[70] hidden w-[min(92vw,28rem)] -translate-x-1/2 rounded-3xl border px-4 py-3 text-sm font-semibold text-white shadow-2xl backdrop-blur-xl opacity-0 ${toneClasses[tone] || toneClasses.info}`;
@@ -782,18 +785,18 @@
         const CONFIRM_TONE_STYLES = {
             danger: {
                 icon: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
-                iconClass: 'border-rose-300/40 bg-rose-500/15 text-rose-100',
-                confirmClass: 'bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700',
+                iconClass: 'border-danger-300/40 bg-danger-500/15 text-danger-100',
+                confirmClass: 'bg-gradient-to-r from-danger-500 to-danger-600 hover:from-danger-600 hover:to-danger-700',
             },
             success: {
                 icon: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>',
-                iconClass: 'border-emerald-300/40 bg-emerald-500/15 text-emerald-100',
-                confirmClass: 'bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700',
+                iconClass: 'border-success-300/40 bg-success-500/15 text-success-100',
+                confirmClass: 'bg-gradient-to-r from-success-500 to-success-600 hover:from-success-600 hover:to-success-700',
             },
             default: {
                 icon: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
-                iconClass: 'border-violet-300/40 bg-violet-500/15 text-violet-100',
-                confirmClass: 'bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700',
+                iconClass: 'border-brand-300/40 bg-brand-500/15 text-brand-100',
+                confirmClass: 'bg-gradient-to-r from-brand-600 to-brand-800 hover:from-brand-700 hover:to-brand-700',
             },
         };
 
@@ -887,20 +890,20 @@
             const statusLabel = getAppointmentStatusMeta(normalizedStatus).label;
 
             return `
-                <label class="flex flex-col gap-2">
-                    <span class="text-xs font-semibold text-slate-500 sm:hidden">حالة الموعد</span>
-                    <select
+ <label class="flex flex-col gap-2">
+ <span class="text-xs font-semibold text-ink-500 sm:hidden">حالة الموعد</span>
+ <select
                         data-status-select="1"
                         data-appointment-id="${appointmentId ?? ''}"
-                        class="w-full min-w-[10rem] rounded-2xl border border-slate-200 bg-white/90 px-3 py-2 text-xs font-bold text-slate-700 shadow-sm outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                        class="w-full min-w-[10rem] rounded-2xl border border-ink-200 bg-white/90 px-3 py-2 text-xs font-bold text-ink-700 shadow-sm outline-none transition focus:border-brand-400 focus:ring-4 focus:ring-brand-100"
                     >
-                        <option value="pending" ${normalizedStatus === 'pending' ? 'selected' : ''}>في الانتظار</option>
-                        <option value="checked_in" ${normalizedStatus === 'checked_in' ? 'selected' : ''}>دخل العيادة</option>
-                        <option value="no_show" ${normalizedStatus === 'no_show' ? 'selected' : ''}>تخلف عن الموعد</option>
-                    </select>
-                    <span class="sm:hidden text-[11px] font-semibold text-slate-400">${statusLabel}</span>
-                </label>
-            `;
+ <option value="pending" ${normalizedStatus === 'pending' ? 'selected' : ''}>في الانتظار</option>
+ <option value="checked_in" ${normalizedStatus === 'checked_in' ? 'selected' : ''}>دخل العيادة</option>
+ <option value="no_show" ${normalizedStatus === 'no_show' ? 'selected' : ''}>تخلف عن الموعد</option>
+ </select>
+ <span class="sm:hidden text-[11px] font-semibold text-ink-400">${statusLabel}</span>
+ </label>
+ `;
         }
 
         function renderPatientOptions() {
@@ -998,7 +1001,7 @@
             const patientName = String(appointment?.patient_name || patientRecord?.full_name || 'المريض').trim();
             const appointmentDate = formatAppointmentDateForReminder(appointment);
             const appointmentTime = String(appointment?.appointment_time || 'غير محدد').trim() || 'غير محدد';
-            const message = `مرحباً سيد/ة ${patientName}، نذكركم بموعدكم القادم في العيادة ${currentDoctorName} اليوم ${appointmentDate} عند الساعة ${appointmentTime}. نتمنى لكم دوام الصحة والعافية. 🦷✨`;
+            const message = `مرحباً سيد/ة ${patientName}، نذكركم بموعدكم القادم في العيادة ${currentDoctorName} اليوم ${appointmentDate} عند الساعة ${appointmentTime}. نتمنى لكم دوام الصحة والعافية. ✨`;
 
             const whatsappUrl = `https://whatsapp.com/send?phone=${patientPhone}&text=${encodeURIComponent(message)}`;
             window.open(whatsappUrl, '_blank');
@@ -1183,10 +1186,10 @@
                 chip.setAttribute('data-active', selectedDayKey === key ? '1' : '0');
                 if (busyDays.has(key)) chip.setAttribute('data-busy', '1');
                 chip.innerHTML = `
-                    <span class="week-day-name">${dayNames[date.getDay()]}</span>
-                    <span class="week-day-num">${String(date.getDate()).padStart(2, '0')}</span>
-                    <span class="week-day-dot"></span>
-                `;
+ <span class="week-day-name">${dayNames[date.getDay()]}</span>
+ <span class="week-day-num">${String(date.getDate()).padStart(2, '0')}</span>
+ <span class="week-day-dot"></span>
+ `;
                 chip.addEventListener('click', () => {
                     selectedDayKey = key;
                     applyAppointmentsDayFilter();
@@ -1215,50 +1218,50 @@
 
             if (!currentAppointments.length) {
                 tableBody.innerHTML = `
-                    <tr>
-                        <td colspan="6" class="px-4 py-8 text-center text-sm text-slate-500">لا توجد مواعيد مسجلة حاليًا.</td>
-                    </tr>
-                `;
+ <tr>
+ <td colspan="6" class="px-4 py-8 text-center text-sm text-ink-600">لا توجد مواعيد مسجلة حاليًا.</td>
+ </tr>
+ `;
                 return;
             }
 
             tableBody.innerHTML = currentAppointments.map((appointment) => {
                 const normalizedStatus = normalizeAppointmentStatus(appointment.status);
                 const statusMeta = getAppointmentStatusMeta(normalizedStatus);
-                const rowClass = `appointment-row block rounded-2xl border border-slate-200 p-2 shadow-sm transition hover:shadow-md sm:table-row sm:rounded-none sm:border-0 sm:p-0 ${statusMeta.rowClass}`;
+                const rowClass = `appointment-row block rounded-2xl border border-ink-200 p-2 shadow-sm transition hover:shadow-md sm:table-row sm:rounded-none sm:border-0 sm:p-0 ${statusMeta.rowClass}`;
 
                 return `
-                    <tr data-appointment-id="${appointment.id ?? ''}" data-appointment-status="${normalizedStatus}" class="${rowClass}">
-                        <td class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 ap-cell ap-cell-id text-sm text-slate-600 last:border-b-0 sm:table-cell sm:border-b-0">
-                            <span class="ap-label text-xs font-semibold text-slate-400 sm:hidden">ID</span>
-                            <span>${appointment.id ?? '-'}</span>
-                        </td>
-                        <td class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 ap-cell ap-cell-name text-sm font-semibold text-slate-700 last:border-b-0 sm:table-cell sm:border-b-0">
-                            <span class="ap-label text-xs font-semibold text-slate-400 sm:hidden">اسم المريض</span>
-                            <span>${appointment.patient_name || '—'}</span>
-                        </td>
-                        <td class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 ap-cell ap-cell-time text-sm text-slate-600 last:border-b-0 sm:table-cell sm:border-b-0">
-                            <span class="ap-label text-xs font-semibold text-slate-400 sm:hidden">الوقت</span>
-                            <span>${appointment.appointment_time || '—'}</span>
-                        </td>
-                        <td class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 ap-cell ap-cell-proc text-sm text-slate-600 last:border-b-0 sm:table-cell sm:border-b-0">
-                            <span class="ap-label text-xs font-semibold text-slate-400 sm:hidden">الإجراء</span>
-                            <span>${appointment.procedure_type || '—'}</span>
-                        </td>
-                        <td class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 ap-cell ap-cell-status text-sm last:border-b-0 sm:table-cell sm:border-b-0">
-                            <span class="ap-label text-xs font-semibold text-slate-400 sm:hidden">حالة الموعد</span>
+ <tr data-appointment-id="${appointment.id ?? ''}" data-appointment-status="${normalizedStatus}" class="${rowClass}">
+ <td class="flex items-center justify-between gap-3 border-b border-ink-100 px-4 py-3 ap-cell ap-cell-id text-sm text-ink-600 last:border-b-0 sm:table-cell sm:border-b-0">
+ <span class="ap-label text-xs font-semibold text-ink-400 sm:hidden">ID</span>
+ <span>${appointment.id ?? '-'}</span>
+ </td>
+ <td class="flex items-center justify-between gap-3 border-b border-ink-100 px-4 py-3 ap-cell ap-cell-name text-sm font-semibold text-ink-700 last:border-b-0 sm:table-cell sm:border-b-0">
+ <span class="ap-label text-xs font-semibold text-ink-400 sm:hidden">اسم المريض</span>
+ <span>${appointment.patient_name || '—'}</span>
+ </td>
+ <td class="flex items-center justify-between gap-3 border-b border-ink-100 px-4 py-3 ap-cell ap-cell-time text-sm text-ink-600 last:border-b-0 sm:table-cell sm:border-b-0">
+ <span class="ap-label text-xs font-semibold text-ink-400 sm:hidden">الوقت</span>
+ <span>${appointment.appointment_time || '—'}</span>
+ </td>
+ <td class="flex items-center justify-between gap-3 border-b border-ink-100 px-4 py-3 ap-cell ap-cell-proc text-sm text-ink-600 last:border-b-0 sm:table-cell sm:border-b-0">
+ <span class="ap-label text-xs font-semibold text-ink-400 sm:hidden">الإجراء</span>
+ <span>${appointment.procedure_type || '—'}</span>
+ </td>
+ <td class="flex items-center justify-between gap-3 border-b border-ink-100 px-4 py-3 ap-cell ap-cell-status text-sm last:border-b-0 sm:table-cell sm:border-b-0">
+ <span class="ap-label text-xs font-semibold text-ink-400 sm:hidden">حالة الموعد</span>
                             ${renderAppointmentStatusSelect(normalizedStatus, appointment.id)}
-                        </td>
-                        <td class="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 ap-cell ap-cell-actions text-sm last:border-b-0 sm:table-cell sm:border-b-0">
-                            <span class="ap-label text-xs font-semibold text-slate-400 sm:hidden">إجراءات</span>
-                            <div class="flex flex-wrap items-center gap-2">
-                                <button type="button" data-edit-appointment-id="${appointment.id ?? ''}" class="edit-appointment-btn appointment-action-btn btn-edit-appointment px-3 py-2 text-xs"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"></path></svg><span>تعديل</span></button>
-                                <button type="button" data-delete-appointment-id="${appointment.id ?? ''}" class="delete-appointment-btn appointment-action-btn btn-delete-appointment px-3 py-2 text-xs"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg><span>حذف</span></button>
-                                <button type="button" data-whatsapp-appointment-id="${appointment.id ?? ''}" class="whatsapp-reminder-btn appointment-action-btn btn-whatsapp-reminder px-3 py-2 text-xs"><span>تذكير واتساب</span><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M12 2.1c-5.46 0-9.9 4.3-9.9 9.62 0 1.87.55 3.7 1.59 5.28L2 22l5.19-1.56a10.15 10.15 0 0 0 4.81 1.22c5.46 0 9.9-4.3 9.9-9.62S17.46 2.1 12 2.1Zm0 17.94c-1.49 0-2.96-.39-4.25-1.14l-.31-.18-3.08.93.96-2.96-.2-.31a8.07 8.07 0 0 1-1.25-4.34c0-4.45 3.69-8.06 8.23-8.06s8.23 3.61 8.23 8.06-3.69 8.06-8.23 8.06Zm4.52-5.9c-.25-.12-1.48-.73-1.71-.82-.23-.08-.4-.12-.57.12-.17.24-.65.82-.8.99-.15.16-.29.19-.54.06-.25-.12-1.04-.38-1.97-1.2-.73-.65-1.22-1.45-1.36-1.69-.14-.24-.01-.37.1-.49.1-.1.25-.27.37-.41.12-.14.16-.24.25-.4.08-.16.04-.31-.02-.43-.06-.12-.57-1.36-.78-1.86-.21-.49-.42-.42-.57-.43h-.49c-.17 0-.43.06-.66.31-.23.24-.86.83-.86 2.03 0 1.2.89 2.36 1.01 2.52.12.16 1.75 2.77 4.24 3.88.59.25 1.05.4 1.41.51.59.18 1.13.16 1.56.1.48-.07 1.48-.6 1.69-1.17.21-.58.21-1.08.15-1.17-.06-.1-.23-.16-.48-.28Z"/></svg></button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
+ </td>
+ <td class="flex items-center justify-between gap-2 border-b border-ink-100 px-4 py-3 ap-cell ap-cell-actions text-sm last:border-b-0 sm:table-cell sm:border-b-0">
+ <span class="ap-label text-xs font-semibold text-ink-400 sm:hidden">إجراءات</span>
+ <div class="flex flex-wrap items-center gap-2">
+ <button type="button" data-edit-appointment-id="${appointment.id ?? ''}" class="edit-appointment-btn appointment-action-btn btn-edit-appointment px-3 py-2 text-xs"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"></path></svg><span>تعديل</span></button>
+ <button type="button" data-delete-appointment-id="${appointment.id ?? ''}" class="delete-appointment-btn appointment-action-btn btn-delete-appointment px-3 py-2 text-xs"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg><span>حذف</span></button>
+ <button type="button" data-whatsapp-appointment-id="${appointment.id ?? ''}" class="whatsapp-reminder-btn appointment-action-btn btn-whatsapp-reminder px-3 py-2 text-xs"><span>تذكير واتساب</span><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M12 2.1c-5.46 0-9.9 4.3-9.9 9.62 0 1.87.55 3.7 1.59 5.28L2 22l5.19-1.56a10.15 10.15 0 0 0 4.81 1.22c5.46 0 9.9-4.3 9.9-9.62S17.46 2.1 12 2.1Zm0 17.94c-1.49 0-2.96-.39-4.25-1.14l-.31-.18-3.08.93.96-2.96-.2-.31a8.07 8.07 0 0 1-1.25-4.34c0-4.45 3.69-8.06 8.23-8.06s8.23 3.61 8.23 8.06-3.69 8.06-8.23 8.06Zm4.52-5.9c-.25-.12-1.48-.73-1.71-.82-.23-.08-.4-.12-.57.12-.17.24-.65.82-.8.99-.15.16-.29.19-.54.06-.25-.12-1.04-.38-1.97-1.2-.73-.65-1.22-1.45-1.36-1.69-.14-.24-.01-.37.1-.49.1-.1.25-.27.37-.41.12-.14.16-.24.25-.4.08-.16.04-.31-.02-.43-.06-.12-.57-1.36-.78-1.86-.21-.49-.42-.42-.57-.43h-.49c-.17 0-.43.06-.66.31-.23.24-.86.83-.86 2.03 0 1.2.89 2.36 1.01 2.52.12.16 1.75 2.77 4.24 3.88.59.25 1.05.4 1.41.51.59.18 1.13.16 1.56.1.48-.07 1.48-.6 1.69-1.17.21-.58.21-1.08.15-1.17-.06-.1-.23-.16-.48-.28Z"/></svg></button>
+ </div>
+ </td>
+ </tr>
+ `;
             }).join('');
 
             attachAppointmentRowListeners();
@@ -1344,7 +1347,7 @@
             const response = await fetch(apiUrl(`/api/appointments/${encodeURIComponent(String(appointmentId))}/status`), {
                 method: 'PUT',
                 headers: getDoctorAuthHeaders({
-                    'Content-Type': 'application/json',
+ 'Content-Type': 'application/json',
                 }),
                 body: JSON.stringify({ status }),
             });
@@ -1431,10 +1434,10 @@
             } catch (error) {
                 console.error(error);
                 tableBody.innerHTML = `
-                    <tr>
-                        <td colspan="6" class="px-4 py-8 text-center text-sm text-rose-600">تعذر الاتصال بالخادم.</td>
-                    </tr>
-                `;
+ <tr>
+ <td colspan="6" class="px-4 py-8 text-center text-sm text-danger-600">تعذر الاتصال بالخادم.</td>
+ </tr>
+ `;
             }
         }
 
@@ -1481,26 +1484,26 @@
             if (!list) return;
 
             if (!currentBookingRequests.length) {
-                list.innerHTML = '<p class="text-sm text-slate-500">لا توجد طلبات حجز جديدة حالياً.</p>';
+                list.innerHTML = '<p class="text-sm text-ink-600">لا توجد طلبات حجز جديدة حالياً.</p>';
                 return;
             }
 
             list.innerHTML = currentBookingRequests.map((request) => `
-                <div class="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between" data-booking-request-id="${request.id ?? ''}">
-                    <div class="min-w-0">
-                        <p class="font-bold text-slate-800">
+ <div class="flex flex-col gap-3 rounded-2xl border border-warning-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between" data-booking-request-id="${request.id ?? ''}">
+ <div class="min-w-0">
+ <p class="font-bold text-ink-800">
                             ${request.patient_name || 'مريض'}
-                            ${request.patient_phone ? `<span dir="ltr" class="mr-2 font-mono text-sm text-slate-500">${request.patient_phone}</span>` : ''}
-                        </p>
-                        <p class="mt-1 inline-flex items-center gap-1 text-sm text-slate-600"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg><span>${formatBookingRequestDate(request)}</span><span>—</span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg><span>${request.appointment_time || '—'}</span></p>
-                        ${request.notes ? `<p class="mt-1 inline-flex items-center gap-1 text-xs text-slate-500"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg><span>${request.notes}</span></p>` : ''}
-                    </div>
-                    <div class="flex shrink-0 items-center gap-2">
-                        <button type="button" data-accept-request-id="${request.id ?? ''}" class="accept-request-btn appointment-action-btn btn-accept-request px-4 py-2 text-xs"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg><span>قبول</span></button>
-                        <button type="button" data-reject-request-id="${request.id ?? ''}" class="reject-request-btn appointment-action-btn btn-reject-request px-4 py-2 text-xs"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg><span>رفض</span></button>
-                    </div>
-                </div>
-            `).join('');
+                            ${request.patient_phone ? `<span dir="ltr" class="mr-2 font-mono text-sm text-ink-600">${request.patient_phone}</span>` : ''}
+ </p>
+ <p class="mt-1 inline-flex items-center gap-1 text-sm text-ink-600"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg><span>${formatBookingRequestDate(request)}</span><span>—</span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg><span>${request.appointment_time || '—'}</span></p>
+                        ${request.notes ? `<p class="mt-1 inline-flex items-center gap-1 text-xs text-ink-500"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg><span>${request.notes}</span></p>` : ''}
+ </div>
+ <div class="flex shrink-0 items-center gap-2">
+ <button type="button" data-accept-request-id="${request.id ?? ''}" class="accept-request-btn appointment-action-btn btn-accept-request px-4 py-2 text-xs"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg><span>قبول</span></button>
+ <button type="button" data-reject-request-id="${request.id ?? ''}" class="reject-request-btn appointment-action-btn btn-reject-request px-4 py-2 text-xs"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg><span>رفض</span></button>
+ </div>
+ </div>
+ `).join('');
 
             attachBookingRequestListeners();
         }
@@ -1557,7 +1560,7 @@
                         throw new Error(data.detail || 'تعذر إرسال الرد على الطلب.');
                     }
 
-                    showToast(decision === 'accept' ? 'تم قبول طلب الحجز بنجاح ✅' : 'تم رفض طلب الحجز.', decision === 'accept' ? 'success' : 'info');
+                    showToast(decision === 'accept' ? 'تم قبول طلب الحجز بنجاح ' : 'تم رفض طلب الحجز.', decision === 'accept' ? 'success' : 'info');
                     await loadAppointments();
                 } catch (error) {
                     showToast(error.message || 'تعذر إرسال الرد على الطلب.', 'error');

@@ -5,9 +5,12 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 	<title>التقارير المالية - عيادتي الرقمية</title>
 	<link rel="stylesheet" href="/tailwind.css" />
-	<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
+	<link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet" />
 	<style>
-		body { font-family: 'Tajawal', sans-serif; }
+		body { font-family: 'Noto Sans Arabic', 'Segoe UI', Tahoma, system-ui, sans-serif; }
+		h1, h2, h3, .stats-value, .modal-title, .tfs-name {
+			font-family: 'Noto Kufi Arabic', 'Segoe UI', Tahoma, system-ui, sans-serif;
+		}
 
 		/* ---------------------------------------------------------------
 		   عرض الجوال للملخّص المالي
@@ -77,12 +80,12 @@
 				grid-column: 1 / -1;
 				border-radius: 26px !important;
 				border: 1px solid rgba(255, 255, 255, 0.15) !important;
-				background: linear-gradient(160deg, rgba(31, 41, 55, 0.96), rgba(49, 46, 129, 0.95), rgba(76, 29, 149, 0.94)) !important;
+				background: linear-gradient(160deg, rgba(31, 41, 55, 0.96), rgba(49, 46, 129, 0.95), rgba(49, 46, 129, 0.94)) !important;
 				box-shadow: 0 18px 50px rgba(67, 56, 202, 0.28) !important;
 				padding: 16px 18px !important;
 			}
 			#profitCard[data-negative="1"] {
-				background: linear-gradient(160deg, rgba(69, 10, 10, 0.96), rgba(136, 19, 55, 0.95), rgba(76, 29, 149, 0.92)) !important;
+				background: linear-gradient(160deg, rgba(69, 10, 10, 0.96), rgba(136, 19, 55, 0.95), rgba(49, 46, 129, 0.92)) !important;
 				box-shadow: 0 18px 50px rgba(190, 18, 60, 0.28) !important;
 			}
 			#profitCard > p:first-child { color: #c7d2fe !important; font-size: 12px !important; }
@@ -133,14 +136,14 @@
 			backdrop-filter: blur(12px);
 		}
 		.badge-premium {
-			background: linear-gradient(130deg, #fef08a 0%, #f59e0b 45%, #fde68a 100%);
-			color: #5b3400;
-			box-shadow: 0 8px 28px rgba(245, 158, 11, 0.45);
+			background: #fef3c7;
+			border: 1px solid #fde68a;
+			color: #78350f;
 		}
 		.badge-standard {
-			background: linear-gradient(130deg, #4338ca 0%, #6366f1 100%);
-			color: #e0e7ff;
-			box-shadow: 0 8px 22px rgba(67, 56, 202, 0.35);
+			background: #eef2ff;
+			border: 1px solid #c7d2fe;
+			color: #3730a3;
 		}
 		.upgrade-card-hidden {
 			opacity: 0;
@@ -245,17 +248,17 @@
 	<link rel="alternate icon" type="image/png" href="favicon.png" />
 	<link rel="apple-touch-icon" href="favicon.png" />
 </head>
-<body class="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.22),_transparent_30%),linear-gradient(135deg,_#f8fafc_0%,_#eef2ff_45%,_#e0e7ff_100%)] text-slate-800">
+<body class="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.22),_transparent_30%),linear-gradient(135deg,_#f8fafc_0%,_#eef2ff_45%,_#e0e7ff_100%)] text-ink-800">
 	<div class="pointer-events-none absolute inset-0 overflow-hidden">
-		<div class="absolute right-[10%] top-16 h-40 w-40 rounded-full bg-indigo-200/30 blur-3xl"></div>
-		<div class="absolute left-[6%] top-[22%] h-56 w-56 rounded-full bg-violet-200/20 blur-3xl"></div>
+		<div class="absolute right-[10%] top-16 h-40 w-40 rounded-full bg-brand-200/30 blur-3xl"></div>
+		<div class="absolute left-[6%] top-[22%] h-56 w-56 rounded-full bg-brand-200/20 blur-3xl"></div>
 	</div>
 
 	<div id="patientRecordApp" class="relative flex min-h-screen w-full flex-col overflow-x-hidden px-4 pt-24 pb-6 sm:px-6 sm:pt-32 md:pt-32 lg:px-8 lg:pt-32 xl:px-10">
-		<header class="fixed inset-x-0 top-0 z-50 hidden w-full border-b border-white/15 bg-[#1e1b4b]/85 shadow-2xl shadow-indigo-950/35 backdrop-blur-2xl md:block">
+		<header class="fixed inset-x-0 top-0 z-50 hidden w-full border-b border-white/15 bg-[#1e1b4b]/85 shadow-2xl shadow-brand-950/35 backdrop-blur-2xl md:block">
 			<div class="mx-auto flex w-full max-w-none flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8 xl:px-10">
 				<div class="flex items-center gap-3 text-white">
-					<img id="clinicLogoImg" src="logo.png" alt="شعار العيادة" class="h-12 w-12 rounded-xl border border-white/10 bg-white/10 object-contain p-2 shadow-lg shadow-indigo-950/25" />
+					<img id="clinicLogoImg" src="logo.png" alt="شعار العيادة" class="h-12 w-12 rounded-xl border border-white/10 bg-white/10 object-contain p-2 shadow-lg shadow-brand-950/25" />
 					<div class="flex items-center gap-3">
 						<h1 id="clinicTitle" class="text-lg font-extrabold tracking-tight text-white sm:text-xl">عيادة الطبيب</h1>
 						<span id="tierBadge" class="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Standard</span>
@@ -263,21 +266,21 @@
 				</div>
 
 				<div class="flex flex-wrap items-center gap-2 lg:flex-1 lg:justify-center">
-					<a href="index.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span>لوحة المرضى</span></a>
-					<a href="appointments.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg><span>المواعيد اليومية</span></a>
-					<a href="finance.html" class="inline-flex items-center gap-2 rounded-2xl border border-cyan-300/30 bg-cyan-500/15 px-4 py-2 text-sm font-extrabold text-cyan-50 shadow-[0_0_24px_rgba(34,211,238,0.14)] transition hover:-translate-y-0.5 hover:border-cyan-200/50 hover:bg-cyan-400/20 hover:shadow-[0_0_28px_rgba(34,211,238,0.26)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg><span>التقارير المالية</span></a>
-					<a href="inventory.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg><span>مخزن المواد</span></a>
-					<a href="contact_developer.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg><span>تواصل مع المطور</span></a>
-					<a href="profile.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg><span>حسابي</span></a>
-					<button id="logoutBtn" type="button" class="inline-flex items-center gap-2 rounded-2xl border border-rose-300/30 bg-rose-500/15 px-4 py-2 text-sm font-bold text-rose-100 transition hover:-translate-y-0.5 hover:border-rose-200/50 hover:bg-rose-500/25 hover:shadow-[0_0_24px_rgba(244,63,94,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg><span>تسجيل الخروج</span></button>
+					<a href="index.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span>لوحة المرضى</span></a>
+					<a href="appointments.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg><span>المواعيد اليومية</span></a>
+					<a href="finance.html" class="inline-flex items-center gap-2 rounded-2xl border border-info-300/30 bg-info-500/15 px-4 py-2 text-sm font-extrabold text-info-50 shadow-[0_0_24px_rgba(56,189,248,0.14)] transition hover:-translate-y-0.5 hover:border-info-200/50 hover:bg-info-400/20 hover:shadow-[0_0_28px_rgba(56,189,248,0.26)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg><span>التقارير المالية</span></a>
+					<a href="inventory.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg><span>مخزن المواد</span></a>
+					<a href="contact_developer.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg><span>تواصل مع المطور</span></a>
+					<a href="profile.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg><span>حسابي</span></a>
+					<button id="logoutBtn" type="button" class="inline-flex items-center gap-2 rounded-2xl border border-danger-300/30 bg-danger-500/15 px-4 py-2 text-sm font-bold text-danger-100 transition hover:-translate-y-0.5 hover:border-danger-200/50 hover:bg-danger-500/25 hover:shadow-[0_0_24px_rgba(244,63,94,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg><span>تسجيل الخروج</span></button>
 				</div>
 			</div>
 		</header>
 
-		<div class="fixed inset-x-0 top-0 z-[60] border-b border-white/15 bg-[#1e1b4b]/90 shadow-2xl shadow-indigo-950/35 backdrop-blur-2xl md:hidden">
+		<div class="fixed inset-x-0 top-0 z-[60] border-b border-white/15 bg-[#1e1b4b]/90 shadow-2xl shadow-brand-950/35 backdrop-blur-2xl md:hidden">
 			<div class="relative mx-auto flex w-full max-w-none items-center justify-between gap-3 px-4 py-3 sm:px-6">
 				<div class="flex min-w-0 items-center gap-3 text-white">
-					<img id="mobileClinicLogoImg" src="logo.png" alt="شعار العيادة" class="h-10 w-10 rounded-xl border border-white/10 bg-white/10 object-contain p-1.5 shadow-lg shadow-indigo-950/25" />
+					<img id="mobileClinicLogoImg" src="logo.png" alt="شعار العيادة" class="h-10 w-10 rounded-xl border border-white/10 bg-white/10 object-contain p-1.5 shadow-lg shadow-brand-950/25" />
 					<div class="min-w-0">
 						<div class="flex min-w-0 items-center gap-2">
 							<p id="mobileClinicTitle" class="truncate text-sm font-extrabold tracking-tight text-white">عيادة الطبيب</p>
@@ -286,7 +289,7 @@
 					</div>
 				</div>
 
-				<button id="mobileMenuToggle" type="button" class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white shadow-lg shadow-indigo-950/20 transition hover:bg-white/15" aria-expanded="false" aria-controls="mobileMenuDropdown">
+				<button id="mobileMenuToggle" type="button" class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white shadow-lg shadow-brand-950/20 transition hover:bg-white/15" aria-expanded="false" aria-controls="mobileMenuDropdown">
 					<svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
 						<path d="M4 7h16"></path>
 						<path d="M4 12h16"></path>
@@ -294,7 +297,7 @@
 					</svg>
 				</button>
 
-				<div id="mobileMenuDropdown" class="absolute left-0 right-0 top-full hidden border-t border-white/10 bg-[#1e1b4b] px-4 py-3 shadow-2xl shadow-indigo-950/35 md:hidden">
+				<div id="mobileMenuDropdown" class="absolute left-0 right-0 top-full hidden border-t border-white/10 bg-[#1e1b4b] px-4 py-3 shadow-2xl shadow-brand-950/35 md:hidden">
 					<div class="mx-auto flex w-full max-w-none flex-col gap-2 sm:px-2">
 						<a href="index.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span>لوحة المرضى</span></a>
 						<a href="appointments.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg><span>المواعيد اليومية</span></a>
@@ -302,7 +305,7 @@
 						<a href="inventory.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg><span>مخزن المواد</span></a>
 						<a href="contact_developer.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg><span>تواصل مع المطور</span></a>
 						<a href="profile.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg><span>حسابي</span></a>
-						<button id="mobileLogoutBtn" type="button" class="inline-flex items-center gap-2 rounded-2xl border border-rose-300/30 bg-rose-500/15 px-4 py-3 text-right text-sm font-bold text-rose-100 transition hover:bg-rose-500/25"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg><span>تسجيل الخروج</span></button>
+						<button id="mobileLogoutBtn" type="button" class="inline-flex items-center gap-2 rounded-2xl border border-danger-300/30 bg-danger-500/15 px-4 py-3 text-right text-sm font-bold text-danger-100 transition hover:bg-danger-500/25"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg><span>تسجيل الخروج</span></button>
 					</div>
 				</div>
 			</div>
@@ -310,9 +313,9 @@
 
 		<main class="min-w-0 flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8 xl:p-10">
 			<div id="dashboardWrapper" class="transition duration-300">
-				<section id="upgradeInlineCard" class="mb-6 rounded-[28px] border border-indigo-200 bg-gradient-to-br from-indigo-800 via-indigo-700 to-violet-700 p-6 text-white shadow-2xl shadow-indigo-900/35 transition duration-300 sm:p-7">
+				<section id="upgradeInlineCard" class="mb-6 rounded-[28px] border border-brand-200 bg-gradient-to-br from-brand-800 via-brand-700 to-brand-700 p-6 text-white shadow-2xl shadow-brand-900/35 transition duration-300 sm:p-7">
 					<div class="mx-auto max-w-3xl text-center">
-						<div class="mb-3 inline-flex rounded-full border border-indigo-200/40 bg-white/10 px-3 py-1 text-xs font-bold tracking-[0.2em] text-indigo-100">STANDARD PLAN</div>
+						<div class="mb-3 inline-flex rounded-full border border-brand-200/40 bg-white/10 px-3 py-1 text-xs font-bold tracking-[0.2em] text-brand-100">STANDARD PLAN</div>
 						<p class="text-lg font-bold leading-8 sm:text-xl">
 							أنت تستخدم الباقة القياسية الحالية. أدخل كود الترقية لتفعيل التقارير المادية وصافي الأرباح فوراً!
 						</p>
@@ -322,40 +325,40 @@
 								type="text"
 								required
 								placeholder="أدخل كود الترقية"
-								class="w-full rounded-2xl border border-indigo-200/30 bg-white/90 px-4 py-3 text-right text-sm font-semibold text-slate-800 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-200 sm:max-w-sm"
+								class="w-full rounded-2xl border border-brand-200/30 bg-white/90 px-4 py-3 text-right text-sm font-semibold text-ink-800 outline-none transition focus:border-warning-300 focus:ring-4 focus:ring-warning-200 sm:max-w-sm"
 							/>
-							<button id="upgradeSubmitBtn" type="submit" class="rounded-2xl border border-amber-200/70 bg-gradient-to-r from-amber-300 via-yellow-300 to-amber-400 px-5 py-3 text-sm font-extrabold text-amber-950 shadow-xl shadow-amber-500/30 transition hover:-translate-y-0.5 hover:from-amber-200 hover:to-yellow-300">
+							<button id="upgradeSubmitBtn" type="submit" class="rounded-2xl border border-warning-200/70 bg-gradient-to-r from-warning-300 via-warning-300 to-warning-400 px-5 py-3 text-sm font-extrabold text-warning-950 shadow-xl shadow-warning-500/30 transition hover:-translate-y-0.5 hover:from-warning-200 hover:to-warning-300">
 								تفعيل الترقية الفورية
 							</button>
 						</form>
-						<p id="upgradeStatus" class="mt-3 text-sm font-semibold text-indigo-100">أدخل الكود ثم اضغط التفعيل.</p>
+						<p id="upgradeStatus" class="mt-3 text-sm font-semibold text-brand-100">أدخل الكود ثم اضغط التفعيل.</p>
 					</div>
 				</section>
 
 				<div id="premiumDataWrapper" class="transition duration-300">
-				<section class="panel-soft mb-6 rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/70 sm:p-6">
+				<section class="panel-soft mb-6 rounded-[28px] border border-white/70 p-5 shadow-xl shadow-ink-200/70 sm:p-6">
 					<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 						<div>
-							<div class="inline-flex rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-bold tracking-[0.22em] text-violet-700">FINANCE PREMIUM</div>
-							<h2 class="mt-3 text-2xl font-extrabold text-slate-800 sm:text-3xl">لوحة التقارير المالية المتقدمة</h2>
-							<p class="mt-1 text-sm text-slate-500">متابعة مؤشرات الأداء المالي للعيادة وإدخال المصروفات بشكل احترافي.</p>
+							<div class="inline-flex rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-bold tracking-[0.22em] text-brand-700">FINANCE PREMIUM</div>
+							<h2 class="mt-3 text-2xl font-extrabold text-ink-800 sm:text-3xl">لوحة التقارير المالية المتقدمة</h2>
+							<p class="mt-1 text-sm text-ink-500">متابعة مؤشرات الأداء المالي للعيادة وإدخال المصروفات بشكل احترافي.</p>
 						</div>
-						<div id="lastSync" class="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-xs font-semibold text-indigo-700">آخر تحديث: --</div>
+						<div id="lastSync" class="rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3 text-xs font-semibold text-brand-700">آخر تحديث: --</div>
 					</div>
 				</section>
 
-				<section class="panel-soft mb-6 rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/70 sm:p-6">
+				<section class="panel-soft mb-6 rounded-[28px] border border-white/70 p-5 shadow-xl shadow-ink-200/70 sm:p-6">
 					<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 						<div>
-							<h3 class="text-sm font-bold text-indigo-900">عرض التقرير المالي لشهر</h3>
-							<p id="periodHint" class="mt-1 text-xs text-slate-500">التقرير يتجدد تلقائياً كل شهر، مع الاحتفاظ الكامل بتقارير كل الأشهر السابقة.</p>
-						<p id="openingBalanceHint" class="mt-2 hidden rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700"></p>
+							<h3 class="text-sm font-bold text-brand-900">عرض التقرير المالي لشهر</h3>
+							<p id="periodHint" class="mt-1 text-xs text-ink-500">التقرير يتجدد تلقائياً كل شهر، مع الاحتفاظ الكامل بتقارير كل الأشهر السابقة.</p>
+						<p id="openingBalanceHint" class="mt-2 hidden rounded-xl border border-warning-200 bg-warning-50 px-3 py-2 text-xs font-semibold text-warning-700"></p>
 						</div>
 						<div id="monthSelectWrap" class="sort-dropdown-wrap relative w-full sm:w-64">
 							<button
 								type="button"
 								id="monthSelectTrigger"
-								class="sort-dropdown-trigger w-full rounded-2xl border border-slate-300 bg-white py-3 px-4 text-sm font-semibold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+								class="sort-dropdown-trigger w-full rounded-2xl border border-ink-300 bg-white py-3 px-4 text-sm font-semibold text-ink-700 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100"
 								title="اختيار فترة التقرير المالي"
 								aria-haspopup="listbox"
 								aria-expanded="false"
@@ -377,20 +380,20 @@
 				</section>
 
 				<section id="financeSummarySection" class="mb-6 grid gap-4 md:grid-cols-3">
-					<article class="panel-soft rounded-3xl border border-emerald-100 p-5 shadow-xl shadow-emerald-100/60">
-						<p class="text-xs font-bold text-emerald-700">إجمالي الإيرادات</p>
-						<p id="revenueValue" class="mt-3 text-3xl font-extrabold text-emerald-600">0 ل.س</p>
+					<article class="panel-soft rounded-3xl border border-success-100 p-5 shadow-xl shadow-success-100/60">
+						<p class="text-xs font-bold text-success-700">إجمالي الإيرادات</p>
+						<p id="revenueValue" class="mt-3 text-3xl font-extrabold text-success-600">0 ل.س</p>
 					</article>
-					<article class="panel-soft rounded-3xl border border-rose-100 p-5 shadow-xl shadow-rose-100/60">
-						<p class="text-xs font-bold text-rose-700">تكلفة المواد والمستلزمات</p>
-						<p id="expenseValue" class="mt-3 text-3xl font-extrabold text-rose-600">0 ل.س</p>
+					<article class="panel-soft rounded-3xl border border-danger-100 p-5 shadow-xl shadow-danger-100/60">
+						<p class="text-xs font-bold text-danger-700">تكلفة المواد والمستلزمات</p>
+						<p id="expenseValue" class="mt-3 text-3xl font-extrabold text-danger-600">0 ل.س</p>
 					</article>
-					<article id="profitCard" class="panel-soft rounded-3xl border border-violet-100 bg-gradient-to-br from-violet-50 to-indigo-50 p-5 shadow-xl shadow-violet-100/70">
+					<article id="profitCard" class="panel-soft rounded-3xl border border-brand-100 bg-gradient-to-br from-brand-50 to-brand-250 p-5 shadow-xl shadow-brand-100/70">
 						<div class="flex items-start justify-between gap-3">
-							<p class="text-xs font-bold text-violet-700">صافي أرباح العيادة</p>
+							<p class="text-xs font-bold text-brand-700">صافي أرباح العيادة</p>
 							<span id="financeGrowthBadge" class="hidden shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] font-extrabold"></span>
 						</div>
-						<p id="profitValue" class="mt-3 text-3xl font-extrabold text-violet-700">0 ل.س</p>
+						<p id="profitValue" class="mt-3 text-3xl font-extrabold text-brand-700">0 ل.س</p>
 						<div class="finance-mobile-only">
 							<div id="financeRatioBar">
 								<div id="financeRatioIncome" style="width: 50%"></div>
@@ -404,52 +407,52 @@
 					</article>
 				</section>
 
-				<section class="panel-soft mb-6 rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/70 sm:p-6">
+				<section class="panel-soft mb-6 rounded-[28px] border border-white/70 p-5 shadow-xl shadow-ink-200/70 sm:p-6">
 					<div class="mb-4 flex items-center justify-between gap-3">
-						<h3 class="text-lg font-bold text-indigo-900">آخر الحركات</h3>
-						<span id="movesPeriodHint" class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">هذه الفترة</span>
+						<h3 class="text-lg font-bold text-brand-900">آخر الحركات</h3>
+						<span id="movesPeriodHint" class="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">هذه الفترة</span>
 					</div>
 					<div id="financeMovesList" class="flex flex-col gap-2"></div>
-					<p id="financeMovesEmpty" class="hidden rounded-2xl border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-semibold text-slate-500">لا توجد حركات مالية في هذه الفترة.</p>
+					<p id="financeMovesEmpty" class="hidden rounded-2xl border border-ink-200 bg-ink-50 px-4 py-6 text-center text-sm font-semibold text-ink-500">لا توجد حركات مالية في هذه الفترة.</p>
 				</section>
 
-				<section class="panel-soft rounded-[28px] border border-white/70 p-5 shadow-xl shadow-slate-200/70 sm:p-6">
+				<section class="panel-soft rounded-[28px] border border-white/70 p-5 shadow-xl shadow-ink-200/70 sm:p-6">
 					<div class="mb-5">
-						<h3 class="text-xl font-bold text-indigo-900">إضافة مصروف جديد</h3>
-						<p class="mt-1 text-sm text-slate-500">سجّل أي تكلفة تشغيلية جديدة ليتم تضمينها ضمن تقارير الأداء المالي.</p>
+						<h3 class="text-xl font-bold text-brand-900">إضافة مصروف جديد</h3>
+						<p class="mt-1 text-sm text-ink-500">سجّل أي تكلفة تشغيلية جديدة ليتم تضمينها ضمن تقارير الأداء المالي.</p>
 					</div>
 
 					<form id="expenseForm" class="grid gap-4 md:grid-cols-3">
 						<label class="block md:col-span-1">
-							<span class="mb-2 block text-sm font-semibold text-slate-700">المبلغ</span>
-							<input id="expenseAmount" name="amount" type="number" min="0" step="0.01" required class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" placeholder="1500" />
+							<span class="mb-2 block text-sm font-semibold text-ink-700">المبلغ</span>
+							<input id="expenseAmount" name="amount" type="number" min="0" step="0.01" required class="w-full rounded-2xl border border-ink-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100" placeholder="1500" />
 						</label>
 						<label class="block md:col-span-2">
-							<span class="mb-2 block text-sm font-semibold text-slate-700">الوصف</span>
-							<input id="expenseDescription" name="description" type="text" required class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" placeholder="شراء مواد حشو وتجهيزات" />
+							<span class="mb-2 block text-sm font-semibold text-ink-700">الوصف</span>
+							<input id="expenseDescription" name="description" type="text" required class="w-full rounded-2xl border border-ink-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100" placeholder="شراء مواد حشو وتجهيزات" />
 						</label>
 
-						<div class="md:col-span-3 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
-							<label class="flex cursor-pointer items-center gap-3 text-sm font-semibold text-indigo-900">
-								<input id="addToInventoryToggle" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400" />
-								📦 هذا المصروف لشراء مادة جديدة — أضفها تلقائياً إلى مخزن المواد
+						<div class="md:col-span-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-4">
+							<label class="flex cursor-pointer items-center gap-3 text-sm font-semibold text-brand-900">
+								<input id="addToInventoryToggle" type="checkbox" class="h-4 w-4 rounded border-ink-300 text-brand-600 focus:ring-brand-400" />
+								<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-2px"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05"/><path d="M12 22.08V12"/></svg> هذا المصروف لشراء مادة جديدة — أضفها تلقائياً إلى مخزن المواد
 							</label>
 							<div id="inventoryLinkFields" class="mt-4 hidden grid gap-4 sm:grid-cols-2">
 								<label class="block">
-									<span class="mb-2 block text-sm font-semibold text-slate-700">اسم المادة</span>
-									<input id="inventoryItemNameInput" name="inventory_item_name" type="text" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" placeholder="مثال: قفازات طبية" />
+									<span class="mb-2 block text-sm font-semibold text-ink-700">اسم المادة</span>
+									<input id="inventoryItemNameInput" name="inventory_item_name" type="text" class="w-full rounded-2xl border border-ink-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100" placeholder="مثال: قفازات طبية" />
 								</label>
 								<label class="block">
-									<span class="mb-2 block text-sm font-semibold text-slate-700">الكمية المضافة</span>
-									<input id="inventoryQuantityInput" name="inventory_quantity" type="number" min="1" step="1" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" placeholder="10" />
+									<span class="mb-2 block text-sm font-semibold text-ink-700">الكمية المضافة</span>
+									<input id="inventoryQuantityInput" name="inventory_quantity" type="number" min="1" step="1" class="w-full rounded-2xl border border-ink-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100" placeholder="10" />
 								</label>
 							</div>
-							<p class="mt-2 text-xs text-slate-500">إن وجدت مادة بنفس الاسم في المخزن سيتم زيادة كميتها تلقائياً، وإلا سيتم إنشاء مادة جديدة.</p>
+							<p class="mt-2 text-xs text-ink-500">إن وجدت مادة بنفس الاسم في المخزن سيتم زيادة كميتها تلقائياً، وإلا سيتم إنشاء مادة جديدة.</p>
 						</div>
 
 						<div class="md:col-span-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-							<p id="expenseStatus" class="text-sm font-medium text-slate-500">جاهز لإرسال العملية.</p>
-							<button id="expenseSubmitBtn" type="submit" class="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:from-indigo-700 hover:to-violet-700">
+							<p id="expenseStatus" class="text-sm font-medium text-ink-500">جاهز لإرسال العملية.</p>
+							<button id="expenseSubmitBtn" type="submit" class="rounded-2xl bg-gradient-to-r from-brand-600 to-brand-800 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:from-brand-700 hover:to-brand-700">
 								حفظ المصروف
 							</button>
 						</div>
@@ -458,7 +461,7 @@
 				</div>
 			</div>
 
-			<footer class="mt-8 text-center text-xs font-mono tracking-wide text-indigo-500/90">
+			<footer class="mt-8 text-center text-xs font-mono tracking-wide text-brand-500/90">
 				تطوير وإدارة: المهندس فارس حلاوي © 2026
 			</footer>
 		</main>
@@ -513,29 +516,29 @@
 				const overlay = document.createElement('div');
 				overlay.id = 'expiredSubscriptionOverlay';
 				overlay.setAttribute('dir', 'rtl');
-				overlay.className = 'fixed inset-0 z-[999] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 font-sans';
+				overlay.className = 'fixed inset-0 z-[999] flex items-center justify-center bg-ink-950/80 backdrop-blur-sm p-4 font-sans';
 				overlay.innerHTML = `
-						<div class="max-w-xl w-full bg-indigo-950/60 backdrop-blur-2xl border border-purple-500/25 p-8 rounded-3xl shadow-2xl shadow-purple-950/60 text-center space-y-6">
-								<div class="w-20 h-20 bg-purple-500/10 border border-purple-500/30 rounded-2xl flex items-center justify-center mx-auto text-4xl shadow-lg shadow-purple-500/10 animate-pulse">
-								🔒
+						<div class="max-w-xl w-full bg-brand-950/60 backdrop-blur-2xl border border-brand-500/25 p-8 rounded-3xl shadow-2xl shadow-brand-950/60 text-center space-y-6">
+								<div class="w-20 h-20 bg-brand-500/10 border border-brand-500/30 rounded-2xl flex items-center justify-center mx-auto text-4xl shadow-lg shadow-brand-500/10 animate-pulse">
+								<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10.5" width="16" height="10.5" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>
 								</div>
 
-								<h1 class="text-2xl font-bold text-purple-300">انتهت صلاحية باقتك</h1>
+								<h1 class="text-2xl font-bold text-brand-300">انتهت صلاحية باقتك</h1>
 
-								<p class="text-slate-300 leading-relaxed text-sm">
-								    مرحباً يا دكتور، نود إعلامك بأن فترة صلاحية باقتك الحالية قد انتهت. سجلات مرضاك، مواعيدك، ومخزن عيادتك في أمان تام ومحفوظة أبدياً داخل السيرفر ولا تضيع أبداً 🔒. للمتابعة الفورية واستعادة صلاحيات الإدارة كاملة، يرجى إدخال كود التجديد الشهري الجديد. للدعم الفني السريع والحصول على الكود كاش، يرجى التواصل مع مطور المنصة المهندس فارس حلاوي على الرقم: 0956907698 🛠️
+								<p class="text-ink-300 leading-relaxed text-sm">
+								    مرحباً يا دكتور، نود إعلامك بأن فترة صلاحية باقتك الحالية قد انتهت. سجلات مرضاك، مواعيدك، ومخزن عيادتك في أمان تام ومحفوظة أبدياً داخل السيرفر ولا تضيع أبداً 🔒. للمتابعة الفورية واستعادة صلاحيات الإدارة كاملة، يرجى إدخال كود التجديد الشهري الجديد. للدعم الفني السريع والحصول على الكود كاش، يرجى التواصل مع مطور المنصة المهندس فارس حلاوي على الرقم: 0956907698 
 								</p>
 
 								<div class="space-y-3">
-								    <input type="text" id="renewalKeyInput" placeholder="أدخل كود التجديد الجديد هنا"
-								           class="w-full bg-slate-900 border border-purple-500/25 rounded-xl px-4 py-3 text-center text-sm focus:outline-none focus:border-purple-400 transition-colors text-white placeholder-slate-500" />
+								 <input type="text" id="renewalKeyInput" placeholder="أدخل كود التجديد الجديد هنا"
+								           class="w-full bg-ink-900 border border-brand-500/25 rounded-xl px-4 py-3 text-center text-sm focus:outline-none focus:border-brand-400 transition-colors text-white placeholder-ink-500" />
 
-								    <p id="renewalStatusMsg" class="text-xs min-h-[1rem]"></p>
+								 <p id="renewalStatusMsg" class="text-xs min-h-[1rem]"></p>
 
-								    <button id="renewSubscriptionBtn" onclick="renewSubscription()"
-								            class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-purple-600/30 active:scale-[0.98]">
-								        تجديد الاشتراك ومتابعة العمل 🚀
-								    </button>
+								 <button id="renewSubscriptionBtn" onclick="renewSubscription()"
+								            class="w-full bg-gradient-to-r from-brand-600 to-brand-800 hover:from-brand-500 hover:to-brand-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-brand-600/30 active:scale-[0.98]">
+								        تجديد الاشتراك ومتابعة العمل 
+								 </button>
 								</div>
 						</div>
 				`;
@@ -553,7 +556,7 @@
 				if (!keyCode) {
 						if (statusEl) {
 								statusEl.textContent = 'يرجى إدخال كود التجديد أولاً.';
-								statusEl.className = 'text-xs min-h-[1rem] text-rose-400';
+								statusEl.className = 'text-xs min-h-[1rem] text-danger-400';
 						}
 						return;
 				}
@@ -564,7 +567,7 @@
 				}
 				if (statusEl) {
 						statusEl.textContent = 'يتم الاتصال بالخادم الآن...';
-						statusEl.className = 'text-xs min-h-[1rem] text-indigo-300';
+						statusEl.className = 'text-xs min-h-[1rem] text-brand-300';
 				}
 
 				fetch('/api/activate', {
@@ -587,33 +590,33 @@
 								    const message = (data && data.detail) || 'تعذر التحقق من الكود. حاول مرة أخرى.';
 								    if (statusEl) {
 								        statusEl.textContent = message;
-								        statusEl.className = 'text-xs min-h-[1rem] text-rose-400';
+								        statusEl.className = 'text-xs min-h-[1rem] text-danger-400';
 								    }
 								    if (btn) {
 								        btn.disabled = false;
-								        btn.textContent = 'تجديد الاشتراك ومتابعة العمل 🚀';
+								        btn.textContent = 'تجديد الاشتراك ومتابعة العمل ';
 								    }
 								    return;
 								}
 
 								localStorage.setItem('user_tier', data.user_tier);
 								if (statusEl) {
-								    statusEl.textContent = '🎉 تم التجديد بنجاح!';
-								    statusEl.className = 'text-xs min-h-[1rem] text-emerald-400';
+								    statusEl.textContent = ' تم التجديد بنجاح!';
+								    statusEl.className = 'text-xs min-h-[1rem] text-success-400';
 								}
 								// رسالة تهنئة منبثقة فورية حسب الطلب، ثم إعادة تحميل الصفحة مباشرة
 								// لإظهار كامل عناصر لوحة التحكم بعد استعادة الصلاحيات.
-								showFinanceToast('🎉 تم تجديد اشتراكك بنجاح! سيتم تحديث الصفحة الآن لإظهار كامل صلاحيات لوحة التحكم.');
+								showFinanceToast(' تم تجديد اشتراكك بنجاح! سيتم تحديث الصفحة الآن لإظهار كامل صلاحيات لوحة التحكم.');
 								setTimeout(() => window.location.reload(), 1800);
 						})
 						.catch(() => {
 								if (statusEl) {
 								    statusEl.textContent = 'تعذر الاتصال بالخادم. تحقق من الإنترنت وحاول مرة أخرى.';
-								    statusEl.className = 'text-xs min-h-[1rem] text-rose-400';
+								    statusEl.className = 'text-xs min-h-[1rem] text-danger-400';
 								}
 								if (btn) {
 								    btn.disabled = false;
-								    btn.textContent = 'تجديد الاشتراك ومتابعة العمل 🚀';
+								    btn.textContent = 'تجديد الاشتراك ومتابعة العمل ';
 								}
 						});
 		}
@@ -782,7 +785,7 @@
 			if (!openingBalanceHint) return;
 			const openingBalance = Number(data?.opening_balance_income || 0);
 			if (openingBalance > 0) {
-				openingBalanceHint.textContent = `🕰️ توجد أيضاً ${formatCurrency(openingBalance)} كأرصدة قديمة/سابقة مُرحّلة إلى النظام — غير محتسبة ضمن دخل أي شهر محدد أعلاه، لكنها محسوبة ضمن "كل الوقت".`;
+				openingBalanceHint.textContent = ` توجد أيضاً ${formatCurrency(openingBalance)} كأرصدة قديمة/سابقة مُرحّلة إلى النظام — غير محتسبة ضمن دخل أي شهر محدد أعلاه، لكنها محسوبة ضمن "كل الوقت".`;
 				openingBalanceHint.classList.remove('hidden');
 			} else {
 				openingBalanceHint.classList.add('hidden');
@@ -804,15 +807,15 @@
 				// data-negative يبقى بعد إعادة كتابة className أدناه، وعليه
 				// تعتمد قاعدة CSS التي تصبغ البطاقة بالأحمر على الجوال.
 				if (profitCard) profitCard.dataset.negative = '1';
-				profitValue.className = 'mt-3 text-3xl font-extrabold text-rose-700';
+				profitValue.className = 'mt-3 text-3xl font-extrabold text-danger-700';
 				if (profitCard) {
-					profitCard.className = 'panel-soft rounded-3xl border border-rose-200 bg-gradient-to-br from-rose-50 to-red-50 p-5 shadow-xl shadow-rose-100/70';
+					profitCard.className = 'panel-soft rounded-3xl border border-danger-200 bg-gradient-to-br from-danger-50 to-danger-250 p-5 shadow-xl shadow-danger-100/70';
 				}
 			} else {
 				if (profitCard) delete profitCard.dataset.negative;
-				profitValue.className = 'mt-3 text-3xl font-extrabold text-violet-700';
+				profitValue.className = 'mt-3 text-3xl font-extrabold text-brand-700';
 				if (profitCard) {
-					profitCard.className = 'panel-soft rounded-3xl border border-violet-100 bg-gradient-to-br from-violet-50 to-indigo-50 p-5 shadow-xl shadow-violet-100/70';
+					profitCard.className = 'panel-soft rounded-3xl border border-brand-100 bg-gradient-to-br from-brand-50 to-brand-250 p-5 shadow-xl shadow-brand-100/70';
 				}
 			}
 		}
@@ -842,11 +845,11 @@
 
 		function setExpenseStatus(message, type = 'normal') {
 			if (type === 'error') {
-				expenseStatus.className = 'text-sm font-medium text-rose-600';
+				expenseStatus.className = 'text-sm font-medium text-danger-600';
 			} else if (type === 'success') {
-				expenseStatus.className = 'text-sm font-medium text-emerald-600';
+				expenseStatus.className = 'text-sm font-medium text-success-600';
 			} else {
-				expenseStatus.className = 'text-sm font-medium text-slate-500';
+				expenseStatus.className = 'text-sm font-medium text-ink-500';
 			}
 			expenseStatus.textContent = message;
 		}
@@ -854,11 +857,11 @@
 		function setUpgradeStatus(message, type = 'normal') {
 			if (!upgradeStatus) return;
 			if (type === 'error') {
-				upgradeStatus.className = 'mt-3 text-sm font-semibold text-rose-100';
+				upgradeStatus.className = 'mt-3 text-sm font-semibold text-danger-100';
 			} else if (type === 'success') {
-				upgradeStatus.className = 'mt-3 text-sm font-semibold text-emerald-200';
+				upgradeStatus.className = 'mt-3 text-sm font-semibold text-success-200';
 			} else {
-				upgradeStatus.className = 'mt-3 text-sm font-semibold text-indigo-100';
+				upgradeStatus.className = 'mt-3 text-sm font-semibold text-brand-100';
 			}
 			upgradeStatus.textContent = message;
 		}
@@ -869,7 +872,7 @@
 				tierBadge.className = 'badge-premium rounded-full px-3 py-1 text-xs font-extrabold tracking-wide';
 				tierBadge.textContent = 'Premium';
 				if (mobileTierBadge) {
-					mobileTierBadge.className = 'shrink-0 rounded-full border border-emerald-300/30 bg-emerald-400/15 px-2 py-1 text-[11px] font-extrabold tracking-wide text-emerald-50 shadow-[0_0_18px_rgba(52,211,153,0.18)]';
+					mobileTierBadge.className = 'shrink-0 rounded-full border border-success-300/30 bg-success-400/15 px-2 py-1 text-[11px] font-extrabold tracking-wide text-success-50 shadow-[0_0_18px_rgba(52,211,153,0.18)]';
 					mobileTierBadge.textContent = 'Premium';
 				}
 				return;
