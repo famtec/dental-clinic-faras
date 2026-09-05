@@ -28,3 +28,10 @@ Thumbs.db
 
 # الملفات المرفوعة من المستخدمين (صور اشعة وغيرها)
 uploads/
+
+# سجلات انهيار JVM التي يخلّفها Gradle عند فشل البناء (2026-09-05)
+hs_err_pid*.log
+replay_pid*.log
+
+# مفاتيح Firebase السرّية (Service Account) -- لا تُرفع أبداً
+*firebase*adminsdk*.json
