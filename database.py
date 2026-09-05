@@ -258,6 +258,13 @@ def init_db():
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE users ADD COLUMN last_idle_reminder_at TIMESTAMP"))
 
+    # رمز إشعارات متصفح المريض على طلب الحجز -- 2026-09-05 (انظر models.py).
+    if "appointments" in inspector.get_table_names():
+        patient_push_columns = {column["name"] for column in inspector.get_columns("appointments")}
+        if "patient_web_push_token" not in patient_push_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE appointments ADD COLUMN patient_web_push_token VARCHAR"))
+
     # ====================================================================
     # فواتير العلاج المستقلة (treatment_invoices) -- 2026-08-25
     # ====================================================================

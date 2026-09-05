@@ -151,6 +151,17 @@
 			<div class="mx-auto mb-4 inline-flex h-16 w-16 items-center justify-center rounded-3xl border border-success-200 bg-success-50 text-success-700"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg></div>
 			<h1 class="text-xl font-extrabold text-ink-800">تم إرسال طلب حجزك بنجاح!</h1>
 			<p class="mt-2 text-sm leading-6 text-ink-500">سيراجع الطبيب طلبك قريباً، وسيصلك إشعار على واتساب فور قبول أو رفض الموعد.</p>
+
+			<!-- تنبيه المتصفح للمريض (2026-09-05) -- قناة ثانية اختيارية إلى جانب
+			     واتساب. لا نطلب إذن الإشعارات تلقائياً إطلاقاً: الطلب يظهر فقط بعد
+			     ضغط المريض الزر بنفسه (كروم يحجب نهائياً المواقع التي تطلب الإذن
+			     تلقائياً). ويبقى الصندوق مخفياً كلياً إن كان المتصفح لا يدعم
+			     الإشعارات أو كانت محجوبة -- لا نعرض للمريض زراً لا يفعل شيئاً. -->
+			<div id="bookingPushBox" class="step-hidden mt-5 rounded-2xl border border-brand-100 bg-brand-50/50 p-4 text-right">
+				<p class="text-sm leading-6 text-ink-600">تريد أن يصلك الرد على هذا المتصفح أيضاً، حتى لو أغلقت الصفحة؟</p>
+				<button id="enableBookingPushBtn" type="button" class="mt-3 w-full rounded-2xl bg-gradient-to-r from-brand-600 to-brand-800 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:from-brand-700 hover:to-brand-700 sm:w-auto">فعّل التنبيه ليصلك رد الطبيب</button>
+				<p id="bookingPushStatusMsg" class="mt-3 text-sm font-medium text-ink-500"></p>
+			</div>
 		</div>
 
 		<footer class="mt-8 text-center text-xs font-mono tracking-wide text-brand-500/70">
@@ -166,6 +177,10 @@
 	     الحقيقي وراء "هذا الرابط غير متاح"، اكتُشف 2026-08-24 عبر رسالة الخطأ
 	     التفصيلية المضافة بالتعديل السابق). -->
 	<script src="/api-config.js"></script>
+	<!-- إشعارات المتصفح للمريض (2026-09-05) -- مسار مطلق مقصود لنفس السبب
+	     الموثّق أعلاه لـ api-config.js: هذه الصفحة تُخدَّم عبر /d/<slug>. -->
+	<script src="/firebase-web-config.js"></script>
+	<script src="/web-push.js"></script>
 	<script>
 		function resolveBookingSlug() {
 			const pathParts = window.location.pathname.split('/').filter(Boolean);
@@ -412,7 +427,9 @@
 						return;
 					}
 
+					lastBookingPhone = trimmedPhone;
 					showOnly(successState);
+					setupBookingPushBox();
 				} catch (error) {
 					bookingFormStatusMsg.textContent = 'تعذر الاتصال بالخادم. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.';
 				} finally {
@@ -424,6 +441,52 @@
 
 		if (retryBookingBtn) {
 			retryBookingBtn.addEventListener('click', () => loadDoctorInfo(0));
+		}
+
+		// --- تفعيل تنبيه المتصفح للمريض بعد إرسال طلبه (2026-09-05) ---
+		// رقم الهاتف هو هوية المريض الوحيدة (لا حساب ولا تسجيل دخول)، والخادم
+		// يتحقق من ملكيته للطلب بمطابقة الرقم المطبَّع -- نفس ضمانة "تحقق من
+		// حالة طلبي" بالأسفل. كل منطق Firebase/Service Worker داخل web-push.js.
+		let lastBookingPhone = '';
+		let bookingPushBoxReady = false;
+
+		function setupBookingPushBox() {
+			if (bookingPushBoxReady) return;
+
+			const bookingPushBox = document.getElementById('bookingPushBox');
+			const enableBookingPushBtn = document.getElementById('enableBookingPushBtn');
+			const bookingPushStatusMsg = document.getElementById('bookingPushStatusMsg');
+			if (!bookingPushBox || !enableBookingPushBtn || !bookingPushStatusMsg) return;
+			if (!window.ClinicWebPush || !lastBookingPhone || !bookingSlug) return;
+
+			// لا نعرض الصندوق إلا إن كان التفعيل ممكناً فعلاً: متصفح مدعوم، الميزة
+			// مهيّأة، والإذن غير محجوب. غير ذلك يبقى واتساب قناة المريض، بلا زر ميت.
+			const publicStatus = window.ClinicWebPush.getPublicStatus();
+			if (publicStatus !== 'default' && publicStatus !== 'granted') return;
+
+			bookingPushBoxReady = true;
+			bookingPushBox.classList.remove('step-hidden');
+
+			enableBookingPushBtn.addEventListener('click', () => {
+				const originalLabel = enableBookingPushBtn.textContent;
+				enableBookingPushBtn.disabled = true;
+				enableBookingPushBtn.classList.add('opacity-60');
+				enableBookingPushBtn.textContent = 'جاري التفعيل...';
+
+				window.ClinicWebPush.enableForBooking({ slug: bookingSlug, phone: lastBookingPhone })
+					.then((result) => {
+						bookingPushStatusMsg.textContent = (result && result.message) || '';
+						if (result && result.ok) enableBookingPushBtn.classList.add('step-hidden');
+					})
+					.catch(() => {
+						bookingPushStatusMsg.textContent = 'تعذر تفعيل التنبيه حالياً. حاول مرة أخرى.';
+					})
+					.finally(() => {
+						enableBookingPushBtn.disabled = false;
+						enableBookingPushBtn.classList.remove('opacity-60');
+						enableBookingPushBtn.textContent = originalLabel;
+					});
+			});
 		}
 
 		// تحقق من حالة طلب حجز سابق عبر رقم الهاتف فقط (لا يوجد تسجيل دخول للمريض).

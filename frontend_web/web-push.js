@@ -28,6 +28,11 @@
  *   ClinicWebPush.enable()           -> Promise<{ ok, status, message }>
  *   ClinicWebPush.disable()          -> Promise<{ ok, status, message }>
  *   ClinicWebPush.onStatusChange(fn) -> يُستدعى fn(status) عند كل تغيّر
+ *
+ * وواجهة ثانية خاصة بصفحة الحجز العامة (المريض، بلا تسجيل دخول) -- 2026-09-05:
+ *   ClinicWebPush.getPublicStatus()
+ *   ClinicWebPush.enableForBooking({ slug, phone }) -> Promise<{ ok, status, message }>
+ * يحفظ رمز متصفح المريض على طلب حجزه ليصله إشعار بقرار الطبيب (قبول/رفض).
  */
 (function () {
   var SDK_VERSION = '10.12.2';
@@ -125,7 +130,13 @@
   }
 
   function serviceWorkerUrl() {
-    return new URL(SERVICE_WORKER_FILE, window.location.href).href;
+    // مسار مطلق من جذر الموقع، وليس نسبياً -- مقصود: صفحة الحجز العامة تُخدَّم
+    // عبر /d/<slug> (مسارين بالعمق)، فالمسار النسبي كان سيُحَلّ إلى
+    // /d/firebase-messaging-sw.js غير الموجود. هذا بالضبط نفس الخطأ الذي عطّل
+    // api-config.js في تلك الصفحة سابقاً (انظر التعليق في booking.html).
+    // الجذر هو المكان الصحيح أصلاً: Service Worker لا يتحكم إلا بالصفحات ضمن
+    // نطاق مساره، ونحن نريد نطاق الموقع كله.
+    return new URL('/' + SERVICE_WORKER_FILE, window.location.origin).href;
   }
 
   function getMessaging() {
@@ -152,13 +163,15 @@
     try {
       messaging.onMessage(function (payload) {
         var notification = (payload && payload.notification) || {};
-        // كلا نوعَي الإشعار (حجز جديد / تذكير العيادة) وجهتهما صفحة المواعيد --
-        // نفس وجهة إشعار الخلفية (webpush.fcm_options.link من main.py) ونفس
-        // وجهة الإشعار في تطبيق أندرويد، فيبقى السلوك واحداً في كل الحالات.
+        // إشعارات الطبيب (حجز جديد / تذكير العيادة) وجهتها صفحة المواعيد -- نفس
+        // وجهة إشعار الخلفية (webpush.fcm_options.link من main.py) ونفس وجهة
+        // الإشعار في تطبيق أندرويد. أما إشعار المريض في صفحة الحجز العامة فلا
+        // وجهة له (لا يملك حساباً ولا وصولاً لصفحة المواعيد)، فنعرض البطاقة
+        // للقراءة فقط. وجود authToken هو ما يفرّق بين السياقين.
         showInPageNotification(
           notification.title || 'عيادتك الرقمية',
           notification.body || '',
-          'appointments.html'
+          authToken() ? '/appointments.html' : null
         );
       });
     } catch (error) {
@@ -191,9 +204,16 @@
 
     card.appendChild(titleEl);
     card.appendChild(bodyEl);
-    card.addEventListener('click', function () {
-      window.location.href = link;
-    });
+    if (link) {
+      card.addEventListener('click', function () {
+        window.location.href = link;
+      });
+    } else {
+      card.style.cursor = 'default';
+      card.addEventListener('click', function () {
+        card.remove();
+      });
+    }
 
     document.body.appendChild(card);
     window.setTimeout(function () {
@@ -221,19 +241,41 @@
       });
   }
 
-  function fetchAndRegisterToken() {
-    return getMessaging()
-      .then(function (messaging) {
-        return navigator.serviceWorker.register(serviceWorkerUrl(), { scope: './' }).then(function (registration) {
-          return messaging.getToken({
-            vapidKey: vapidKey(),
-            serviceWorkerRegistration: registration,
-          });
+  // يسجّل الـ Service Worker ويستخرج رمز الجهاز من Firebase -- بلا أي إرسال
+  // للخادم. الفصل مقصود: نفس الرمز يُسلَّم إما لمسار الطبيب الموثّق أو لمسار
+  // المريض العام في صفحة الحجز، وكلاهما يشترك في هذه الخطوة حرفياً.
+  function fetchWebPushToken() {
+    return getMessaging().then(function (messaging) {
+      return navigator.serviceWorker.register(serviceWorkerUrl(), { scope: '/' }).then(function (registration) {
+        return messaging.getToken({
+          vapidKey: vapidKey(),
+          serviceWorkerRegistration: registration,
         });
+      });
+    });
+  }
+
+  function fetchAndRegisterToken() {
+    return fetchWebPushToken().then(function (webPushToken) {
+      if (!webPushToken) return false;
+      return sendTokenToServer(webPushToken);
+    });
+  }
+
+  // مسار المريض في صفحة الحجز العامة: لا يوجد تسجيل دخول للمريض إطلاقاً، والخادم
+  // يتحقق من ملكية الطلب بمطابقة رقم الهاتف المطبَّع (نفس ضمانة "تحقق من حالة طلبي").
+  function sendBookingTokenToServer(slug, phone, webPushToken) {
+    if (typeof window.apiUrl !== 'function') return Promise.resolve(false);
+    return fetch(window.apiUrl('/api/public/doctor/' + encodeURIComponent(slug) + '/booking-push'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: phone, web_push_token: webPushToken }),
+    })
+      .then(function (response) {
+        return response.ok;
       })
-      .then(function (webPushToken) {
-        if (!webPushToken) return false;
-        return sendTokenToServer(webPushToken);
+      .catch(function () {
+        return false;
       });
   }
 
@@ -310,6 +352,69 @@
       });
   }
 
+  // ---- مسار المريض في صفحة الحجز العامة (booking.html) -- أُضيف 2026-09-05 ----
+  // نسخة مستقلة عن enable() أعلاه لأن المريض ليس مستخدماً مسجّلاً: لا authToken
+  // ولا حساب، والهوية الوحيدة التي يملكها هي رقم هاتفه الذي حجز به.
+  function getPublicStatus() {
+    if (!isSupported()) return 'unsupported';
+    if (!isConfigured()) return 'not-configured';
+    if (Notification.permission === 'denied') return 'denied';
+    if (Notification.permission === 'granted') return 'granted';
+    return 'default';
+  }
+
+  function enableForBooking(options) {
+    var slug = (options && options.slug) || '';
+    var phone = (options && options.phone) || '';
+
+    if (!slug || !phone) {
+      return Promise.resolve({ ok: false, status: 'error', message: 'بيانات الطلب ناقصة.' });
+    }
+
+    var status = getPublicStatus();
+    if (status === 'unsupported') {
+      return Promise.resolve({
+        ok: false,
+        status: status,
+        message: 'متصفحك لا يدعم التنبيهات. لا تقلق — سيصلك رد الطبيب عبر واتساب.',
+      });
+    }
+    if (status === 'not-configured') {
+      return Promise.resolve({
+        ok: false,
+        status: status,
+        message: 'التنبيهات غير متاحة حالياً. سيصلك رد الطبيب عبر واتساب.',
+      });
+    }
+    if (status === 'denied') {
+      return Promise.resolve({
+        ok: false,
+        status: status,
+        message: 'التنبيهات محجوبة في متصفحك لهذا الموقع. اسمح بها من إعدادات المتصفح ثم أعد المحاولة.',
+      });
+    }
+
+    return Notification.requestPermission()
+      .then(function (permission) {
+        if (permission !== 'granted') {
+          return { ok: false, status: getPublicStatus(), message: 'لم تسمح بالتنبيهات. سيصلك رد الطبيب عبر واتساب.' };
+        }
+        return fetchWebPushToken().then(function (webPushToken) {
+          if (!webPushToken) {
+            return { ok: false, status: getPublicStatus(), message: 'تعذر تفعيل التنبيه. حاول مرة أخرى.' };
+          }
+          return sendBookingTokenToServer(slug, phone, webPushToken).then(function (saved) {
+            return saved
+              ? { ok: true, status: 'granted', message: 'تم تفعيل التنبيه ✅ سيصلك إشعار فور رد الطبيب.' }
+              : { ok: false, status: getPublicStatus(), message: 'تعذر تفعيل التنبيه حالياً. حاول مرة أخرى.' };
+          });
+        });
+      })
+      .catch(function () {
+        return { ok: false, status: getPublicStatus(), message: 'تعذر تفعيل التنبيه حالياً. حاول مرة أخرى.' };
+      });
+  }
+
   function onStatusChange(listener) {
     if (typeof listener === 'function') {
       statusListeners.push(listener);
@@ -328,6 +433,9 @@
     enable: enable,
     disable: disable,
     onStatusChange: onStatusChange,
+    // خاصّان بصفحة الحجز العامة (المريض، بلا تسجيل دخول)
+    getPublicStatus: getPublicStatus,
+    enableForBooking: enableForBooking,
   };
 
   // تحديث صامت للرمز عند كل تحميل صفحة -- فقط إذا كان الإذن ممنوحاً مسبقاً.

@@ -215,6 +215,7 @@ def on_startup() -> None:
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP;",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS web_push_token VARCHAR;",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_idle_reminder_at TIMESTAMP;",
+            "ALTER TABLE appointments ADD COLUMN IF NOT EXISTS patient_web_push_token VARCHAR;",
         ):
             activity_migration_db.execute(text(migration_statement))
         activity_migration_db.commit()
@@ -3314,10 +3315,15 @@ def respond_to_booking_request(
         db.rollback()
         raise HTTPException(status_code=400, detail="تعذر تحديث حالة الطلب حالياً. حاول مرة أخرى.")
 
+    # تسميتان تستخدمهما قناتا إشعار المريض بالأسفل (واتساب + إشعار المتصفح) --
+    # عُرِّفتا هنا خارج كتلة الهاتف في 2026-09-05 عندما أُضيفت قناة المتصفح، وإلا
+    # لبقيتا معرَّفتين داخل `if appointment.patient_phone` وحدها فينكسر مسار
+    # المتصفح بـ NameError في أي حالة لا يحمل فيها الموعد رقم هاتف.
+    doctor_label = (current_user.doctor_name or "").strip() or "العيادة"
+    appointment_date_label = appointment.appointment_date.strftime("%Y-%m-%d") if appointment.appointment_date else ""
+
     # إشعار المريض عبر واتساب بقرار الطبيب (best-effort -- لا يوقف الرد لو فشل الإرسال)
     if appointment.patient_phone:
-        doctor_label = (current_user.doctor_name or "").strip() or "العيادة"
-        appointment_date_label = appointment.appointment_date.strftime("%Y-%m-%d") if appointment.appointment_date else ""
         if new_status == "pending":
             patient_message = (
                 f"مرحباً {appointment.patient_name}، تم قبول طلب حجزكم لدى {doctor_label} "
@@ -3330,6 +3336,38 @@ def respond_to_booking_request(
                 "يرجى التواصل مع العيادة أو تجربة موعد آخر عبر رابط الحجز."
             )
         send_whatsapp_message_for_doctor(current_user, appointment.patient_phone, patient_message)
+
+    # إشعار متصفح للمريض بقرار الطبيب (أُضيف 2026-09-05) -- قناة ثانية مستقلة
+    # تماماً عن واتساب وليست بديلاً عنه: رسالة الواتساب تُرسَل من حساب Green API
+    # الخاص بكل طبيب، فالطبيب الذي لم يربط حسابه بعد لا يصل مرضاه أي شيء إطلاقاً،
+    # بينما هذا الإشعار يُرسَل من حساب Firebase الخاص بالمنصة فيعمل لكل الأطباء.
+    # يُتجاهَل بصمت إن لم يفعّل المريض التنبيه من صفحة الحجز (القيمة NULL).
+    if appointment.patient_web_push_token:
+        if new_status == "pending":
+            push_title = "تم قبول موعدك ✅"
+            push_body = (
+                f"أكّد {doctor_label} موعدك بتاريخ {appointment_date_label} "
+                f"الساعة {appointment.appointment_time}. بانتظارك!"
+            )
+        else:
+            push_title = "بخصوص طلب حجزك"
+            push_body = (
+                f"لم يتمكن {doctor_label} من تأكيد موعدك بتاريخ {appointment_date_label}. "
+                "افتح صفحة الحجز لاختيار موعد آخر مناسب."
+            )
+
+        booking_page_link = (
+            f"{PRODUCTION_SITE_URL}/d/{current_user.booking_slug}"
+            if current_user.booking_slug
+            else PRODUCTION_SITE_URL
+        )
+        send_push_to_token(
+            appointment.patient_web_push_token,
+            push_title,
+            push_body,
+            data={"type": "booking_response", "decision": respond_request.decision},
+            click_link=booking_page_link,
+        )
 
     return {
         "message": "تم إرسال الرد بنجاح.",
@@ -5344,11 +5382,16 @@ def create_public_booking_request(
 
     # إشعار Push فوري لتطبيق الطبيب على أندرويد (best-effort مثل واتساب أعلاه
     # تماماً -- مستقل عنه، يعمل حتى لو واتساب غير مضبوط أو فشل إرساله)
-    send_push_notification_to_doctor(
+    # 2026-09-05: كان هذا النداء يستهدف جهاز التطبيق وحده (send_push_notification_to_doctor)
+    # بينما بطاقة "إشعارات المتصفح" في صفحة "حسابي" تَعِد الطبيب صراحةً بتنبيه على
+    # متصفحه "عند وصول حجز جديد" -- فجوة بين ما تعِد به الواجهة وما ينفّذه الكود.
+    # الآن يصل الإشعار إلى تطبيق أندرويد ومتصفح الموقع معاً.
+    send_push_to_all_doctor_devices(
         doctor,
         title="📅 طلب حجز جديد",
         body=f"{trimmed_name} حجز موعداً بتاريخ {parsed_date.isoformat()} الساعة {trimmed_time}",
         data={"type": "new_booking", "appointment_id": str(db_appointment.id)},
+        click_link=f"{PRODUCTION_SITE_URL}/appointments.html",
     )
 
     return {
@@ -5408,6 +5451,73 @@ def get_public_booking_status(
         "appointment_date": appointment.appointment_date.strftime("%Y-%m-%d") if appointment.appointment_date else None,
         "appointment_time": appointment.appointment_time,
     }
+
+
+class PublicBookingPushSubscribeRequest(BaseModel):
+    phone: str
+    web_push_token: str
+
+
+@app.post("/api/public/doctor/{slug}/booking-push")
+def subscribe_public_booking_push(
+    slug: str,
+    payload: PublicBookingPushSubscribeRequest,
+    db: Session = Depends(database.get_db),
+):
+    """يحفظ رمز إشعارات متصفح المريض على أحدث طلب حجز له لدى هذا الطبيب، ليصله
+    إشعار بقرار الطبيب لاحقاً (2026-09-05). مسار عام بلا تسجيل دخول -- فالمريض
+    ليس له حساب أصلاً -- ومحميّ بنفس ضمانة /booking-status بالضبط: لا يُحفَظ أي
+    رمز إلا على موعد يحمل رقم الهاتف نفسه بعد تطبيعه، فلا يستطيع غريب ربط رمزه
+    بطلب شخص آخر ولا استنتاج أي شيء عن مواعيد غيره.
+
+    ملاحظة أمنية مقصودة: الرد لا يكشف اسم المريض ولا تاريخ الموعد ولا أي بيانات
+    أخرى -- فقط تأكيد الحفظ -- حتى لا يتحوّل هذا المسار إلى وسيلة للتحقق من
+    أرقام الهواتف أو استخراج بيانات المرضى.
+    """
+    doctor = get_public_doctor_or_404(db, slug)
+
+    normalized_phone = normalize_whatsapp_phone(payload.phone)
+    if not normalized_phone:
+        raise HTTPException(status_code=400, detail="رقم الهاتف غير صالح.")
+
+    token_value = (payload.web_push_token or "").strip()
+    if not token_value:
+        raise HTTPException(status_code=400, detail="رمز الإشعارات مطلوب.")
+
+    # نفس منطق المطابقة المستخدم في get_public_booking_status أعلاه: لا يوجد عمود
+    # مُطبَّع لرقم الهاتف، فنطبّع بايثونياً داخل مواعيد هذا الطبيب وحدها.
+    candidate_appointments = (
+        db.query(models.Appointment)
+        .filter(
+            models.Appointment.doctor_email == doctor.email,
+            models.Appointment.patient_phone.isnot(None),
+        )
+        .order_by(models.Appointment.id.desc())
+        .all()
+    )
+    appointment = next(
+        (
+            candidate
+            for candidate in candidate_appointments
+            if normalize_whatsapp_phone(candidate.patient_phone) == normalized_phone
+        ),
+        None,
+    )
+
+    if not appointment:
+        raise HTTPException(
+            status_code=404,
+            detail="لم يتم العثور على طلب حجز مرتبط بهذا الرقم لدى هذا الطبيب.",
+        )
+
+    try:
+        appointment.patient_web_push_token = token_value
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر تفعيل التنبيه حالياً. حاول مرة أخرى.")
+
+    return {"message": "تم تفعيل التنبيه بنجاح."}
 
 
 @app.get("/d/{slug}", include_in_schema=False)
