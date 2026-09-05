@@ -239,6 +239,26 @@ def init_db():
                 connection.execute(text("ALTER TABLE users ADD COLUMN fcm_token VARCHAR"))
 
     # ====================================================================
+    # تتبّع نشاط الطبيب + تذكير الخمول اليومي -- 2026-09-05
+    # ====================================================================
+    # ثلاثة أعمدة nullable بالكامل على users، فلا تؤثر على أي صف قائم: آخر نشاط
+    # موثّق للطبيب، رمز إشعارات المتصفح، وآخر تذكير خمول أُرسل له. بلا شرط نوع
+    # قاعدة البيانات لنفس السبب الموثّق أعلاه (الإنتاج على Render هو Supabase
+    # Postgres وليس SQLite). انظر أيضاً كتلة ALTER TABLE ... IF NOT EXISTS
+    # المقابلة في on_startup داخل main.py.
+    if "users" in inspector.get_table_names():
+        activity_columns = {column["name"] for column in inspector.get_columns("users")}
+        if "last_active_at" not in activity_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN last_active_at TIMESTAMP"))
+        if "web_push_token" not in activity_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN web_push_token VARCHAR"))
+        if "last_idle_reminder_at" not in activity_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN last_idle_reminder_at TIMESTAMP"))
+
+    # ====================================================================
     # فواتير العلاج المستقلة (treatment_invoices) -- 2026-08-25
     # ====================================================================
     # يحل مشكلة تداخل حسابات المريض: كانت "التكلفة الإجمالية" حقلاً واحداً

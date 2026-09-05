@@ -378,6 +378,11 @@
 	<script src="api-config.js"></script>
 	<script src="clinic-loader.js"></script>
 	<script src="notification-badge.js"></script>
+	<!-- إشعارات المتصفح (Web Push) -- 2026-09-05: firebase-web-config.js يحمل
+	     إعدادات Firebase للويب ومفتاح VAPID، ويستورده أيضاً firebase-messaging-sw.js
+	     في جذر الموقع. الميزة صامتة تماماً ما لم تُملأ تلك القيم. -->
+	<script src="firebase-web-config.js"></script>
+	<script src="web-push.js"></script>
 	<script src="mobile-shell.js"></script>
 	<script>
 		let userTier = localStorage.getItem("user_tier");

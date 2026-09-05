@@ -360,6 +360,37 @@
 						</ol>
 					</details>
 				</section>
+
+				<!-- إشعارات المتصفح (Web Push) -- 2026-09-05: تفعيل صريح بضغطة زر من
+				     الطبيب، ولا نطلب الإذن تلقائياً عند فتح الصفحة إطلاقاً (كروم يحجب
+				     الطلب نهائياً على المواقع التي تفعل ذلك). المنطق كله في web-push.js. -->
+				<section class="panel-soft rounded-[28px] border border-white/70 bg-white/90 p-4 shadow-xl shadow-ink-200/70 sm:p-6">
+					<div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+						<div>
+							<h3 class="inline-flex items-center gap-2 text-xl font-bold text-brand-900"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg><span>إشعارات المتصفح</span></h3>
+							<p class="mt-1 text-sm text-ink-500">فعّلها ليصلك تنبيه على هذا الجهاز عند وصول حجز جديد، وتذكير يومي إن لم تفتح عيادتك — حتى والموقع مغلق تماماً.</p>
+						</div>
+						<span id="webPushStatusBadge" class="rounded-full border border-ink-200 bg-ink-50 px-3 py-1 text-xs font-bold text-ink-500">جاري التحقق...</span>
+					</div>
+
+					<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+						<p id="webPushStatusMsg" class="text-sm font-medium text-ink-500">جاري التحقق من دعم متصفحك...</p>
+						<div class="flex flex-wrap gap-2">
+							<button id="enableWebPushBtn" type="button" class="rounded-2xl bg-gradient-to-r from-brand-600 to-brand-800 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:from-brand-700 hover:to-brand-700">تفعيل إشعارات المتصفح</button>
+							<button id="disableWebPushBtn" type="button" class="hidden rounded-2xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm font-bold text-brand-700 transition hover:bg-brand-100">إيقاف على هذا الجهاز</button>
+						</div>
+					</div>
+
+					<details class="mt-5 rounded-2xl border border-brand-100 bg-brand-50/50 p-4 text-sm text-ink-700">
+						<summary class="cursor-pointer select-none font-bold text-brand-800">ملاحظات مهمة قبل التفعيل</summary>
+						<ol class="mt-3 list-decimal space-y-2 pr-5 leading-6">
+							<li>الإذن يُمنح لكل متصفح وجهاز على حدة — فعّله على كل جهاز تعمل عليه فعلاً.</li>
+							<li>على iPhone وiPad يجب أولاً إضافة الموقع إلى الشاشة الرئيسية (زر المشاركة ← "إضافة إلى الشاشة الرئيسية") ثم فتحه من هناك، وإلا لن يسمح Safari بالإشعارات إطلاقاً — قيد من Apple لا يمكن تجاوزه.</li>
+							<li>إن سبق أن رفضت الإذن فلن يظهر الطلب مجدداً: اضغط أيقونة القفل بجانب عنوان الموقع ← الإشعارات ← السماح، ثم أعد المحاولة.</li>
+							<li>تطبيق الجوال يستقبل الإشعارات نفسها بشكل مستقل — تفعيل أحدهما لا يلغي الآخر، وتصلك على الاثنين معاً.</li>
+						</ol>
+					</details>
+				</section>
 			</div>
 
 			<footer class="mt-8 text-center text-xs font-mono tracking-wide text-brand-500/90">
@@ -370,6 +401,11 @@
 
 	<script src="api-config.js"></script>
 	<script src="notification-badge.js"></script>
+	<!-- إشعارات المتصفح (Web Push) -- 2026-09-05: firebase-web-config.js يحمل
+	     إعدادات Firebase للويب ومفتاح VAPID، ويستورده أيضاً firebase-messaging-sw.js
+	     في جذر الموقع. الميزة صامتة تماماً ما لم تُملأ تلك القيم. -->
+	<script src="firebase-web-config.js"></script>
+	<script src="web-push.js"></script>
 	<script src="mobile-shell.js"></script>
 	<!-- توليد QR Code من جهة المتصفح مباشرة (بلا أي طلب سيرفر) لرابط الحجز العام
 	     الخاص بكل طبيب -- 2026-08-23. -->
@@ -1115,6 +1151,110 @@
 	}
 
 	applyDoctorAvatarToHeaderLogo();
+
+	// --- بطاقة "إشعارات المتصفح" (2026-09-05) ---
+	// كل التعامل مع Firebase/Service Worker/الأذونات داخل web-push.js؛ هنا نرسم
+	// الحالة ونربط الزرين فقط. إن لم يُحمَّل الملف لأي سبب نُخفي البطاقة كلياً
+	// بدل ترك زر لا يفعل شيئاً أمام الطبيب.
+	(function initWebPushCard() {
+		const webPushBadge = document.getElementById('webPushStatusBadge');
+		const webPushMsg = document.getElementById('webPushStatusMsg');
+		const enableWebPushBtn = document.getElementById('enableWebPushBtn');
+		const disableWebPushBtn = document.getElementById('disableWebPushBtn');
+		if (!webPushBadge || !webPushMsg || !enableWebPushBtn || !disableWebPushBtn) return;
+
+		const webPushSection = webPushBadge.closest('section');
+		if (!window.ClinicWebPush) {
+			if (webPushSection) webPushSection.classList.add('hidden');
+			return;
+		}
+
+		const BADGE_NEUTRAL = 'rounded-full border border-ink-200 bg-ink-50 px-3 py-1 text-xs font-bold text-ink-500';
+		const BADGE_ON = 'rounded-full border border-success-200 bg-success-50 px-3 py-1 text-xs font-bold text-success-700';
+		const BADGE_OFF = 'rounded-full border border-warning-200 bg-warning-50 px-3 py-1 text-xs font-bold text-warning-700';
+
+		const STATUS_VIEW = {
+			granted: {
+				badgeText: 'مفعّلة ',
+				badgeClass: BADGE_ON,
+				message: 'إشعارات المتصفح مفعّلة على هذا الجهاز.',
+				showEnable: false,
+				showDisable: true,
+			},
+			default: {
+				badgeText: 'غير مفعّلة',
+				badgeClass: BADGE_OFF,
+				message: 'لم تُفعّل بعد — اضغط الزر ووافق على طلب الإذن الذي سيظهر من المتصفح.',
+				showEnable: true,
+				showDisable: false,
+			},
+			denied: {
+				badgeText: 'محجوبة',
+				badgeClass: BADGE_OFF,
+				message: 'الإشعارات محجوبة من إعدادات المتصفح لهذا الموقع. اضغط أيقونة القفل بجانب العنوان ← الإشعارات ← السماح، ثم حدّث الصفحة.',
+				showEnable: false,
+				showDisable: false,
+			},
+			unsupported: {
+				badgeText: 'غير مدعومة',
+				badgeClass: BADGE_NEUTRAL,
+				message: 'متصفحك الحالي لا يدعم إشعارات الويب. استخدم Chrome أو Edge على الحاسوب، أو تطبيق الجوال.',
+				showEnable: false,
+				showDisable: false,
+			},
+			'not-configured': {
+				badgeText: 'غير مهيّأة',
+				badgeClass: BADGE_NEUTRAL,
+				message: 'إشعارات المتصفح لم تُهيّأ بعد على هذا الموقع (بانتظار إعدادات Firebase للويب).',
+				showEnable: false,
+				showDisable: false,
+			},
+			'not-logged-in': {
+				badgeText: 'غير مفعّلة',
+				badgeClass: BADGE_NEUTRAL,
+				message: 'يرجى تسجيل الدخول أولاً.',
+				showEnable: false,
+				showDisable: false,
+			},
+		};
+
+		function renderWebPushStatus(status) {
+			const view = STATUS_VIEW[status] || STATUS_VIEW.default;
+			webPushBadge.textContent = view.badgeText;
+			webPushBadge.className = view.badgeClass;
+			webPushMsg.textContent = view.message;
+			enableWebPushBtn.classList.toggle('hidden', !view.showEnable);
+			disableWebPushBtn.classList.toggle('hidden', !view.showDisable);
+		}
+
+		function runWebPushAction(button, action) {
+			const originalLabel = button.textContent;
+			button.disabled = true;
+			button.textContent = 'جاري التنفيذ...';
+			action()
+				.then((result) => {
+					if (result && result.message) showToast(result.message);
+					renderWebPushStatus((result && result.status) || window.ClinicWebPush.getStatus());
+				})
+				.catch(() => {
+					showToast('تعذر تنفيذ العملية حالياً. حاول مرة أخرى.');
+					renderWebPushStatus(window.ClinicWebPush.getStatus());
+				})
+				.finally(() => {
+					button.disabled = false;
+					button.textContent = originalLabel;
+				});
+		}
+
+		enableWebPushBtn.addEventListener('click', () => {
+			runWebPushAction(enableWebPushBtn, () => window.ClinicWebPush.enable());
+		});
+		disableWebPushBtn.addEventListener('click', () => {
+			runWebPushAction(disableWebPushBtn, () => window.ClinicWebPush.disable());
+		});
+
+		window.ClinicWebPush.onStatusChange(renderWebPushStatus);
+	})();
 </script>
 </body>
 </html>

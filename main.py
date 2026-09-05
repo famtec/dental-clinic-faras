@@ -206,6 +206,23 @@ def on_startup() -> None:
     finally:
         activation_keys_migration_db.close()
 
+    # أعمدة تتبّع نشاط الطبيب + تذكير الخمول اليومي (2026-09-05) -- انظر
+    # models.py (تعريف الأعمدة) و database.py (نسخة SQLite المحلية). الثلاثة
+    # nullable بالكامل، وتنفيذ هذه الكتلة آمن ومتكرّر بلا أي أثر جانبي.
+    activity_migration_db = database.SessionLocal()
+    try:
+        for migration_statement in (
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP;",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS web_push_token VARCHAR;",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_idle_reminder_at TIMESTAMP;",
+        ):
+            activity_migration_db.execute(text(migration_statement))
+        activity_migration_db.commit()
+    except Exception:
+        activity_migration_db.rollback()
+    finally:
+        activity_migration_db.close()
+
     # Keep legacy SQLite-safe migration checks for existing local environments.
     database.init_db()
     seed_default_activation_key()
@@ -360,12 +377,32 @@ def _get_firebase_access_token() -> str | None:
         return None
 
 
-def send_push_notification_to_doctor(doctor, title: str, body: str, data: dict | None = None) -> bool:
-    # إشعار Push فوري لتطبيق الطبيب على أندرويد عند وصول حجز جديد (أُضيف
-    # 2026-08-24) -- best-effort بالكامل مثل send_whatsapp_message_via_green_api
-    # تماماً: لا يُطلق أي استثناء ولا يوقف أي عملية حجز لو فشل الإرسال أو لم
-    # تُضبط بيانات Firebase أو لم يسجّل الطبيب جهازه بعد.
-    if not doctor or not getattr(doctor, "fcm_token", None):
+def send_push_to_token(
+    token: str | None,
+    title: str,
+    body: str,
+    data: dict | None = None,
+    channel_id: str | None = None,
+    click_link: str | None = None,
+) -> bool:
+    """جوهر إرسال إشعار Push واحد إلى رمز جهاز واحد عبر FCM v1 -- مصدر الحقيقة
+    الوحيد لكل إشعارات المشروع (أُخرجت من send_push_notification_to_doctor في
+    2026-09-05 عندما صار للطبيب أكثر من سطح واحد: تطبيق أندرويد + متصفح الموقع).
+    أي تعديل مستقبلي على شكل رسالة FCM يكفي تطبيقه هنا مرة واحدة -- نفس المبدأ
+    المطبَّق في resolve_activation_key_tier بعد خلل تصنيف أكواد التفعيل.
+
+    best-effort بالكامل مثل send_whatsapp_message_via_green_api تماماً: لا يُطلق
+    أي استثناء ولا يوقف أي عملية لو فشل الإرسال أو لم تُضبط بيانات Firebase أو
+    لم يسجّل الطبيب أي جهاز بعد.
+
+    channel_id: قناة إشعارات أندرويد (يسمح للطبيب بكتم "تذكيرات العيادة" وحدها
+    دون أن يفقد إشعارات "حجوزات جديدة"). إن تُركت فارغة يستخدم أندرويد القناة
+    الافتراضية المعرّفة في AndroidManifest.xml.
+    click_link: الرابط الذي يُفتح عند الضغط على إشعار المتصفح (Web Push فقط --
+    أندرويد يوجَّه عبر حقل data["type"] داخل التطبيق).
+    """
+    token_value = (token or "").strip() if isinstance(token, str) else ""
+    if not token_value:
         return False
     if not FIREBASE_PROJECT_ID or not FIREBASE_SERVICE_ACCOUNT_JSON:
         return False
@@ -375,12 +412,27 @@ def send_push_notification_to_doctor(doctor, title: str, body: str, data: dict |
         return False
 
     url = f"https://fcm.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}/messages:send"
+
+    android_config: dict = {"priority": "high"}
+    if channel_id:
+        android_config["notification"] = {"channel_id": channel_id}
+
+    webpush_config: dict = {
+        "notification": {
+            "icon": f"{PRODUCTION_SITE_URL}/favicon.png",
+            "badge": f"{PRODUCTION_SITE_URL}/favicon.png",
+        }
+    }
+    if click_link:
+        webpush_config["fcm_options"] = {"link": click_link}
+
     payload = {
         "message": {
-            "token": doctor.fcm_token,
+            "token": token_value,
             "notification": {"title": title, "body": body},
             "data": {str(key): str(value) for key, value in (data or {}).items()},
-            "android": {"priority": "high"},
+            "android": android_config,
+            "webpush": webpush_config,
         }
     }
 
@@ -395,6 +447,59 @@ def send_push_notification_to_doctor(doctor, title: str, body: str, data: dict |
     except Exception as exc:
         print(f"⚠️ [PUSH NOTIFICATION] فشل إرسال إشعار Push: {exc}")
         return False
+
+
+def send_push_notification_to_doctor(
+    doctor,
+    title: str,
+    body: str,
+    data: dict | None = None,
+    channel_id: str | None = None,
+    click_link: str | None = None,
+) -> bool:
+    # إشعار Push فوري لتطبيق الطبيب على أندرويد عند وصول حجز جديد (أُضيف
+    # 2026-08-24). بقي هذا الغلاف بنفس اسمه وسلوكه بالضبط بعد إعادة هيكلة
+    # 2026-09-05 (جهاز التطبيق وحده، fcm_token) حتى لا يتغيّر أي شيء في مسار
+    # إشعار الحجز الجديد -- الإرسال لكل أسطح الطبيب يتم عبر الدالة التالية.
+    if not doctor:
+        return False
+    return send_push_to_token(
+        getattr(doctor, "fcm_token", None),
+        title,
+        body,
+        data=data,
+        channel_id=channel_id,
+        click_link=click_link,
+    )
+
+
+def send_push_to_all_doctor_devices(
+    doctor,
+    title: str,
+    body: str,
+    data: dict | None = None,
+    channel_id: str | None = None,
+    click_link: str | None = None,
+) -> int:
+    """يرسل نفس الإشعار لكل أسطح الطبيب المسجَّلة (تطبيق أندرويد + متصفح
+    الموقع)، ويُرجع عدد الأسطح التي وصلها فعلاً. الطبيب قد يستخدم الاثنين معاً،
+    ورمز كلٍّ منهما مخزَّن في عمود مستقل (fcm_token / web_push_token)."""
+    if not doctor:
+        return 0
+
+    delivered = 0
+    for device_token in (getattr(doctor, "fcm_token", None), getattr(doctor, "web_push_token", None)):
+        if send_push_to_token(
+            device_token,
+            title,
+            body,
+            data=data,
+            channel_id=channel_id,
+            click_link=click_link,
+        ):
+            delivered += 1
+
+    return delivered
 
 
 def send_due_appointment_reminders() -> int:
@@ -662,6 +767,227 @@ async def _patient_recall_loop() -> None:
 @app.on_event("startup")
 async def _start_patient_recall_task() -> None:
     asyncio.create_task(_patient_recall_loop())
+
+
+# --- محرّك تذكير الطبيب الخامل (Doctor Idle Reminder) -- أُضيف 2026-09-05 ---
+# طلب صريح من مالك المنصة: إن لم يفتح الطبيب الموقع ولا التطبيق في يومٍ ما،
+# يصله إشعار تذكيري عند الساعة 1 ظهراً بتوقيت العيادة يدعوه للعودة إلى نظامه.
+# يعتمد كلياً على users.last_active_at التي تُختم مركزياً في touch_user_activity
+# بالأسفل، ويرسل عبر send_push_to_all_doctor_devices إلى تطبيق أندرويد ومتصفح
+# الموقع معاً.
+#
+# لماذا الحلقة موثوقة رغم أن Render المجاني ينام؟ لأن _keep_render_alive_loop
+# بالأعلى يُبقي الخدمة مستيقظة من KEEP_ALIVE_START_HOUR (8ص) إلى
+# KEEP_ALIVE_END_HOUR (10م) بتوقيت دمشق، والساعة 1 ظهراً تقع داخل هذه النافذة
+# بوضوح. **إن غُيّرت ساعة التذكير مستقبلاً إلى خارج تلك النافذة فلن تعمل
+# إطلاقاً** -- لا تنسَ توسيع نافذة keep-alive معها.
+IDLE_REMINDER_HOUR = int(os.getenv("IDLE_REMINDER_HOUR", "13"))  # 1 ظهراً بتوقيت KEEP_ALIVE_TIMEZONE
+IDLE_REMINDER_CHECK_INTERVAL_SECONDS = int(os.getenv("IDLE_REMINDER_CHECK_INTERVAL_SECONDS", str(15 * 60)))
+# احترام أيام عطلة الطبيب (users.work_days) -- قرار المالك: لا نزعجه في يوم
+# عطلته. اضبط المتغيّر إلى "0" لتعطيل هذا الاحترام وإرسال التذكير كل يوم.
+IDLE_REMINDER_RESPECT_WORK_DAYS = os.getenv("IDLE_REMINDER_RESPECT_WORK_DAYS", "1").strip().lower() not in ("0", "false", "no")
+# قناة إشعارات أندرويد مستقلة عن قناة الحجوزات (new_booking_channel) حتى يقدر
+# الطبيب كتم التذكيرات وحدها دون أن يفقد إشعار وصول حجز جديد. يجب أن تطابق
+# القيمة نفسها في dental_app/lib/services/push_notification_service.dart.
+IDLE_REMINDER_CHANNEL_ID = "clinic_reminder_channel"
+
+
+def _local_now_naive() -> datetime:
+    return datetime.now(KEEP_ALIVE_TIMEZONE).replace(tzinfo=None)
+
+
+def _start_of_local_today() -> datetime:
+    return _local_now_naive().replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _arabic_count_phrase(count: int, singular: str, dual: str, plural: str, accusative: str) -> str:
+    """صياغة عربية سليمة للعدد داخل نص الإشعار: "موعد واحد" / "موعدان" /
+    "3 مواعيد" / "12 موعداً" -- بدل "3 موعد" الركيكة."""
+    if count == 1:
+        return singular
+    if count == 2:
+        return dual
+    if 3 <= count <= 10:
+        return f"{count} {plural}"
+    return f"{count} {accusative}"
+
+
+def is_doctor_working_today(doctor: "models.User", today: date) -> bool:
+    """users.work_days أرقام مفصولة بفواصل بترميز date.weekday() نفسه
+    (الاثنين=0 .. الأحد=6)، وهو نفس الترميز المستخدم في صفحة الحجز العامة.
+    إن لم يضبط الطبيب أيام دوامه إطلاقاً نعتبر كل الأيام أيام عمل -- لا نكتم
+    التذكير عنه بسبب حقل لم يملأه أصلاً."""
+    raw_work_days = (getattr(doctor, "work_days", None) or "").strip()
+    if not raw_work_days:
+        return True
+
+    work_day_numbers = set()
+    for part in raw_work_days.split(","):
+        part = part.strip()
+        if part.isdigit():
+            work_day_numbers.add(int(part))
+
+    if not work_day_numbers:
+        return True
+
+    return today.weekday() in work_day_numbers
+
+
+def build_idle_reminder_message(db: Session, doctor: "models.User") -> tuple[str, str]:
+    """نص التذكير يُبنى من بيانات الطبيب الفعلية اليوم وليس نصاً ثابتاً --
+    "لديك 3 مواعيد اليوم وطلب حجز واحد بانتظار ردّك" أقوى بكثير من رسالة
+    تسويقية عامة، وتعطي الطبيب سبباً حقيقياً لفتح النظام فوراً."""
+    normalized_tier = (getattr(doctor, "tier", None) or "").strip().lower()
+
+    # منتهي الاشتراك: نص مختلف تماماً -- تذكيره بمواعيد لا يستطيع رؤيتها أصلاً
+    # إحباط، والرسالة الصحيحة له هي التجديد.
+    if normalized_tier == "expired_subscription":
+        return (
+            "اشتراكك في عيادتك الرقمية منتهٍ ⏳",
+            "مواعيدك وسجلات مرضاك وتقاريرك المالية محفوظة كما تركتها تماماً. "
+            "جدّد اشتراكك لتستعيد الوصول إليها فوراً.",
+        )
+
+    today_start = _start_of_local_today()
+    today_end = today_start + timedelta(days=1)
+
+    appointments_today = (
+        db.query(func.count(models.Appointment.id))
+        .filter(
+            models.Appointment.doctor_email == doctor.email,
+            models.Appointment.appointment_date >= today_start,
+            models.Appointment.appointment_date < today_end,
+            models.Appointment.status.notin_(["rejected", "pending_confirmation"]),
+        )
+        .scalar()
+        or 0
+    )
+
+    pending_requests = (
+        db.query(func.count(models.Appointment.id))
+        .filter(
+            models.Appointment.doctor_email == doctor.email,
+            models.Appointment.status == "pending_confirmation",
+        )
+        .scalar()
+        or 0
+    )
+
+    message_parts = []
+    if appointments_today:
+        message_parts.append(
+            "لديك " + _arabic_count_phrase(appointments_today, "موعد واحد", "موعدان", "مواعيد", "موعداً") + " اليوم"
+        )
+    if pending_requests:
+        message_parts.append(
+            _arabic_count_phrase(pending_requests, "طلب حجز واحد", "طلبا حجز", "طلبات حجز", "طلب حجز")
+            + " بانتظار ردّك"
+        )
+
+    if message_parts:
+        return ("عيادتك بانتظارك 🦷", " و".join(message_parts) + ". افتح عيادتك الرقمية وألقِ نظرة سريعة.")
+
+    return (
+        "عيادتك بانتظارك 🦷",
+        "لم تفتح عيادتك الرقمية اليوم. دقيقة واحدة تكفي لمراجعة مواعيدك وتسجيل ما استجدّ على مرضاك.",
+    )
+
+
+def get_idle_doctors(db: Session) -> list["models.User"]:
+    """الأطباء المستحقون لتذكير خمول الآن، حسب القواعد المتفق عليها:
+    نشط، فعّل حسابه يوماً ما، لديه جهاز مسجَّل واحد على الأقل، اليوم ليس يوم
+    عطلته، لم يفتح النظام منذ منتصف ليلة اليوم المحلي، ولم يصله تذكير اليوم."""
+    today_start = _start_of_local_today()
+    today = today_start.date()
+
+    idle_doctors = []
+    for doctor in db.query(models.User).filter(models.User.is_active.is_(True)).all():
+        if not doctor.email:
+            continue
+
+        # حساب لم يُفعَّل يوماً ليس "خاملاً" -- هو ببساطة لم يبدأ بعد، وإشعاره
+        # إزعاج بلا معنى (قرار صريح من المالك 2026-09-05).
+        normalized_tier = (doctor.tier or "").strip().lower()
+        if normalized_tier in ("", "pending_activation"):
+            continue
+
+        # بلا أي جهاز مسجَّل لا يوجد إلى أين نرسل أصلاً -- نتخطاه قبل أي استعلام
+        # إضافي بدل محاولة إرسال فاشلة مؤكدة.
+        if not getattr(doctor, "fcm_token", None) and not getattr(doctor, "web_push_token", None):
+            continue
+
+        if IDLE_REMINDER_RESPECT_WORK_DAYS and not is_doctor_working_today(doctor, today):
+            continue
+
+        last_active_at = getattr(doctor, "last_active_at", None)
+        if last_active_at and last_active_at >= today_start:
+            continue  # فتح النظام اليوم فعلاً، لا داعي للتذكير
+
+        last_reminder_at = getattr(doctor, "last_idle_reminder_at", None)
+        if last_reminder_at and last_reminder_at >= today_start:
+            continue  # وصله تذكير اليوم بالفعل -- حارس عدم التكرار
+
+        idle_doctors.append(doctor)
+
+    return idle_doctors
+
+
+def send_idle_reminder_to_doctor(db: Session, doctor: "models.User") -> bool:
+    title, body = build_idle_reminder_message(db, doctor)
+    delivered_devices = send_push_to_all_doctor_devices(
+        doctor,
+        title,
+        body,
+        data={"type": "idle_reminder"},
+        channel_id=IDLE_REMINDER_CHANNEL_ID,
+        # وجهة الضغط على إشعار المتصفح: صفحة المواعيد -- نص التذكير نفسه
+        # مبني على مواعيد اليوم وطلبات الحجز المعلّقة، وهي نفس وجهة الإشعار
+        # في تطبيق أندرويد (تبويب "المواعيد") فيبقى السلوك واحداً على السطحين.
+        click_link=f"{PRODUCTION_SITE_URL}/appointments.html",
+    )
+
+    # لا نختم last_idle_reminder_at إلا إذا وصل الإشعار فعلاً إلى سطح واحد على
+    # الأقل -- وإلا لأسكتنا التذكير ليوم كامل بسبب عطل مؤقت في Firebase.
+    if not delivered_devices:
+        return False
+
+    doctor.last_idle_reminder_at = _local_now_naive()
+    db.commit()
+    return True
+
+
+def send_due_idle_reminders() -> int:
+    db = database.SessionLocal()
+    sent_count = 0
+    try:
+        for doctor in get_idle_doctors(db):
+            if send_idle_reminder_to_doctor(db, doctor):
+                sent_count += 1
+    except Exception as exc:
+        db.rollback()
+        print(f"⚠️ [IDLE REMINDER] فشل فحص الأطباء الخاملين: {exc}")
+    finally:
+        db.close()
+
+    return sent_count
+
+
+async def _idle_reminder_loop() -> None:
+    while True:
+        await asyncio.sleep(IDLE_REMINDER_CHECK_INTERVAL_SECONDS)
+        if datetime.now(KEEP_ALIVE_TIMEZONE).hour != IDLE_REMINDER_HOUR:
+            continue
+        try:
+            sent_count = await asyncio.to_thread(send_due_idle_reminders)
+            if sent_count:
+                print(f"🔔 [IDLE REMINDER] تم إرسال {sent_count} تذكير للأطباء الخاملين اليوم.")
+        except Exception as exc:
+            print(f"⚠️ [IDLE REMINDER] خطأ غير متوقع بحلقة التذكير: {exc}")
+
+
+@app.on_event("startup")
+async def _start_idle_reminder_task() -> None:
+    asyncio.create_task(_idle_reminder_loop())
 
 
 # 2. تفعيل نظام CORS للسماح لموقع الويب وتطبيق الأندرويد بالاتصال بالـ API دون قيود أمنية ومتصفح
@@ -1204,6 +1530,35 @@ def require_premium_user_by_email(db: Session, authorization: str | None) -> mod
     return user
 
 
+# --- ختم آخر نشاط للطبيب (أُضيف 2026-09-05) ---
+# نقطة الحقيقة الوحيدة لسؤال "متى آخر مرة فتح فيها هذا الطبيب النظام؟"، ويعتمد
+# عليها كلياً محرّك تذكير الخمول بالأعلى. تُستدعى من get_current_doctor_user
+# وحدها -- وهي النقطة التي يمرّ منها كل طلب موثّق في المشروع، من الموقع ومن
+# تطبيق أندرويد على حدّ سواء -- فلم نحتج أي تعديل في الواجهة الأمامية ولا في
+# التطبيق لتغذية هذه القيمة، ولن ينسى أي مسار جديد يُضاف مستقبلاً ختمَها.
+#
+# الـ throttle مقصود وضروري: بدونه يتحوّل كل طلب قراءة عادي إلى كتابة في
+# القاعدة -- الصفحة الواحدة في الموقع تُطلق عدة طلبات عند فتحها، و
+# notification-badge.js وحده يستدعي الـ API كل 4 ثوانٍ من كل تبويب مفتوح.
+# best-effort بالكامل: أي فشل هنا يُبتلع بصمت ولا يمنع الطبيب من العمل.
+ACTIVITY_STAMP_THROTTLE_SECONDS = int(os.getenv("ACTIVITY_STAMP_THROTTLE_SECONDS", str(10 * 60)))
+
+
+def touch_user_activity(db: Session, user: "models.User") -> None:
+    try:
+        now = datetime.now(KEEP_ALIVE_TIMEZONE).replace(tzinfo=None)
+        last_active_at = getattr(user, "last_active_at", None)
+        if last_active_at and (now - last_active_at).total_seconds() < ACTIVITY_STAMP_THROTTLE_SECONDS:
+            return
+        user.last_active_at = now
+        db.commit()
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+
 def get_current_doctor_user(
     db: Session,
     doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
@@ -1222,6 +1577,9 @@ def get_current_doctor_user(
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
+    # يكفي ختم النشاط هنا: كل مسار موثّق في المشروع يمرّ من هذه الدالة، مباشرة
+    # أو عبر require_active_doctor_user/require_premium_user_by_email.
+    touch_user_activity(db, user)
     return user
 
 
@@ -1954,11 +2312,18 @@ async def upload_doctor_avatar(
 
 
 class DeviceTokenRequest(BaseModel):
-    fcm_token: str
+    # كلا الحقلين اختياري منذ 2026-09-05: تطبيق أندرويد يرسل fcm_token وحده
+    # (توافق كامل مع النسخة المنشورة الحالية، بلا أي تعديل مطلوب فيها)، وموقع
+    # الويب يرسل web_push_token وحده. تمرير سلسلة فارغة "" لأحدهما يعني إلغاء
+    # تسجيل ذاك السطح تحديداً (الطبيب أوقف إشعارات المتصفح مثلاً)، أما عدم
+    # تمرير الحقل إطلاقاً (None) فلا يمسّ القيمة المخزَّنة له.
+    fcm_token: Optional[str] = None
+    web_push_token: Optional[str] = None
 
 
-# تسجيل رمز جهاز Firebase Cloud Messaging لتطبيق الطبيب على أندرويد (أُضيف
-# 2026-08-24) -- يُستدعى مرة بعد كل تسجيل دخول ناجح في التطبيق. نستخدم
+# تسجيل رمز جهاز Firebase Cloud Messaging لأسطح الطبيب (أُضيف 2026-08-24،
+# ووُسّع لإشعارات متصفح الموقع في 2026-09-05) -- يُستدعى مرة بعد كل تسجيل دخول
+# ناجح في التطبيق، وعند تفعيل إشعارات المتصفح من صفحة "حسابي". نستخدم
 # get_current_doctor_user (وليس require_active_doctor_user) على غرار مسارات
 # الحساب/الأفاتار، حتى يقدر طبيب بانتظار التفعيل يسجّل جهازه أيضاً.
 @app.post("/api/auth/register-device")
@@ -1970,18 +2335,27 @@ def register_device_token(
 ):
     user = get_current_doctor_user(db, doctor_email=doctor_email, authorization=authorization)
 
-    token_value = (payload.fcm_token or "").strip()
-    if not token_value:
-        raise HTTPException(status_code=400, detail="fcm_token مطلوب.")
+    app_token = payload.fcm_token.strip() if isinstance(payload.fcm_token, str) else None
+    web_token = payload.web_push_token.strip() if isinstance(payload.web_push_token, str) else None
+
+    if app_token is None and web_token is None:
+        raise HTTPException(status_code=400, detail="fcm_token أو web_push_token مطلوب.")
 
     try:
-        user.fcm_token = token_value
+        if app_token is not None:
+            user.fcm_token = app_token or None
+        if web_token is not None:
+            user.web_push_token = web_token or None
         db.commit()
     except Exception:
         db.rollback()
         raise HTTPException(status_code=400, detail="تعذر حفظ رمز الجهاز حالياً.")
 
-    return {"message": "تم تسجيل الجهاز لاستقبال الإشعارات بنجاح."}
+    return {
+        "message": "تم تسجيل الجهاز لاستقبال الإشعارات بنجاح.",
+        "app_push_enabled": bool(user.fcm_token),
+        "web_push_enabled": bool(user.web_push_token),
+    }
 
 
 # 4. مسار إرسال (حفظ) مريض جديد في النظام [POST]
@@ -4580,6 +4954,45 @@ def activate_account(request: ActivationRequest, db: Session = Depends(database.
     except Exception:
         db.rollback()
         raise HTTPException(status_code=500, detail="فشل تحديث قاعدة البيانات السحابية. حاول مرة أخرى.")
+
+
+@app.post("/api/admin/idle-reminders/run")
+def admin_run_idle_reminders(
+    x_admin_secret: str | None = Header(default=None, alias="X-Admin-Secret"),
+    dry_run: bool = Query(default=False),
+):
+    # مسار إداري لاختبار محرّك تذكير الخمول فوراً دون انتظار الساعة 1 ظهراً
+    # (2026-09-05). يتجاوز شرط الساعة وحده -- كل بقية القواعد تُطبَّق كما هي
+    # حرفياً (الأطباء المستحقون، احترام أيام العطلة، حارس التذكير الواحد يومياً).
+    # dry_run=true يُرجع قائمة من كان سيصله التذكير دون إرسال أي شيء فعلياً،
+    # وهي الطريقة الآمنة للتحقق قبل أول تشغيل حقيقي.
+    if not x_admin_secret or x_admin_secret != ADMIN_SECRET_KEY:
+        raise HTTPException(status_code=401, detail="مفتاح الإدارة السرّي مفقود أو غير صحيح.")
+
+    if dry_run:
+        db = database.SessionLocal()
+        try:
+            candidates = get_idle_doctors(db)
+            preview = []
+            for doctor in candidates:
+                title, body = build_idle_reminder_message(db, doctor)
+                preview.append(
+                    {
+                        "email": doctor.email,
+                        "tier": doctor.tier,
+                        "last_active_at": doctor.last_active_at.isoformat() if doctor.last_active_at else None,
+                        "app_push": bool(doctor.fcm_token),
+                        "web_push": bool(doctor.web_push_token),
+                        "title": title,
+                        "body": body,
+                    }
+                )
+            return {"dry_run": True, "candidates": len(preview), "doctors": preview}
+        finally:
+            db.close()
+
+    sent_count = send_due_idle_reminders()
+    return {"dry_run": False, "sent": sent_count}
 
 
 class RenewalKeyGenerateRequest(BaseModel):

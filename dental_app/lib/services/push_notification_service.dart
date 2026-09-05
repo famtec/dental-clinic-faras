@@ -6,14 +6,33 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'api_service.dart';
 
-/// معرّف قناة الإشعارات -- يجب أن يطابق بالضبط القيمة الموضوعة في
+/// معرّف قناة الإشعارات الافتراضية -- يجب أن يطابق بالضبط القيمة الموضوعة في
 /// android/app/src/main/AndroidManifest.xml (com.google.firebase.messaging.default_notification_channel_id).
 const String kBookingNotificationChannelId = 'new_booking_channel';
+
+/// قناة "تذكيرات العيادة" (أُضيفت 2026-09-05) -- منفصلة عمداً عن قناة الحجوزات
+/// حتى يقدر الطبيب كتم التذكيرات اليومية وحدها من إعدادات أندرويد دون أن يفقد
+/// إشعار وصول حجز جديد (وهو الأهم عنده). **يجب أن تطابق القيمة نفسها
+/// IDLE_REMINDER_CHANNEL_ID في main.py على الخادم**: الخادم يمرّرها داخل
+/// android.notification.channel_id فتصل إشعارات الخلفية إلى القناة الصحيحة
+/// بدل القناة الافتراضية.
+const String kClinicReminderChannelId = 'clinic_reminder_channel';
+
+/// نوع الإشعار كما يرسله الخادم في data["type"] -- نستخدمه لاختيار القناة عند
+/// عرض الإشعار والتطبيق مفتوح، ولتوجيه الطبيب للتبويب الصحيح عند الضغط عليه.
+const String kIdleReminderNotificationType = 'idle_reminder';
 
 const AndroidNotificationChannel _bookingChannel = AndroidNotificationChannel(
   kBookingNotificationChannelId,
   'حجوزات جديدة',
   description: 'إشعارات فورية عند وصول طلب حجز جديد من مريض عبر رابط الحجز العام',
+  importance: Importance.high,
+);
+
+const AndroidNotificationChannel _reminderChannel = AndroidNotificationChannel(
+  kClinicReminderChannelId,
+  'تذكيرات العيادة',
+  description: 'تذكير يومي بمتابعة عيادتك إن لم تفتح التطبيق أو الموقع في ذلك اليوم',
   importance: Importance.high,
 );
 
@@ -69,10 +88,11 @@ class PushNotificationService {
       },
     );
 
-    await _localNotifications
+    final androidNotifications = _localNotifications
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(_bookingChannel);
+            AndroidFlutterLocalNotificationsPlugin>();
+    await androidNotifications?.createNotificationChannel(_bookingChannel);
+    await androidNotifications?.createNotificationChannel(_reminderChannel);
 
     // إشعار وصل والتطبيق مفتوح فعلاً -- نعرضه يدوياً عبر flutter_local_notifications
     // لأن أندرويد لا يعرض إشعارات foreground تلقائياً بنفسه.
@@ -108,16 +128,23 @@ class PushNotificationService {
   void _showForegroundNotification(RemoteMessage message) {
     final notification = message.notification;
     if (notification == null) return;
+
+    // القناة تُختار من نوع الإشعار نفسه: إشعارات الخلفية يوجّهها الخادم عبر
+    // android.notification.channel_id، وهذه هي النسخة المقابلة لحالة "التطبيق
+    // مفتوح" حيث نعرض الإشعار بأنفسنا (أندرويد لا يعرض إشعارات foreground).
+    final isReminder =
+        message.data['type'] == kIdleReminderNotificationType;
+    final channel = isReminder ? _reminderChannel : _bookingChannel;
+
     _localNotifications.show(
       notification.hashCode,
       notification.title,
       notification.body,
-      const NotificationDetails(
+      NotificationDetails(
         android: AndroidNotificationDetails(
-          kBookingNotificationChannelId,
-          'حجوزات جديدة',
-          channelDescription:
-              'إشعارات فورية عند وصول طلب حجز جديد من مريض عبر رابط الحجز العام',
+          channel.id,
+          channel.name,
+          channelDescription: channel.description,
           importance: Importance.high,
           priority: Priority.high,
         ),

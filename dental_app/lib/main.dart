@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'screens/dashboard_screen.dart';
+import 'screens/patients_list_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/splash_screen.dart';
@@ -38,7 +38,10 @@ class _DentalDoctorAppState extends State<DentalDoctorApp> {
       PushNotificationService(_apiService);
 
   final GlobalKey<HomeScreenState> _homeScreenKey = GlobalKey<HomeScreenState>();
-  final GlobalKey<DashboardScreenState> _dashboardKey = GlobalKey<DashboardScreenState>();
+  // 2026-09-02: حلّ محلّ _dashboardKey بعد دمج لوحة القيادة في قائمة
+  // المرضى -- إشعار الحجز الجديد يُحدّث الآن القائمة وبطاقات إحصائياتها.
+  final GlobalKey<PatientsListScreenState> _patientsKey =
+      GlobalKey<PatientsListScreenState>();
   final GlobalKey<TodayScheduleScreenState> _todayScheduleKey =
       GlobalKey<TodayScheduleScreenState>();
 
@@ -66,13 +69,21 @@ class _DentalDoctorAppState extends State<DentalDoctorApp> {
 
   Future<void> _initPush() async {
     _pushService.onNotificationTap = (data) {
-      // أي إشعار حالياً هو طلب حجز جديد -- نوجّه الطبيب لتبويب الجدول
-      // ونحدّث كلاً من الجدول ولوحة الرئيسية فوراً حتى يظهر الحجز الجديد
-      // بلا حاجة لسحب يدوي، أياً كان التبويب المفتوح وقت وصول الإشعار
-      // (IndexedStack يبقي حالة الشاشتين حيّة دائماً).
+      // نوعا الإشعارات الحاليان -- طلب حجز جديد (new_booking)، وتذكير العيادة
+      // اليومي عند الخمول (idle_reminder، أُضيف 2026-09-05) -- يقصدان معاً
+      // تبويب "المواعيد": الأول لطلب ينتظر رداً، والثاني لأن نص التذكير نفسه
+      // مبني على مواعيد اليوم وطلبات الحجز المعلّقة.
+      //
+      // ملاحظة لمن يعدّل لاحقاً: التبويب 0 هو "المرضى" وليس لوحة قيادة --
+      // لوحة القيادة دُمجت في قائمة "المزيد" (2026-09-02)، فلا تفترض وجود
+      // تبويب رئيسية مستقل عند إضافة توجيه جديد هنا.
       _homeScreenKey.currentState?.showTodayTab();
+
+      // نحدّث الشاشات الحيّة فوراً حتى يظهر الجديد بلا حاجة لسحب يدوي، أياً
+      // كان التبويب المفتوح وقت وصول الإشعار (كل تبويب يبقى حيّاً عبر
+      // _KeepAlivePage داخل home_screen.dart).
       _todayScheduleKey.currentState?.refresh();
-      _dashboardKey.currentState?.refresh();
+      _patientsKey.currentState?.refresh();
     };
     try {
       await _pushService.initialize();
@@ -116,7 +127,7 @@ class _DentalDoctorAppState extends State<DentalDoctorApp> {
                   apiService: _apiService,
                   authStorage: _authStorage,
                   onLogout: _handleLogout,
-                  dashboardKey: _dashboardKey,
+                  patientsKey: _patientsKey,
                   todayScheduleKey: _todayScheduleKey,
                 )
               : LoginScreen(
