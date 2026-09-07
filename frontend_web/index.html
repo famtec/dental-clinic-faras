@@ -162,7 +162,14 @@
     .panel-soft {
       background: rgba(255, 255, 255, 0.92);
       backdrop-filter: blur(12px);
+      /* نفس إصلاح finance.html (2026-09-07): backdrop-filter يعزل كل قسم
+         panel-soft في سياق تكديس مستقل، فتظهر القائمة المنسدلة خلف القسم
+         التالي مهما كان z-index الداخلي لها. نرفع القسم الحاوي لقائمة
+         مفتوحة فوق إخوته فقط أثناء الفتح. */
+      position: relative;
+      z-index: 0;
     }
+    .panel-soft:has(.dropdown-open) { z-index: 30; }
     .badge-premium {
       background: #fef3c7;
       border: 1px solid #fde68a;

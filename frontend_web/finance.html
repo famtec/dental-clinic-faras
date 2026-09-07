@@ -134,7 +134,16 @@
 		.panel-soft {
 			background: rgba(255, 255, 255, 0.92);
 			backdrop-filter: blur(12px);
+			/* backdrop-filter ينشئ سياق تكديس (stacking context) جديداً لكل
+			   قسم panel-soft على حدة، بصرف النظر عن أي z-index داخلي. فالقائمة
+			   المنسدلة (z-index:40) تبقى محصورة داخل سياق قسمها، والقسم التالي
+			   (بطاقات المؤشرات) يُرسَم فوقه لأنه يليه في DOM. الحل: نمنح كل قسم
+			   ترتيباً صريحاً متساوياً افتراضياً، ثم نرفع القسم الذي يحوي قائمة
+			   مفتوحة فوق إخوته فقط أثناء فتحها (2026-09-07). */
+			position: relative;
+			z-index: 0;
 		}
+		.panel-soft:has(.dropdown-open) { z-index: 30; }
 		.badge-premium {
 			background: #fef3c7;
 			border: 1px solid #fde68a;
