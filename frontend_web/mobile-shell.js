@@ -75,7 +75,11 @@
     action:
       '<circle cx="12" cy="12" r="9"></circle><path d="M12 8v8"></path><path d="M8 12h8"></path>',
     logout:
-      '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line>'
+      '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line>',
+    trash:
+      '<path d="M4 7h16"></path><path d="M9 7V5h6v2"></path><path d="M6 7l1 13h10l1-13"></path>',
+    plus: '<path d="M12 5v14"></path><path d="M5 12h14"></path>',
+    back: '<path d="M15 6l-6 6 6 6"></path>'
   };
 
   /* صفحات فرعية تُبقي تبويبها الأب مُضاءً في الشريط السفلي (ملف المريض
@@ -101,6 +105,30 @@
   var KNOWN_BUTTONS = {
     backupBtn: { label: 'نسخة احتياطية', hint: 'تصدير البيانات', icon: 'backup', tone: 'cyan' },
     restoreBackupBtn: { label: 'استرجاع نسخة', hint: 'استيراد ملف', icon: 'restore', tone: 'emerald' }
+  };
+
+  /* عنوان كل صفحة كما يظهر في شريط iOS العلوي. */
+  var PAGE_TITLES = {
+    'index.html': 'المرضى',
+    'appointments.html': 'المواعيد',
+    'finance.html': 'المالية',
+    'inventory.html': 'المخزن',
+    'patient_record.html': 'ملف المريض',
+    'profile.html': 'حسابي',
+    'qr.html': 'رمز الحجز',
+    'contact_developer.html': 'تواصل مع المطور'
+  };
+
+  /* الإجراء الأساسي الذي يصير زرّ + في الترويسة. الضغط يُمرَّر إلى الزرّ
+     الأصلي في الصفحة عبر .click()، فلا يُعاد تنفيذ أي منطق هنا. */
+  var PRIMARY_ACTIONS = {
+    'index.html': { id: 'addPatientBtn', label: 'مريض جديد' },
+    'appointments.html': { id: 'openModalBtn', label: 'موعد جديد' }
+  };
+
+  /* صفحة فرعية: زرّ رجوع يحمل اسم صفحتها الأمّ بدل شعار العيادة. */
+  var PARENT_PAGES = {
+    'patient_record.html': { href: 'index.html', label: 'المرضى' }
   };
 
   var TONES = {
@@ -577,7 +605,79 @@
       /* حالة التطابق في البحث كانت حلقة ظلّ + حدّاً، وقد أُلغيا أعلاه. */
       '  html.is-ios .patient-card[data-matched="1"]{background-color:#ecfdf5 !important;}',
 
-      '}'
+      /* ---- شريط iOS العلوي ----
+         الترويسة القديمة تُخفى (وتبقى في الـ DOM لأن لوحة "المزيد" تقرأ منها)،
+         و body يأخذ حشوة = المساحة الآمنة العلوية، فيصير ارتفاع الشريط
+         (المساحة + 44 + 52) مطابقاً لِـ pt-24 التي تحجزها كل صفحة. */
+      '  html.is-ios .ios-fixed-header{display:none !important;}',
+      '  html.is-ios body{padding-top:env(safe-area-inset-top,0px);}',
+      /* زرّ + في الترويسة يحلّ محلّ الزرّ العائم. */
+      '  html.is-ios #addPatientFab{display:none !important;}',
+
+      '  #iosNavBar{position:fixed;inset-inline:0;top:0;z-index:65;color:#fff;',
+      '    background:rgba(30,27,75,.92);',
+      '    -webkit-backdrop-filter:saturate(180%) blur(24px);backdrop-filter:saturate(180%) blur(24px);',
+      '    border-bottom:0.5px solid rgba(255,255,255,.14);',
+      '    box-shadow:0 8px 24px rgba(30,27,75,.18);font-family:inherit;}',
+      '  .ios-safetop{height:env(safe-area-inset-top,0px);}',
+      '  .ios-navrow{height:44px;display:flex;align-items:center;gap:10px;',
+      '    padding-left:calc(16px + env(safe-area-inset-left,0px));',
+      '    padding-right:calc(16px + env(safe-area-inset-right,0px));}',
+      '  .ios-nav-lead{flex:0 0 auto;display:flex;align-items:center;min-width:32px;}',
+      '  .ios-nav-logo{width:30px;height:30px;border-radius:10px;object-fit:contain;',
+      '    border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.1);',
+      '    padding:4px;box-sizing:border-box;}',
+      '  .ios-nav-back{display:inline-flex;align-items:center;gap:3px;color:#fff;',
+      '    text-decoration:none;font-size:17px;font-weight:500;}',
+      '  .ios-nav-title-small{flex:1 1 0;min-width:0;text-align:center;color:#fff;',
+      '    font-size:17px;font-weight:600;letter-spacing:-.2px;opacity:0;',
+      '    transition:opacity .18s ease;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}',
+      '  #iosNavBar[data-collapsed="1"] .ios-nav-title-small{opacity:1;}',
+      '  .ios-nav-actions{flex:0 0 auto;display:flex;align-items:center;justify-content:flex-end;',
+      '    gap:6px;min-width:32px;}',
+      '  .ios-nav-btn{width:32px;height:32px;display:flex;align-items:center;justify-content:center;',
+      '    border:none;background:transparent;color:#fff;padding:0;cursor:pointer;',
+      '    -webkit-tap-highlight-color:transparent;}',
+      '  .ios-nav-btn:active{opacity:.55;}',
+      '  .ios-nav-large{height:52px;overflow:hidden;display:flex;align-items:flex-end;',
+      '    padding-left:16px;padding-right:16px;color:#fff;',
+      '    font-family:"Noto Kufi Arabic","Segoe UI",Tahoma,system-ui,sans-serif;',
+      '    font-size:30px;font-weight:700;letter-spacing:-.5px;',
+      '    transition:height .24s ease,opacity .18s ease,transform .24s ease;}',
+      '  .ios-nav-large > span{display:block;padding-bottom:6px;white-space:nowrap;',
+      '    overflow:hidden;text-overflow:ellipsis;}',
+      '  #iosNavBar[data-collapsed="1"] .ios-nav-large{height:0;opacity:0;transform:translateY(-8px);}',
+
+      /* التنبيهات المنبثقة (#toast) عند top:20px وz-index 60 — أي تحت الشريط
+         الجديد. ترتفع فوقه كما ترتفع لافتات iOS فوق شريط التنقّل. */
+      '  html.is-ios #toast{z-index:70 !important;',
+      '    top:calc(12px + env(safe-area-inset-top,0px)) !important;}',
+
+      /* ---- لوحة "المزيد": صفوف إعدادات بعمود واحد بدل بلاطتين ---- */
+      '  html.is-ios .mshell-tiles{grid-template-columns:minmax(0,1fr) !important;gap:0 !important;',
+      '    background:#fff;border:1.5px solid #eef2f7;border-radius:20px;overflow:hidden;',
+      '    box-shadow:0 6px 16px rgba(148,163,184,.14);}',
+      '  html.is-ios .mshell-tile{min-height:56px;position:relative;padding-inline-end:36px;',
+      '    border-radius:0 !important;border:0 !important;box-shadow:none !important;}',
+      '  html.is-ios .mshell-tile + .mshell-tile{border-top:1px solid #eef2f7 !important;}',
+      /* السهم يتّجه يساراً: حدّ يسار + أسفل مُدوَّران 45 درجة (حدود فيزيائية لا منطقية). */
+      '  html.is-ios .mshell-tile::after{content:"";position:absolute;inset-inline-end:16px;top:50%;',
+      '    width:8px;height:8px;border-left:2px solid #cbd5e1;border-bottom:2px solid #cbd5e1;',
+      '    transform:translateY(-50%) rotate(45deg);}',
+
+      /* ---- السحب للحذف ---- */
+      '  html.is-ios #patientsMobileList{position:relative;}',
+      '  html.is-ios .patient-card[data-swiping]{background-color:#fff !important;}',
+      '  .ios-swipe-delete{position:absolute;left:0;width:96px;display:none;',
+      '    flex-direction:column;align-items:center;justify-content:center;gap:3px;',
+      '    border:none;background:linear-gradient(160deg,#f43f5e,#e11d48);color:#fff;',
+      '    font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;',
+      '    -webkit-tap-highlight-color:transparent;}',
+
+      '}',
+
+      /* الشريط العلوي للجوال وحده: على iPad العريض تبقى الترويسة الأصلية. */
+      '@media (min-width: 768px){#iosNavBar{display:none !important;}}'
     ].join('\n');
     document.head.appendChild(style);
   }
@@ -588,6 +688,256 @@
     if (!toggle || !toggle.closest) return;
     var header = toggle.closest('div.fixed');
     if (header) header.classList.add('ios-fixed-header');
+  }
+
+
+  /* ------------------------------------------------------------------ */
+  /* شريط iOS العلوي (عنوان كبير ينطوي عند التمرير)                      */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * يحلّ محلّ الترويسة الثابتة للجوال (تُخفى بالـ CSS، وتبقى في الـ DOM لأن
+   * لوحة "المزيد" تقرأ منها اسم العيادة والباقة).
+   *
+   * ارتفاعه = env(safe-area-inset-top) + 44 + 52. والصفحات الثماني كلّها
+   * تحجز pt-24 (96px = 44+52) لترويستها القديمة، و body يأخذ حشوة علوية
+   * تساوي المساحة الآمنة — فيطابق المحتوى أسفل الشريط بالضبط بلا أي تعديل
+   * على أي صفحة.
+   */
+  function buildIosNavBar() {
+    if (document.getElementById('iosNavBar')) return;
+    var page = currentPage();
+    var title = PAGE_TITLES[page];
+    if (!title) return;
+
+    var bar = document.createElement('header');
+    bar.id = 'iosNavBar';
+
+    var safe = document.createElement('div');
+    safe.className = 'ios-safetop';
+    bar.appendChild(safe);
+
+    var row = document.createElement('div');
+    row.className = 'ios-navrow';
+
+    /* الجهة الأمامية: زرّ رجوع في الصفحات الفرعية، وشعار العيادة في غيرها. */
+    var lead = document.createElement('div');
+    lead.className = 'ios-nav-lead';
+    var parent = PARENT_PAGES[page];
+    if (parent) {
+      var back = document.createElement('a');
+      back.className = 'ios-nav-back';
+      back.href = parent.href;
+      back.innerHTML = svg(ICONS.back, 17, 'currentColor') + '<span>' + parent.label + '</span>';
+      lead.appendChild(back);
+    } else {
+      var logoImg = document.getElementById('mobileClinicLogoImg') || document.getElementById('clinicLogoImg');
+      var src = logoImg && logoImg.getAttribute('src');
+      if (src) {
+        var img = document.createElement('img');
+        img.className = 'ios-nav-logo';
+        img.src = src;
+        img.alt = 'شعار العيادة';
+        lead.appendChild(img);
+      }
+    }
+    row.appendChild(lead);
+
+    var small = document.createElement('div');
+    small.className = 'ios-nav-title-small';
+    small.textContent = title;
+    row.appendChild(small);
+
+    var actions = document.createElement('div');
+    actions.className = 'ios-nav-actions';
+    var action = PRIMARY_ACTIONS[page];
+    if (action && document.getElementById(action.id)) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ios-nav-btn';
+      btn.setAttribute('aria-label', action.label);
+      btn.innerHTML = svg(ICONS.plus, 24, 'currentColor');
+      btn.addEventListener('click', function () {
+        var original = document.getElementById(action.id);
+        if (original) original.click();
+      });
+      actions.appendChild(btn);
+    }
+    row.appendChild(actions);
+    bar.appendChild(row);
+
+    var large = document.createElement('div');
+    large.className = 'ios-nav-large';
+    large.innerHTML = '<span>' + title + '</span>';
+    bar.appendChild(large);
+
+    document.body.appendChild(bar);
+
+    /* في ملف المريض يصير العنوان اسم المريض حين يصل من السيرفر. */
+    if (page === 'patient_record.html') {
+      var tries = 0;
+      var timer = window.setInterval(function () {
+        tries++;
+        var el = document.getElementById('patientName');
+        var name = el && (el.textContent || '').trim();
+        /* الصفحة تبدأ بشُرطة نائبة (— أو --) قبل وصول البيانات. */
+        if (name && !/^[-–—.\s]+$/.test(name)) {
+          large.innerHTML = '<span>' + name + '</span>';
+          small.textContent = name;
+          window.clearInterval(timer);
+        } else if (tries > 20) {
+          window.clearInterval(timer);
+        }
+      }, 400);
+    }
+
+    /* الانطواء: العنوان الكبير يختفي ويظهر العنوان الصغير في الوسط. */
+    var collapsed = false;
+    var queued = false;
+    function onScroll() {
+      if (queued) return;
+      queued = true;
+      window.requestAnimationFrame(function () {
+        queued = false;
+        var next = (window.pageYOffset || document.documentElement.scrollTop || 0) > 24;
+        if (next === collapsed) return;
+        collapsed = next;
+        if (collapsed) bar.setAttribute('data-collapsed', '1');
+        else bar.removeAttribute('data-collapsed');
+      });
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* السحب للحذف في قائمة المرضى                                         */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * اصطلاح iOS: إجراءات الصف تُكشف بالسحب لا بزرّ دائم. في العربية جهة
+   * الكشف هي الحافة اليسرى، فالسحب يكون نحو اليمين.
+   *
+   * زرّ الحذف الأصلي في الصف يبقى ظاهراً كما هو (حتى لا يفقد الطبيب طريقة
+   * الحذف المعروفة له)، والسحب يستدعيه بنفسه عبر .click() — فلا منطق حذف
+   * مكرّر هنا ولا تعديل على الصفحة.
+   */
+  function enableSwipeToDelete() {
+    var list = document.getElementById('patientsMobileList');
+    if (!list || !('ontouchstart' in window)) return;
+
+    var OPEN_PX = 96;
+    var panel = null;
+    var row = null;
+    var candidate = null;
+    var startX = 0, startY = 0, dx = 0;
+    var engaged = false, opened = false;
+
+    function ensurePanel() {
+      if (panel) return panel;
+      panel = document.createElement('button');
+      panel.type = 'button';
+      panel.className = 'ios-swipe-delete';
+      panel.innerHTML = svg(ICONS.trash, 20, 'currentColor') + '<span>حذف</span>';
+      panel.addEventListener('click', function () {
+        var target = row;
+        var original = target && target.querySelector('.patient-card-delete');
+        close();
+        if (original) window.setTimeout(function () { original.click(); }, 140);
+      });
+      list.appendChild(panel);
+      return panel;
+    }
+
+    function place() {
+      panel.style.top = row.offsetTop + 'px';
+      panel.style.height = row.offsetHeight + 'px';
+    }
+
+    function close() {
+      if (row) {
+        row.style.transform = '';
+        row.removeAttribute('data-swiping');
+      }
+      if (panel) panel.style.display = 'none';
+      row = null;
+      candidate = null;
+      engaged = false;
+      opened = false;
+      dx = 0;
+    }
+
+    list.addEventListener('touchstart', function (event) {
+      if (event.touches.length !== 1) return;
+      var card = event.target && event.target.closest ? event.target.closest('.patient-card') : null;
+      if (opened && card !== row) { close(); return; }
+      if (!card || opened) return;
+      candidate = card;
+      startX = event.touches[0].clientX;
+      startY = event.touches[0].clientY;
+      engaged = false;
+      dx = 0;
+    }, { passive: true });
+
+    list.addEventListener('touchmove', function (event) {
+      if (!candidate || event.touches.length !== 1) return;
+      var mx = event.touches[0].clientX - startX;
+      var my = event.touches[0].clientY - startY;
+
+      if (!engaged) {
+        /* نية عمودية = تمرير الصفحة: نتخلّى عن الصف ولا نمنع الحركة. */
+        if (Math.abs(my) > 10 && Math.abs(my) >= Math.abs(mx)) { candidate = null; return; }
+        if (mx < 12 || mx < Math.abs(my) * 1.5) return;
+        engaged = true;
+        row = candidate;
+        row.setAttribute('data-swiping', '1');
+        ensurePanel();
+        place();
+        panel.style.display = 'flex';
+      }
+
+      dx = Math.max(0, Math.min(OPEN_PX + 20, mx));
+      row.style.transform = 'translateX(' + dx + 'px)';
+      if (event.cancelable) event.preventDefault();
+    }, { passive: false });
+
+    list.addEventListener('touchend', function () {
+      if (!engaged || !row) { candidate = null; return; }
+      if (dx > OPEN_PX / 2) {
+        opened = true;
+        engaged = false;
+        candidate = null;
+        row.style.transition = 'transform .18s ease';
+        row.style.transform = 'translateX(' + OPEN_PX + 'px)';
+        window.setTimeout(function () { if (row) row.style.transition = ''; }, 200);
+      } else {
+        close();
+      }
+    }, { passive: true });
+
+    /* أي لمسة خارج الصف المفتوح تُعيده، وكذلك التمرير أو إعادة رسم القائمة. */
+    document.addEventListener('touchstart', function (event) {
+      if (!opened) return;
+      var inside = event.target && event.target.closest &&
+        (event.target.closest('.ios-swipe-delete') || event.target.closest('.patient-card') === row);
+      if (!inside) close();
+    }, { passive: true });
+    window.addEventListener('scroll', function () { if (opened) close(); }, { passive: true });
+    /* إعادة رسم القائمة تُغلق الصف المفتوح — مع تجاهل إضافة لوحة الحذف
+       نفسها إلى القائمة، وإلا أغلق المراقبُ السحبةَ في اللحظة التي تُنشأ فيها. */
+    if (window.MutationObserver) {
+      new MutationObserver(function (records) {
+        for (var i = 0; i < records.length; i++) {
+          var nodes = [].concat(
+            [].slice.call(records[i].addedNodes),
+            [].slice.call(records[i].removedNodes)
+          );
+          for (var j = 0; j < nodes.length; j++) {
+            if (nodes[j] !== panel) { close(); return; }
+          }
+        }
+      }).observe(list, { childList: true });
+    }
   }
 
   function init() {
@@ -610,6 +960,8 @@
     if (IS_IOS) {
       markFixedHeader();
       injectIosStyles();
+      buildIosNavBar();
+      enableSwipeToDelete();
     }
   }
 
