@@ -65,6 +65,64 @@
 			white-space: nowrap;
 		}
 
+		/* 2026-09-10: زرّا تعديل/حذف على كل حركة في "آخر الحركات". المبلغ والأزرار
+		   داخل حاوية واحدة (.fin-move-tail) تنقلب إلى عمود تحت 520px حتى يبقى
+		   للوصف عرض كافٍ على الجوال بدل أن ينضغط إلى كلمة واحدة. */
+		.fin-move-tail {
+			flex-shrink: 0;
+			display: flex;
+			align-items: center;
+			gap: 10px;
+		}
+		.fin-move-actions {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			flex-shrink: 0;
+		}
+		.fin-move-btn {
+			width: 32px;
+			height: 32px;
+			flex-shrink: 0;
+			border-radius: 11px;
+			border: 1px solid transparent;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			cursor: pointer;
+			font-family: inherit;
+			transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+		}
+		.fin-move-btn:hover { transform: translateY(-1px); }
+		.fin-move-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+		.fin-move-btn.fin-move-edit {
+			border-color: #c7d2fe;
+			background: #eef2ff;
+			color: #4338ca;
+		}
+		.fin-move-btn.fin-move-edit:hover {
+			background: #e0e7ff;
+			box-shadow: 0 6px 14px rgba(99, 102, 241, 0.22);
+		}
+		.fin-move-btn.fin-move-delete {
+			border-color: #fecdd3;
+			background: #fff1f2;
+			color: #be123c;
+		}
+		.fin-move-btn.fin-move-delete:hover {
+			background: #ffe4e6;
+			box-shadow: 0 6px 14px rgba(244, 63, 94, 0.22);
+		}
+		@media (max-width: 519.98px) {
+			.fin-move { gap: 9px; padding: 10px 11px; }
+			.fin-move-tail {
+				flex-direction: column;
+				align-items: flex-end;
+				gap: 6px;
+			}
+			.fin-move-btn { width: 29px; height: 29px; border-radius: 10px; }
+		}
+
 		#financeSummarySection .finance-mobile-only { display: none; }
 
 		@media (max-width: 767.98px) {
@@ -173,6 +231,12 @@
 			box-shadow: 0 15px 30px -8px rgba(16, 185, 129, 0.5);
 			z-index: 80;
 			animation: toastIn 0.25s ease, toastOut 0.25s ease 2.35s forwards;
+		}
+		/* 2026-09-10: نفس مكوّن التوست لكن بلون الخطأ -- تُضاف بعد .toast-success
+		   فتغلب عليها في الخلفية والظل وحدهما، وتبقى الحركة (animation) واحدة. */
+		.toast-error {
+			background: linear-gradient(90deg, #f43f5e, #be123c);
+			box-shadow: 0 15px 30px -8px rgba(244, 63, 94, 0.5);
 		}
 		@keyframes toastIn { from { opacity: 0; transform: translate(-50%, -10px); } to { opacity: 1; transform: translate(-50%, 0); } }
 		@keyframes toastOut { to { opacity: 0; transform: translate(-50%, -10px); } }
@@ -476,6 +540,57 @@
 		</main>
 	</div>
 
+	<!-- 2026-09-10: تعديل/حذف حركة مالية من قائمة "آخر الحركات" مباشرة.
+	     نفس تصميم نافذة تعديل الدفعة في patient_record.html، وتستدعي نفس
+	     المسارين PUT/DELETE /api/finance/transaction/{id} الموجودين مسبقاً في
+	     main.py -- لا تعديل على الخادم إطلاقاً. -->
+	<div id="moveEditModal" class="fixed inset-0 z-[75] hidden items-center justify-center bg-ink-950/80 p-4 opacity-0 backdrop-blur-sm transition-opacity duration-200">
+		<div class="w-full max-w-xl scale-95 rounded-[28px] border border-brand-300/25 bg-[linear-gradient(165deg,_rgba(15,23,42,0.96),_rgba(30,27,75,0.95),_rgba(49,46,129,0.94))] p-5 text-brand-50 shadow-2xl shadow-brand-950/70 transition-transform duration-200 sm:p-6">
+			<div class="flex items-start justify-between gap-4">
+				<div>
+					<p id="moveEditKindLabel" class="text-sm font-semibold text-brand-200">تعديل الحركة المالية</p>
+					<h3 class="mt-1 text-2xl font-extrabold text-white">تحديث تفاصيل الحركة</h3>
+				</div>
+				<button id="closeMoveEditModalBtn" type="button" class="rounded-full border border-brand-200/35 bg-white/10 px-3 py-2 text-sm font-semibold text-brand-100 transition hover:bg-white/15">إغلاق</button>
+			</div>
+			<form id="moveEditForm" class="mt-5 space-y-4">
+				<label class="block">
+					<span class="mb-1 block text-xs font-semibold text-brand-100">المبلغ</span>
+					<input id="moveEditAmount" type="text" inputmode="decimal" required class="w-full rounded-2xl border border-brand-200/30 bg-white/10 px-4 py-3 text-sm text-white outline-none transition placeholder:text-brand-200/60 focus:border-brand-300 focus:ring-4 focus:ring-brand-300/25" placeholder="أدخل المبلغ الجديد" />
+				</label>
+				<label class="block">
+					<span class="mb-1 block text-xs font-semibold text-brand-100">الوصف</span>
+					<textarea id="moveEditDescription" rows="3" required class="w-full rounded-2xl border border-brand-200/30 bg-white/10 px-4 py-3 text-sm text-white outline-none transition placeholder:text-brand-200/60 focus:border-brand-300 focus:ring-4 focus:ring-brand-300/25" placeholder="اكتب وصف الحركة..."></textarea>
+				</label>
+				<label id="moveEditOpeningBalanceRow" class="flex items-start gap-2 text-xs font-semibold leading-6 text-brand-100">
+					<input id="moveEditOpeningBalance" type="checkbox" class="mt-1 h-4 w-4 rounded border-brand-300/40 bg-white/10 text-brand-500 focus:ring-brand-400" />
+					<span>هذه تسوية رصيد قديم/سابق (تُستبعد من تقرير أي شهر محدد، وتبقى ضمن الإجمالي الكلي)</span>
+				</label>
+				<p id="moveEditHint" class="rounded-2xl border border-brand-200/30 bg-white/5 px-4 py-3 text-xs font-semibold leading-6 text-brand-100"></p>
+				<div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+					<button id="cancelMoveEditBtn" type="button" class="rounded-2xl border border-brand-200/35 bg-white/10 px-5 py-3 text-sm font-semibold text-brand-50 transition hover:bg-white/20">إلغاء</button>
+					<button id="saveMoveEditBtn" type="submit" class="rounded-2xl bg-gradient-to-r from-brand-600 to-brand-800 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:from-brand-700 hover:to-brand-700">حفظ التعديل</button>
+				</div>
+			</form>
+		</div>
+	</div>
+
+	<div id="moveDeleteModal" class="fixed inset-0 z-[75] hidden items-center justify-center bg-brand-950/75 p-3 opacity-0 backdrop-blur-md transition-opacity duration-200 sm:p-4">
+		<div class="w-full max-w-md scale-95 rounded-[26px] border border-brand-200/20 bg-[linear-gradient(160deg,_rgba(30,27,75,0.96),_rgba(49,46,129,0.95),_rgba(67,56,202,0.94))] p-5 text-brand-50 shadow-2xl shadow-brand-950/70 transition-transform duration-200 sm:p-6">
+			<div class="flex items-start gap-3">
+				<div class="flex items-center justify-center rounded-2xl bg-danger-500/20 px-3 py-2 leading-none"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></div>
+				<div>
+					<h3 class="text-lg font-extrabold text-white">حذف الحركة المالية</h3>
+					<p id="moveDeleteMessage" class="mt-2 text-sm leading-7 text-brand-100">هل أنت متأكد من حذف هذه الحركة نهائياً؟ لا يمكن التراجع عن هذا الإجراء.</p>
+				</div>
+			</div>
+			<div class="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+				<button id="cancelMoveDeleteBtn" type="button" class="rounded-xl border border-ink-300/45 bg-ink-200/20 px-4 py-2.5 text-sm font-semibold text-ink-100 transition hover:bg-ink-200/30">إلغاء</button>
+				<button id="confirmMoveDeleteBtn" type="button" class="rounded-xl bg-gradient-to-r from-danger-600 via-danger-600 to-danger-700 px-4 py-2.5 text-sm font-extrabold text-white shadow-lg shadow-danger-900/40 transition hover:from-danger-700 hover:via-danger-700 hover:to-danger-800">تأكيد الحذف النهائي</button>
+			</div>
+		</div>
+	</div>
+
 	<script src="api-config.js"></script>
 	<script src="clinic-loader.js"></script>
 	<script src="notification-badge.js"></script>
@@ -487,12 +602,14 @@
 	<script src="mobile-shell.js"></script>
 
 	<script>
-		function showFinanceToast(message) {
+		// 2026-09-10: type='error' يضيف .toast-error فوق .toast-success فيغيّر
+		// اللون وحده -- كل الاستدعاءات القديمة بوسيط واحد تبقى خضراء كما كانت.
+		function showFinanceToast(message, type = 'success') {
 			const existing = document.getElementById('financeToast');
 			if (existing) existing.remove();
 			const toast = document.createElement('div');
 			toast.id = 'financeToast';
-			toast.className = 'toast-success';
+			toast.className = type === 'error' ? 'toast-success toast-error' : 'toast-success';
 			toast.textContent = message;
 			document.body.appendChild(toast);
 			setTimeout(() => toast.remove(), 2600);
@@ -939,6 +1056,11 @@
 			});
 		}
 
+		// 2026-09-10: تُحفظ حركات الفترة المعروضة كما وصلت من الخادم ليعتمد عليها
+		// زرّا التعديل/الحذف أدناه بدل قراءة القيم من نص الصف (الذي يمر بتنسيق
+		// عملة وتاريخ ولا يمكن عكسه بثقة).
+		let currentFinanceMoves = [];
+
 		function renderFinanceMoves(transactions) {
 			const list = document.getElementById('financeMovesList');
 			const empty = document.getElementById('financeMovesEmpty');
@@ -946,6 +1068,7 @@
 
 			list.innerHTML = '';
 			const rows = Array.isArray(transactions) ? transactions : [];
+			currentFinanceMoves = rows;
 			if (!rows.length) {
 				empty.classList.remove('hidden');
 				return;
@@ -955,8 +1078,22 @@
 			rows.forEach((row) => {
 				const isIncome = String(row?.type || '').toLowerCase() === 'income';
 				const amount = Number(row?.amount || 0);
+				const moveId = row?.id === null || row?.id === undefined ? '' : String(row.id);
+				const safeId = escapeHtml(moveId);
 				const item = document.createElement('div');
 				item.className = 'fin-move';
+				if (moveId) item.setAttribute('data-move-id', moveId);
+				// بلا معرّف لا يمكن استدعاء PUT/DELETE، فلا تُرسم الأزرار أصلاً بدل
+				// إظهار زر يفشل عند الضغط.
+				const actionsHtml = moveId ? `
+						<span class="fin-move-actions">
+							<button type="button" class="fin-move-btn fin-move-edit" data-move-edit-id="${safeId}" title="تعديل الحركة" aria-label="تعديل الحركة">
+								<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+							</button>
+							<button type="button" class="fin-move-btn fin-move-delete" data-move-delete-id="${safeId}" title="حذف الحركة" aria-label="حذف الحركة">
+								<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
+							</button>
+						</span>` : '';
 				item.innerHTML = `
 					<span class="fin-move-icon" style="background:${isIncome ? '#ecfdf5' : '#fff1f2'}">
 						<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="${isIncome ? '#059669' : '#e11d48'}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="${isIncome ? 'm5 15 7-7 7 7' : 'm19 9-7 7-7-7'}"></path></svg>
@@ -965,7 +1102,9 @@
 						<span class="fin-move-title" style="display:block">${escapeHtml(row?.description || (isIncome ? 'دفعة' : 'مصروف'))}</span>
 						<span class="fin-move-date" style="display:block">${escapeHtml(formatMoveDate(row?.created_at))}</span>
 					</span>
-					<span class="fin-move-amount" style="color:${isIncome ? '#047857' : '#be123c'}">${isIncome ? '+' : '-'} ${Math.abs(amount).toLocaleString('ar-SA-u-nu-latn', { maximumFractionDigits: 2 })}</span>
+					<span class="fin-move-tail">
+						<span class="fin-move-amount" style="color:${isIncome ? '#047857' : '#be123c'}">${isIncome ? '+' : '-'} ${Math.abs(amount).toLocaleString('ar-SA-u-nu-latn', { maximumFractionDigits: 2 })}</span>${actionsHtml}
+					</span>
 				`;
 				list.appendChild(item);
 			});
@@ -983,6 +1122,314 @@
 				renderFinanceMoves([]);
 			}
 		}
+
+		// ============================================================
+		// تعديل/حذف حركة من قائمة "آخر الحركات" (2026-09-10)
+		// ------------------------------------------------------------
+		// يستدعي المسارين الموجودين مسبقاً في main.py:
+		//   PUT    /api/finance/transaction/{id}
+		//   DELETE /api/finance/transaction/{id}
+		// وهما نفس المسارين اللذين يستخدمهما جدول الدفعات في patient_record.html
+		// وتطبيق الجوال، فلا حاجة لأي تعديل على الخادم.
+		// ============================================================
+		const FINANCE_TRANSACTION_ENDPOINT_BASE = `${RENDER_BASE_URL}/api/finance/transaction`;
+
+		let activeFinanceMove = null;
+		let moveEditModalCloseTimer = null;
+		let moveDeleteModalCloseTimer = null;
+
+		function getFinanceTransactionEndpoint(transactionId) {
+			return `${FINANCE_TRANSACTION_ENDPOINT_BASE}/${encodeURIComponent(String(transactionId))}`;
+		}
+
+		function findFinanceMove(moveId) {
+			if (!moveId) return null;
+			return currentFinanceMoves.find((item) => String(item?.id) === String(moveId)) || null;
+		}
+
+		// الخادم يعيد رسائل عربية جاهزة في detail (مثل "الدفعة المالية غير موجودة")،
+		// فنعرضها كما هي بدل رسالة عامة كلما توفرت.
+		async function readErrorDetail(response, fallbackMessage) {
+			try {
+				const data = await response.json();
+				if (data && typeof data.detail === 'string' && data.detail.trim()) {
+					return data.detail.trim();
+				}
+			} catch (error) {
+				/* الرد ليس JSON -- نكتفي بالرسالة الافتراضية */
+			}
+			return fallbackMessage;
+		}
+
+		function financeMoveHintText(record) {
+			const isIncome = String(record?.type || '').toLowerCase() === 'income';
+			if (isIncome && record?.patient_id) {
+				return 'هذه دفعة مسجّلة على مريض ومرتبطة بفاتورة علاج — تغيير مبلغها أو حذفها يغيّر المبلغ المتبقي على تلك الفاتورة داخل ملف المريض.';
+			}
+			if (isIncome) {
+				return 'حركة وارد. التعديل ينعكس مباشرة على إجمالي الواردات وصافي الربح للفترة المعروضة.';
+			}
+			return 'حركة مصروف. حذفها لا يحذف أي مادة أُضيفت إلى مخزن المواد من خلالها.';
+		}
+
+		function openMoveEditModal(record) {
+			const modal = document.getElementById('moveEditModal');
+			if (!modal || !record) return;
+
+			activeFinanceMove = record;
+			const isIncome = String(record?.type || '').toLowerCase() === 'income';
+
+			const kindLabel = document.getElementById('moveEditKindLabel');
+			if (kindLabel) kindLabel.textContent = isIncome ? 'تعديل حركة وارد' : 'تعديل حركة مصروف';
+
+			const amountInput = document.getElementById('moveEditAmount');
+			if (amountInput) {
+				const rawAmount = Number(record.amount);
+				amountInput.value = Number.isNaN(rawAmount) ? '' : String(rawAmount);
+			}
+
+			const descriptionInput = document.getElementById('moveEditDescription');
+			if (descriptionInput) descriptionInput.value = String(record.description || '').trim();
+
+			// خانة "رصيد قديم/سابق" تخص الواردات وحدها -- لا معنى لتصنيف مصروف
+			// كرصيد افتتاحي، فتُخفى تماماً على حركات المصاريف.
+			const openingRow = document.getElementById('moveEditOpeningBalanceRow');
+			const openingInput = document.getElementById('moveEditOpeningBalance');
+			if (openingInput) openingInput.checked = Boolean(record.is_opening_balance);
+			if (openingRow) openingRow.classList.toggle('hidden', !isIncome);
+
+			const hint = document.getElementById('moveEditHint');
+			if (hint) hint.textContent = financeMoveHintText(record);
+
+			if (moveEditModalCloseTimer) {
+				window.clearTimeout(moveEditModalCloseTimer);
+				moveEditModalCloseTimer = null;
+			}
+
+			modal.classList.remove('hidden');
+			modal.classList.add('flex');
+			requestAnimationFrame(() => {
+				modal.classList.remove('opacity-0');
+				const panel = modal.firstElementChild;
+				if (panel) panel.classList.remove('scale-95');
+			});
+		}
+
+		function closeMoveEditModal() {
+			activeFinanceMove = null;
+			const modal = document.getElementById('moveEditModal');
+			if (!modal) return;
+
+			modal.classList.add('opacity-0');
+			const panel = modal.firstElementChild;
+			if (panel) panel.classList.add('scale-95');
+
+			moveEditModalCloseTimer = window.setTimeout(() => {
+				modal.classList.add('hidden');
+				modal.classList.remove('flex');
+				moveEditModalCloseTimer = null;
+			}, 180);
+		}
+
+		async function submitMoveEdit(event) {
+			event.preventDefault();
+			if (!activeFinanceMove) return;
+
+			const record = activeFinanceMove;
+			const amountInput = document.getElementById('moveEditAmount');
+			const descriptionInput = document.getElementById('moveEditDescription');
+			const openingInput = document.getElementById('moveEditOpeningBalance');
+			const saveButton = document.getElementById('saveMoveEditBtn');
+
+			const parsedAmount = parseFloat(String(amountInput ? amountInput.value : '').trim());
+			const descriptionValue = String(descriptionInput ? descriptionInput.value : '').trim();
+
+			if (!descriptionValue || Number.isNaN(parsedAmount) || parsedAmount <= 0) {
+				showFinanceToast('يرجى إدخال مبلغ صحيح أكبر من صفر ووصف واضح قبل الحفظ.', 'error');
+				return;
+			}
+
+			const payload = { amount: parsedAmount, description: descriptionValue };
+			// المصاريف لا تُرسل is_opening_balance إطلاقاً -- تركه غير مُرسَل يعني
+			// "لا تغيير" في FinancialTransactionUpdate على الخادم.
+			if (String(record.type || '').toLowerCase() === 'income' && openingInput) {
+				payload.is_opening_balance = Boolean(openingInput.checked);
+			}
+
+			if (saveButton && window.ClinicLoader) {
+				ClinicLoader.setButtonLoading(saveButton, true, { loadingText: '...جاري الحفظ' });
+			} else if (saveButton) {
+				saveButton.disabled = true;
+				saveButton.textContent = 'جاري الحفظ...';
+			}
+
+			try {
+				const response = await fetch(getFinanceTransactionEndpoint(record.id), {
+					method: 'PUT',
+					headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
+					body: JSON.stringify(payload),
+				});
+
+				if (!response.ok) {
+					throw new Error(await readErrorDetail(response, 'تعذر تحديث الحركة المالية الآن. حاول مرة أخرى.'));
+				}
+
+				closeMoveEditModal();
+				showFinanceToast('تم تحديث الحركة المالية بنجاح ✨');
+				await fetchFinancialMetrics();
+			} catch (error) {
+				console.error('submitMoveEdit error:', error);
+				showFinanceToast(error instanceof Error ? error.message : 'تعذر تحديث الحركة المالية الآن.', 'error');
+			} finally {
+				if (saveButton && window.ClinicLoader) {
+					ClinicLoader.setButtonLoading(saveButton, false);
+				} else if (saveButton) {
+					saveButton.disabled = false;
+					saveButton.textContent = 'حفظ التعديل';
+				}
+			}
+		}
+
+		function openMoveDeleteModal(record) {
+			const modal = document.getElementById('moveDeleteModal');
+			if (!modal || !record) return;
+
+			activeFinanceMove = record;
+
+			const messageEl = document.getElementById('moveDeleteMessage');
+			if (messageEl) {
+				const label = String(record.description || '').trim();
+				const amountText = formatCurrency(Math.abs(Number(record.amount || 0)));
+				messageEl.textContent = `سيتم حذف "${label || 'حركة بلا وصف'}" بقيمة ${amountText} نهائياً. ${financeMoveHintText(record)}`;
+			}
+
+			if (moveDeleteModalCloseTimer) {
+				window.clearTimeout(moveDeleteModalCloseTimer);
+				moveDeleteModalCloseTimer = null;
+			}
+
+			modal.classList.remove('hidden');
+			modal.classList.add('flex');
+			requestAnimationFrame(() => {
+				modal.classList.remove('opacity-0');
+				const panel = modal.firstElementChild;
+				if (panel) panel.classList.remove('scale-95');
+			});
+		}
+
+		function closeMoveDeleteModal() {
+			activeFinanceMove = null;
+			const modal = document.getElementById('moveDeleteModal');
+			if (!modal) return;
+
+			modal.classList.add('opacity-0');
+			const panel = modal.firstElementChild;
+			if (panel) panel.classList.add('scale-95');
+
+			moveDeleteModalCloseTimer = window.setTimeout(() => {
+				modal.classList.add('hidden');
+				modal.classList.remove('flex');
+				moveDeleteModalCloseTimer = null;
+			}, 180);
+		}
+
+		async function confirmMoveDelete() {
+			if (!activeFinanceMove) return;
+
+			const record = activeFinanceMove;
+			const actionButton = document.getElementById('confirmMoveDeleteBtn');
+
+			if (actionButton && window.ClinicLoader) {
+				ClinicLoader.setButtonLoading(actionButton, true, { loadingText: '...جاري الحذف' });
+			} else if (actionButton) {
+				actionButton.disabled = true;
+				actionButton.textContent = 'جاري الحذف...';
+			}
+
+			try {
+				const response = await fetch(getFinanceTransactionEndpoint(record.id), {
+					method: 'DELETE',
+					headers: getDoctorAuthHeaders(),
+				});
+
+				if (!response.ok) {
+					throw new Error(await readErrorDetail(response, 'تعذر حذف الحركة المالية الآن. حاول مرة أخرى.'));
+				}
+
+				closeMoveDeleteModal();
+				showFinanceToast('تم حذف الحركة المالية بنجاح.');
+				await fetchFinancialMetrics();
+			} catch (error) {
+				console.error('confirmMoveDelete error:', error);
+				showFinanceToast(error instanceof Error ? error.message : 'تعذر حذف الحركة المالية الآن.', 'error');
+			} finally {
+				if (actionButton && window.ClinicLoader) {
+					ClinicLoader.setButtonLoading(actionButton, false);
+				} else if (actionButton) {
+					actionButton.disabled = false;
+					actionButton.textContent = 'تأكيد الحذف النهائي';
+				}
+			}
+		}
+
+		// تفويض واحد على الحاوية بدل ربط مستمعين لكل صف عند كل إعادة رسم --
+		// القائمة تُعاد كتابتها بالكامل في كل تحديث للفترة.
+		const financeMovesListEl = document.getElementById('financeMovesList');
+		if (financeMovesListEl) {
+			financeMovesListEl.addEventListener('click', (event) => {
+				const editButton = event.target.closest('[data-move-edit-id]');
+				if (editButton) {
+					const record = findFinanceMove(editButton.getAttribute('data-move-edit-id'));
+					if (record) openMoveEditModal(record);
+					return;
+				}
+
+				const deleteButton = event.target.closest('[data-move-delete-id]');
+				if (deleteButton) {
+					const record = findFinanceMove(deleteButton.getAttribute('data-move-delete-id'));
+					if (record) openMoveDeleteModal(record);
+				}
+			});
+		}
+
+		const moveEditFormEl = document.getElementById('moveEditForm');
+		if (moveEditFormEl) moveEditFormEl.addEventListener('submit', submitMoveEdit);
+
+		['closeMoveEditModalBtn', 'cancelMoveEditBtn'].forEach((buttonId) => {
+			const button = document.getElementById(buttonId);
+			if (button) button.addEventListener('click', closeMoveEditModal);
+		});
+
+		const moveEditModalEl = document.getElementById('moveEditModal');
+		if (moveEditModalEl) {
+			moveEditModalEl.addEventListener('click', (event) => {
+				if (event.target === moveEditModalEl) closeMoveEditModal();
+			});
+		}
+
+		const cancelMoveDeleteBtnEl = document.getElementById('cancelMoveDeleteBtn');
+		if (cancelMoveDeleteBtnEl) cancelMoveDeleteBtnEl.addEventListener('click', closeMoveDeleteModal);
+
+		const confirmMoveDeleteBtnEl = document.getElementById('confirmMoveDeleteBtn');
+		if (confirmMoveDeleteBtnEl) confirmMoveDeleteBtnEl.addEventListener('click', confirmMoveDelete);
+
+		const moveDeleteModalEl = document.getElementById('moveDeleteModal');
+		if (moveDeleteModalEl) {
+			moveDeleteModalEl.addEventListener('click', (event) => {
+				if (event.target === moveDeleteModalEl) closeMoveDeleteModal();
+			});
+		}
+
+		document.addEventListener('keydown', (event) => {
+			if (event.key !== 'Escape') return;
+			if (moveDeleteModalEl && !moveDeleteModalEl.classList.contains('hidden')) {
+				closeMoveDeleteModal();
+				return;
+			}
+			if (moveEditModalEl && !moveEditModalEl.classList.contains('hidden')) {
+				closeMoveEditModal();
+			}
+		});
 
 		// مقارنة صافي الربح بالشهر السابق. تظهر فقط عند اختيار شهر محدد --
 		// لا معنى لها مع "كل الوقت" ولا مع "اليوم".
