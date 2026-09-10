@@ -611,8 +611,9 @@
          (المساحة + 44 + 52) مطابقاً لِـ pt-24 التي تحجزها كل صفحة. */
       '  html.is-ios .ios-fixed-header{display:none !important;}',
       '  html.is-ios body{padding-top:env(safe-area-inset-top,0px);}',
-      /* زرّ + في الترويسة يحلّ محلّ الزرّ العائم. */
+      /* زرّ + في الترويسة يحلّ محلّ الزرّ العائم وزرّ الإضافة المضمَّن. */
       '  html.is-ios #addPatientFab{display:none !important;}',
+      '  html.is-ios.ios-has-nav-action #openModalBtn{display:none !important;}',
 
       '  #iosNavBar{position:fixed;inset-inline:0;top:0;z-index:65;color:#fff;',
       '    background:rgba(30,27,75,.92);',
@@ -647,6 +648,11 @@
       '  .ios-nav-large > span{display:block;padding-bottom:6px;white-space:nowrap;',
       '    overflow:hidden;text-overflow:ellipsis;}',
       '  #iosNavBar[data-collapsed="1"] .ios-nav-large{height:0;opacity:0;transform:translateY(-8px);}',
+
+      /* شارة المدّة بعد انتقالها إلى سطر الإجراء. */
+      '  html.is-ios .ap-cell-proc .ap-time-badge{display:inline-block !important;',
+      '    background:#eef2ff !important;color:#4338ca !important;font-size:10.5px !important;',
+      '    font-weight:700 !important;padding:1px 7px !important;border-radius:999px !important;}',
 
       /* التنبيهات المنبثقة (#toast) عند top:20px وz-index 60 — أي تحت الشريط
          الجديد. ترتفع فوقه كما ترتفع لافتات iOS فوق شريط التنقّل. */
@@ -762,6 +768,9 @@
         if (original) original.click();
       });
       actions.appendChild(btn);
+      /* الزرّ المضمَّن في الصفحة يُخفى فقط بعد التأكّد أن بديله في الترويسة
+         موجود فعلاً — فلا تبقى الصفحة بلا طريقة للإضافة أبداً. */
+      document.documentElement.classList.add('ios-has-nav-action');
     }
     row.appendChild(actions);
     bar.appendChild(row);
@@ -940,6 +949,48 @@
     }
   }
 
+
+  /* ------------------------------------------------------------------ */
+  /* مدّة الموعد في السطر الثانوي                                        */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * عمود الوقت على الجوال ضيّق (62px)، فشارة المدّة كانت تُخفى فيه وتضيع
+   * المعلومة تماماً. هنا تُنقل الشارة نفسها — لا نسخة منها — إلى جانب اسم
+   * الإجراء فتقرأ "تنظيف وتلميع · نصف ساعة" كما في لوحة التصميم.
+   *
+   * نقل العنصر بعينه (لا استنساخه) يعني أنه لا يظهر مرّتين على أي عرض،
+   * ولا حاجة لأي تعديل على appointments.html. المراقب يعيد التطبيق بعد كل
+   * تحديث تلقائي للقائمة (كل 30 ثانية) وبعد كل تغيير يوم.
+   */
+  function inlineAppointmentDuration() {
+    var body = document.getElementById('appointmentsTableBody');
+    if (!body) return;
+
+    function apply() {
+      var rows = body.querySelectorAll('.appointment-row');
+      for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        if (row.getAttribute('data-ios-duration') === '1') continue;
+        row.setAttribute('data-ios-duration', '1');
+
+        var badge = row.querySelector('.ap-time-badge');
+        var proc = row.querySelector('.ap-cell-proc span:not(.ap-label)');
+        if (!badge || !proc) continue;
+
+        /* إجراء فارغ (—): المدّة وحدها أنفع من شُرطة. */
+        if (/^[-–—\s]*$/.test(proc.textContent || '')) proc.textContent = '';
+        else proc.appendChild(document.createTextNode(' '));
+        proc.appendChild(badge);
+      }
+    }
+
+    apply();
+    if (window.MutationObserver) {
+      new MutationObserver(apply).observe(body, { childList: true, subtree: true });
+    }
+  }
+
   function init() {
     /* صفحات لا تملك قائمة تنقّل أصلاً (تسجيل الدخول، الحجز العام...) */
     if (!document.getElementById('mobileMenuDropdown')) return;
@@ -962,6 +1013,7 @@
       injectIosStyles();
       buildIosNavBar();
       enableSwipeToDelete();
+      inlineAppointmentDuration();
     }
   }
 
