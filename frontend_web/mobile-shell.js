@@ -28,11 +28,30 @@
  *   <script src="mobile-shell.js"></script>
  *
  * لا يعمل إطلاقاً على الشاشات المكتبية (كل عناصره md:hidden عبر CSS).
+ *
+ * ---------------------------------------------------------------------------
+ * طبقة iOS (2026-09-10)
+ * ---------------------------------------------------------------------------
+ * أُضيفت في نهاية هذا الملف طبقة تعمل على أجهزة أبل وحدها (iPhone/iPad):
+ *
+ *   1. تضيف `viewport-fit=cover` إلى وسم viewport. بدونه تُرجِع كل دوال
+ *      env(safe-area-inset-*) صفراً على iPhone -- وهذا ما كان يحدث فعلاً:
+ *      الحشوة المكتوبة أدناه `calc(14px + env(safe-area-inset-bottom))` كانت
+ *      تنفّذ 14px بدل 48px، فيقع الشريط السفلي تحت مؤشر الصفحة.
+ *   2. تضيف theme-color بلون الترويسة و apple-touch-icon.
+ *   3. تحقن أنماطاً تعطي الشريط والصفيحة والقوائم قياسات iOS الحقيقية
+ *      (49pt + مساحة المؤشر، صفوف بفواصل تبدأ من بداية النصّ، حقول 17px
+ *      حتى لا يكبّر Safari الشاشة عند اللمس) مع الحفاظ على ألوان الموقع
+ *      وأسطحه وخطّه كما هي حرفاً بحرف.
+ *
+ * كل شيء محصور بالصنف `html.is-ios`: لا سطر منه يظهر على أندرويد أو المكتب.
  */
 (function () {
   'use strict';
 
   var NAV_HEIGHT_PX = 86;
+  /* على iOS: 49pt لصف التبويبات + مساحة مؤشر الصفحة من env() */
+  var IOS_TAB_ROW_PX = 49;
 
   var ICONS = {
     patients:
@@ -419,6 +438,157 @@
     }, 260);
   }
 
+
+  /* ------------------------------------------------------------------ */
+  /* طبقة iOS                                                            */
+  /* ------------------------------------------------------------------ */
+
+  /* iPadOS 13+ يعرّف نفسه MacIntel، فيُكشف بعدد نقاط اللمس. */
+  var IS_IOS = (function () {
+    var ua = navigator.userAgent || '';
+    if (/iPad|iPhone|iPod/.test(ua)) return true;
+    return navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1;
+  })();
+
+  function ensureMeta(name, content) {
+    if (document.querySelector('meta[name="' + name + '"]')) return;
+    var meta = document.createElement('meta');
+    meta.setAttribute('name', name);
+    meta.setAttribute('content', content);
+    document.head.appendChild(meta);
+  }
+
+  function ensureLink(rel, href) {
+    if (document.querySelector('link[rel="' + rel + '"]')) return;
+    var link = document.createElement('link');
+    link.setAttribute('rel', rel);
+    link.setAttribute('href', href);
+    document.head.appendChild(link);
+  }
+
+  /**
+   * الإصلاح الأهمّ: `viewport-fit=cover`. Safari لا يعطي قيماً حقيقية لدوال
+   * env(safe-area-inset-*) إلا بوجوده، ولذلك كانت حشوة مؤشر الصفحة معطّلة
+   * تماماً على iPhone. يُنفَّذ فوراً عند تحميل السكربت -- أي قبل أن يُبنى
+   * الشريط السفلي أدناه -- فيولد الشريط بقياسه الصحيح من أول رسم.
+   */
+  function applyIosPlatformFixes() {
+    var root = document.documentElement;
+    if (root.classList) root.classList.add('is-ios');
+    else if ((' ' + root.className + ' ').indexOf(' is-ios ') === -1) root.className += ' is-ios';
+
+    var viewport = document.querySelector('meta[name="viewport"]');
+    if (!viewport) {
+      viewport = document.createElement('meta');
+      viewport.setAttribute('name', 'viewport');
+      viewport.setAttribute('content', 'width=device-width, initial-scale=1');
+      document.head.appendChild(viewport);
+    }
+    var content = viewport.getAttribute('content') || 'width=device-width, initial-scale=1';
+    if (content.indexOf('viewport-fit') === -1) {
+      viewport.setAttribute('content', content.replace(/[\s,]+$/, '') + ', viewport-fit=cover');
+    }
+
+    /* لون ترويسة الموقع نفسه (brand-950) يصبغ شريط Safari العلوي. */
+    ensureMeta('theme-color', '#1e1b4b');
+    ensureLink('apple-touch-icon', '/logo.png');
+  }
+
+  /**
+   * تُحقن بعد injectStyles() حتى تتقدّم عليها في التتالي.
+   * لا لون ولا خطّ ولا سطح جديد هنا: القيم كلها من tailwind.config.js وصفحات
+   * الموقع (زجاج panel-soft، ‎#e2e8f0 للفواصل، ‎#ecfdf5 للتطابق، نصف قطر 22).
+   */
+  function injectIosStyles() {
+    if (document.getElementById('ios-shell-styles')) return;
+    var style = document.createElement('style');
+    style.id = 'ios-shell-styles';
+    style.textContent = [
+      'html.is-ios{-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent;}',
+      'html.is-ios a,html.is-ios button,html.is-ios [role="button"],html.is-ios label,',
+      'html.is-ios input,html.is-ios select,html.is-ios textarea{touch-action:manipulation;}',
+      'html.is-ios .overflow-x-auto,html.is-ios #desktopChartScroller{-webkit-overflow-scrolling:touch;}',
+
+      /* التأثيرات المعلّقة: على اللمس لا يوجد "خروج بالمؤشر" فيبقى الزر مرفوعاً. */
+      '@media (hover: none){',
+      '  html.is-ios .btn-open-file:hover,html.is-ios .btn-delete-patient:hover,',
+      '  html.is-ios .row-action-btn:hover,html.is-ios .mshell-tile:hover,',
+      '  html.is-ios .sort-dropdown-trigger:hover{transform:none !important;}',
+      '}',
+
+      '@media (max-width: 767.98px){',
+
+      /* أي حقل خطّه أصغر من 16px يجعل Safari يكبّر الصفحة عند اللمس. */
+      '  html.is-ios input,html.is-ios select,html.is-ios textarea{font-size:17px !important;}',
+
+      /* شريط التبويبات بقياس iOS: صف 49pt ملتصق بالحافة + مساحة المؤشر. */
+      '  html.is-ios body{padding-bottom:calc(' + IOS_TAB_ROW_PX + 'px + env(safe-area-inset-bottom,0px)) !important;}',
+      '  html.is-ios #mobileShellNav{',
+      '    border-radius:0;gap:0;',
+      '    border-top:0.5px solid rgba(255,255,255,.18);',
+      '    padding:0 calc(4px + env(safe-area-inset-right,0px))',
+      '      env(safe-area-inset-bottom,0px) calc(4px + env(safe-area-inset-left,0px));',
+      '    box-shadow:0 -8px 24px rgba(30,27,75,.22);',
+      '  }',
+      '  html.is-ios .mshell-tab{min-height:' + IOS_TAB_ROW_PX + 'px;border-radius:0;',
+      '    font-size:10px;font-weight:600;gap:2px;}',
+      '  html.is-ios .mshell-tab[data-active="1"]{background:transparent;box-shadow:none;color:#fff;}',
+
+      /* الزرّ العائم يستند إلى الشريط الجديد لا إلى 96px الثابتة. */
+      '  html.is-ios #addPatientFab{bottom:calc(' + (IOS_TAB_ROW_PX + 12) + 'px + env(safe-area-inset-bottom,0px));}',
+
+      /* الصفيحة: تحتجز التمرير ولا تدع الإصبع يمرّر الصفحة خلفها. */
+      '  html.is-ios #mobileShellSheet{max-height:88dvh;overscroll-behavior:contain;',
+      '    -webkit-overflow-scrolling:touch;',
+      '    padding-bottom:calc(20px + env(safe-area-inset-bottom,0px));}',
+
+      /* الترويسة الثابتة: حشوة الحافة الآمنة (تساوي صفراً في وضع التصفّح
+         العادي، وتصبح لها قيمة في الوضع الأفقي وعلى الشاشة الرئيسية). */
+      '  html.is-ios .ios-fixed-header{padding-top:env(safe-area-inset-top,0px);',
+      '    padding-inline:env(safe-area-inset-left,0px) env(safe-area-inset-right,0px);}',
+
+      /* القوائم: بطاقة مجمّعة واحدة بدل بطاقة لكل صف — بنفس زجاج
+         panel-soft ونصف قطره، والفاصل يبدأ من بداية النصّ. */
+      '  html.is-ios #patientsMobileList,html.is-ios #appointmentsTableBody,',
+      '  html.is-ios #financeMovesList{',
+      '    gap:0 !important;border-radius:22px;overflow:hidden;',
+      '    background:rgba(255,255,255,.92);',
+      '    -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);',
+      '    border:1px solid rgba(255,255,255,.7);',
+      '    box-shadow:0 10px 26px rgba(148,163,184,.18);}',
+      '  html.is-ios #patientsMobileList:empty,html.is-ios #appointmentsTableBody:empty,',
+      '  html.is-ios #financeMovesList:empty{display:none;}',
+      '  html.is-ios .patient-card,html.is-ios .appointment-row,html.is-ios .fin-move{',
+      '    margin:0 !important;border:0 !important;border-radius:0 !important;',
+      '    background-color:transparent !important;box-shadow:none !important;}',
+
+      /* الفاصل مرسوم كخلفية لا كعنصر ::before: صف المواعيد شبكة (grid)،
+         وأي عنصر زائف داخله يصبح خلية فيها ويُزيح التخطيط. */
+      '  html.is-ios .patient-card + .patient-card,',
+      '  html.is-ios .appointment-row + .appointment-row,',
+      '  html.is-ios .fin-move + .fin-move{',
+      '    background-image:linear-gradient(#e2e8f0,#e2e8f0) !important;',
+      '    background-repeat:no-repeat !important;background-position:top left !important;}',
+      '  html.is-ios .patient-card + .patient-card{background-size:calc(100% - 68px) 1px !important;}',
+      '  html.is-ios .appointment-row + .appointment-row{background-size:calc(100% - 85px) 1px !important;}',
+      '  html.is-ios .fin-move + .fin-move{background-size:calc(100% - 60px) 1px !important;}',
+
+      /* حالة التطابق في البحث كانت حلقة ظلّ + حدّاً، وقد أُلغيا أعلاه. */
+      '  html.is-ios .patient-card[data-matched="1"]{background-color:#ecfdf5 !important;}',
+
+      '}'
+    ].join('\n');
+    document.head.appendChild(style);
+  }
+
+  /* الترويسة الثابتة للجوال لا تحمل id، وتُعرَف بزرّ الهامبرغر داخلها. */
+  function markFixedHeader() {
+    var toggle = document.getElementById('mobileMenuToggle');
+    if (!toggle || !toggle.closest) return;
+    var header = toggle.closest('div.fixed');
+    if (header) header.classList.add('ios-fixed-header');
+  }
+
   function init() {
     /* صفحات لا تملك قائمة تنقّل أصلاً (تسجيل الدخول، الحجز العام...) */
     if (!document.getElementById('mobileMenuDropdown')) return;
@@ -433,10 +603,26 @@
     });
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
+  function boot() {
     init();
+    /* أنماط iOS تُحقن بعد أنماط الغلاف حتى تتقدّم عليها في التتالي. */
+    if (IS_IOS) {
+      markFixedHeader();
+      injectIosStyles();
+    }
+  }
+
+  /* إصلاحات وسوم الرأس تسبق كل شيء: يجب أن يصحّ viewport قبل أن يُبنى
+     الشريط السفلي، وإلا وُلد بحشوة مؤشر صفحة تساوي صفراً. */
+  if (IS_IOS) {
+    if (document.head) applyIosPlatformFixes();
+    else document.addEventListener('DOMContentLoaded', applyIosPlatformFixes);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
   }
 
   window.MobileShell = { open: openSheet, close: closeSheet };
