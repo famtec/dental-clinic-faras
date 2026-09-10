@@ -523,16 +523,17 @@
 
       /* شريط التبويبات بقياس iOS: صف 49pt ملتصق بالحافة + مساحة المؤشر. */
       '  html.is-ios body{padding-bottom:calc(' + IOS_TAB_ROW_PX + 'px + env(safe-area-inset-bottom,0px)) !important;}',
+      /* الشريط: هندسة iOS (ملتصق بالحافة، زوايا صفر، خطّ شعري، صف 49pt)
+         مع الإبقاء على كبسولة التبويب النشط المتدرّجة كما هي في الموقع —
+         الحشوة 3px فوق وتحت تعطيها متنفّساً داخل الصف. */
       '  html.is-ios #mobileShellNav{',
-      '    border-radius:0;gap:0;',
+      '    border-radius:0;',
       '    border-top:0.5px solid rgba(255,255,255,.18);',
-      '    padding:0 calc(4px + env(safe-area-inset-right,0px))',
-      '      env(safe-area-inset-bottom,0px) calc(4px + env(safe-area-inset-left,0px));',
+      '    padding:3px calc(6px + env(safe-area-inset-right,0px))',
+      '      calc(3px + env(safe-area-inset-bottom,0px)) calc(6px + env(safe-area-inset-left,0px));',
       '    box-shadow:0 -8px 24px rgba(30,27,75,.22);',
       '  }',
-      '  html.is-ios .mshell-tab{min-height:' + IOS_TAB_ROW_PX + 'px;border-radius:0;',
-      '    font-size:10px;font-weight:600;gap:2px;}',
-      '  html.is-ios .mshell-tab[data-active="1"]{background:transparent;box-shadow:none;color:#fff;}',
+      '  html.is-ios .mshell-tab{min-height:' + (IOS_TAB_ROW_PX - 6) + 'px;}',
 
       /* الزرّ العائم يستند إلى الشريط الجديد لا إلى 96px الثابتة. */
       '  html.is-ios #addPatientFab{bottom:calc(' + (IOS_TAB_ROW_PX + 12) + 'px + env(safe-area-inset-bottom,0px));}',
