@@ -265,6 +265,19 @@ def init_db():
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE appointments ADD COLUMN patient_web_push_token VARCHAR"))
 
+    # مدة الموعد بالدقائق -- 2026-09-10 (انظر models.py عند
+    # Appointment.duration_minutes). عمود NOT NULL DEFAULT 30 حتى تُعامَل كل
+    # المواعيد القديمة كنصف ساعة تلقائياً بلا أي عملية تعبئة يدوية، وحتى لا
+    # يفشل فحص التعارض على صف قديم بقيمة NULL. بلا شرط نوع قاعدة البيانات
+    # لنفس السبب الموثّق بالأسفل: الإنتاج الحقيقي على Render يستخدم Postgres.
+    if "appointments" in inspector.get_table_names():
+        appointment_duration_columns = {column["name"] for column in inspector.get_columns("appointments")}
+        if "duration_minutes" not in appointment_duration_columns:
+            with engine.begin() as connection:
+                connection.execute(
+                    text("ALTER TABLE appointments ADD COLUMN duration_minutes INTEGER NOT NULL DEFAULT 30")
+                )
+
     # ====================================================================
     # فواتير العلاج المستقلة (treatment_invoices) -- 2026-08-25
     # ====================================================================

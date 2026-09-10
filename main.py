@@ -1091,12 +1091,22 @@ class AppointmentCreate(BaseModel):
     description: str = Field(validation_alias=AliasChoices("description", "notes", "procedure_type"))
     patient_name: Optional[str] = None
     status: str = "Pending"
+    # مدة الموعد بالدقائق (2026-09-10) -- اختيارية: أي عميل قديم لا يرسلها
+    # يحصل على القيمة الافتراضية (30 دقيقة) تماماً كما كان السلوك قبل الميزة.
+    duration_minutes: Optional[int] = None
 
 
 class AppointmentUpdate(BaseModel):
     appointment_date: Optional[datetime] = None
     appointment_time: Optional[str] = None
     description: Optional[str] = None
+    # حقلا التاريخ/الوقت النصّيان اللذان يرسلهما الموقع أصلاً ضمن نفس الطلب
+    # (date: "YYYY-MM-DD"، time: "HH:MM"). نقرأهما هنا صراحةً لأنهما تمثيل
+    # محلي صريح بلا منطقة زمنية، خلافاً لـ appointment_date الذي يصل كـ ISO
+    # بصيغة UTC (‎...Z‎) فينزاح بمقدار فرق التوقيت عند التخزين والمقارنة.
+    date: Optional[str] = None
+    time: Optional[str] = None
+    duration_minutes: Optional[int] = None
 
 
 class AppointmentStatusUpdate(BaseModel):
@@ -1114,6 +1124,9 @@ class AppointmentResponse(BaseModel):
     patient_id: Optional[int] = None
     # هاتف صاحب طلب الحجز العام (2026-08-23) -- يظهر فقط لطلبات booking.html
     patient_phone: Optional[str] = None
+    # مدة الموعد بالدقائق (2026-09-10) -- تعتمد عليها صفحة المواعيد اليومية
+    # لعرض مدى الموعد (من ... إلى ...) ولفحص التعارض قبل الحفظ.
+    duration_minutes: Optional[int] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -3128,6 +3141,151 @@ def update_patient_chart(
 
 
 # 6. مسار لحجز موعد جديد لمريض [POST]
+# ====================================================================
+# مدة الموعد + فحص التعارض -- 2026-09-10
+# ====================================================================
+# الطبيب/السكرتيرة يختار مدة كل موعد على حدة (ربع ساعة وحتى ٣ ساعات بخطوة ربع
+# ساعة). موعدان يتقاطعان زمنياً لا يمكن حجزهما معاً: الحفظ يُرفض برسالة عربية
+# واضحة تذكر المريض صاحب الموعد المحجوز ومداه الزمني وأقرب وقت متاح بعده.
+#
+# الفحص مُطبَّق هنا في الخادم عمداً وليس في المتصفح فقط: صفحة المواعيد اليومية
+# تعرض تجربة أغنى (اقتراح فوري بزر واحد قبل حتى محاولة الحفظ)، لكن الخادم هو
+# خط الدفاع الأخير الذي يحمي أيضاً تطبيق الأندرويد وصفحة الحجز العامة وأي
+# طلبين متزامنين يصلان في نفس اللحظة على نفس الوقت.
+APPOINTMENT_DURATION_CHOICES = (15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165, 180)
+DEFAULT_APPOINTMENT_DURATION_MINUTES = 30
+
+# الحالات التي لا "تشغل" وقتاً في جدول العيادة: طلب حجز عام لم يُقبل بعد
+# (pending_confirmation)، طلب مرفوض، أو موعد ملغى. أي حالة أخرى (pending /
+# checked_in / no_show) تُعامَل كموعد قائم يحجز وقته.
+APPOINTMENT_NON_BLOCKING_STATUSES = {"pending_confirmation", "rejected", "cancelled", "canceled"}
+
+
+def normalize_appointment_duration(value) -> int:
+    """أقرب مدة مسموحة للقيمة الواردة، و30 دقيقة لأي قيمة مفقودة أو غير صالحة."""
+    try:
+        minutes = int(value)
+    except (TypeError, ValueError):
+        return DEFAULT_APPOINTMENT_DURATION_MINUTES
+    if minutes in APPOINTMENT_DURATION_CHOICES:
+        return minutes
+    if minutes <= 0:
+        return DEFAULT_APPOINTMENT_DURATION_MINUTES
+    return min(APPOINTMENT_DURATION_CHOICES, key=lambda choice: (abs(choice - minutes), choice))
+
+
+def _naive_local_datetime(value: Optional[datetime]) -> Optional[datetime]:
+    """يجرّد أي تاريخ/وقت من منطقته الزمنية ليُقارَن مع المخزَّن (naive) بأمان."""
+    if value is None:
+        return None
+    if value.tzinfo is not None:
+        return value.replace(tzinfo=None)
+    return value
+
+
+def collect_busy_appointment_intervals(
+    db: Session,
+    doctor_email: str,
+    target_day: date,
+    exclude_appointment_id: Optional[int] = None,
+) -> List[dict]:
+    """كل المواعيد التي تشغل وقتاً في يوم معيّن، مرتّبة زمنياً."""
+    day_start = datetime.combine(target_day, datetime.min.time())
+    query = db.query(models.Appointment).filter(
+        models.Appointment.doctor_email == doctor_email,
+        models.Appointment.appointment_date >= day_start,
+        models.Appointment.appointment_date < day_start + timedelta(days=1),
+    )
+    if exclude_appointment_id is not None:
+        query = query.filter(models.Appointment.id != exclude_appointment_id)
+
+    intervals: List[dict] = []
+    for existing in query.all():
+        if (existing.status or "").strip().lower() in APPOINTMENT_NON_BLOCKING_STATUSES:
+            continue
+        existing_start = _naive_local_datetime(existing.appointment_date)
+        if existing_start is None:
+            continue
+        existing_duration = normalize_appointment_duration(existing.duration_minutes)
+        intervals.append(
+            {
+                "appointment": existing,
+                "start": existing_start,
+                "end": existing_start + timedelta(minutes=existing_duration),
+                "duration": existing_duration,
+            }
+        )
+
+    intervals.sort(key=lambda item: item["start"])
+    return intervals
+
+
+def find_next_available_start(
+    intervals: List[dict],
+    desired_start: datetime,
+    duration_minutes: int,
+) -> Optional[datetime]:
+    """أول وقت في نفس اليوم يتسع للمدة المطلوبة بلا تعارض، ابتداءً من الوقت المطلوب."""
+    day_limit = datetime.combine(desired_start.date(), datetime.min.time()) + timedelta(days=1)
+    candidate = desired_start
+    # عدد المواعيد في يوم واحد محدود، وكل دورة تقفز إلى نهاية موعد لاحق، فحدّ
+    # التكرار هنا مجرد صمّام أمان ضد أي حلقة لا نهائية غير متوقعة.
+    for _ in range(len(intervals) + 2):
+        if candidate + timedelta(minutes=duration_minutes) > day_limit:
+            return None
+        blocking = next(
+            (item for item in intervals if item["start"] < candidate + timedelta(minutes=duration_minutes) and candidate < item["end"]),
+            None,
+        )
+        if blocking is None:
+            return candidate
+        candidate = blocking["end"]
+    return None
+
+
+def ensure_appointment_slot_is_free(
+    db: Session,
+    doctor_email: str,
+    start_at: datetime,
+    duration_minutes: int,
+    exclude_appointment_id: Optional[int] = None,
+) -> None:
+    """يرفع 409 برسالة عربية جاهزة للعرض إن كان الوقت المطلوب متعارضاً مع موعد قائم."""
+    start_at = _naive_local_datetime(start_at)
+    if start_at is None:
+        return
+
+    intervals = collect_busy_appointment_intervals(
+        db, doctor_email, start_at.date(), exclude_appointment_id=exclude_appointment_id
+    )
+    requested_end = start_at + timedelta(minutes=duration_minutes)
+    conflict = next(
+        (item for item in intervals if item["start"] < requested_end and start_at < item["end"]),
+        None,
+    )
+    if conflict is None:
+        return
+
+    conflict_patient = (conflict["appointment"].patient_name or "").strip()
+    conflict_label = f"المريض «{conflict_patient}»" if conflict_patient else "موعد آخر"
+    message = (
+        f"الموعد محجوز: {conflict_label} لديه موعد من "
+        f"{conflict['start'].strftime('%H:%M')} حتى {conflict['end'].strftime('%H:%M')}."
+    )
+
+    suggested_start = find_next_available_start(intervals, conflict["end"], duration_minutes)
+    if suggested_start is not None:
+        suggested_end = suggested_start + timedelta(minutes=duration_minutes)
+        message += (
+            f" أقرب وقت متاح لهذه المدة هو {suggested_start.strftime('%H:%M')}"
+            f" (ينتهي {suggested_end.strftime('%H:%M')})."
+        )
+    else:
+        message += " لا يوجد وقت متاح لهذه المدة في بقية اليوم — جرّب مدة أقصر أو يوماً آخر."
+
+    raise HTTPException(status_code=409, detail=message)
+
+
 @app.post("/api/appointments", response_model=AppointmentResponse, status_code=201)
 def create_appointment(
     appointment: AppointmentCreate,
@@ -3165,6 +3323,20 @@ def create_appointment(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date/time format")
 
+    normalized_status = (appointment.status or "pending").strip().lower() or "pending"
+    duration_value = normalize_appointment_duration(
+        appointment.duration_minutes
+        if appointment.duration_minutes is not None
+        else DEFAULT_APPOINTMENT_DURATION_MINUTES
+    )
+
+    # الموعد الذي لا يشغل وقتاً أصلاً (طلب حجز عام بانتظار قبول الطبيب) لا
+    # يُفحَص ضد التعارض -- يُفحص لاحقاً عند قبوله لا عند وصوله.
+    if normalized_status not in APPOINTMENT_NON_BLOCKING_STATUSES:
+        ensure_appointment_slot_is_free(
+            db, current_user.email, appointment_date_time, duration_value
+        )
+
     db_appointment = models.Appointment(
         patient_id=appointment.patient_id,
         doctor_email=current_user.email,
@@ -3173,7 +3345,8 @@ def create_appointment(
         appointment_time=normalized_time,
         procedure_type=description_value,
         notes=description_value,
-        status=(appointment.status or "pending").strip().lower() or "pending",
+        status=normalized_status,
+        duration_minutes=duration_value,
     )
 
     try:
@@ -3193,6 +3366,7 @@ def create_appointment(
         "procedure_type": db_appointment.procedure_type,
         "notes": db_appointment.notes,
         "status": db_appointment.status,
+        "duration_minutes": db_appointment.duration_minutes,
     }
 
 
@@ -3217,18 +3391,75 @@ def update_appointment(
             appointment_update.appointment_date,
             appointment_update.appointment_time,
             appointment_update.description,
+            appointment_update.date,
+            appointment_update.time,
+            appointment_update.duration_minutes,
         )
     )
     if not has_any_update:
         raise HTTPException(status_code=400, detail="No appointment fields provided for update")
 
+    # --- الوقت والمدة الجديدان بعد التعديل، لفحص التعارض قبل الحفظ ---
+    new_time_text = (appointment_update.time or appointment_update.appointment_time or "").strip()[:5]
+    new_duration = (
+        normalize_appointment_duration(appointment_update.duration_minutes)
+        if appointment_update.duration_minutes is not None
+        else normalize_appointment_duration(appointment.duration_minutes)
+    )
+
+    # بناء لحظة بداية الموعد بعد التعديل. تُفضَّل دائماً الصيغة النصية المحلية
+    # (date: "YYYY-MM-DD" + time: "HH:MM") على appointment_date القادم بتوقيت
+    # UTC: الأخير ينزاح بمقدار فرق التوقيت (‎+3‎ في دمشق)، فيضع الموعد في ساعة --
+    # وأحياناً في يوم -- غير الذي اختاره المستخدم، ويُفسد فحص التعارض معه.
+    # لذلك: التاريخ يُؤخذ من date إن وُجد وإلا من تاريخ appointment_date، أما
+    # الساعة فمن النص المحلي time/appointment_time دائماً ما دام مُرسَلاً.
+    date_component: Optional[str] = None
+    if appointment_update.date:
+        date_component = appointment_update.date.strip().split("T", 1)[0]
+    elif appointment_update.appointment_date is not None:
+        incoming_date = _naive_local_datetime(appointment_update.appointment_date)
+        date_component = incoming_date.date().isoformat() if incoming_date else None
+    else:
+        current_start = _naive_local_datetime(appointment.appointment_date)
+        date_component = current_start.date().isoformat() if current_start else None
+
+    time_component = new_time_text or (appointment.appointment_time or "").strip()[:5]
+
+    effective_start: Optional[datetime] = None
+    if date_component and len(time_component) == 5 and time_component[2] == ":":
+        try:
+            effective_start = datetime.fromisoformat(f"{date_component}T{time_component}:00")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date/time format")
+    elif appointment_update.appointment_date is not None:
+        effective_start = _naive_local_datetime(appointment_update.appointment_date)
+    else:
+        effective_start = _naive_local_datetime(appointment.appointment_date)
+
+    if effective_start is not None and (appointment.status or "").strip().lower() not in APPOINTMENT_NON_BLOCKING_STATUSES:
+        ensure_appointment_slot_is_free(
+            db,
+            current_user.email,
+            effective_start,
+            new_duration,
+            exclude_appointment_id=appointment.id,
+        )
+
     try:
-        if appointment_update.appointment_date is not None:
-            appointment.appointment_date = appointment_update.appointment_date
-        if appointment_update.appointment_time is not None:
-            appointment.appointment_time = appointment_update.appointment_time.strip()
+        if effective_start is not None:
+            appointment.appointment_date = effective_start
+        # الساعة المخزَّنة تُحدَّث فقط من النص المحلي المُرسَل -- لا تُشتَق أبداً
+        # من appointment_date حتى لا تُستبدَل ساعة صحيحة بأخرى مزاحة بتوقيت UTC.
+        if new_time_text:
+            appointment.appointment_time = new_time_text
+        if appointment_update.duration_minutes is not None:
+            appointment.duration_minutes = new_duration
         if appointment_update.description is not None:
+            # يُحدَّث الحقلان معاً: notes هو النص الذي يعيده الخادم، و
+            # procedure_type هو ما يعرضه عمود "الإجراء" في جدول المواعيد --
+            # كان تحديث الوصف سابقاً لا ينعكس على الجدول إطلاقاً لهذا السبب.
             appointment.notes = appointment_update.description.strip()
+            appointment.procedure_type = appointment_update.description.strip()
 
         db.commit()
         db.refresh(appointment)
@@ -5232,19 +5463,28 @@ def compute_available_slots_for_date(db: Session, doctor: models.User, target_da
     # أي حالة موعد "تشغل" الوقت وتمنع حجزه من جديد: بانتظار (pending)، بانتظار
     # قبول الطبيب (pending_confirmation)، أو تم تسجيل الحضور فعلاً (checked_in).
     # الحالة "rejected" أو "no_show" لا تشغل الوقت، فيعود متاحاً للحجز مجدداً.
-    taken_times = {
-        appointment.appointment_time
-        for appointment in (
-            db.query(models.Appointment)
-            .filter(
-                models.Appointment.doctor_email == doctor.email,
-                models.Appointment.appointment_date >= day_start,
-                models.Appointment.appointment_date < day_start + timedelta(days=1),
-                models.Appointment.status.in_(["pending", "pending_confirmation", "checked_in"]),
-            )
-            .all()
+    #
+    # 2026-09-10: صار لكل موعد مدته الخاصة (Appointment.duration_minutes)، فلم
+    # يعد يكفي استبعاد وقت البداية وحده -- موعد مدته ساعة ونصف يبدأ 10:00 يجب
+    # أن يُخفي أيضاً خانات 10:30 و11:00. لذلك نبني فترات مشغولة (بداية/نهاية)
+    # ونستبعد أي خانة تتقاطع مع أي منها.
+    busy_windows = []
+    for appointment in (
+        db.query(models.Appointment)
+        .filter(
+            models.Appointment.doctor_email == doctor.email,
+            models.Appointment.appointment_date >= day_start,
+            models.Appointment.appointment_date < day_start + timedelta(days=1),
+            models.Appointment.status.in_(["pending", "pending_confirmation", "checked_in"]),
         )
-    }
+        .all()
+    ):
+        busy_start = _naive_local_datetime(appointment.appointment_date)
+        if busy_start is None:
+            continue
+        busy_windows.append(
+            (busy_start, busy_start + timedelta(minutes=normalize_appointment_duration(appointment.duration_minutes)))
+        )
 
     available_slots: List[str] = []
     cursor = day_start
@@ -5252,9 +5492,10 @@ def compute_available_slots_for_date(db: Session, doctor: models.User, target_da
         if target_date == now_local.date() and cursor <= now_local:
             cursor += timedelta(minutes=slot_minutes)
             continue
-        slot_label = cursor.strftime("%H:%M")
-        if slot_label not in taken_times:
-            available_slots.append(slot_label)
+        slot_end = cursor + timedelta(minutes=slot_minutes)
+        is_taken = any(busy_start < slot_end and cursor < busy_end for busy_start, busy_end in busy_windows)
+        if not is_taken:
+            available_slots.append(cursor.strftime("%H:%M"))
         cursor += timedelta(minutes=slot_minutes)
 
     return available_slots
@@ -5361,6 +5602,9 @@ def create_public_booking_request(
         procedure_type=(booking.notes or "").strip() or "حجز عبر صفحة الحجز العامة",
         notes=(booking.notes or "").strip() or None,
         status="pending_confirmation",
+        # طلب الحجز العام يحجز خانة واحدة بطول خانة الحجز التي عرّفها الطبيب
+        # في "حسابي" -- هي نفسها الوحدة التي عُرضت للمريض في صفحة الحجز.
+        duration_minutes=normalize_appointment_duration(doctor.slot_duration_minutes),
     )
 
     try:

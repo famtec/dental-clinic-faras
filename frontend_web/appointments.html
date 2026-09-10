@@ -128,6 +128,25 @@
                 text-align: center;
                 line-height: 1.2;
             }
+            /* مدى الموعد داخل شارة الوقت الضيقة (62px): وقت البداية سطراً
+               أول بارزاً، ووقت الانتهاء تحته أصغر. الفاصلة وشارة المدة
+               النصية تُخفيان هنا -- وقت الانتهاء وحده يكفي على الجوال،
+               والمدة الكاملة تظهر في نافذة التعديل. */
+            .appointment-row .ap-cell-time .ap-time-wrap {
+                flex-direction: column;
+                flex-wrap: nowrap;
+                gap: 1px;
+                justify-content: center;
+                line-height: 1.15;
+            }
+            .appointment-row .ap-cell-time .ap-time-sep,
+            .appointment-row .ap-cell-time .ap-time-badge { display: none !important; }
+            .appointment-row .ap-cell-time .ap-time-end {
+                font-size: 11px;
+                font-weight: 700;
+                opacity: 0.85;
+            }
+
             .appointment-row .ap-cell-name {
                 grid-area: name;
                 font-size: 14.5px !important;
@@ -414,6 +433,21 @@
  <input id="appointmentTime" type="time" required class="w-full rounded-2xl border border-brand-200/30 bg-white/10 py-3 pr-10 pl-4 text-sm text-white outline-none transition focus:border-brand-300 focus:ring-4 focus:ring-brand-300/25" />
  </div>
  </label>
+ </div>
+
+ <!-- مدة الموعد (2026-09-10): يختارها الطبيب/السكرتيرة لكل موعد على حدة،
+                         وعليها يقوم فحص التعارض مع بقية مواعيد اليوم نفسه. تُملأ خياراتها
+                         من APPOINTMENT_DURATION_OPTIONS في السكربت بالأسفل. -->
+ <label class="block">
+ <span class="mb-1 block text-xs font-semibold text-brand-100">مدة الموعد</span>
+ <select id="appointmentDuration" class="w-full rounded-2xl border border-brand-200/30 bg-white/10 px-4 py-3 text-sm font-semibold text-white outline-none transition focus:border-brand-300 focus:ring-4 focus:ring-brand-300/25"></select>
+ <span id="appointmentEndHint" class="mt-1 block text-xs font-semibold text-brand-200/80"></span>
+ </label>
+
+ <div id="appointmentConflictBox" class="hidden rounded-2xl border border-danger-300/30 bg-danger-500/15 px-4 py-3">
+ <p class="text-sm font-extrabold text-danger-100">الموعد محجوز</p>
+ <p id="appointmentConflictMessage" class="mt-1 text-xs font-semibold leading-relaxed text-danger-100"></p>
+ <button id="applySuggestedTimeBtn" type="button" class="mt-3 hidden items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-4 py-2 text-xs font-bold text-white transition hover:bg-white/20">اختر أقرب وقت متاح</button>
  </div>
 
  <label class="block">
@@ -721,6 +755,207 @@
                 badgeClass: 'bg-danger-100 text-danger-800 border border-danger-200',
             },
         };
+
+        // ============================================================
+        // مدة الموعد + فحص التعارض -- 2026-09-10
+        // ============================================================
+        // المدد المسموحة: من ربع ساعة حتى ٣ ساعات، بخطوة ربع ساعة. القيمة
+        // الافتراضية 30 دقيقة هي نفسها القيمة الافتراضية في قاعدة البيانات،
+        // فتُعامَل كل المواعيد القديمة (قبل إضافة الميزة) كنصف ساعة تلقائياً.
+        const DEFAULT_APPOINTMENT_DURATION = 30;
+        const APPOINTMENT_DURATION_OPTIONS = [
+            { value: 15, label: 'ربع ساعة (15 دقيقة)', short: 'ربع ساعة' },
+            { value: 30, label: 'نصف ساعة (30 دقيقة)', short: 'نصف ساعة' },
+            { value: 45, label: 'ثلاثة أرباع الساعة (45 دقيقة)', short: '45 دقيقة' },
+            { value: 60, label: 'ساعة', short: 'ساعة' },
+            { value: 75, label: 'ساعة وربع', short: 'ساعة وربع' },
+            { value: 90, label: 'ساعة ونصف', short: 'ساعة ونصف' },
+            { value: 105, label: 'ساعة وثلاثة أرباع', short: 'ساعة و45 د' },
+            { value: 120, label: 'ساعتان', short: 'ساعتان' },
+            { value: 135, label: 'ساعتان وربع', short: 'ساعتان وربع' },
+            { value: 150, label: 'ساعتان ونصف', short: 'ساعتان ونصف' },
+            { value: 165, label: 'ساعتان وثلاثة أرباع', short: 'ساعتان و45 د' },
+            { value: 180, label: 'ثلاث ساعات', short: '3 ساعات' },
+        ];
+        const MINUTES_IN_DAY = 24 * 60;
+
+        const durationSelect = document.getElementById('appointmentDuration');
+        const appointmentEndHint = document.getElementById('appointmentEndHint');
+        const conflictBox = document.getElementById('appointmentConflictBox');
+        const conflictMessage = document.getElementById('appointmentConflictMessage');
+        const applySuggestedTimeBtn = document.getElementById('applySuggestedTimeBtn');
+        // الوقت المقترح حالياً (بالدقائق من منتصف الليل) الذي يطبّقه زر
+        // "اختر أقرب وقت متاح"؛ null يعني لا يوجد اقتراح صالح.
+        let suggestedStartMinutes = null;
+
+        function normalizeDurationMinutes(value) {
+            const minutes = Number(value);
+            if (!Number.isFinite(minutes) || minutes <= 0) return DEFAULT_APPOINTMENT_DURATION;
+            const exact = APPOINTMENT_DURATION_OPTIONS.find((option) => option.value === minutes);
+            if (exact) return exact.value;
+            // أقرب مدة مسموحة (وعند التساوي: الأقصر)، حتى لا تكسر أي قيمة
+            // قديمة/غريبة قادمة من الخادم شكل القائمة.
+            return APPOINTMENT_DURATION_OPTIONS.reduce((best, option) => {
+                const optionGap = Math.abs(option.value - minutes);
+                const bestGap = Math.abs(best - minutes);
+                return optionGap < bestGap ? option.value : best;
+            }, DEFAULT_APPOINTMENT_DURATION);
+        }
+
+        function getDurationShortLabel(value) {
+            const normalized = normalizeDurationMinutes(value);
+            const option = APPOINTMENT_DURATION_OPTIONS.find((item) => item.value === normalized);
+            return option ? option.short : `${normalized} دقيقة`;
+        }
+
+        function timeTextToMinutes(value) {
+            const match = String(value || '').trim().match(/^(\d{1,2}):(\d{2})/);
+            if (!match) return null;
+            const hours = Number(match[1]);
+            const minutes = Number(match[2]);
+            if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+            if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+            return hours * 60 + minutes;
+        }
+
+        function minutesToTimeText(value) {
+            const total = Math.max(0, Math.round(Number(value) || 0));
+            const hours = Math.floor(total / 60) % 24;
+            const minutes = total % 60;
+            return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+        }
+
+        // وقت بداية الموعد يُقرأ من appointment_time النصّي أولاً، وهو التمثيل
+        // المحلي الصريح؛ appointment_date يُستخدم كاحتياط فقط لأنه قد يصل
+        // بتوقيت UTC فينزاح بمقدار فرق التوقيت.
+        function getAppointmentStartMinutes(appointment) {
+            const fromText = timeTextToMinutes(appointment?.appointment_time);
+            if (fromText !== null) return fromText;
+            const parsed = appointment?.appointment_date ? new Date(appointment.appointment_date) : null;
+            if (!parsed || Number.isNaN(parsed.getTime())) return null;
+            return parsed.getHours() * 60 + parsed.getMinutes();
+        }
+
+        function getAppointmentDuration(appointment) {
+            return normalizeDurationMinutes(appointment?.duration_minutes);
+        }
+
+        // كل المواعيد التي تشغل وقتاً في يوم معيّن، مرتّبة زمنياً.
+        // allNormalAppointments مستبعَد منها أصلاً طلبات الحجز غير المؤكدة
+        // (pending_confirmation) والمرفوضة (rejected)، فلا تحجز وقتاً هنا.
+        function collectBusyIntervals(dayKey, excludeAppointmentId) {
+            return allNormalAppointments
+                .filter((appointment) => appointmentDayKey(appointment) === dayKey)
+                .filter((appointment) => {
+                    if (excludeAppointmentId === undefined || excludeAppointmentId === null) return true;
+                    return String(appointment?.id ?? '') !== String(excludeAppointmentId);
+                })
+                .map((appointment) => {
+                    const start = getAppointmentStartMinutes(appointment);
+                    if (start === null) return null;
+                    const duration = getAppointmentDuration(appointment);
+                    return { appointment, start, end: start + duration, duration };
+                })
+                .filter(Boolean)
+                .sort((first, second) => first.start - second.start);
+        }
+
+        function findBlockingInterval(intervals, startMinutes, durationMinutes) {
+            const endMinutes = startMinutes + durationMinutes;
+            return intervals.find((item) => item.start < endMinutes && startMinutes < item.end) || null;
+        }
+
+        function findNextAvailableStart(intervals, fromMinutes, durationMinutes) {
+            let candidate = fromMinutes;
+            for (let step = 0; step <= intervals.length + 1; step += 1) {
+                if (candidate + durationMinutes > MINUTES_IN_DAY) return null;
+                const blocking = findBlockingInterval(intervals, candidate, durationMinutes);
+                if (!blocking) return candidate;
+                candidate = blocking.end;
+            }
+            return null;
+        }
+
+        function renderDurationOptions() {
+            if (!durationSelect || durationSelect.options.length) return;
+            // ألوان الخيارات مكتوبة صراحةً: قائمة <select> المنسدلة ترث لون
+            // النص الأبيض من الحقل نفسه، فتصبح غير مقروءة على خلفية القائمة
+            // الفاتحة الافتراضية للمتصفح ما لم نحدد لها خلفية داكنة بنفسها.
+            durationSelect.innerHTML = APPOINTMENT_DURATION_OPTIONS
+                .map((option) => `<option value="${option.value}" style="background-color:#312e81;color:#ffffff;">${option.label}</option>`)
+                .join('');
+            durationSelect.value = String(DEFAULT_APPOINTMENT_DURATION);
+        }
+
+        function getSelectedDurationMinutes() {
+            return normalizeDurationMinutes(durationSelect?.value);
+        }
+
+        function hideAppointmentConflict() {
+            suggestedStartMinutes = null;
+            if (conflictBox) conflictBox.classList.add('hidden');
+            if (applySuggestedTimeBtn) {
+                applySuggestedTimeBtn.classList.add('hidden');
+                applySuggestedTimeBtn.classList.remove('inline-flex');
+            }
+        }
+
+        // الفحص الحيّ: يُستدعى مع كل تغيير للتاريخ/الوقت/المدة، ومرة أخرى قبل
+        // الحفظ. يُرجع كائن التعارض إن وُجد، أو null إن كان الوقت متاحاً.
+        function refreshAppointmentConflictState() {
+            if (!conflictBox) return null;
+
+            const dateValue = document.getElementById('appointmentDate')?.value || '';
+            const timeValue = document.getElementById('appointmentTime')?.value || '';
+            const startMinutes = timeTextToMinutes(timeValue);
+            const durationMinutes = getSelectedDurationMinutes();
+
+            if (appointmentEndHint) {
+                appointmentEndHint.textContent = startMinutes === null
+                    ? ''
+                    : `ينتهي الساعة ${minutesToTimeText(startMinutes + durationMinutes)}`;
+            }
+
+            if (!dateValue || startMinutes === null) {
+                hideAppointmentConflict();
+                return null;
+            }
+
+            const intervals = collectBusyIntervals(dateValue, activeAppointment?.id);
+            const blocking = findBlockingInterval(intervals, startMinutes, durationMinutes);
+            if (!blocking) {
+                hideAppointmentConflict();
+                return null;
+            }
+
+            const patientName = String(blocking.appointment?.patient_name || '').trim();
+            const owner = patientName ? `المريض «${patientName}»` : 'موعد آخر';
+            suggestedStartMinutes = findNextAvailableStart(intervals, blocking.end, durationMinutes);
+
+            let message = `${owner} لديه موعد من ${minutesToTimeText(blocking.start)} حتى ${minutesToTimeText(blocking.end)}`
+                + ` (${getDurationShortLabel(blocking.duration)}).`;
+            if (suggestedStartMinutes === null) {
+                message += ' لا يوجد وقت متاح لهذه المدة في بقية اليوم — جرّب مدة أقصر أو يوماً آخر.';
+            } else {
+                message += ` أقرب وقت متاح لهذه المدة هو ${minutesToTimeText(suggestedStartMinutes)}`
+                    + ` (ينتهي ${minutesToTimeText(suggestedStartMinutes + durationMinutes)}).`;
+            }
+
+            if (conflictMessage) conflictMessage.textContent = message;
+            conflictBox.classList.remove('hidden');
+            if (applySuggestedTimeBtn) {
+                if (suggestedStartMinutes === null) {
+                    applySuggestedTimeBtn.classList.add('hidden');
+                    applySuggestedTimeBtn.classList.remove('inline-flex');
+                } else {
+                    applySuggestedTimeBtn.textContent = `اختر أقرب وقت متاح (${minutesToTimeText(suggestedStartMinutes)})`;
+                    applySuggestedTimeBtn.classList.remove('hidden');
+                    applySuggestedTimeBtn.classList.add('inline-flex');
+                }
+            }
+
+            return blocking;
+        }
 
         function normalizeAppointmentStatus(status) {
             const normalized = String(status || 'pending').trim().toLowerCase();
@@ -1033,12 +1268,26 @@
             if (appointmentSubmitBtn) {
                 appointmentSubmitBtn.textContent = 'حفظ الموعد';
             }
+            renderDurationOptions();
+            if (durationSelect) {
+                durationSelect.value = String(DEFAULT_APPOINTMENT_DURATION);
+            }
+            hideAppointmentConflict();
+            if (appointmentEndHint) {
+                appointmentEndHint.textContent = '';
+            }
         }
 
         function setEditMode(appointment) {
             activeAppointment = appointment;
             if (appointmentSubmitBtn) {
                 appointmentSubmitBtn.textContent = 'حفظ التعديلات';
+            }
+
+            renderDurationOptions();
+            hideAppointmentConflict();
+            if (durationSelect) {
+                durationSelect.value = String(normalizeDurationMinutes(appointment?.duration_minutes));
             }
 
             if (patientSearchInput) {
@@ -1087,12 +1336,42 @@
             if (descriptionInput) {
                 descriptionInput.value = String(appointment?.notes || appointment?.description || appointment?.procedure_type || '').trim();
             }
+
+            // الموعد نفسه مستبعَد من فحص التعارض أثناء تعديله (activeAppointment)،
+            // فلا يتعارض مع نفسه، لكن أي تعارض حقيقي مع موعد آخر يظهر فوراً.
+            refreshAppointmentConflictState();
+        }
+
+        // فحص حيّ للتعارض مع كل تغيير في التاريخ/الوقت/المدة، حتى يرى المستخدم
+        // الرسالة قبل أن يضغط "حفظ" أصلاً.
+        ['appointmentDate', 'appointmentTime'].forEach((inputId) => {
+            const field = document.getElementById(inputId);
+            if (!field) return;
+            field.addEventListener('change', refreshAppointmentConflictState);
+            field.addEventListener('input', refreshAppointmentConflictState);
+        });
+
+        if (durationSelect) {
+            durationSelect.addEventListener('change', refreshAppointmentConflictState);
+        }
+
+        if (applySuggestedTimeBtn) {
+            applySuggestedTimeBtn.addEventListener('click', () => {
+                if (suggestedStartMinutes === null) return;
+                const timeInput = document.getElementById('appointmentTime');
+                if (!timeInput) return;
+                timeInput.value = minutesToTimeText(suggestedStartMinutes);
+                refreshAppointmentConflictState();
+                showToast(`تم اختيار أقرب وقت متاح: ${timeInput.value}`, 'success');
+            });
         }
 
         function openModal(appointment = null) {
             if (allPatients.length === 0) {
                 loadPatientsForAppointmentForm();
             }
+
+            renderDurationOptions();
 
             if (appointment) {
                 setEditMode(appointment);
@@ -1133,6 +1412,15 @@
             form.reset();
             if (patientIdInput) {
                 patientIdInput.value = '';
+            }
+            // form.reset() يعيد قائمة المدة إلى أول خيار (ربع ساعة) لا إلى
+            // الافتراضي، لذا نعيد ضبطها بعده لا قبله.
+            if (durationSelect) {
+                durationSelect.value = String(DEFAULT_APPOINTMENT_DURATION);
+            }
+            hideAppointmentConflict();
+            if (appointmentEndHint) {
+                appointmentEndHint.textContent = '';
             }
         }
 
@@ -1217,6 +1505,29 @@
             badge.textContent = count === 1 ? 'موعد واحد' : `${count} مواعيد`;
         }
 
+        // عمود "الوقت" يعرض مدى الموعد كاملاً (من ... إلى ...) مع شارة صغيرة
+        // بمدته، لأن المدة صارت مختلفة من موعد لآخر ولم يعد وقت البداية وحده
+        // كافياً لمعرفة متى ينتهي الموعد ومتى يبدأ التالي.
+        function renderAppointmentTimeRange(appointment) {
+            const startMinutes = getAppointmentStartMinutes(appointment);
+            if (startMinutes === null) {
+                return '<span>—</span>';
+            }
+            const duration = getAppointmentDuration(appointment);
+            const endText = minutesToTimeText(startMinutes + duration);
+            // البطاقة على الجوال تعيد ترتيب هذه الأجزاء عمودياً داخل شارة
+            // الوقت الضيقة (انظر قواعد .ap-time-* في <style> بالأعلى)، لذلك
+            // كل جزء في span مستقل بدل نص واحد.
+            return `
+ <span class="ap-time-wrap flex flex-wrap items-center justify-end gap-2 sm:justify-start">
+ <span class="ap-time-start whitespace-nowrap font-semibold">${minutesToTimeText(startMinutes)}</span>
+ <span class="ap-time-sep">—</span>
+ <span class="ap-time-end whitespace-nowrap font-semibold">${endText}</span>
+ <span class="ap-time-badge whitespace-nowrap rounded-full bg-ink-100 px-2 py-0.5 text-[11px] font-bold text-ink-500">${getDurationShortLabel(duration)}</span>
+ </span>
+ `;
+        }
+
         function renderAppointments(appointments) {
             currentAppointments = Array.isArray(appointments) ? appointments : [];
             updateAppointmentsCount(currentAppointments.length);
@@ -1247,7 +1558,7 @@
  </td>
  <td class="flex items-center justify-between gap-3 border-b border-ink-100 px-4 py-3 ap-cell ap-cell-time text-sm text-ink-600 last:border-b-0 sm:table-cell sm:border-b-0">
  <span class="ap-label text-xs font-semibold text-ink-400 sm:hidden">الوقت</span>
- <span>${appointment.appointment_time || '—'}</span>
+                            ${renderAppointmentTimeRange(appointment)}
  </td>
  <td class="flex items-center justify-between gap-3 border-b border-ink-100 px-4 py-3 ap-cell ap-cell-proc text-sm text-ink-600 last:border-b-0 sm:table-cell sm:border-b-0">
  <span class="ap-label text-xs font-semibold text-ink-400 sm:hidden">الإجراء</span>
@@ -1626,6 +1937,18 @@
                 return;
             }
 
+            // فحص التعارض قبل إرسال أي طلب: الوقت المطلوب يجب ألا يتقاطع مع
+            // أي موعد آخر في نفس اليوم بعد احتساب مدة كل منهما.
+            const selectedDuration = getSelectedDurationMinutes();
+            const blockingInterval = refreshAppointmentConflictState();
+            if (blockingInterval) {
+                showToast('الموعد محجوز — اختر وقتاً آخر أو اضغط "اختر أقرب وقت متاح".', 'error');
+                if (conflictBox) {
+                    conflictBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                return;
+            }
+
             const payload = {
                 patient_id: Number(selectedPatient.id),
                 patient_name: String(selectedPatient.full_name || ''),
@@ -1636,6 +1959,7 @@
                 appointment_time: selectedTime,
                 notes: description,
                 procedure_type: description,
+                duration_minutes: selectedDuration,
                 status: normalizeAppointmentStatus(activeAppointment?.status || 'pending')
             };
 
@@ -1661,7 +1985,35 @@
 
                 if (!response.ok) {
                     const errorText = await response.text();
-                    throw new Error(errorText || 'فشل حفظ الموعد');
+                    let serverMessage = errorText;
+                    try {
+                        const parsed = JSON.parse(errorText);
+                        if (parsed && typeof parsed.detail === 'string') {
+                            serverMessage = parsed.detail;
+                        }
+                    } catch (parseError) {
+                        // نص غير JSON -- يُعرض كما هو.
+                    }
+
+                    // 409 = الخادم اكتشف تعارضاً لم يكن ظاهراً في المتصفح (مثلاً
+                    // موعد أضافته سكرتيرة أخرى أو التطبيق قبل ثوانٍ). نعرض رسالة
+                    // الخادم داخل النافذة نفسها ونعيد تحميل الجدول ليصبح الفحص
+                    // الحيّ محدَّثاً.
+                    if (response.status === 409) {
+                        if (conflictMessage) {
+                            conflictMessage.textContent = serverMessage || 'هذا الوقت لم يعد متاحاً.';
+                        }
+                        if (conflictBox) {
+                            conflictBox.classList.remove('hidden');
+                            conflictBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                        showToast('الموعد محجوز — اختر وقتاً آخر.', 'error');
+                        await loadAppointments();
+                        refreshAppointmentConflictState();
+                        return;
+                    }
+
+                    throw new Error(serverMessage || 'فشل حفظ الموعد');
                 }
 
                 closeModal();

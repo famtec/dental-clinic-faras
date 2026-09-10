@@ -3730,7 +3730,7 @@
         });
 
         if (!response.ok) {
-          throw new Error('Failed to update appointment');
+          throw new Error(await readAppointmentErrorMessage(response, 'تعذر تحديث الموعد الآن. يرجى المحاولة لاحقاً.'));
         }
 
         const updatedAppointment = await response.json();
@@ -3742,12 +3742,34 @@
         createMedicalToast('تم تحديث الموعد بنجاح');
         closeAppointmentModal();
       } catch (error) {
-        showToast('تعذر تحديث الموعد الآن. يرجى المحاولة لاحقاً.', 'error');
+        showToast(error?.message || 'تعذر تحديث الموعد الآن. يرجى المحاولة لاحقاً.', 'error');
       } finally {
         if (saveButton) {
           saveButton.disabled = false;
           saveButton.textContent = 'حفظ التعديلات';
         }
+      }
+    }
+
+    // 2026-09-10: الخادم صار يرفض أي موعد يتقاطع زمنياً مع موعد آخر (409)
+    // ويعيد رسالة عربية جاهزة للعرض تذكر المريض صاحب الموعد المحجوز وأقرب وقت
+    // متاح بعده. نعرضها كما هي بدل رسالة "تعذر ..." العامة التي لا تفيد
+    // المستخدم في شيء.
+    async function readAppointmentErrorMessage(response, fallbackMessage) {
+      try {
+        const rawText = await response.text();
+        if (!rawText) return fallbackMessage;
+        try {
+          const parsed = JSON.parse(rawText);
+          if (parsed && typeof parsed.detail === 'string' && parsed.detail.trim()) {
+            return parsed.detail.trim();
+          }
+        } catch (parseError) {
+          // ليست JSON -- نتجاهل ونعيد الرسالة الافتراضية.
+        }
+        return fallbackMessage;
+      } catch (readError) {
+        return fallbackMessage;
       }
     }
 
@@ -3803,7 +3825,7 @@
         });
 
         if (!response.ok) {
-          throw new Error('تعذر إضافة الموعد حالياً.');
+          throw new Error(await readAppointmentErrorMessage(response, 'تعذر إضافة الموعد حالياً.'));
         }
 
         await response.json();
@@ -3812,7 +3834,7 @@
         clearAppointmentCreateForm();
         closeAppointmentCreateModal();
       } catch (error) {
-        showToast('تعذر إضافة الموعد الآن. يرجى المحاولة لاحقاً.', 'error');
+        showToast(error?.message || 'تعذر إضافة الموعد الآن. يرجى المحاولة لاحقاً.', 'error');
       } finally {
         if (saveButton && window.ClinicLoader) {
           ClinicLoader.setButtonLoading(saveButton, false);
