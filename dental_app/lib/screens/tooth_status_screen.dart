@@ -118,13 +118,14 @@ class _ToothStatusScreenState extends State<ToothStatusScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final surf = context.surface;
     final raw = _rawStatus;
     final resolved = resolveToothStatus(raw);
     final activeKey = toothStatusByKey(raw?.trim().toLowerCase())?.key;
     final nextIndex = (_walkOrder.indexOf(_fdi) + 1) % _walkOrder.length;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: surf.pageBg,
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -133,9 +134,10 @@ class _ToothStatusScreenState extends State<ToothStatusScreen> {
             Transform.translate(
               offset: const Offset(0, -22),
               child: Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                decoration: BoxDecoration(
+                  color: surf.pageBg,
+                  borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(28)),
                 ),
                 padding: EdgeInsets.fromLTRB(
                     16, 26, 16, MediaQuery.of(context).padding.bottom + 18),
@@ -159,10 +161,10 @@ class _ToothStatusScreenState extends State<ToothStatusScreen> {
                             textAlign: TextAlign.left,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
-                                color: AppColors.slate400),
+                                color: surf.textMuted),
                           ),
                         ),
                       ],
@@ -183,10 +185,10 @@ class _ToothStatusScreenState extends State<ToothStatusScreen> {
                       children: [
                         Text(
                           'التالي: السن ${_walkOrder[nextIndex]}',
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 11.5,
                               fontWeight: FontWeight.w700,
-                              color: AppColors.slate400),
+                              color: surf.textMuted),
                         ),
                         const Spacer(),
                         _PrimaryButton(
@@ -364,6 +366,7 @@ class _ToothStatusScreenState extends State<ToothStatusScreen> {
   }
 
   Widget _buildCustomSection() {
+    final surf = context.surface;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -387,11 +390,11 @@ class _ToothStatusScreenState extends State<ToothStatusScreen> {
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(color: AppColors.slate300),
+                borderSide: BorderSide(color: surf.fieldBorder),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(color: AppColors.slate300),
+                borderSide: BorderSide(color: surf.fieldBorder),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -404,6 +407,7 @@ class _ToothStatusScreenState extends State<ToothStatusScreen> {
             spacing: 8,
             runSpacing: 8,
             children: toothStatusOptions.map((option) {
+    final surf = context.surface;
               final selected = _customColor?.key == option.key;
               return GestureDetector(
                 onTap: () => setState(() => _customColor = option),
@@ -414,12 +418,12 @@ class _ToothStatusScreenState extends State<ToothStatusScreen> {
                     color: option.color,
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: selected ? AppColors.indigo800 : Colors.white,
+                      color: selected ? surf.accentSolid : surf.cardBg,
                       width: 2,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: (selected ? AppColors.indigo800 : AppColors.slate900)
+                        color: (selected ? AppColors.indigo800 : surf.textPrimary)
                             .withValues(alpha: selected ? .35 : .18),
                         blurRadius: selected ? 6 : 3,
                       ),
@@ -529,6 +533,7 @@ class _GhostButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final surf = context.surface;
     final disabled = onPressed == null;
     return Opacity(
       opacity: disabled ? .5 : 1,
@@ -541,10 +546,10 @@ class _GhostButton extends StatelessWidget {
             height: 48,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: dashedIndigo ? const Color(0xFFF8FAFF) : AppColors.pageBg,
+              color: dashedIndigo ? const Color(0xFFF8FAFF) : surf.chipBg,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: dashedIndigo ? const Color(0xFFC7D2FE) : AppColors.slate200,
+                color: dashedIndigo ? const Color(0xFFC7D2FE) : surf.cardBorder,
                 width: 1.5,
               ),
             ),
@@ -556,7 +561,7 @@ class _GhostButton extends StatelessWidget {
                       size: 17,
                       color: dashedIndigo
                           ? AppColors.indigoAccent
-                          : AppColors.slate500),
+                          : surf.textSecondary),
                   const SizedBox(width: 8),
                 ],
                 Text(
@@ -565,7 +570,7 @@ class _GhostButton extends StatelessWidget {
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
                     color:
-                        dashedIndigo ? AppColors.indigoAccent : AppColors.slate500,
+                        dashedIndigo ? AppColors.indigoAccent : surf.textSecondary,
                   ),
                 ),
               ],

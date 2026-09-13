@@ -23,4 +23,12 @@ class PatientStats {
       pendingBalances: (json['pending_balances'] as num?)?.toDouble() ?? 0,
     );
   }
+
+  /// عكس [fromJson] -- لتخزين آخر نسخة معروفة محلياً (cache_kv) وعرضها عند
+  /// انقطاع الاتصال بدل "--" فارغة. أُضيف 2026-09-02.
+  Map<String, dynamic> toJson() => {
+        'total_patients': totalPatients,
+        'active_appointments': activeAppointments,
+        'pending_balances': pendingBalances,
+      };
 }

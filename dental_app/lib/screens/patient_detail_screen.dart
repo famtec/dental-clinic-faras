@@ -1,6 +1,6 @@
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:image_picker/image_picker.dart' show ImageSource;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -12,11 +12,13 @@ import '../models/patient_archive_file.dart';
 import '../models/prescription.dart';
 import '../models/treatment_invoice.dart';
 import '../services/api_service.dart';
+import '../services/media_picker.dart';
 import '../theme/app_theme.dart';
 import '../utils/appointment_status.dart';
 import '../utils/dental_chart.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/tooth_widget.dart';
+import 'tooth_status_screen.dart';
 
 const _prescriptionArabicMonthNames = [
   'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
@@ -96,6 +98,10 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
   String? _invoicesError;
   bool _isLoadingInvoices = true;
   String? _savingToothKey;
+  /// الربع المعروض في المخطط (1..4 بترميز FDI). المخطط الكامل (32 سناً في
+  /// صفّين) كان يفرض خلايا صغيرة جداً على شاشة الهاتف؛ عرض الأرباع يكبّر
+  /// ثمانية أسنان فقط في كل مرة -- نفس ما فُعل في patient_record.html.
+  int _activeQuadrant = 1;
 
   // 2026-08-30: أرشيف ملفات المريض (صور/أشعة أو مستندات PDF) -- بطلب
   // المستخدم "اضف امكانية أرشيف ملفات المريض مثل التي في الموقع تماما"،
@@ -106,7 +112,8 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
   bool _isUploadingArchive = false;
   int? _deletingArchiveId;
   final _archiveDescriptionController = TextEditingController();
-  final ImagePicker _archiveImagePicker = ImagePicker();
+  // 2026-09-10: أُزيل حقل ImagePicker من هنا؛ الاختيار يمرّ عبر
+  // services/media_picker.dart ليعمل على ويندوز أيضاً.
 
   // 2026-08-30: الوصفات الطبية القابلة للطباعة الفورية -- بطلب المستخدم
   // "اضف خاصية الوصفات الطبية مثل التي في الموقع الاساسي تماما بنفس
@@ -217,14 +224,15 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
   /// السحب-والإفلات؛ في التطبيق كل ضغطة ترفع ملفاً واحداً (أنسب للمس على
   /// الجوال)، ويمكن تكرار الضغط لرفع أكثر من ملف بنفس الوصف المكتوب حالياً.
   Future<void> _pickAndUploadArchiveFile() async {
+    final surf = context.surface;
     final choice = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) => Container(
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+        decoration: BoxDecoration(
+          color: surf.sheetBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -236,7 +244,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
-                  color: AppColors.slate200,
+                  color: surf.cardBorder,
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),
@@ -247,15 +255,24 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 16),
-            ListTile(
-              onTap: () => Navigator.of(sheetContext).pop('camera'),
-              leading: const Icon(Icons.photo_camera_outlined, color: AppColors.indigo700),
-              title: const Text('تصوير بالكاميرا', textAlign: TextAlign.right),
-            ),
+            // 2026-09-10: خيار الكاميرا يظهر على الجوال فقط -- ويندوز لا يملك
+            // ImageSource.camera، وعرض خيار يفشل عند الضغط عليه أسوأ من
+            // إخفائه.
+            if (supportsCameraCapture)
+              ListTile(
+                onTap: () => Navigator.of(sheetContext).pop('camera'),
+                leading: const Icon(Icons.photo_camera_outlined, color: AppColors.indigo700),
+                title: const Text('تصوير بالكاميرا', textAlign: TextAlign.right),
+              ),
             ListTile(
               onTap: () => Navigator.of(sheetContext).pop('gallery'),
               leading: const Icon(Icons.photo_library_outlined, color: AppColors.indigo700),
-              title: const Text('اختيار صورة من المعرض', textAlign: TextAlign.right),
+              title: Text(
+                supportsCameraCapture
+                    ? 'اختيار صورة من المعرض'
+                    : 'اختيار صورة من الجهاز',
+                textAlign: TextAlign.right,
+              ),
             ),
             ListTile(
               onTap: () => Navigator.of(sheetContext).pop('pdf'),
@@ -272,28 +289,31 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
     String? filename;
 
     try {
-      if (choice == 'pdf') {
-        final result = await FilePicker.platform.pickFiles(
-          type: FileType.custom,
-          allowedExtensions: const ['pdf'],
-          withData: true,
-        );
-        if (result == null || result.files.isEmpty) return;
-        bytes = result.files.single.bytes;
-        filename = result.files.single.name;
-      } else {
-        final picked = await _archiveImagePicker.pickImage(
-          source: choice == 'camera' ? ImageSource.camera : ImageSource.gallery,
-          imageQuality: 85,
-        );
-        if (picked == null) return;
-        bytes = await picked.readAsBytes();
-        filename = picked.name;
-      }
+      // 2026-09-10: مرّ الاختيار كله عبر services/media_picker.dart بدل
+      // استدعاء FilePicker/ImagePicker هنا مباشرة -- هو من يقرر أي آلية
+      // تناسب المنصّة (كاميرا/معرض على الجوال، حوار ملفات ويندوز على سطح
+      // المكتب) ويرجع بايتات + اسم ملف موحّدَين.
+      final PickedMedia? picked = choice == 'pdf'
+          ? await pickPdfFromDevice()
+          : await pickImageFromDevice(
+              source: choice == 'camera'
+                  ? ImageSource.camera
+                  : ImageSource.gallery,
+            );
+      if (picked == null) return;
+      bytes = picked.bytes;
+      filename = picked.name;
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('تعذر فتح الكاميرا/المعرض/متصفح الملفات.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            supportsCameraCapture
+                ? 'تعذر فتح الكاميرا/المعرض/متصفح الملفات.'
+                : 'تعذر فتح نافذة اختيار الملفات.',
+          ),
+        ),
+      );
       return;
     }
 
@@ -523,16 +543,26 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
     }
   }
 
+  /// خط الوصفة يُقرأ من ملفات مرفقة داخل التطبيق بدل تنزيله وقت الطباعة.
+  ///
+  /// **هذا إصلاح حقيقي لا مجرد تهيئة لويندوز:** كان الكود يستدعي
+  /// `PdfGoogleFonts.notoNaskhArabic*()`، وهي تُنزّل الخط من الإنترنت عند أول
+  /// طباعة. أي أن طباعة وصفة على جهاز بلا اتصال كانت تفشل -- وهو أسوأ توقيت
+  /// ممكن للفشل في تطبيق يُفترض أنه يعمل أوفلاين، والمريض واقف أمام الطبيب.
+  /// الملفات الآن ضمن مجلد `google_fonts/` المرفق (انظر pubspec.yaml).
+  Future<pw.Font> _loadPrescriptionFont(String fileName) async {
+    final data = await rootBundle.load('google_fonts/$fileName.ttf');
+    return pw.Font.ttf(data);
+  }
+
   /// طباعة/مشاركة وصفة كملف PDF -- بديل الجوال لنافذة طباعة المتصفح
   /// (window.print على #prescriptionPrintTemplate) في patient_record.html.
   /// يبني نفس محتوى القالب: اسم العيادة (من doctor_name المحفوظ محلياً، نفس
   /// منطق populatePrescriptionPrintTemplate)، اسم المريض، التاريخ، صندوقا
-  /// الأدوية والتعليمات، وسطر الحقوق السفلي -- بخط Noto Naskh Arabic (خط
-  /// عربي كامل الدعم عبر PdfGoogleFonts، وهو الخيار الموثّق من حزمة pdf/
-  /// printing نفسها لعرض نص عربي صحيح؛ لم يُستخدم خط Tajawal المستخدم في
-  /// واجهة التطبيق هنا تحديداً لعدم التأكد من توفره عبر PdfGoogleFonts بلا
-  /// أداة Flutter فعلية للتحقق -- إن رغب المستخدم مطابقة الخط بدقة لاحقاً
-  /// يمكن تجربة PdfGoogleFonts.tajawalRegular()/tajawalBold() بدلاً منه).
+  /// الأدوية والتعليمات، وسطر الحقوق السفلي -- بخط Noto Naskh Arabic، وهو خط
+  /// عربي كامل الدعم مناسب للنص المطبوع (خطّا الواجهة Noto Kufi/Noto Sans
+  /// مصمَّمان للشاشة). 2026-09-10: صار يُقرأ من ملف مرفق داخل التطبيق عبر
+  /// [_loadPrescriptionFont] بدل تنزيله من الإنترنت -- انظر شرح السبب هناك.
   Future<void> _printPrescription(Prescription prescription) async {
     setState(() => _printingPrescriptionId = prescription.id);
     try {
@@ -541,8 +571,8 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
           ? 'عيادة ${doctorName.trim()}'
           : 'عيادة الطبيب';
 
-      final regularFont = await PdfGoogleFonts.notoNaskhArabicRegular();
-      final boldFont = await PdfGoogleFonts.notoNaskhArabicBold();
+      final regularFont = await _loadPrescriptionFont('NotoNaskhArabic-Regular');
+      final boldFont = await _loadPrescriptionFont('NotoNaskhArabic-Bold');
 
       final doc = pw.Document(
         theme: pw.ThemeData.withFont(base: regularFont, bold: boldFont),
@@ -664,6 +694,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
   /// ملاحظات التاريخ الطبي. طلب المستخدم استبدال زر الاتصال القديم بهذا الزر
   /// 2026-08-29 (لم يكن له مقابل تعديل على الإطلاق في التطبيق من قبل).
   Future<void> _openEditPatientSheet() async {
+    final surf = context.surface;
     final nameController = TextEditingController(text: _patient.fullName);
     final phoneController = TextEditingController(text: _patient.phone);
     final ageController =
@@ -732,9 +763,9 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                   EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
               child: Container(
                 padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+                decoration: BoxDecoration(
+                  color: surf.sheetBg,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
                 ),
                 child: Form(
                   key: formKey,
@@ -748,7 +779,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                           height: 4,
                           margin: const EdgeInsets.only(bottom: 16),
                           decoration: BoxDecoration(
-                            color: AppColors.slate200,
+                            color: surf.cardBorder,
                             borderRadius: BorderRadius.circular(999),
                           ),
                         ),
@@ -878,7 +909,25 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
   /// "إزالة الحالة الحالية" ليست موجودة في نافذة الموقع أصلاً، لكن أُبقيت
   /// هنا (بشكل ثانوي أسفل النافذة) لأنها ميزة مفيدة قائمة سلفاً في التطبيق
   /// ولا تعارض التصميم المطلوب مطابقته.
+  /// شاشة السن الكاملة (الخيار ب) -- بديل الورقة السفلية على الجوال.
+  /// تبقى مفتوحة بعد كل حفظ ليتمكّن الطبيب من تسجيل عدة أسنان متتالية،
+  /// وتقرأ حالة المخطط حيّةً من هذه الشاشة بعد كل حفظ ناجح.
+  Future<void> _openToothScreen(int fdiNumber) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ToothStatusScreen(
+          initialFdi: fdiNumber,
+          chartStateReader: () => _patient.chartState,
+          onSave: _updateTooth,
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
+  }
+
+  // ignore: unused_element
   void _openToothPicker(int fdiNumber) {
+    final surf = context.surface;
     final palmerKey = fdiToPalmer[fdiNumber];
     final currentKey = palmerKey == null ? null : _patient.chartState[palmerKey];
     final customEntry = decodeCustomToothStatus(currentKey);
@@ -969,29 +1018,29 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                                     const SizedBox(height: 3),
                                     Text(
                                       'السن $fdiNumber',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 19,
                                         fontWeight: FontWeight.w900,
-                                        color: AppColors.slate900,
+                                        color: surf.textPrimary,
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
                               Material(
-                                color: AppColors.slate100,
+                                color: surf.chipBg,
                                 borderRadius: BorderRadius.circular(999),
                                 child: InkWell(
                                   borderRadius: BorderRadius.circular(999),
                                   onTap: () => Navigator.of(sheetContext).pop(),
-                                  child: const Padding(
+                                  child: Padding(
                                     padding: EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                                     child: Text(
                                       'إغلاق',
                                       style: TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w700,
-                                        color: AppColors.slate600,
+                                        color: surf.textSecondary,
                                       ),
                                     ),
                                   ),
@@ -1000,9 +1049,9 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                             ],
                           ),
                           const SizedBox(height: 8),
-                          const Text(
+                          Text(
                             'اختر الحالة السنية المناسبة وسيتم حفظها فورًا على الملف السحابي.',
-                            style: TextStyle(fontSize: 12, height: 1.5, color: AppColors.slate600),
+                            style: TextStyle(fontSize: 12, height: 1.5, color: surf.textSecondary),
                           ),
                           const SizedBox(height: 12),
                           GridView.count(
@@ -1020,14 +1069,14 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                                 .toList(),
                           ),
                           const SizedBox(height: 14),
-                          Container(height: 1, color: AppColors.slate100),
+                          Container(height: 1, color: surf.chipBg),
                           const SizedBox(height: 10),
-                          const Text(
+                          Text(
                             'أو أضف حالة مخصصة باسم ولون من اختيارك',
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w800,
-                              color: AppColors.slate600,
+                              color: surf.textSecondary,
                             ),
                           ),
                           const SizedBox(height: 6),
@@ -1066,10 +1115,10 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                           Text(
                             hintText,
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 10.5,
                               fontWeight: FontWeight.w600,
-                              color: AppColors.slate500,
+                              color: surf.textSecondary,
                             ),
                           ),
                           if (currentKey != null) ...[
@@ -1077,14 +1126,14 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                             Center(
                               child: TextButton.icon(
                                 onPressed: handleRemove,
-                                icon: const Icon(Icons.close,
-                                    size: 15, color: AppColors.slate500),
-                                label: const Text(
+                                icon: Icon(Icons.close,
+                                    size: 15, color: surf.textSecondary),
+                                label: Text(
                                   'إزالة الحالة الحالية',
                                   style: TextStyle(
                                     fontSize: 11.5,
                                     fontWeight: FontWeight.w700,
-                                    color: AppColors.slate500,
+                                    color: surf.textSecondary,
                                   ),
                                 ),
                               ),
@@ -1235,12 +1284,14 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final surf = context.surface;
     return Scaffold(
-      backgroundColor: AppColors.pageBg,
+      backgroundColor: surf.pageBg,
       body: ListView(
         padding: EdgeInsets.zero,
         children: [
           _buildHeader(context),
+          const OfflineSyncBanner(),
           Transform.translate(
             offset: const Offset(0, -30),
             child: Padding(
@@ -1292,6 +1343,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
   }
 
   Widget _buildProfileCard() {
+    final surf = context.surface;
     final age = _patient.age;
     // 2026-08-29: بطلب المستخدم -- لا نريد عرض جنس المريض إطلاقاً بجانب
     // الاسم (كانت تظهر كلمة "Male" لأن index.html بالموقع يزرعها تلقائياً
@@ -1300,7 +1352,11 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
     final subtitleParts = <String>[
       if (age != null) '$age سنة',
     ];
+    // opaque: البطاقة مسحوبة 30px فوق الترويسة المتدرّجة (Transform.translate
+    // في build)، والزجاج الشفّاف كان يُظهر البنفسجي من خلال نصفها العلوي
+    // ويتوقّف فجأة عند حدّ الترويسة فتبدو مقطوعة أفقياً.
     return SectionCard(
+      opaque: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1320,10 +1376,25 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      _patient.fullName,
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            _patient.fullName,
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
+                          ),
+                        ),
+                        // مريض أُنشئ/عُدِّلت بياناته أو مخطط أسنانه أوفلاين
+                        // وما زال بانتظار الاتصال بالإنترنت -- انظر
+                        // OfflineAwareApiService. أُضيف 2026-09-02.
+                        if (_patient.isPendingSync) ...[
+                          const SizedBox(width: 6),
+                          const Icon(Icons.cloud_off_outlined,
+                              size: 15, color: AppColors.amber900),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 3),
                     Text(
@@ -1332,13 +1403,22 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                         if (subtitleParts.isNotEmpty) subtitleParts.join(' · '),
                       ].join(' · '),
                       textAlign: TextAlign.right,
-                      style: const TextStyle(color: AppColors.slate500, fontSize: 12.5),
+                      style: TextStyle(color: surf.textSecondary, fontSize: 12.5),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 10),
-              InitialsAvatar(name: _patient.fullName, size: 52),
+              // بلا تدرّج كان يستعمل الخلفية الافتراضية indigo50 -- قرص
+              // أبيض ساطع على سطح داكن. نفس تدرّج بطاقة المريض في القائمة.
+              InitialsAvatar(
+                name: _patient.fullName,
+                size: 52,
+                borderRadius: 18,
+                spacedInitials: true,
+                gradient: AppColors.primaryButtonGradient,
+                foreground: Colors.white,
+              ),
             ],
           ),
           if (_patient.medicalHistory != null && _patient.medicalHistory!.trim().isNotEmpty) ...[
@@ -1347,24 +1427,24 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: AppColors.amber50,
+                color: surf.warnBg,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.amber200),
+                border: Border.all(color: surf.warnBorder),
               ),
               child: Text(
                 _patient.medicalHistory!,
                 textAlign: TextAlign.right,
-                style: const TextStyle(fontSize: 12.5, color: AppColors.amber900text),
+                style: TextStyle(fontSize: 12.5, color: surf.warnFg),
               ),
             ),
           ],
           const SizedBox(height: 12),
-          const Divider(height: 1, color: AppColors.slate200),
+          Divider(height: 1, color: surf.cardBorder),
           const SizedBox(height: 12),
           Row(
             children: [
               _balanceTile('${_patient.totalTreatmentCost.toStringAsFixed(0)}', 'إجمالي التكلفة',
-                  AppColors.slate900),
+                  surf.textPrimary),
               _balanceDivider(),
               _balanceTile('${_patient.paidAmount.toStringAsFixed(0)}', 'المدفوع', AppColors.emerald600),
               _balanceDivider(),
@@ -1399,21 +1479,228 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
   }
 
   Widget _balanceTile(String value, String label, Color color) {
+    final surf = context.surface;
     return Expanded(
       child: Column(
         children: [
           Text('$value ل.س',
               style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: color)),
           const SizedBox(height: 3),
-          Text(label, style: const TextStyle(fontSize: 11, color: AppColors.slate500)),
+          Text(label, style: TextStyle(fontSize: 11, color: surf.textSecondary)),
         ],
       ),
     );
   }
 
-  Widget _balanceDivider() => Container(width: 1, height: 32, color: AppColors.slate200);
+  Widget _balanceDivider() {
+    final surf = context.surface;
+    return Container(width: 1, height: 32, color: surf.cardBorder);
+  }
+
+  /// أرقام أسنان ربع واحد بترتيب عرضه على الشاشة -- الربعان الأيمنان
+  /// يُقرآن تنازلياً (18←11 و48←41) تماماً كصفّي المخطط الكامل.
+  List<int> _quadrantFdiList(int quadrant) {
+    final list = List<int>.generate(8, (i) => quadrant * 10 + i + 1);
+    return (quadrant == 1 || quadrant == 4) ? list.reversed.toList() : list;
+  }
+
+  /// خريطة الفم كاملاً بمربّعات صغيرة ملوّنة حسب الحالة، والربع المحدَّد
+  /// مؤطَّر -- تعطي الطبيب الصورة الكلية دون أن يفقدها عند تكبير ربع واحد.
+  Widget _buildMouthOverview() {
+    final surf = context.surface;
+    Widget chipsRow(List<int> quadrants) {
+      return Row(
+        children: [
+          for (var i = 0; i < quadrants.length; i++) ...[
+            if (i > 0) const SizedBox(width: 7),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: _activeQuadrant == quadrants[i]
+                      ? const Color(0xFFE0E7FF)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _activeQuadrant == quadrants[i]
+                        ? const Color(0xFFA5B4FC)
+                        : Colors.transparent,
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    for (final fdi in _quadrantFdiList(quadrants[i]))
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 1),
+                          child: _overviewChip(fdi),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 10, 8, 9),
+      decoration: BoxDecoration(
+        color: surf.chipBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: surf.cardBorder),
+      ),
+      child: Column(
+        children: [
+          Text(
+            'الفم كاملاً — الربع المحدَّد مؤطَّر',
+            style: TextStyle(
+                fontSize: 10.5, fontWeight: FontWeight.w800, color: surf.textMuted),
+          ),
+          const SizedBox(height: 8),
+          // dir=ltr حتى يقع الربع الأول يساراً والثاني يميناً كما في المخطط
+          // الكامل وكما في الموقع -- داخل RTL ينعكس الترتيب ويظهر مقلوباً.
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Column(
+              children: [
+                chipsRow(const [1, 2]),
+                Container(
+                  margin: const EdgeInsets.symmetric(vertical: 7, horizontal: 2),
+                  height: 1,
+                  color: AppColors.rose200,
+                ),
+                chipsRow(const [4, 3]),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _overviewChip(int fdi) {
+    final resolved = resolveToothStatus(_patient.chartState[fdiToPalmer[fdi]]);
+    return Container(
+      height: 22,
+      decoration: BoxDecoration(
+        color: resolved?.color.withValues(alpha: .85) ?? toothDefaultFill,
+        borderRadius: BorderRadius.circular(6),
+        border: resolved == null
+            ? Border.all(color: const Color(0xFFEDDCC0))
+            : null,
+      ),
+    );
+  }
+
+  Widget _buildQuadrantTabs() {
+    final surf = context.surface;
+    const labels = {
+      1: 'علوي يمين',
+      2: 'علوي يسار',
+      3: 'سفلي يسار',
+      4: 'سفلي يمين',
+    };
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: surf.chipBg,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        children: [
+          for (final quadrant in const [1, 2, 3, 4])
+            Expanded(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () => setState(() => _activeQuadrant = quadrant),
+                  child: Container(
+                    height: 38,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      gradient: _activeQuadrant == quadrant
+                          ? AppColors.primaryButtonGradient
+                          : null,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: _activeQuadrant == quadrant
+                          ? [
+                              BoxShadow(
+                                color: AppColors.indigoAccent.withValues(alpha: .32),
+                                blurRadius: 16,
+                                offset: const Offset(0, 6),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: Text(
+                      labels[quadrant]!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        color: _activeQuadrant == quadrant
+                            ? Colors.white
+                            : surf.textSecondary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuadrantTeeth() {
+    final surf = context.surface;
+    final isUpper = _activeQuadrant == 1 || _activeQuadrant == 2;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(4, 10, 4, 8),
+      decoration: BoxDecoration(
+        color: surf.cardBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: surf.cardBorder),
+      ),
+      child: Column(
+        children: [
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Row(
+              children: [
+                for (final fdi in _quadrantFdiList(_activeQuadrant))
+                  Expanded(
+                    child: ToothCell(
+                      fdiNumber: fdi,
+                      statusKey: _patient.chartState[fdiToPalmer[fdi]],
+                      isUpper: isUpper,
+                      shapeWidth: 30,
+                      shapeHeight: 48,
+                      numberFontSize: 10.5,
+                      onTap: () => _openToothScreen(fdi),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'اضغط أي سن لفتح لوحة الحالة',
+            style: TextStyle(
+                fontSize: 10.5, fontWeight: FontWeight.w700, color: surf.textMuted),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildChartCard() {
+    final surf = context.surface;
     return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1425,40 +1712,11 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
             ],
           ),
           const SizedBox(height: 10),
-          Directionality(
-            textDirection: TextDirection.ltr,
-            child: Column(
-              children: [
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  children: upperArchFdi
-                      .map((n) => ToothCell(
-                            fdiNumber: n,
-                            statusKey: _patient.chartState[fdiToPalmer[n]],
-                            isUpper: true,
-                            onTap: () => _openToothPicker(n),
-                          ))
-                      .toList(),
-                ),
-                Container(
-                  margin: const EdgeInsets.symmetric(vertical: 4),
-                  height: 1,
-                  color: AppColors.slate200,
-                ),
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  children: lowerArchFdi
-                      .map((n) => ToothCell(
-                            fdiNumber: n,
-                            statusKey: _patient.chartState[fdiToPalmer[n]],
-                            isUpper: false,
-                            onTap: () => _openToothPicker(n),
-                          ))
-                      .toList(),
-                ),
-              ],
-            ),
-          ),
+          _buildMouthOverview(),
+          const SizedBox(height: 12),
+          _buildQuadrantTabs(),
+          const SizedBox(height: 12),
+          _buildQuadrantTeeth(),
           if (_savingToothKey != null) ...[
             const SizedBox(height: 8),
             const LinearProgressIndicator(minHeight: 3),
@@ -1479,7 +1737,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                               BoxDecoration(color: option.color, shape: BoxShape.circle),
                         ),
                         const SizedBox(width: 4),
-                        Text(option.label, style: const TextStyle(fontSize: 10.5, color: AppColors.slate500)),
+                        Text(option.label, style: TextStyle(fontSize: 10.5, color: surf.textSecondary)),
                       ],
                     ))
                 .toList(),
@@ -1494,6 +1752,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
   /// المتاح على الجوال) + حقل وصف اختياري + شبكة بطاقات (صور بمعاينة بملء
   /// الشاشة، ومستندات PDF ببطاقة "فتح المستند").
   Widget _buildArchiveSection() {
+    final surf = context.surface;
     final files = _archiveFiles ?? [];
     return SectionCard(
       child: Column(
@@ -1529,11 +1788,11 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
           Row(
             children: [
               if (files.isNotEmpty)
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'اضغط مطوّلاً على أي ملف لحذفه',
+                    'اضغط على أيقونة الحذف الظاهرة على كل بطاقة لحذفها',
                     textAlign: TextAlign.right,
-                    style: TextStyle(fontSize: 10.5, color: AppColors.slate400),
+                    style: TextStyle(fontSize: 10.5, color: surf.textMuted),
                   ),
                 )
               else
@@ -1541,7 +1800,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
               const SizedBox(width: 8),
               Text(
                 '${files.length} ملف',
-                style: const TextStyle(fontSize: 11.5, color: AppColors.slate500, fontWeight: FontWeight.w700),
+                style: TextStyle(fontSize: 11.5, color: surf.textSecondary, fontWeight: FontWeight.w700),
               ),
             ],
           ),
@@ -1563,13 +1822,13 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
               ),
             )
           else if (files.isEmpty)
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(vertical: 20),
               child: Center(
                 child: Text(
                   'لا توجد ملفات طبية مرفوعة لهذا المريض حتى الآن.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.slate500, fontSize: 12.5),
+                  style: TextStyle(color: surf.textSecondary, fontSize: 12.5),
                 ),
               ),
             )
@@ -1591,15 +1850,54 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
     );
   }
 
+  /// أيقونة حذف صريحة دائمة الظهور في زاوية بطاقة الأرشيف -- أُضيفت 2026-09-07
+  /// بعد أن أبلغ المستخدم أن الضغط المطوّل (الطريقة الوحيدة سابقاً) لا يفتح
+  /// مربع التأكيد إطلاقاً على جهاز حقيقي. راجعت onLongPress نفسها ولم أجد
+  /// خللاً بها (مربوطة بشكل صحيح لـ _confirmDeleteArchiveFile)، لكن هذه
+  /// البطاقات تقع داخل GridView متداخل بلا تمرير خاص به (physics:
+  /// NeverScrollableScrollPhysics) ضمن ListView رأسي هو المتحكم الفعلي
+  /// بالتمرير (_buildArchiveSection يُستدعى كعنصر من ListView الشاشة كاملة) --
+  /// الضغط المطوّل الذي يتضمن أي انزلاق طفيف بالإصبع (متوقع تماماً على شاشة
+  /// حقيقية، بخلاف نقرة فأرة ثابتة تماماً بالمحاكي) قد يجعل محرّك التمرير
+  /// الرأسي "يفوز" بحلبة الإيماءات قبل انتهاء مهلة الضغط المطوّل، فتُلغى
+  /// onLongPress بصمت بلا أي خطأ. بدل محاولة إصلاح غير مضمونة على مستوى
+  /// الإيماءات، أُضيفت أيقونة حذف صريحة (نفس مبدأ زر "حذف" الصريح المستخدم
+  /// أصلاً لحذف المواعيد بهذه الشاشة، انظر Icons.delete_outline أعلاه) --
+  /// نقرة عادية بسيطة لا تعاني من نفس تعارض الإيماءات. الضغط المطوّل تُرك
+  /// يعمل كطريقة بديلة إضافية لمن ينجح معه.
+  Widget _buildArchiveDeleteBadge(PatientArchiveFile file, bool isDeleting) {
+    return Positioned(
+      top: 6,
+      left: 6,
+      child: Material(
+        color: Colors.white.withValues(alpha: 0.92),
+        shape: const CircleBorder(),
+        elevation: 1.5,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: isDeleting ? null : () => _confirmDeleteArchiveFile(file),
+          child: const Padding(
+            padding: EdgeInsets.all(6),
+            child: Icon(Icons.delete_outline, size: 16, color: AppColors.rose700text),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildArchiveCard(PatientArchiveFile file) {
+    final surf = context.surface;
     final uploadedAt = _formatArchiveDate(file.uploadedAt);
     final isDeleting = _deletingArchiveId == file.id;
 
     if (file.isPdf) {
       return _wrapArchiveCardWithDeleteOverlay(
         isDeleting: isDeleting,
-        child: Material(
-          color: Colors.white,
+        child: Stack(
+        fit: StackFit.expand,
+        children: [
+        Material(
+          color: surf.cardBg,
           borderRadius: BorderRadius.circular(18),
           child: InkWell(
             borderRadius: BorderRadius.circular(18),
@@ -1609,7 +1907,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: AppColors.slate200),
+                border: Border.all(color: surf.cardBorder),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1638,22 +1936,28 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.right,
-                    style: const TextStyle(fontSize: 10.5, color: AppColors.slate500),
+                    style: TextStyle(fontSize: 10.5, color: surf.textSecondary),
                   ),
                   const Spacer(),
-                  Text(uploadedAt, style: const TextStyle(fontSize: 9.5, color: AppColors.slate400)),
+                  Text(uploadedAt, style: TextStyle(fontSize: 9.5, color: surf.textMuted)),
                 ],
               ),
             ),
           ),
         ),
+        _buildArchiveDeleteBadge(file, isDeleting),
+        ],
+      ),
       );
     }
 
     return _wrapArchiveCardWithDeleteOverlay(
       isDeleting: isDeleting,
-      child: Material(
-        color: Colors.white,
+      child: Stack(
+      fit: StackFit.expand,
+      children: [
+      Material(
+        color: surf.cardBg,
         borderRadius: BorderRadius.circular(18),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -1668,14 +1972,15 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                   file.resolvedImageUrl,
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stack) => Container(
-                    color: AppColors.slate100,
+                    color: surf.chipBg,
                     alignment: Alignment.center,
-                    child: const Icon(Icons.broken_image_outlined, color: AppColors.slate400),
+                    child: Icon(Icons.broken_image_outlined, color: surf.textMuted),
                   ),
                   loadingBuilder: (context, child, progress) {
+    final surf = context.surface;
                     if (progress == null) return child;
                     return Container(
-                      color: AppColors.slate100,
+                      color: surf.chipBg,
                       alignment: Alignment.center,
                       child: const SizedBox(
                         width: 22,
@@ -1705,7 +2010,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                     Text(
                       uploadedAt,
                       textAlign: TextAlign.right,
-                      style: const TextStyle(fontSize: 9.5, color: AppColors.slate400),
+                      style: TextStyle(fontSize: 9.5, color: surf.textMuted),
                     ),
                   ],
                 ),
@@ -1714,14 +2019,17 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
           ),
         ),
       ),
+      _buildArchiveDeleteBadge(file, isDeleting),
+      ],
+      ),
     );
   }
 
   /// طبقة شفافة فوق بطاقة الملف أثناء تنفيذ الحذف (بعد تأكيد المستخدم) --
   /// نفس فكرة تعطيل الزر + إظهار مؤشّر تحميل مكانه المستخدمة في بطاقة
-  /// الموعد (انظر _buildAppointmentCard/isDeleting)، هنا كطبقة فوق الصورة
-  /// كاملةً لأن بطاقة الأرشيف لا تملك زر حذف منفصل -- الحذف يتم بالضغط
-  /// المطوّل مباشرةً على البطاقة.
+  /// الموعد (انظر _buildAppointmentCard/isDeleting)، هنا كطبقة فوق البطاقة
+  /// كاملةً (بما فيها أيقونة الحذف الصريحة _buildArchiveDeleteBadge) أثناء
+  /// تنفيذ طلب الحذف الفعلي.
   Widget _wrapArchiveCardWithDeleteOverlay({required bool isDeleting, required Widget child}) {
     if (!isDeleting) return child;
     return Stack(
@@ -1745,6 +2053,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
   }
 
   Widget _buildInvoicesSection() {
+    final surf = context.surface;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1802,6 +2111,14 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                                     invoice.isOpen ? AppColors.amber800text : AppColors.emerald700text,
                               ),
                               const Spacer(),
+                              // فاتورة (أو دفعة عليها) أُنشئت أوفلاين وما
+                              // زالت بانتظار الاتصال بالإنترنت -- انظر
+                              // OfflineAwareApiService. أُضيف 2026-09-02.
+                              if (invoice.isPendingSync) ...[
+                                const Icon(Icons.cloud_off_outlined,
+                                    size: 14, color: AppColors.amber900),
+                                const SizedBox(width: 6),
+                              ],
                               Text(invoice.title,
                                   style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5)),
                             ],
@@ -1812,7 +2129,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                             child: LinearProgressIndicator(
                               value: invoice.progress,
                               minHeight: 6,
-                              backgroundColor: AppColors.slate100,
+                              backgroundColor: surf.chipBg,
                               valueColor: const AlwaysStoppedAnimation(AppColors.emerald500),
                             ),
                           ),
@@ -1821,7 +2138,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text('الإجمالي ${invoice.totalCost.toStringAsFixed(0)} ل.س',
-                                  style: const TextStyle(fontSize: 11.5, color: AppColors.slate500)),
+                                  style: TextStyle(fontSize: 11.5, color: surf.textSecondary)),
                               Text('المتبقي ${invoice.remainingAmount.toStringAsFixed(0)} ل.س',
                                   style: const TextStyle(
                                       fontSize: 11.5,
@@ -1843,6 +2160,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
   /// نموذج إصدار وصفة جديدة (الأدوية + التعليمات، مطلوبان)، شارة عدد
   /// الوصفات، وقائمة الوصفات السابقة مع زر "طباعة" لكل واحدة.
   Widget _buildPrescriptionsSection() {
+    final surf = context.surface;
     final prescriptions = _prescriptions ?? [];
     return SectionCard(
       child: Column(
@@ -1864,7 +2182,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                     Text(
                       'أصدر وصفة جديدة للمريض واحتفظ بسجلها مع إمكانية الطباعة الفورية.',
                       textAlign: TextAlign.right,
-                      style: const TextStyle(fontSize: 11, color: AppColors.slate500),
+                      style: TextStyle(fontSize: 11, color: surf.textSecondary),
                     ),
                   ],
                 ),
@@ -1873,7 +2191,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: AppColors.indigo50,
+                  color: surf.iconBoxBg,
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
@@ -1887,17 +2205,18 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: surf.cardBg,
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColors.purple200),
+              border: Border.all(
+                  color: AppColors.purple600.withValues(alpha: .28)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Align(
+                Align(
                   alignment: Alignment.centerRight,
                   child: Text('الأدوية والمستحضرات',
-                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.slate600)),
+                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: surf.textSecondary)),
                 ),
                 const SizedBox(height: 6),
                 TextField(
@@ -1910,10 +2229,10 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                const Align(
+                Align(
                   alignment: Alignment.centerRight,
                   child: Text('التعليمات والجرعات',
-                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.slate600)),
+                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: surf.textSecondary)),
                 ),
                 const SizedBox(height: 6),
                 TextField(
@@ -1952,13 +2271,13 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
               ),
             )
           else if (prescriptions.isEmpty)
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
               child: Center(
                 child: Text(
                   'لا توجد وصفات طبية مسجلة لهذا المريض حتى الآن.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.slate500, fontSize: 12.5),
+                  style: TextStyle(color: surf.textSecondary, fontSize: 12.5),
                 ),
               ),
             )
@@ -1973,13 +2292,14 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
   }
 
   Widget _buildPrescriptionCard(Prescription prescription) {
+    final surf = context.surface;
     final isPrinting = _printingPrescriptionId == prescription.id;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.slate100,
+        color: surf.chipBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.slate200),
+        border: Border.all(color: surf.cardBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2000,7 +2320,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
               const Spacer(),
               Text(
                 _formatPrescriptionDate(prescription.createdAt),
-                style: const TextStyle(fontSize: 11, color: AppColors.slate400),
+                style: TextStyle(fontSize: 11, color: surf.textMuted),
               ),
             ],
           ),
@@ -2014,7 +2334,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
           Align(
             alignment: Alignment.centerRight,
             child: Text('التعليمات: ${prescription.instructions}',
-                textAlign: TextAlign.right, style: const TextStyle(fontSize: 12.5, height: 1.5, color: AppColors.slate600)),
+                textAlign: TextAlign.right, style: TextStyle(fontSize: 12.5, height: 1.5, color: surf.textSecondary)),
           ),
         ],
       ),
@@ -2068,6 +2388,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
   /// بنفس الحقول بالضبط: تاريخ + وقت + وصف) -- تبسيطاً للكود مع الحفاظ على
   /// نفس الحقول والتحقق والسلوك سواء بسواء.
   Future<void> _openAppointmentFormSheet({Appointment? existing}) async {
+    final surf = context.surface;
     final isEditing = existing != null;
     String initialDescription = '';
     if (existing != null) {
@@ -2182,9 +2503,9 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
               padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
               child: Container(
                 constraints: BoxConstraints(maxHeight: MediaQuery.of(sheetContext).size.height * 0.85),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+                decoration: BoxDecoration(
+                  color: surf.sheetBg,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
                 ),
                 padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
                 child: SingleChildScrollView(
@@ -2198,7 +2519,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                           height: 4,
                           margin: const EdgeInsets.only(bottom: 16),
                           decoration: BoxDecoration(
-                            color: AppColors.slate200,
+                            color: surf.cardBorder,
                             borderRadius: BorderRadius.circular(999),
                           ),
                         ),
@@ -2342,6 +2663,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
   }
 
   Widget _buildAppointmentsSection() {
+    final surf = context.surface;
     final appointments = _appointments ?? [];
     return SectionCard(
       child: Column(
@@ -2360,10 +2682,10 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                         textAlign: TextAlign.right,
                         style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
                     const SizedBox(height: 3),
-                    const Text(
+                    Text(
                       'عرض مباشر للمواعيد المرتبطة بهذا الملف مع تعديل سريع للموعد والوصف.',
                       textAlign: TextAlign.right,
-                      style: TextStyle(fontSize: 11, color: AppColors.slate500),
+                      style: TextStyle(fontSize: 11, color: surf.textSecondary),
                     ),
                   ],
                 ),
@@ -2372,7 +2694,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: AppColors.indigo50,
+                  color: surf.iconBoxBg,
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
@@ -2406,13 +2728,13 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
               ),
             )
           else if (appointments.isEmpty)
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
               child: Center(
                 child: Text(
                   'لا توجد مواعيد مسجلة لهذا المريض حتى الآن.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.slate500, fontSize: 12.5),
+                  style: TextStyle(color: surf.textSecondary, fontSize: 12.5),
                 ),
               ),
             )
@@ -2426,8 +2748,36 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
     );
   }
 
+  /// نمط موحّد لأزرار إجراءات الموعد الثلاثة: حشوة أفقية ضيّقة (6 بدل 16)
+  /// حتى يتّسع النص العربي داخل ثلث عرض الشاشة.
+  ButtonStyle _appointmentActionStyle({
+    required Color foreground,
+    required Color border,
+  }) {
+    return OutlinedButton.styleFrom(
+      foregroundColor: foreground,
+      side: BorderSide(color: border),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+      minimumSize: const Size(0, 44),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+  }
+
+  /// نص زر لا ينكسر سطرين: يصغّر نفسه قليلاً عند الضيق بدل الالتفاف.
+  Widget _actionLabel(String text) => FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          text,
+          maxLines: 1,
+          softWrap: false,
+          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+        ),
+      );
+
   Widget _buildAppointmentCard(Appointment appointment) {
-    final style = appointmentStatusStyle(appointment.status);
+    final surf = context.surface;
+    final style = appointmentStatusStyle(appointment.status,
+        isDark: context.surface.isDark);
     final isDeleting = _deletingAppointmentId == appointment.id;
     final dateLabel = appointment.appointmentDate != null
         ? _formatAppointmentDateTime(appointment.appointmentDate!)
@@ -2435,9 +2785,9 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.slate100,
+        color: surf.chipBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.slate200),
+        border: Border.all(color: surf.cardBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2459,7 +2809,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
               Text(
                 dateLabel,
                 textAlign: TextAlign.right,
-                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.slate600),
+                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: surf.textSecondary),
               ),
             ],
           ),
@@ -2473,21 +2823,32 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
             ),
           ),
           const SizedBox(height: 10),
+          // ثلاثة أزرار في ثلث عرض الشاشة لكلٍّ منها. الحشوة الأفقية
+          // الافتراضية لـ OutlinedButton (16 لكل جهة) + الأيقونة + الفجوة لم
+          // تكن تترك للنص إلا بضعة بكسلات، وبعد انتقال الخط إلى Noto Sans
+          // Arabic -- وهو أعرض من Tajawal عند نفس المقاس -- صارت "تعديل"
+          // و"واتساب" تلتفّان سطرين داخل الزر. الحلّ: حشوة ضيّقة + FittedBox
+          // يصغّر النص بدل أن يكسره، لا تصغير المقاس لكل الأزرار في التطبيق.
           Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
+                  style: _appointmentActionStyle(
+                      foreground: surf.accentSolid, border: surf.cardBorder),
                   onPressed: () => _openAppointmentFormSheet(existing: appointment),
                   icon: const Icon(Icons.edit_outlined, size: 15),
-                  label: const Text('تعديل'),
+                  label: _actionLabel('تعديل'),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.rose700text,
-                    side: const BorderSide(color: AppColors.rose200),
+                  style: _appointmentActionStyle(
+                    foreground: surf.isDark
+                        ? AppColors.rose400
+                        : AppColors.rose700text,
+                    border: AppColors.rose500
+                        .withValues(alpha: surf.isDark ? .30 : .35),
                   ),
                   onPressed: isDeleting ? null : () => _confirmDeleteAppointment(appointment),
                   icon: isDeleting
@@ -2497,19 +2858,19 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.delete_outline, size: 15),
-                  label: const Text('حذف'),
+                  label: _actionLabel('حذف'),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.emerald700text,
-                    side: const BorderSide(color: AppColors.emerald100),
+                  style: _appointmentActionStyle(
+                    foreground: surf.pillPaidFg,
+                    border: surf.pillPaidFg.withValues(alpha: .40),
                   ),
                   onPressed: () => _sendWhatsappReminder(appointment),
                   icon: const Icon(Icons.chat_bubble_outline, size: 15),
-                  label: const Text('واتساب'),
+                  label: _actionLabel('واتساب'),
                 ),
               ),
             ],
@@ -2615,6 +2976,7 @@ class _InvoiceDetailSheetState extends State<_InvoiceDetailSheet> {
   /// فواتير المريض بعد الحفظ لأن تعديل المبلغ قد يغيّر المتبقي على الفاتورة
   /// (PUT /api/finance/transaction/{id} يُرجع رسالة نجاح فقط بلا كائن محدَّث).
   Future<void> _openEditPaymentDialog(InvoicePayment payment) async {
+    final surf = context.surface;
     final amountController =
         TextEditingController(text: payment.amount.toStringAsFixed(0));
     final descriptionController = TextEditingController(text: payment.description);
@@ -2706,7 +3068,7 @@ class _InvoiceDetailSheetState extends State<_InvoiceDetailSheet> {
                             child: Text(
                               '🕰️ هذه تسوية رصيد قديم/سابق (تُستبعد من تقرير أي شهر محدد، وتبقى ضمن الإجمالي الكلي)',
                               textAlign: TextAlign.right,
-                              style: const TextStyle(fontSize: 11.5, color: AppColors.slate600),
+                              style: TextStyle(fontSize: 11.5, color: surf.textSecondary),
                             ),
                           ),
                           Checkbox(
@@ -2754,6 +3116,7 @@ class _InvoiceDetailSheetState extends State<_InvoiceDetailSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final surf = context.surface;
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(
@@ -2770,7 +3133,7 @@ class _InvoiceDetailSheetState extends State<_InvoiceDetailSheet> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: AppColors.slate300,
+                  color: surf.fieldBorder,
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
@@ -2783,7 +3146,7 @@ class _InvoiceDetailSheetState extends State<_InvoiceDetailSheet> {
             Text(
               'الإجمالي ${_invoice.totalCost.toStringAsFixed(0)} ل.س · المدفوع ${_invoice.paidAmount.toStringAsFixed(0)} ل.س · المتبقي ${_invoice.remainingAmount.toStringAsFixed(0)} ل.س',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12, color: AppColors.slate500),
+              style: TextStyle(fontSize: 12, color: surf.textSecondary),
             ),
             const SizedBox(height: 14),
             const Align(
@@ -2798,6 +3161,7 @@ class _InvoiceDetailSheetState extends State<_InvoiceDetailSheet> {
                       controller: widget.scrollController,
                       itemCount: _invoice.payments.length,
                       itemBuilder: (context, index) {
+    final surf = context.surface;
                         final payment = _invoice.payments[index];
                         return ListTile(
                           contentPadding: EdgeInsets.zero,
@@ -2822,7 +3186,7 @@ class _InvoiceDetailSheetState extends State<_InvoiceDetailSheet> {
                               const SizedBox(width: 4),
                               Text(
                                 '${payment.createdAt.year}/${payment.createdAt.month}/${payment.createdAt.day}',
-                                style: const TextStyle(fontSize: 11, color: AppColors.slate400),
+                                style: TextStyle(fontSize: 11, color: surf.textMuted),
                               ),
                             ],
                           ),
@@ -2864,7 +3228,7 @@ class _InvoiceDetailSheetState extends State<_InvoiceDetailSheet> {
                       child: Text(
                         '🕰️ هذه تسوية رصيد قديم/سابق (لن تُحتسب ضمن دخل الشهر الحالي في التقارير)',
                         textAlign: TextAlign.right,
-                        style: const TextStyle(fontSize: 11.5, color: AppColors.slate600),
+                        style: TextStyle(fontSize: 11.5, color: surf.textSecondary),
                       ),
                     ),
                     Checkbox(
@@ -2957,6 +3321,7 @@ class _CustomColorSwatch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final surf = context.surface;
     return InkWell(
       customBorder: const CircleBorder(),
       onTap: onTap,
@@ -2967,7 +3332,7 @@ class _CustomColorSwatch extends StatelessWidget {
           color: color,
           shape: BoxShape.circle,
           border: Border.all(
-            color: selected ? AppColors.indigo800 : Colors.white,
+            color: selected ? surf.accentSolid : surf.cardBg,
             width: 2,
           ),
           boxShadow: [

@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 1.3.0+8
 
 environment:
   sdk: ^3.12.2
@@ -80,6 +80,25 @@ dependencies:
   # (بخلاف api.qrserver.com المستخدَمة سابقاً بهذه الشاشة). 2026-08-31.
   qr_flutter: ^4.1.0
 
+  # -- نسخة سطح المكتب لويندوز (2026-09-10) --
+  # الهدف: ملف .exe واحد بنفس تصميم "الليل النيلي" وبنفس محرّك العمل بلا
+  # إنترنت المكتوب أصلاً بالدارت (LocalDb + outbox في OfflineAwareApiService)،
+  # بدل إعادة كتابة ذلك المحرّك بـ JavaScript داخل غلاف للموقع.
+  #
+  # sqflite_common_ffi: sqflite لا يملك تطبيقاً أصلياً على ويندوز. هذه الحزمة
+  #   تنفّذ نفس الواجهة فوق مكتبة sqlite3 مرفقة مع التطبيق، فلا يتغيّر أي
+  #   استعلام SQL ولا أي سطر داخل LocalDb -- يتبدّل المصنع فقط في
+  #   platform_support.dart.
+  # path_provider: لتحديد مجلد كتابة قاعدة البيانات على ويندوز
+  #   (%APPDATA%). المصنع الافتراضي يكتب بجوار ملف الـ .exe، أي داخل
+  #   Program Files بعد التثبيت -- وهو غير قابل للكتابة، فتتعطّل الميزة كلها.
+  # window_manager: عنوان النافذة بالعربية، حجم افتتاحي مناسب، وحدّ أدنى
+  #   يمنع تصغيراً تنهار عنده الواجهة. (ويندوز/ماك/لينكس فقط -- لا تُستدعى
+  #   على أندرويد إطلاقاً، انظر الحارس في initPlatformServices.)
+  sqflite_common_ffi: ^2.3.4
+  path_provider: ^2.1.5
+  window_manager: ^0.4.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -102,10 +121,26 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  # -- خطوط مرفقة داخل التطبيق (2026-09-10) --
+  # حزمة google_fonts تُنزّل الخطوط من الإنترنت عند أول استخدام وتخزّنها
+  # مؤقتاً. هذا مقبول في تطبيق متصل، وكارثي في تطبيق شعاره "يعمل بلا
+  # إنترنت": أول تشغيل على جهاز عيادة بلا اتصال كان سيعرض الواجهة بخط النظام
+  # الاحتياطي (Segoe UI على ويندوز) بدل هوية الموقع.
+  #
+  # الحل الموثّق من google_fonts نفسها: مجلد باسم `google_fonts` في جذر
+  # المشروع، بأسماء ملفات على صيغة {العائلة}-{الوزن}.ttf -- عندها تقرأ الحزمة
+  # الملف المرفق ولا تلمس الشبكة إطلاقاً.
+  #
+  # المرفق: Noto Sans Arabic و Noto Kufi Arabic بستة أوزان لكلٍّ منهما
+  # (400/500/600/700/800/900 -- وهي بالضبط الأوزان المستخدَمة في كل ملفات
+  # lib/، تم إحصاؤها قبل التوليد)، بالإضافة إلى Noto Naskh Arabic
+  # (عادي/عريض) المستخدَم في PDF الوصفات الطبية. المجموع ~2.6MB.
+  #
+  # وُلِّدت من الخطوط المتغيّرة الرسمية (google/fonts) بأداة fontTools
+  # instancer، ومعها جدول الأسماء الصحيح لكل وزن -- لا تستبدلها بملف الخط
+  # المتغيّر الواحد، فحينها ستُرسم كل الأوزان بوزن واحد.
+  assets:
+    - google_fonts/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

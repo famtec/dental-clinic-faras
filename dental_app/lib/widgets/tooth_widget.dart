@@ -64,12 +64,21 @@ class ToothCell extends StatelessWidget {
   final bool isUpper;
   final VoidCallback onTap;
 
+  /// مقاس رسم السن. الافتراضي (22×30) هو مقاس المخطط الكامل القديم؛ عرض
+  /// الأرباع يمرّر مقاساً أكبر لأن ثمانية أسنان فقط تتقاسم عرض الشاشة.
+  final double shapeWidth;
+  final double shapeHeight;
+  final double numberFontSize;
+
   const ToothCell({
     super.key,
     required this.fdiNumber,
     required this.statusKey,
     required this.isUpper,
     required this.onTap,
+    this.shapeWidth = 22,
+    this.shapeHeight = 30,
+    this.numberFontSize = 9.5,
   });
 
   @override
@@ -84,14 +93,14 @@ class ToothCell extends StatelessWidget {
     final number = Text(
       '$fdiNumber',
       style: TextStyle(
-        fontSize: 9.5,
+        fontSize: numberFontSize,
         fontWeight: FontWeight.w700,
         color: resolved != null ? stroke : const Color(0xFF94A3B8),
       ),
     );
     final shape = SizedBox(
-      width: 22,
-      height: 30,
+      width: shapeWidth,
+      height: shapeHeight,
       child: CustomPaint(
         painter: ToothShapePainter(fill: fill, stroke: stroke, isUpper: isUpper),
       ),

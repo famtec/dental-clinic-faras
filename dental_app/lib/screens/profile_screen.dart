@@ -7,6 +7,8 @@ import '../models/booking_settings.dart';
 import '../models/doctor_profile.dart';
 import '../services/api_service.dart';
 import '../services/auth_storage.dart';
+import '../services/media_picker.dart';
+import '../services/platform_support.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/booking_qr_card.dart';
@@ -75,7 +77,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final Set<int> _selectedWorkDays = {};
 
   // -- صورة الحساب (الأفاتار) -- انظر _buildAvatarPicker/_pickAndUploadAvatar.
-  final ImagePicker _imagePicker = ImagePicker();
+  // 2026-09-10: أُزيل حقل ImagePicker من هنا؛ الاختيار يمرّ الآن عبر
+  // services/media_picker.dart ليعمل على ويندوز أيضاً (حوار ملفات النظام).
   bool _isUploadingAvatar = false;
 
   @override
@@ -196,17 +199,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   /// يفتح قائمة اختيار مصدر الصورة (كاميرا/معرض) ثم يرفعها -- نفس سلوك
   /// avatarFileInput في profile.html بالموقع (يقبل PNG/JPG/WEBP فقط، يتحقق
-  /// الـ backend من الامتداد وMIME في validate_avatar_file). يُستخدم
-  /// XFile.readAsBytes بدل dart:io File مباشرة حتى يعمل هذا على الويب أيضاً.
+  /// الـ backend من الامتداد وMIME في validate_avatar_file). الاختيار يمرّ
+  /// عبر services/media_picker.dart ويرجع بايتات مباشرة (لا مسار ملف ولا
+  /// dart:io File) -- فيعمل نفس الكود على أندرويد وويندوز والويب معاً.
   Future<void> _pickAndUploadAvatar() async {
+    // سطح المكتب (ويندوز): لا كاميرا ولا "معرض صور" -- عرض ورقة اختيار
+    // المصدر هناك يعني خيارين كلاهما يؤدي لنفس حوار ملفات النظام. نفتح
+    // الحوار مباشرة بنقرة واحدة بدل نقرتين (2026-09-10).
+    if (isDesktopPlatform) {
+      await _uploadPickedAvatar(await _pickAvatarSafely());
+      return;
+    }
+
+    final surf = context.surface;
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) => Container(
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+        decoration: BoxDecoration(
+          color: surf.sheetBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -218,7 +231,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
-                  color: AppColors.slate200,
+                  color: surf.cardBorder,
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),
@@ -245,21 +258,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
     if (source == null) return;
 
-    XFile? picked;
+    await _uploadPickedAvatar(await _pickAvatarSafely(source: source));
+  }
+
+  /// اختيار الصورة مع تحويل أي فشل (كاميرا/معرض على الجوال، حوار ملفات على
+  /// ويندوز) إلى رسالة عربية واحدة. مشترك بين المسارين حتى لا يتكرر منطق
+  /// معالجة الخطأ مرتين.
+  Future<PickedMedia?> _pickAvatarSafely({
+    ImageSource source = ImageSource.gallery,
+  }) async {
     try {
-      picked = await _imagePicker.pickImage(source: source, imageQuality: 85);
+      return await pickImageFromDevice(source: source);
     } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('تعذر فتح الكاميرا/المعرض.')));
-      return;
+      if (!mounted) return null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isDesktopPlatform
+                ? 'تعذر فتح نافذة اختيار الملفات.'
+                : 'تعذر فتح الكاميرا/المعرض.',
+          ),
+        ),
+      );
+      return null;
     }
-    if (picked == null) return;
+  }
+
+  /// رفع الصورة المختارة -- نفس المنطق السابق حرفياً، أُخرج إلى دالة مستقلة
+  /// ليستدعيه مسارا الجوال وسطح المكتب معاً.
+  Future<void> _uploadPickedAvatar(PickedMedia? picked) async {
+    if (picked == null || !mounted) return;
 
     setState(() => _isUploadingAvatar = true);
     try {
-      final bytes = await picked.readAsBytes();
-      await widget.apiService.uploadAvatar(bytes: bytes, filename: picked.name);
+      await widget.apiService
+          .uploadAvatar(bytes: picked.bytes, filename: picked.name);
       // إعادة تحميل بيانات الحساب كاملة حتى تعكس avatar_url الجديد القادم من
       // السيرفر (بدل بناء نسخة يدوية من DoctorProfile هنا).
       await _load();
@@ -500,6 +533,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /// بالموقع تماماً: رابط عام (/d/<slug>) يقدر أي مريض يحجز موعده منه مباشرة
   /// بلا تسجيل دخول، مع رمز QR ومعاينة حية للرابط.
   Widget _buildBookingSettingsSection() {
+    final surf = context.surface;
     return SectionCard(
       child: LoadingErrorEmpty(
         isLoading: _isBookingLoading,
@@ -519,7 +553,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onChanged: (value) => setState(() => _bookingEnabled = value),
                   ),
                   const Spacer(),
-                  const Expanded(
+                  Expanded(
                     flex: 3,
                     child: Align(
                       alignment: Alignment.centerRight,
@@ -532,7 +566,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           Text(
                             'رابط عام يقدر أي مريض يحجز موعده منه مباشرة بلا تسجيل دخول',
                             textAlign: TextAlign.right,
-                            style: TextStyle(fontSize: 11, color: AppColors.slate500),
+                            style: TextStyle(fontSize: 11, color: surf.textSecondary),
                           ),
                         ],
                       ),
@@ -584,12 +618,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(height: 4),
               // نفس نص profile.html بالموقع بالحرف.
-              const Align(
+              Align(
                 alignment: Alignment.centerRight,
                 child: Text(
                   'اطبع هذا الرمز وعلّقه بعيادتك -- أي مريض يمسحه بكاميرا هاتفه يوصله مباشرة لصفحة حجز موعده معك.',
                   textAlign: TextAlign.right,
-                  style: TextStyle(fontSize: 11, color: AppColors.slate500),
+                  style: TextStyle(fontSize: 11, color: surf.textSecondary),
                 ),
               ),
               const SizedBox(height: 10),
@@ -598,14 +632,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 22),
                   decoration: BoxDecoration(
-                    color: AppColors.slate100,
+                    color: surf.chipBg,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.slate300),
+                    border: Border.all(color: surf.fieldBorder),
                   ),
-                  child: const Text(
+                  child: Text(
                     'احفظ رابط الحجز (Slug) أولاً لعرض QR Code الخاص بعيادتك.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.slate500, fontSize: 12),
+                    style: TextStyle(color: surf.textSecondary, fontSize: 12),
                   ),
                 )
               else
@@ -678,7 +712,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     selectedColor: AppColors.emerald50,
                     checkmarkColor: AppColors.emerald700text,
                     labelStyle: TextStyle(
-                      color: selected ? AppColors.emerald700text : AppColors.slate600,
+                      color: selected ? AppColors.emerald700text : surf.textSecondary,
                       fontWeight: FontWeight.w700,
                     ),
                   );
@@ -887,6 +921,7 @@ class _TimeField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final surf = context.surface;
     return InkWell(
       borderRadius: BorderRadius.circular(14),
       onTap: onTap,
@@ -895,7 +930,7 @@ class _TimeField extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Icon(Icons.access_time, size: 18, color: AppColors.slate400),
+            Icon(Icons.access_time, size: 18, color: surf.textMuted),
             Text(
               time != null
                   ? '${time!.hour.toString().padLeft(2, '0')}:${time!.minute.toString().padLeft(2, '0')}'

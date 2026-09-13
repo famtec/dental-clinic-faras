@@ -1,0 +1,1546 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>الأطباء والنسب - عيادتي الرقمية</title>
+	<link rel="stylesheet" href="/tailwind.css" />
+	<link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet" />
+	<style>
+		body { font-family: 'Noto Sans Arabic', 'Segoe UI', Tahoma, system-ui, sans-serif; }
+		h1, h2, h3, .stats-value, .modal-title, .tfs-name {
+			font-family: 'Noto Kufi Arabic', 'Segoe UI', Tahoma, system-ui, sans-serif;
+		}
+		.panel-soft {
+			background: rgba(255, 255, 255, 0.92);
+			backdrop-filter: blur(12px);
+		}
+		.badge-premium {
+			background: #fef3c7;
+			border: 1px solid #fde68a;
+			color: #78350f;
+		}
+		.badge-standard {
+			background: #eef2ff;
+			border: 1px solid #c7d2fe;
+			color: #3730a3;
+		}
+		.upgrade-card-hidden {
+			opacity: 0;
+			transform: translateY(-8px);
+			pointer-events: none;
+		}
+		.danger-stock {
+			background: #ef4444;
+			color: #ffffff;
+			box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.22), 0 0 24px rgba(239, 68, 68, 0.45);
+		}
+
+		/* زر تعديل عنصر المخزون -- شريحة فاتحة تمتلئ بتدرّج إندگو/بنفسجي مع
+		   ارتفاع خفيف وتوهّج عند المرور (2026-08-25). */
+		.edit-item-btn {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			padding: 9px 14px;
+			border-radius: 12px;
+			border: 1px solid #e0e7ff;
+			background: linear-gradient(135deg, #ffffff 0%, #eef2ff 100%);
+			color: #4338ca;
+			font-family: inherit;
+			font-size: 12px;
+			font-weight: 800;
+			cursor: pointer;
+			box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+			transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+		}
+		.edit-item-btn svg { flex-shrink: 0; }
+		.edit-item-btn:hover {
+			background: linear-gradient(135deg, #4f46e5 0%, #4f46e5 100%);
+			color: #ffffff;
+			border-color: transparent;
+			transform: translateY(-2px);
+			box-shadow: 0 10px 24px rgba(79, 70, 229, 0.35);
+		}
+		.edit-item-btn:active { transform: translateY(0); box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3); }
+		.edit-item-btn:focus-visible { outline: 2px solid #a5b4fc; outline-offset: 2px; }
+
+		.modal-overlay {
+			position: fixed;
+			inset: 0;
+			z-index: 70;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			background: rgba(15, 23, 42, 0.55);
+			backdrop-filter: blur(6px);
+			padding: 16px;
+		}
+		/* لازم هذا التحديد الأدق (specificity أعلى) لأن tailwind.css يُحمَّل قبل هذا
+		   الـ<style> في <head>، وقاعدته `.hidden{display:none}` لها نفس درجة التحديد
+		   (0,1,0) لقاعدة `.modal-overlay{display:flex}` أعلاه -- فتكسبها الأخيرة في
+		   ترتيب المصدر وتبقى النافذة ظاهرة رغم إضافة class="hidden" (هذا كان سبب ظهور
+		   نافذة "تعديل مادة المخزون" تلقائياً عند فتح الصفحة، ولماذا كانت أزرار
+		   X/إلغاء "لا تعمل": كانت فعلاً تضيف class hidden لكن بلا أي تأثير بصري). */
+		.modal-overlay.hidden {
+			display: none;
+		}
+		.modal-panel {
+			width: 100%;
+			max-width: 440px;
+			background: #ffffff;
+			border-radius: 28px;
+			border: 1px solid rgba(255, 255, 255, 0.7);
+			box-shadow: 0 25px 50px -12px rgba(30, 27, 75, 0.35);
+			padding: 26px;
+		}
+		.modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; gap: 12px; }
+		.modal-title { margin: 0; font-size: 19px; font-weight: 800; color: #312e81; }
+		.modal-close {
+			width: 32px;
+			height: 32px;
+			flex-shrink: 0;
+			border-radius: 10px;
+			border: 1px solid #e2e8f0;
+			background: #f8fafc;
+			color: #64748b;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			cursor: pointer;
+			transition: all 0.15s ease;
+		}
+		.modal-close:hover { background: #fee2e2; color: #dc2626; border-color: #fecaca; }
+		.field-label { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; font-size: 13px; font-weight: 700; color: #334155; }
+		.field-input {
+			width: 100%;
+			border-radius: 16px;
+			border: 1px solid #cbd5e1;
+			background: #ffffff;
+			padding: 12px 16px;
+			font-size: 14px;
+			font-family: inherit;
+			color: #1e293b;
+			outline: none;
+			transition: border-color 0.15s ease, box-shadow 0.15s ease;
+		}
+		.field-input:focus { border-color: #6366f1; box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15); }
+		.modal-footer { display: flex; gap: 12px; margin-top: 6px; }
+		.btn-cancel {
+			flex: 1;
+			border-radius: 16px;
+			border: 1px solid #cbd5e1;
+			background: #ffffff;
+			color: #475569;
+			font-family: inherit;
+			font-weight: 700;
+			font-size: 14px;
+			padding: 12px;
+			cursor: pointer;
+			transition: background 0.15s ease;
+		}
+		.btn-cancel:hover { background: #f8fafc; }
+		.btn-save {
+			flex: 1;
+			border-radius: 16px;
+			border: none;
+			background: linear-gradient(90deg, #4f46e5, #4f46e5);
+			color: #ffffff;
+			font-family: inherit;
+			font-weight: 700;
+			font-size: 14px;
+			padding: 12px;
+			cursor: pointer;
+			box-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.4);
+			transition: transform 0.15s ease, background 0.15s ease;
+		}
+		.btn-save:hover { background: linear-gradient(90deg, #4338ca, #4338ca); transform: translateY(-1px); }
+		.btn-save:disabled { opacity: 0.7; cursor: default; transform: none; }
+
+		.toast-success {
+			position: fixed;
+			top: 24px;
+			left: 50%;
+			transform: translateX(-50%);
+			background: linear-gradient(90deg, #10b981, #059669);
+			color: #ffffff;
+			padding: 12px 22px;
+			border-radius: 16px;
+			font-weight: 700;
+			font-size: 14px;
+			box-shadow: 0 15px 30px -8px rgba(16, 185, 129, 0.5);
+			z-index: 80;
+			animation: toastIn 0.25s ease, toastOut 0.25s ease 2.35s forwards;
+		}
+		@keyframes toastIn { from { opacity: 0; transform: translate(-50%, -10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+		@keyframes toastOut { to { opacity: 0; transform: translate(-50%, -10px); } }
+
+		/* ============================================================
+		   صفحة الأطباء بالنسبة -- 2026-09-13
+		   ============================================================
+		   كل ما يخص هذه الصفحة تحديداً مكتوب هنا كـ CSS صريح وليس بأصناف
+		   Tailwind جديدة، لأن /tailwind.css في هذا المشروع بناء إنتاجي
+		   (production build) لا يحتوي إلا الأصناف المستخدمة فعلاً وقت بنائه --
+		   أي صنف جديد لا يوجد فيه لن يُطبَّق إطلاقاً وسيظهر العنصر بلا تنسيق. */
+		.period-select {
+			border-radius: 14px;
+			border: 1px solid #cbd5e1;
+			background: #ffffff;
+			padding: 9px 14px;
+			font-family: inherit;
+			font-size: 13px;
+			font-weight: 700;
+			color: #334155;
+			cursor: pointer;
+			outline: none;
+			transition: border-color 0.15s ease, box-shadow 0.15s ease;
+		}
+		.period-select:focus { border-color: #6366f1; box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15); }
+
+		.stat-tile {
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+			border-radius: 20px;
+			border: 1px solid #e2e8f0;
+			background: #ffffff;
+			padding: 14px 16px;
+		}
+		.stat-tile-label { font-size: 12px; font-weight: 700; color: #64748b; }
+		.stat-tile-value {
+			font-family: 'Noto Kufi Arabic', 'Segoe UI', Tahoma, system-ui, sans-serif;
+			font-size: 19px;
+			font-weight: 800;
+			color: #1e293b;
+			word-break: break-word;
+		}
+		.stat-tile-indigo { border-color: #e0e7ff; background: linear-gradient(135deg, #ffffff 0%, #eef2ff 100%); }
+		.stat-tile-indigo .stat-tile-value { color: #3730a3; }
+		.stat-tile-violet { border-color: #ede9fe; background: linear-gradient(135deg, #ffffff 0%, #f5f3ff 100%); }
+		.stat-tile-violet .stat-tile-value { color: #6d28d9; }
+		.stat-tile-emerald { border-color: #d1fae5; background: linear-gradient(135deg, #ffffff 0%, #ecfdf5 100%); }
+		.stat-tile-emerald .stat-tile-value { color: #047857; }
+		.stat-tile-amber { border-color: #fde68a; background: linear-gradient(135deg, #ffffff 0%, #fffbeb 100%); }
+		.stat-tile-amber .stat-tile-value { color: #b45309; }
+
+		.doctor-card {
+			display: flex;
+			flex-direction: column;
+			gap: 14px;
+			border-radius: 24px;
+			border: 1px solid #e2e8f0;
+			background: #ffffff;
+			padding: 18px;
+			box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+			transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+		}
+		.doctor-card:hover { transform: translateY(-2px); border-color: #c7d2fe; box-shadow: 0 16px 32px -18px rgba(79, 70, 229, 0.45); }
+		.doctor-card.is-inactive { background: #f8fafc; opacity: 0.78; }
+		.doctor-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+		.doctor-avatar {
+			width: 44px;
+			height: 44px;
+			flex-shrink: 0;
+			border-radius: 14px;
+			background: linear-gradient(135deg, #4f46e5, #7c3aed);
+			color: #ffffff;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			font-family: 'Noto Kufi Arabic', 'Segoe UI', Tahoma, system-ui, sans-serif;
+			font-size: 15px;
+			font-weight: 800;
+		}
+		.doctor-name {
+			margin: 0;
+			font-family: 'Noto Kufi Arabic', 'Segoe UI', Tahoma, system-ui, sans-serif;
+			font-size: 16px;
+			font-weight: 800;
+			color: #1e293b;
+		}
+		.doctor-meta { margin: 2px 0 0; font-size: 12px; font-weight: 600; color: #64748b; }
+		.doctor-status-pill {
+			flex-shrink: 0;
+			border-radius: 999px;
+			padding: 4px 10px;
+			font-size: 11px;
+			font-weight: 800;
+		}
+		.pill-active { background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; }
+		.pill-inactive { background: #f1f5f9; border: 1px solid #e2e8f0; color: #64748b; }
+
+		.percent-row { display: flex; align-items: center; gap: 8px; }
+		.percent-row label { font-size: 12px; font-weight: 700; color: #334155; }
+		.percent-input {
+			width: 88px;
+			border-radius: 12px;
+			border: 1px solid #cbd5e1;
+			background: #ffffff;
+			padding: 8px 10px;
+			font-family: inherit;
+			font-size: 13px;
+			font-weight: 700;
+			color: #1e293b;
+			outline: none;
+		}
+		.percent-input:focus { border-color: #6366f1; box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15); }
+
+		.doctor-figures { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+		.figure-box { border-radius: 14px; background: #f8fafc; border: 1px solid #eef2f6; padding: 9px 11px; }
+		.figure-label { display: block; font-size: 11px; font-weight: 700; color: #64748b; }
+		.figure-value { display: block; margin-top: 2px; font-size: 14px; font-weight: 800; color: #1e293b; word-break: break-word; }
+		.figure-balance { border-color: #fde68a; background: #fffbeb; }
+		.figure-balance .figure-value { color: #b45309; }
+		.figure-balance.is-settled { border-color: #a7f3d0; background: #ecfdf5; }
+		.figure-balance.is-settled .figure-value { color: #047857; }
+
+		.doctor-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+		.ghost-btn {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			padding: 9px 14px;
+			border-radius: 12px;
+			border: 1px solid #e0e7ff;
+			background: linear-gradient(135deg, #ffffff 0%, #eef2ff 100%);
+			color: #4338ca;
+			font-family: inherit;
+			font-size: 12px;
+			font-weight: 800;
+			cursor: pointer;
+			transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+		}
+		.ghost-btn:hover { background: linear-gradient(135deg, #4f46e5 0%, #4f46e5 100%); color: #ffffff; border-color: transparent; transform: translateY(-2px); }
+		.ghost-btn:disabled { opacity: 0.55; cursor: default; transform: none; }
+		.ghost-btn-emerald { border-color: #a7f3d0; background: linear-gradient(135deg, #ffffff 0%, #ecfdf5 100%); color: #047857; }
+		.ghost-btn-emerald:hover { background: linear-gradient(135deg, #059669 0%, #059669 100%); color: #ffffff; }
+		.ghost-btn-slate { border-color: #e2e8f0; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); color: #475569; }
+		.ghost-btn-slate:hover { background: linear-gradient(135deg, #475569 0%, #475569 100%); color: #ffffff; }
+		.ghost-btn-rose { border-color: #fecdd3; background: linear-gradient(135deg, #ffffff 0%, #fff1f2 100%); color: #be123c; }
+		.ghost-btn-rose:hover { background: linear-gradient(135deg, #e11d48 0%, #e11d48 100%); color: #ffffff; }
+
+		.modal-panel-wide { max-width: 900px; max-height: 88vh; overflow-y: auto; }
+		.statement-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+		.statement-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 18px; }
+		@media (min-width: 768px) { .statement-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+		.statement-section-title {
+			margin: 18px 0 10px;
+			font-family: 'Noto Kufi Arabic', 'Segoe UI', Tahoma, system-ui, sans-serif;
+			font-size: 15px;
+			font-weight: 800;
+			color: #312e81;
+		}
+		.adjusted-flag { display: inline-block; margin-inline-start: 6px; border-radius: 999px; background: #fffbeb; border: 1px solid #fde68a; color: #b45309; padding: 1px 7px; font-size: 10px; font-weight: 800; }
+		.payout-hint { margin: 0 0 14px; border-radius: 14px; background: #fffbeb; border: 1px solid #fde68a; color: #b45309; padding: 10px 12px; font-size: 13px; font-weight: 800; }
+		.payout-status { min-height: 18px; margin: 0 0 8px; font-size: 12px; font-weight: 700; color: #64748b; }
+		.payout-status.is-error { color: #be123c; }
+		.payout-note { margin: 0 0 14px; font-size: 11px; line-height: 1.9; color: #64748b; }
+		/* الصف الأخير في نموذج إضافة طبيب يمتد على كل الأعمدة مهما كان عددها.
+		   مكتوب هنا وليس md:col-span-4 لأن ذلك الصنف غير موجود في بناء
+		   tailwind.css الإنتاجي الحالي فلن يُطبَّق. */
+		.form-span-all { grid-column: 1 / -1; }
+	</style>
+	<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+	<link rel="alternate icon" type="image/png" href="favicon.png" />
+	<link rel="apple-touch-icon" href="favicon.png" />
+</head>
+<body class="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.22),_transparent_30%),linear-gradient(135deg,_#f8fafc_0%,_#eef2ff_45%,_#e0e7ff_100%)] text-ink-800 transition-opacity duration-300">
+	<div class="pointer-events-none absolute inset-0 overflow-hidden">
+		<div class="absolute right-[10%] top-16 h-40 w-40 rounded-full bg-brand-200/30 blur-3xl"></div>
+		<div class="absolute left-[6%] top-[22%] h-56 w-56 rounded-full bg-brand-200/20 blur-3xl"></div>
+	</div>
+
+	<div id="doctorsApp" class="relative flex min-h-screen w-full flex-col overflow-x-hidden px-4 pt-24 pb-6 sm:px-6 sm:pt-32 md:pt-32 lg:px-8 lg:pt-32 xl:px-10">
+		<header class="fixed inset-x-0 top-0 z-50 hidden w-full border-b border-white/15 bg-[#1e1b4b]/85 shadow-2xl shadow-brand-950/35 backdrop-blur-2xl md:block">
+			<div class="mx-auto flex w-full max-w-none flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8 xl:px-10">
+				<div class="flex items-center gap-3 text-white">
+					<img id="clinicLogoImg" src="logo.png" alt="شعار العيادة" class="h-12 w-12 rounded-xl border border-white/10 bg-white/10 object-contain p-2 shadow-lg shadow-brand-950/25" />
+					<div class="flex items-center gap-3">
+						<h1 id="clinicTitle" class="text-lg font-extrabold tracking-tight text-white sm:text-xl">عيادة الطبيب</h1>
+						<span id="tierBadge" class="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Standard</span>
+					</div>
+				</div>
+
+				<div class="flex flex-wrap items-center gap-2 lg:flex-1 lg:justify-center">
+					<a href="index.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span>لوحة المرضى</span></a>
+					<a href="appointments.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg><span>المواعيد اليومية</span></a>
+					<a href="finance.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg><span>التقارير المالية</span></a>
+					<a href="doctors.html" class="inline-flex items-center gap-2 rounded-2xl border border-info-300/30 bg-info-500/15 px-4 py-2 text-sm font-extrabold text-info-50 shadow-[0_0_24px_rgba(56,189,248,0.14)] transition hover:-translate-y-0.5 hover:border-info-200/50 hover:bg-info-400/20 hover:shadow-[0_0_28px_rgba(56,189,248,0.26)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"></path><circle cx="10" cy="7" r="3.2"></circle><path d="M18 8v6"></path><path d="M21 11h-6"></path></svg><span>الأطباء والنسب</span></a>
+					<a href="inventory.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg><span>مخزن المواد</span></a>
+					<a href="contact_developer.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg><span>تواصل مع المطور</span></a>
+					<a href="profile.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg><span>حسابي</span></a>
+					<button id="logoutBtn" type="button" class="inline-flex items-center gap-2 rounded-2xl border border-danger-300/30 bg-danger-500/15 px-4 py-2 text-sm font-bold text-danger-100 transition hover:-translate-y-0.5 hover:border-danger-200/50 hover:bg-danger-500/25 hover:shadow-[0_0_24px_rgba(244,63,94,0.18)]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg><span>تسجيل الخروج</span></button>
+				</div>
+			</div>
+		</header>
+
+		<div class="fixed inset-x-0 top-0 z-[60] border-b border-white/15 bg-[#1e1b4b]/90 shadow-2xl shadow-brand-950/35 backdrop-blur-2xl md:hidden">
+			<div class="relative mx-auto flex w-full max-w-none items-center justify-between gap-3 px-4 py-3 sm:px-6">
+				<div class="flex min-w-0 items-center gap-3 text-white">
+					<img id="mobileClinicLogoImg" src="logo.png" alt="شعار العيادة" class="h-10 w-10 rounded-xl border border-white/10 bg-white/10 object-contain p-1.5 shadow-lg shadow-brand-950/25" />
+					<div class="min-w-0">
+						<div class="flex min-w-0 items-center gap-2">
+							<p id="mobileClinicTitle" class="truncate text-sm font-extrabold tracking-tight text-white">عيادة الطبيب</p>
+							<span id="mobileTierBadge" class="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[11px] font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Standard</span>
+						</div>
+					</div>
+				</div>
+
+				<button id="mobileMenuToggle" type="button" class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white shadow-lg shadow-brand-950/20 transition hover:bg-white/15" aria-expanded="false" aria-controls="mobileMenuDropdown">
+					<svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+						<path d="M4 7h16"></path>
+						<path d="M4 12h16"></path>
+						<path d="M4 17h16"></path>
+					</svg>
+				</button>
+
+				<div id="mobileMenuDropdown" class="absolute left-0 right-0 top-full hidden border-t border-white/10 bg-[#1e1b4b] px-4 py-3 shadow-2xl shadow-brand-950/35 md:hidden">
+					<div class="mx-auto flex w-full max-w-none flex-col gap-2 sm:px-2">
+						<a href="index.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span>لوحة المرضى</span></a>
+						<a href="appointments.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg><span>المواعيد اليومية</span></a>
+						<a href="finance.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg><span>التقارير المالية</span></a>
+						<a href="doctors.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"></path><circle cx="10" cy="7" r="3.2"></circle><path d="M18 8v6"></path><path d="M21 11h-6"></path></svg><span>الأطباء والنسب</span></a>
+						<a href="inventory.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg><span>مخزن المواد</span></a>
+						<a href="contact_developer.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg><span>تواصل مع المطور</span></a>
+						<a href="profile.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg><span>حسابي</span></a>
+						<button id="mobileLogoutBtn" type="button" class="inline-flex items-center gap-2 rounded-2xl border border-danger-300/30 bg-danger-500/15 px-4 py-3 text-right text-sm font-bold text-danger-100 transition hover:bg-danger-500/25"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg><span>تسجيل الخروج</span></button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<main class="min-w-0 flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8 xl:p-10">
+			<div id="doctorsLayoutWrapper" class="transition duration-300">
+				<section id="doctorsLockedOverlay" class="mb-6 hidden rounded-[28px] border border-brand-200 bg-gradient-to-br from-brand-800 via-brand-700 to-brand-700 p-6 text-white shadow-2xl shadow-brand-900/35 transition duration-300 sm:p-7">
+					<div class="mx-auto max-w-3xl text-center">
+						<div class="mb-3 inline-flex rounded-full border border-brand-200/40 bg-white/10 px-3 py-1 text-xs font-bold tracking-[0.2em] text-brand-100">PREMIUM PLAN</div>
+						<p class="text-lg font-bold leading-8 sm:text-xl">
+							إدارة العيادة متعددة الأطباء وحساب نسب كل طبيب متاحة حصرياً لمشتركي الباقة الفخمة (Premium). أدخل كود الترقية لتفعيلها فوراً!
+						</p>
+						<form id="upgradeForm" class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-center">
+							<input
+								id="upgradeCodeInput"
+								type="text"
+								required
+								placeholder="أدخل كود الترقية"
+								class="w-full rounded-2xl border border-brand-200/30 bg-white/90 px-4 py-3 text-right text-sm font-semibold text-ink-800 outline-none transition focus:border-warning-300 focus:ring-4 focus:ring-warning-200 sm:max-w-sm"
+							/>
+							<button id="upgradeSubmitBtn" type="submit" class="rounded-2xl border border-warning-200/70 bg-gradient-to-r from-warning-300 via-warning-300 to-warning-400 px-5 py-3 text-sm font-extrabold text-warning-950 shadow-xl shadow-warning-500/30 transition hover:-translate-y-0.5 hover:from-warning-200 hover:to-warning-300">
+								تفعيل الترقية الفورية
+							</button>
+						</form>
+						<p id="upgradeStatus" class="mt-3 text-sm font-semibold text-brand-100">أدخل الكود ثم اضغط التفعيل.</p>
+					</div>
+				</section>
+
+				<div id="doctorsBoard" class="space-y-6">
+					<section class="panel-soft rounded-[28px] border border-white/70 p-5 shadow-xl shadow-ink-200/70 sm:p-6">
+						<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+							<div>
+								<div class="inline-flex rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-bold tracking-[0.22em] text-brand-700">DOCTORS HUB</div>
+								<h2 class="mt-3 text-2xl font-extrabold text-ink-800 sm:text-3xl">أطباء العيادة والنسب</h2>
+								<p class="mt-1 text-sm text-ink-500">حدّد نسبة كل طبيب، وتابع ما حصّله وما استحقّه وما تبقّى له من مستحقات.</p>
+							</div>
+							<div class="flex items-center gap-3">
+								<select id="periodSelect" class="period-select"></select>
+								<span id="doctorsCountBadge" class="rounded-full bg-brand-50 px-3 py-1 text-sm font-semibold text-brand-700">0 طبيب</span>
+							</div>
+						</div>
+
+						<div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+							<div class="stat-tile stat-tile-indigo">
+								<span class="stat-tile-label">المحصّل عبر الأطباء</span>
+								<span id="statCollected" class="stat-tile-value">0</span>
+							</div>
+							<div class="stat-tile stat-tile-violet">
+								<span class="stat-tile-label">مجموع حصص الأطباء</span>
+								<span id="statDoctorShare" class="stat-tile-value">0</span>
+							</div>
+							<div class="stat-tile stat-tile-emerald">
+								<span class="stat-tile-label">حصة العيادة من عملهم</span>
+								<span id="statClinicShare" class="stat-tile-value">0</span>
+							</div>
+							<div class="stat-tile stat-tile-amber">
+								<span class="stat-tile-label">مستحقات غير مسدّدة (تراكمي)</span>
+								<span id="statBalanceDue" class="stat-tile-value">0</span>
+							</div>
+						</div>
+						<p class="mt-3 text-xs leading-6 text-ink-500">
+							النسبة تُحسب على المبلغ المحصّل فعلياً من المريض، لا على قيمة الفاتورة. وأي تعديل للنسبة يسري على العمل القادم فقط ولا يغيّر أي حركة مسجّلة سابقاً.
+						</p>
+					</section>
+
+					<section class="panel-soft rounded-[28px] border border-white/70 bg-white/90 p-4 shadow-xl shadow-ink-200/70 sm:p-6">
+						<div class="mb-4">
+							<h3 class="text-xl font-bold text-brand-900">إضافة طبيب جديد</h3>
+							<p class="mt-1 text-sm text-ink-500">بعد إضافته يصبح قابلاً للاختيار عند فتح فاتورة علاج أو تسجيل دفعة.</p>
+						</div>
+
+						<form id="doctorForm" class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+							<label class="block md:col-span-1">
+								<span class="mb-2 block text-sm font-semibold text-ink-700">اسم الطبيب</span>
+								<input id="doctorNameInput" type="text" required placeholder="مثال: د. سامر" class="w-full rounded-2xl border border-ink-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100" />
+							</label>
+							<label class="block md:col-span-1">
+								<span class="mb-2 block text-sm font-semibold text-ink-700">الاختصاص (اختياري)</span>
+								<input id="doctorSpecialtyInput" type="text" placeholder="تقويم / جراحة فموية" class="w-full rounded-2xl border border-ink-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100" />
+							</label>
+							<label class="block md:col-span-1">
+								<span class="mb-2 block text-sm font-semibold text-ink-700">رقم الهاتف (اختياري)</span>
+								<input id="doctorPhoneInput" type="tel" placeholder="09xxxxxxxx" class="w-full rounded-2xl border border-ink-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100" />
+							</label>
+							<label class="block md:col-span-1">
+								<span class="mb-2 block text-sm font-semibold text-ink-700">نسبة الطبيب %</span>
+								<input id="doctorPercentInput" type="number" min="0" max="100" step="0.5" required value="40" class="w-full rounded-2xl border border-ink-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100" />
+							</label>
+
+							<div class="form-span-all flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+								<p id="doctorFormStatus" class="text-sm font-medium text-ink-500">جاهز لإضافة طبيب جديد.</p>
+								<button id="doctorSubmitBtn" type="submit" class="rounded-2xl bg-gradient-to-r from-brand-600 to-brand-800 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:from-brand-700 hover:to-brand-700">
+									إضافة الطبيب
+								</button>
+							</div>
+						</form>
+					</section>
+
+					<section class="panel-soft rounded-[28px] border border-white/70 bg-white/90 p-4 shadow-xl shadow-ink-200/70 sm:p-6">
+						<div class="mb-4 flex items-center justify-between">
+							<h3 class="text-xl font-bold text-brand-900">أطباء العيادة</h3>
+							<span id="periodLabelBadge" class="rounded-full bg-brand-50 px-3 py-1 text-sm font-medium text-brand-700">الشهر الحالي</span>
+						</div>
+
+						<div id="doctorsGrid" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3"></div>
+
+						<div id="doctorsEmptyState" class="hidden py-10 text-center text-ink-500">
+							لم تُضِف أي طبيب بعد. كل العمل المسجَّل حتى الآن محسوب لك أنت كطبيب العيادة.
+						</div>
+					</section>
+				</div>
+			</div>
+
+			<div id="statementModal" class="modal-overlay hidden">
+				<div class="modal-panel modal-panel-wide">
+					<div class="modal-header">
+						<h3 class="modal-title" id="statementTitle">كشف حساب الطبيب</h3>
+						<button type="button" id="statementCloseBtn" class="modal-close" aria-label="إغلاق">
+							<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<path d="M18 6 6 18"></path>
+								<path d="M6 6l12 12"></path>
+							</svg>
+						</button>
+					</div>
+
+					<div class="statement-toolbar">
+						<select id="statementPeriodSelect" class="period-select"></select>
+						<button type="button" id="statementExportBtn" class="ghost-btn">تصدير كشف الحساب (CSV)</button>
+					</div>
+
+					<div class="statement-summary">
+						<div class="stat-tile stat-tile-indigo"><span class="stat-tile-label">المحصّل في الفترة</span><span id="stmtCollected" class="stat-tile-value">0</span></div>
+						<div class="stat-tile stat-tile-violet"><span class="stat-tile-label">حصة الطبيب</span><span id="stmtDoctorShare" class="stat-tile-value">0</span></div>
+						<div class="stat-tile stat-tile-emerald"><span class="stat-tile-label">حصة العيادة</span><span id="stmtClinicShare" class="stat-tile-value">0</span></div>
+						<div class="stat-tile stat-tile-amber"><span class="stat-tile-label">الرصيد المستحق (تراكمي)</span><span id="stmtBalance" class="stat-tile-value">0</span></div>
+					</div>
+
+					<h4 class="statement-section-title">حركات الطبيب</h4>
+					<div class="overflow-x-auto rounded-2xl border border-ink-200">
+						<table class="min-w-full border-collapse text-right">
+							<thead>
+								<tr class="border-b border-ink-200 bg-ink-50 text-sm text-ink-600">
+									<th class="px-4 py-3 font-semibold">التاريخ</th>
+									<th class="px-4 py-3 font-semibold">المريض</th>
+									<th class="px-4 py-3 font-semibold">البيان</th>
+									<th class="px-4 py-3 font-semibold">المحصّل</th>
+									<th class="px-4 py-3 font-semibold">النسبة</th>
+									<th class="px-4 py-3 font-semibold">حصة الطبيب</th>
+								</tr>
+							</thead>
+							<tbody id="statementEarningsBody" class="divide-y divide-ink-100 bg-white text-sm text-ink-700"></tbody>
+						</table>
+					</div>
+					<p id="statementEarningsEmpty" class="hidden py-6 text-center text-sm text-ink-500">لا توجد حركات لهذا الطبيب في هذه الفترة.</p>
+
+					<h4 class="statement-section-title">التسويات المسدَّدة</h4>
+					<div class="overflow-x-auto rounded-2xl border border-ink-200">
+						<table class="min-w-full border-collapse text-right">
+							<thead>
+								<tr class="border-b border-ink-200 bg-ink-50 text-sm text-ink-600">
+									<th class="px-4 py-3 font-semibold">التاريخ</th>
+									<th class="px-4 py-3 font-semibold">المبلغ</th>
+									<th class="px-4 py-3 font-semibold">ملاحظة</th>
+									<th class="px-4 py-3 font-semibold">الإجراءات</th>
+								</tr>
+							</thead>
+							<tbody id="statementPayoutsBody" class="divide-y divide-ink-100 bg-white text-sm text-ink-700"></tbody>
+						</table>
+					</div>
+					<p id="statementPayoutsEmpty" class="hidden py-6 text-center text-sm text-ink-500">لا توجد تسويات مسجّلة في هذه الفترة.</p>
+				</div>
+			</div>
+
+			<div id="payoutModal" class="modal-overlay hidden">
+				<div class="modal-panel">
+					<div class="modal-header">
+						<h3 class="modal-title" id="payoutTitle">تسجيل تسوية</h3>
+						<button type="button" id="payoutCloseBtn" class="modal-close" aria-label="إغلاق">
+							<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<path d="M18 6 6 18"></path>
+								<path d="M6 6l12 12"></path>
+							</svg>
+						</button>
+					</div>
+					<form id="payoutForm">
+						<p id="payoutBalanceHint" class="payout-hint">الرصيد المستحق حالياً: 0</p>
+						<label class="field-label">
+							<span>المبلغ المُسلَّم للطبيب</span>
+							<input id="payoutAmountInput" type="number" min="1" step="any" required class="field-input" />
+						</label>
+						<label class="field-label">
+							<span>تاريخ التسليم</span>
+							<input id="payoutDateInput" type="date" class="field-input" />
+						</label>
+						<label class="field-label">
+							<span>ملاحظة (اختياري)</span>
+							<input id="payoutNoteInput" type="text" placeholder="مثال: تسوية نصف الشهر" class="field-input" />
+						</label>
+						<p id="payoutStatus" class="payout-status"></p>
+						<p class="payout-note">تُسجَّل التسوية تلقائياً كمصروف في التقارير المالية، حتى يبقى صافي أرباح العيادة صحيحاً.</p>
+						<div class="modal-footer">
+							<button type="button" id="payoutCancelBtn" class="btn-cancel">إلغاء</button>
+							<button type="submit" id="payoutSaveBtn" class="btn-save">تسجيل التسوية</button>
+						</div>
+					</form>
+				</div>
+			</div>
+		</main>
+	</div>
+
+
+	<script src="api-config.js"></script>
+	<script src="clinic-loader.js"></script>
+	<script src="notification-badge.js"></script>
+	<script src="firebase-web-config.js"></script>
+	<script src="web-push.js"></script>
+	<script src="mobile-shell.js"></script>
+	<script>
+		let userTier = localStorage.getItem("user_tier");
+		// 🔒 حظر فوري ومتزامن لأي زائر لم يسجّل الدخول إطلاقاً -- بدون هذا الفحص كان أي زائر مجهول (وصل مثلاً عبر قائمة تنقل صفحة عامة مثل contact_developer.html) يتجاوز الحماية لأن userTier الفارغ (null) لا يساوي 'pending_activation'، والأخطر أن دوال جلب بيانات المخزن هنا تسقط على بريد الطبيب الاحتياطي الحقيقي عند غياب تسجيل الدخول.
+		if (!localStorage.getItem('user_email')) {
+			window.location.replace('login.html');
+		}
+		// 🔒 حظر فوري ومتزامن قبل أي تسجيل لمستمع DOMContentLoaded أو أي طلب Fetch لبيانات محمية -- التوجيه وحده في نهاية الملف لم يكن كافياً.
+		if (userTier === 'pending_activation') {
+			window.location.replace('index.html');
+		}
+
+		// 🔒 قفل التجديد الشهري اللطيف (Soft Paywall) لحساب expired_subscription:
+		// غير هدّام عمداً -- ينقل عناصر body الحالية داخل غلاف مموَّه (blur) بدل
+		// حذفها، ويضيف نافذة التجديد كعنصر شقيق (وليس ابناً للغلاف) حتى لا يكسر
+		// CSS filter تموضعها الثابت (position: fixed) ولا يموّهها هي أيضاً بالخطأ.
+		function renderExpiredSubscriptionLock() {
+				if (document.getElementById('expiredSubscriptionOverlay')) return;
+
+				const blurWrap = document.createElement('div');
+				blurWrap.id = 'expiredBlurWrap';
+				blurWrap.style.filter = 'blur(8px)';
+				blurWrap.style.pointerEvents = 'none';
+				blurWrap.style.userSelect = 'none';
+				while (document.body.firstChild) {
+						blurWrap.appendChild(document.body.firstChild);
+				}
+				document.body.appendChild(blurWrap);
+
+				const overlay = document.createElement('div');
+				overlay.id = 'expiredSubscriptionOverlay';
+				overlay.setAttribute('dir', 'rtl');
+				overlay.className = 'fixed inset-0 z-[999] flex items-center justify-center bg-ink-950/80 backdrop-blur-sm p-4 font-sans';
+				overlay.innerHTML = `
+						<div class="max-w-xl w-full bg-brand-950/60 backdrop-blur-2xl border border-brand-500/25 p-8 rounded-3xl shadow-2xl shadow-brand-950/60 text-center space-y-6">
+								<div class="w-20 h-20 bg-brand-500/10 border border-brand-500/30 rounded-2xl flex items-center justify-center mx-auto text-4xl shadow-lg shadow-brand-500/10 animate-pulse">
+								<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10.5" width="16" height="10.5" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>
+								</div>
+
+								<h1 class="text-2xl font-bold text-brand-300">انتهت صلاحية باقتك</h1>
+
+								<p class="text-ink-300 leading-relaxed text-sm">
+								    مرحباً يا دكتور، نود إعلامك بأن فترة صلاحية باقتك الحالية قد انتهت. سجلات مرضاك، مواعيدك، ومخزن عيادتك في أمان تام ومحفوظة أبدياً داخل السيرفر ولا تضيع أبداً 🔒. للمتابعة الفورية واستعادة صلاحيات الإدارة كاملة، يرجى إدخال كود التجديد الشهري الجديد. للدعم الفني السريع والحصول على الكود كاش، يرجى التواصل مع مطور المنصة المهندس فارس حلاوي على الرقم: 0956907698 
+								</p>
+
+								<div class="space-y-3">
+								 <input type="text" id="renewalKeyInput" placeholder="أدخل كود التجديد الجديد هنا"
+								           class="w-full bg-ink-900 border border-brand-500/25 rounded-xl px-4 py-3 text-center text-sm focus:outline-none focus:border-brand-400 transition-colors text-white placeholder-ink-500" />
+
+								 <p id="renewalStatusMsg" class="text-xs min-h-[1rem]"></p>
+
+								 <button id="renewSubscriptionBtn" onclick="renewSubscription()"
+								            class="w-full bg-gradient-to-r from-brand-600 to-brand-800 hover:from-brand-500 hover:to-brand-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-brand-600/30 active:scale-[0.98]">
+								        تجديد الاشتراك ومتابعة العمل 
+								 </button>
+								</div>
+						</div>
+				`;
+				document.body.appendChild(overlay);
+		}
+
+		// دالة التحقق من كود التجديد الشهري -- تستدعي نفس مسار /api/activate الموحّد
+		// (مسار مزدوج الغرض: يفعّل حساباً جديداً أو يجدّد حساباً منتهياً بنفس المنطق)
+		function renewSubscription() {
+				const input = document.getElementById('renewalKeyInput');
+				const statusEl = document.getElementById('renewalStatusMsg');
+				const btn = document.getElementById('renewSubscriptionBtn');
+				const keyCode = (input && input.value || '').trim();
+
+				if (!keyCode) {
+						if (statusEl) {
+								statusEl.textContent = 'يرجى إدخال كود التجديد أولاً.';
+								statusEl.className = 'text-xs min-h-[1rem] text-danger-400';
+						}
+						return;
+				}
+
+				if (btn) {
+						btn.disabled = true;
+						btn.textContent = 'جاري التحقق من الكود...';
+				}
+				if (statusEl) {
+						statusEl.textContent = 'يتم الاتصال بالخادم الآن...';
+						statusEl.className = 'text-xs min-h-[1rem] text-brand-300';
+				}
+
+				fetch('/api/activate', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+								email: localStorage.getItem('user_email'),
+								activation_key: keyCode,
+						}),
+				})
+						.then(async (res) => {
+								let data = null;
+								try {
+								    data = await res.json();
+								} catch (parseError) {
+								    data = null;
+								}
+
+								if (!res.ok) {
+								    const message = (data && data.detail) || 'تعذر التحقق من الكود. حاول مرة أخرى.';
+								    if (statusEl) {
+								        statusEl.textContent = message;
+								        statusEl.className = 'text-xs min-h-[1rem] text-danger-400';
+								    }
+								    if (btn) {
+								        btn.disabled = false;
+								        btn.textContent = 'تجديد الاشتراك ومتابعة العمل ';
+								    }
+								    return;
+								}
+
+								localStorage.setItem('user_tier', data.user_tier);
+								if (statusEl) {
+								    statusEl.textContent = ' تم التجديد بنجاح!';
+								    statusEl.className = 'text-xs min-h-[1rem] text-success-400';
+								}
+								// رسالة تهنئة منبثقة فورية حسب الطلب، ثم إعادة تحميل الصفحة مباشرة
+								// لإظهار كامل عناصر لوحة التحكم بعد استعادة الصلاحيات.
+								showDoctorsToast(' تم تجديد اشتراكك بنجاح! سيتم تحديث الصفحة الآن لإظهار كامل صلاحيات لوحة التحكم.');
+								setTimeout(() => window.location.reload(), 1800);
+						})
+						.catch(() => {
+								if (statusEl) {
+								    statusEl.textContent = 'تعذر الاتصال بالخادم. تحقق من الإنترنت وحاول مرة أخرى.';
+								    statusEl.className = 'text-xs min-h-[1rem] text-danger-400';
+								}
+								if (btn) {
+								    btn.disabled = false;
+								    btn.textContent = 'تجديد الاشتراك ومتابعة العمل ';
+								}
+						});
+		}
+
+		if (userTier === 'expired_subscription') {
+			renderExpiredSubscriptionLock();
+		}
+
+		const doctorName = localStorage.getItem('doctor_name') || localStorage.getItem('user_name');
+		const doctorEmail = localStorage.getItem('user_email');
+
+		function getDoctorsAuthHeaders(extraHeaders = {}) {
+			const token = (localStorage.getItem('authToken') || '').trim();
+			const headers = { 'X-Doctor-Email': doctorEmail, ...extraHeaders };
+			if (token) {
+				headers.Authorization = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+			}
+			return headers;
+		}
+
+		const UPGRADE_ENDPOINT = apiUrl('/api/auth/upgrade-tier');
+		const clinicTitle = document.getElementById('clinicTitle');
+		const tierBadge = document.getElementById('tierBadge');
+		const mobileClinicTitle = document.getElementById('mobileClinicTitle');
+		const mobileTierBadge = document.getElementById('mobileTierBadge');
+		const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+		const mobileMenuDropdown = document.getElementById('mobileMenuDropdown');
+		const mobileLogoutBtn = document.getElementById('mobileLogoutBtn');
+		const logoutBtn = document.getElementById('logoutBtn');
+
+		const doctorsLockedOverlay = document.getElementById('doctorsLockedOverlay');
+		const doctorsBoard = document.getElementById('doctorsBoard');
+		const upgradeForm = document.getElementById('upgradeForm');
+		const upgradeCodeInput = document.getElementById('upgradeCodeInput');
+		const upgradeSubmitBtn = document.getElementById('upgradeSubmitBtn');
+		const upgradeStatus = document.getElementById('upgradeStatus');
+
+		const periodSelect = document.getElementById('periodSelect');
+		const periodLabelBadge = document.getElementById('periodLabelBadge');
+		const doctorsCountBadge = document.getElementById('doctorsCountBadge');
+		const doctorsGrid = document.getElementById('doctorsGrid');
+		const doctorsEmptyState = document.getElementById('doctorsEmptyState');
+
+		const doctorForm = document.getElementById('doctorForm');
+		const doctorFormStatus = document.getElementById('doctorFormStatus');
+		const doctorSubmitBtn = document.getElementById('doctorSubmitBtn');
+		const doctorNameInput = document.getElementById('doctorNameInput');
+		const doctorSpecialtyInput = document.getElementById('doctorSpecialtyInput');
+		const doctorPhoneInput = document.getElementById('doctorPhoneInput');
+		const doctorPercentInput = document.getElementById('doctorPercentInput');
+
+		const statementModal = document.getElementById('statementModal');
+		const statementTitle = document.getElementById('statementTitle');
+		const statementCloseBtn = document.getElementById('statementCloseBtn');
+		const statementPeriodSelect = document.getElementById('statementPeriodSelect');
+		const statementExportBtn = document.getElementById('statementExportBtn');
+		const statementEarningsBody = document.getElementById('statementEarningsBody');
+		const statementEarningsEmpty = document.getElementById('statementEarningsEmpty');
+		const statementPayoutsBody = document.getElementById('statementPayoutsBody');
+		const statementPayoutsEmpty = document.getElementById('statementPayoutsEmpty');
+
+		const payoutModal = document.getElementById('payoutModal');
+		const payoutForm = document.getElementById('payoutForm');
+		const payoutTitle = document.getElementById('payoutTitle');
+		const payoutCloseBtn = document.getElementById('payoutCloseBtn');
+		const payoutCancelBtn = document.getElementById('payoutCancelBtn');
+		const payoutAmountInput = document.getElementById('payoutAmountInput');
+		const payoutDateInput = document.getElementById('payoutDateInput');
+		const payoutNoteInput = document.getElementById('payoutNoteInput');
+		const payoutBalanceHint = document.getElementById('payoutBalanceHint');
+		const payoutStatus = document.getElementById('payoutStatus');
+		const payoutSaveBtn = document.getElementById('payoutSaveBtn');
+
+		let currentDoctors = [];
+		let statementDoctorId = null;
+		let statementData = null;
+		let payoutDoctorId = null;
+
+		const ARABIC_MONTHS = [
+			'كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران',
+			'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'
+		];
+
+		function handleLogout() {
+			localStorage.removeItem('doctor_name');
+			localStorage.removeItem('user_email');
+			localStorage.removeItem('doctor_id');
+			localStorage.removeItem('user_tier');
+			window.location.href = 'login.html';
+		}
+
+		function renderTierBadge() {
+			if (!tierBadge) return;
+			if (userTier === 'premium') {
+				tierBadge.className = 'badge-premium rounded-full px-3 py-1 text-xs font-extrabold tracking-wide';
+				tierBadge.textContent = 'Premium';
+				if (mobileTierBadge) {
+					mobileTierBadge.className = 'shrink-0 rounded-full border border-success-300/30 bg-success-400/15 px-2 py-1 text-[11px] font-extrabold tracking-wide text-success-50 shadow-[0_0_18px_rgba(52,211,153,0.18)]';
+					mobileTierBadge.textContent = 'Premium';
+				}
+			} else {
+				tierBadge.className = 'badge-standard rounded-full px-3 py-1 text-xs font-extrabold tracking-wide';
+				tierBadge.textContent = 'Standard';
+				if (mobileTierBadge) {
+					mobileTierBadge.className = 'shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[11px] font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]';
+					mobileTierBadge.textContent = 'Standard';
+				}
+			}
+		}
+
+		function setUpgradeStatus(message, type = 'normal') {
+			if (!upgradeStatus) return;
+			if (type === 'error') {
+				upgradeStatus.className = 'mt-3 text-sm font-semibold text-danger-100';
+			} else if (type === 'success') {
+				upgradeStatus.className = 'mt-3 text-sm font-semibold text-success-200';
+			} else {
+				upgradeStatus.className = 'mt-3 text-sm font-semibold text-brand-100';
+			}
+			upgradeStatus.textContent = message;
+		}
+
+		function setDoctorsGateState() {
+			const isPremium = userTier === 'premium';
+			if (isPremium) {
+				if (doctorsLockedOverlay) doctorsLockedOverlay.classList.add('hidden');
+				if (doctorsBoard) doctorsBoard.classList.remove('pointer-events-none', 'select-none', 'blur-sm', 'opacity-50');
+				return true;
+			}
+			if (doctorsLockedOverlay) doctorsLockedOverlay.classList.remove('hidden');
+			if (doctorsBoard) doctorsBoard.classList.add('pointer-events-none', 'select-none', 'blur-sm', 'opacity-50');
+			return false;
+		}
+
+		async function submitDoctorsUpgradeCode(event) {
+			event.preventDefault();
+			const activationCode = String(upgradeCodeInput?.value || '').trim();
+			if (!activationCode) {
+				setUpgradeStatus('يرجى إدخال كود الترقية أولاً.', 'error');
+				return;
+			}
+			if (upgradeSubmitBtn) {
+				upgradeSubmitBtn.disabled = true;
+				upgradeSubmitBtn.textContent = 'جارٍ التفعيل...';
+			}
+			setUpgradeStatus('جارٍ التحقق من الكود...');
+			try {
+				const storedEmail = String(localStorage.getItem('user_email') || '').trim().toLowerCase();
+				const storedDoctorName = String(localStorage.getItem('doctor_name') || '').trim();
+				const response = await fetch(UPGRADE_ENDPOINT, {
+					method: 'POST',
+					headers: getDoctorsAuthHeaders({ 'Content-Type': 'application/json' }),
+					body: JSON.stringify({
+						email: storedEmail,
+						doctor_name: storedDoctorName,
+						activation_code: activationCode
+					})
+				});
+				let data = null;
+				try { data = await response.json(); } catch (err) { data = null; }
+				if (!response.ok) {
+					const safeMessage = data?.detail || data?.message || 'تعذر تفعيل الترقية حالياً. تأكد من الكود ثم أعد المحاولة.';
+					setUpgradeStatus(safeMessage, 'error');
+					return;
+				}
+				userTier = 'premium';
+				localStorage.setItem('user_tier', 'premium');
+				if (data?.email) {
+					localStorage.setItem('user_email', String(data.email).toLowerCase());
+				}
+				setUpgradeStatus('تم تفعيل الباقة الفخمة بنجاح!', 'success');
+				renderTierBadge();
+				if (setDoctorsGateState()) {
+					await loadDoctors();
+				}
+			} catch (err) {
+				setUpgradeStatus('تعذر الاتصال بالخادم. تحقق من الإنترنت وحاول مرة أخرى.', 'error');
+			} finally {
+				if (upgradeSubmitBtn) {
+					upgradeSubmitBtn.disabled = false;
+					upgradeSubmitBtn.textContent = 'تفعيل الترقية الفورية';
+				}
+			}
+		}
+
+		function escapeHtml(value) {
+			return String(value ?? '')
+				.replace(/&/g, '&amp;')
+				.replace(/</g, '&lt;')
+				.replace(/>/g, '&gt;')
+				.replace(/"/g, '&quot;')
+				.replace(/'/g, '&#39;');
+		}
+
+		// -u-nu-latn إلزامي في كل تنسيق رقمي/تاريخي بالمشروع، وإلا ظهرت الأرقام
+		// بالصيغة الهندية (٠١٢) بدل الغربية -- انظر نفس النمط في finance.html.
+		function formatMoney(value) {
+			const num = Number(value || 0);
+			if (!Number.isFinite(num)) return '0';
+			return num.toLocaleString('ar-SY-u-nu-latn', { maximumFractionDigits: 2 });
+		}
+
+		function formatPercent(value) {
+			const num = Number(value || 0);
+			if (!Number.isFinite(num)) return '0%';
+			const rounded = Math.round(num * 100) / 100;
+			return `${rounded.toLocaleString('en-US', { maximumFractionDigits: 2 })}%`;
+		}
+
+		function formatDate(value) {
+			if (!value) return '—';
+			const dt = new Date(value);
+			if (Number.isNaN(dt.getTime())) return '—';
+			return dt.toLocaleDateString('ar-SY-u-nu-latn', { year: 'numeric', month: '2-digit', day: '2-digit' });
+		}
+
+		function initials(name) {
+			const parts = String(name || '').replace(/^د\.?\s*/, '').trim().split(/\s+/).filter(Boolean);
+			if (!parts.length) return 'د';
+			if (parts.length === 1) return parts[0].slice(0, 2);
+			return (parts[0][0] || '') + (parts[1][0] || '');
+		}
+
+		/* خيارات الفترة: نفس معاملات /api/finance/summary حرفياً (day/month/year/
+		   all_time) حتى تطابق أرقام هذه الصفحة تقرير المالية للفترة نفسها. */
+		function buildPeriodOptions() {
+			const now = new Date();
+			const options = [
+				{ value: 'today', label: 'اليوم' },
+				{ value: 'all', label: 'كل الفترات' }
+			];
+			for (let i = 0; i < 18; i += 1) {
+				const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+				const year = d.getFullYear();
+				const month = d.getMonth() + 1;
+				options.splice(1 + i, 0, {
+					value: `${year}-${month}`,
+					label: i === 0 ? `${ARABIC_MONTHS[d.getMonth()]} ${year} (الشهر الحالي)` : `${ARABIC_MONTHS[d.getMonth()]} ${year}`
+				});
+			}
+			return options;
+		}
+
+		function fillPeriodSelect(selectEl) {
+			if (!selectEl) return;
+			const options = buildPeriodOptions();
+			selectEl.innerHTML = options
+				.map((opt) => `<option value="${escapeHtml(opt.value)}">${escapeHtml(opt.label)}</option>`)
+				.join('');
+			selectEl.value = options[0].value;
+		}
+
+		function periodQuery(value) {
+			if (value === 'all') return 'all_time=true';
+			if (value === 'today') {
+				const now = new Date();
+				return `year=${now.getFullYear()}&month=${now.getMonth() + 1}&day=${now.getDate()}`;
+			}
+			const [year, month] = String(value || '').split('-');
+			if (!year || !month) return 'all_time=true';
+			return `year=${year}&month=${month}`;
+		}
+
+		function periodLabel(selectEl) {
+			if (!selectEl) return '';
+			const option = selectEl.options[selectEl.selectedIndex];
+			return option ? option.textContent : '';
+		}
+
+		function showDoctorsToast(message) {
+			const toast = document.createElement('div');
+			toast.className = 'toast-success';
+			toast.textContent = message;
+			document.body.appendChild(toast);
+			setTimeout(() => toast.remove(), 2800);
+		}
+
+		function setDoctorFormStatus(message, isError = false) {
+			if (!doctorFormStatus) return;
+			doctorFormStatus.textContent = message;
+			doctorFormStatus.className = isError
+				? 'text-sm font-medium text-danger-600'
+				: 'text-sm font-medium text-ink-500';
+		}
+
+		async function readError(response, fallback) {
+			try {
+				const data = await response.json();
+				return data?.detail || data?.message || fallback;
+			} catch (err) {
+				return fallback;
+			}
+		}
+
+		function renderDoctors(doctors) {
+			currentDoctors = Array.isArray(doctors) ? doctors : [];
+			if (doctorsCountBadge) {
+				doctorsCountBadge.textContent = `${currentDoctors.length.toLocaleString('en-US')} طبيب`;
+			}
+			if (periodLabelBadge) periodLabelBadge.textContent = periodLabel(periodSelect);
+
+			let totalCollected = 0;
+			let totalDoctorShare = 0;
+			let totalClinicShare = 0;
+			let totalBalanceDue = 0;
+			currentDoctors.forEach((d) => {
+				totalCollected += Number(d.period_collected || 0);
+				totalDoctorShare += Number(d.period_doctor_share || 0);
+				totalClinicShare += Number(d.period_clinic_share || 0);
+				totalBalanceDue += Number(d.balance_due || 0);
+			});
+			document.getElementById('statCollected').textContent = formatMoney(totalCollected);
+			document.getElementById('statDoctorShare').textContent = formatMoney(totalDoctorShare);
+			document.getElementById('statClinicShare').textContent = formatMoney(totalClinicShare);
+			document.getElementById('statBalanceDue').textContent = formatMoney(totalBalanceDue);
+
+			if (!currentDoctors.length) {
+				doctorsGrid.innerHTML = '';
+				doctorsEmptyState.classList.remove('hidden');
+				return;
+			}
+			doctorsEmptyState.classList.add('hidden');
+
+			doctorsGrid.innerHTML = currentDoctors
+				.map((d) => {
+					const balance = Number(d.balance_due || 0);
+					const settled = balance <= 0;
+					const metaParts = [d.specialty, d.phone].filter(Boolean).map(escapeHtml);
+					return `
+						<article class="doctor-card${d.is_active ? '' : ' is-inactive'}">
+							<div class="doctor-card-head">
+								<div style="display:flex; gap:10px; min-width:0;">
+									<span class="doctor-avatar">${escapeHtml(initials(d.full_name))}</span>
+									<div style="min-width:0;">
+										<h4 class="doctor-name">${escapeHtml(d.full_name)}</h4>
+										<p class="doctor-meta">${metaParts.length ? metaParts.join(' • ') : 'بلا بيانات إضافية'}</p>
+									</div>
+								</div>
+								<span class="doctor-status-pill ${d.is_active ? 'pill-active' : 'pill-inactive'}">${d.is_active ? 'نشط' : 'معطَّل'}</span>
+							</div>
+
+							<div class="percent-row">
+								<label for="percent-${d.id}">النسبة المعتمدة</label>
+								<input id="percent-${d.id}" class="percent-input" type="number" min="0" max="100" step="0.5" value="${Number(d.commission_percent || 0)}" data-percent-for="${d.id}" />
+								<button type="button" class="ghost-btn" data-save-percent="${d.id}">حفظ النسبة</button>
+							</div>
+
+							<div class="doctor-figures">
+								<div class="figure-box">
+									<span class="figure-label">محصّل الفترة</span>
+									<span class="figure-value">${formatMoney(d.period_collected)}</span>
+								</div>
+								<div class="figure-box">
+									<span class="figure-label">حصته من الفترة</span>
+									<span class="figure-value">${formatMoney(d.period_doctor_share)}</span>
+								</div>
+								<div class="figure-box">
+									<span class="figure-label">المُسلَّم له (تراكمي)</span>
+									<span class="figure-value">${formatMoney(d.total_paid_out)}</span>
+								</div>
+								<div class="figure-box figure-balance${settled ? ' is-settled' : ''}">
+									<span class="figure-label">الرصيد المستحق</span>
+									<span class="figure-value">${formatMoney(balance)}</span>
+								</div>
+							</div>
+
+							<div class="doctor-actions">
+								<button type="button" class="ghost-btn" data-statement-for="${d.id}">كشف الحساب</button>
+								<button type="button" class="ghost-btn ghost-btn-emerald" data-payout-for="${d.id}">تسجيل تسوية</button>
+								<button type="button" class="ghost-btn ghost-btn-slate" data-toggle-active="${d.id}">${d.is_active ? 'تعطيل' : 'تفعيل'}</button>
+								<button type="button" class="ghost-btn ghost-btn-rose" data-delete-doctor="${d.id}">حذف</button>
+							</div>
+						</article>
+					`;
+				})
+				.join('');
+		}
+
+		async function loadDoctors() {
+			try {
+				const response = await fetch(apiUrl(`/api/clinic-doctors?${periodQuery(periodSelect.value)}`), {
+					headers: getDoctorsAuthHeaders()
+				});
+				if (!response.ok) {
+					setDoctorFormStatus(await readError(response, 'تعذر تحميل قائمة الأطباء.'), true);
+					return;
+				}
+				renderDoctors(await response.json());
+			} catch (err) {
+				setDoctorFormStatus('تعذر الاتصال بالخادم لتحميل قائمة الأطباء.', true);
+			}
+		}
+
+		async function handleDoctorSubmit(event) {
+			event.preventDefault();
+			const fullName = String(doctorNameInput?.value || '').trim();
+			const percent = Number(doctorPercentInput?.value);
+			if (!fullName) {
+				setDoctorFormStatus('اسم الطبيب مطلوب.', true);
+				return;
+			}
+			if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+				setDoctorFormStatus('النسبة يجب أن تكون رقماً بين 0 و 100.', true);
+				return;
+			}
+			if (window.ClinicLoader) ClinicLoader.setButtonLoading(doctorSubmitBtn, true);
+			setDoctorFormStatus('جارٍ حفظ الطبيب...');
+			try {
+				const response = await fetch(apiUrl('/api/clinic-doctors'), {
+					method: 'POST',
+					headers: getDoctorsAuthHeaders({ 'Content-Type': 'application/json' }),
+					body: JSON.stringify({
+						full_name: fullName,
+						specialty: String(doctorSpecialtyInput?.value || '').trim() || null,
+						phone: String(doctorPhoneInput?.value || '').trim() || null,
+						commission_percent: percent
+					})
+				});
+				if (!response.ok) {
+					setDoctorFormStatus(await readError(response, 'تعذر إضافة الطبيب.'), true);
+					return;
+				}
+				doctorForm.reset();
+				if (doctorPercentInput) doctorPercentInput.value = '40';
+				setDoctorFormStatus('تمت إضافة الطبيب بنجاح.');
+				showDoctorsToast('تمت إضافة الطبيب بنجاح');
+				await loadDoctors();
+			} catch (err) {
+				setDoctorFormStatus('تعذر الاتصال بالخادم. حاول مرة أخرى.', true);
+			} finally {
+				if (window.ClinicLoader) ClinicLoader.setButtonLoading(doctorSubmitBtn, false);
+			}
+		}
+
+		async function patchDoctor(doctorId, payload, successMessage) {
+			try {
+				const response = await fetch(apiUrl(`/api/clinic-doctors/${doctorId}`), {
+					method: 'PATCH',
+					headers: getDoctorsAuthHeaders({ 'Content-Type': 'application/json' }),
+					body: JSON.stringify(payload)
+				});
+				if (!response.ok) {
+					setDoctorFormStatus(await readError(response, 'تعذر تحديث بيانات الطبيب.'), true);
+					return false;
+				}
+				showDoctorsToast(successMessage);
+				await loadDoctors();
+				return true;
+			} catch (err) {
+				setDoctorFormStatus('تعذر الاتصال بالخادم. حاول مرة أخرى.', true);
+				return false;
+			}
+		}
+
+		async function deleteDoctor(doctorId) {
+			const doctor = currentDoctors.find((d) => String(d.id) === String(doctorId));
+			const label = doctor ? doctor.full_name : 'هذا الطبيب';
+			if (!window.confirm(`هل تريد حذف ${label} نهائياً؟ لا يمكن حذف طبيب له سجل مالي — يمكنك تعطيله بدلاً من ذلك.`)) {
+				return;
+			}
+			try {
+				const response = await fetch(apiUrl(`/api/clinic-doctors/${doctorId}`), {
+					method: 'DELETE',
+					headers: getDoctorsAuthHeaders()
+				});
+				if (!response.ok) {
+					setDoctorFormStatus(await readError(response, 'تعذر حذف الطبيب.'), true);
+					return;
+				}
+				showDoctorsToast('تم حذف الطبيب');
+				await loadDoctors();
+			} catch (err) {
+				setDoctorFormStatus('تعذر الاتصال بالخادم. حاول مرة أخرى.', true);
+			}
+		}
+
+		function renderStatement(data) {
+			statementData = data;
+			const doctor = data?.doctor || {};
+			const period = data?.period || {};
+			statementTitle.textContent = `كشف حساب: ${doctor.full_name || ''}`;
+			document.getElementById('stmtCollected').textContent = formatMoney(period.collected);
+			document.getElementById('stmtDoctorShare').textContent = formatMoney(period.doctor_share);
+			document.getElementById('stmtClinicShare').textContent = formatMoney(period.clinic_share);
+			document.getElementById('stmtBalance').textContent = formatMoney(doctor.balance_due);
+
+			const earnings = Array.isArray(data?.earnings) ? data.earnings : [];
+			statementEarningsBody.innerHTML = earnings
+				.map((e) => `
+					<tr>
+						<td class="px-4 py-3">${escapeHtml(formatDate(e.earned_at))}</td>
+						<td class="px-4 py-3">${escapeHtml(e.patient_name || '—')}</td>
+						<td class="px-4 py-3">${escapeHtml(e.description || '—')}${e.adjusted_at ? '<span class="adjusted-flag">معدَّلة</span>' : ''}</td>
+						<td class="px-4 py-3">${formatMoney(e.gross_amount)}</td>
+						<td class="px-4 py-3">${escapeHtml(formatPercent(e.applied_percent))}</td>
+						<td class="px-4 py-3" style="font-weight:800; color:#4338ca;">${formatMoney(e.doctor_share)}</td>
+					</tr>
+				`)
+				.join('');
+			statementEarningsEmpty.classList.toggle('hidden', earnings.length > 0);
+
+			const payouts = Array.isArray(data?.payouts) ? data.payouts : [];
+			statementPayoutsBody.innerHTML = payouts
+				.map((p) => `
+					<tr>
+						<td class="px-4 py-3">${escapeHtml(formatDate(p.paid_at))}</td>
+						<td class="px-4 py-3" style="font-weight:800; color:#047857;">${formatMoney(p.amount)}</td>
+						<td class="px-4 py-3">${escapeHtml(p.note || '—')}</td>
+						<td class="px-4 py-3"><button type="button" class="ghost-btn ghost-btn-rose" data-delete-payout="${p.id}">حذف</button></td>
+					</tr>
+				`)
+				.join('');
+			statementPayoutsEmpty.classList.toggle('hidden', payouts.length > 0);
+		}
+
+		async function loadStatement() {
+			if (statementDoctorId == null) return;
+			try {
+				const response = await fetch(
+					apiUrl(`/api/clinic-doctors/${statementDoctorId}/statement?${periodQuery(statementPeriodSelect.value)}`),
+					{ headers: getDoctorsAuthHeaders() }
+				);
+				if (!response.ok) {
+					showDoctorsToast(await readError(response, 'تعذر تحميل كشف الحساب.'));
+					return;
+				}
+				renderStatement(await response.json());
+			} catch (err) {
+				showDoctorsToast('تعذر الاتصال بالخادم لتحميل كشف الحساب.');
+			}
+		}
+
+		function openStatement(doctorId) {
+			statementDoctorId = doctorId;
+			statementPeriodSelect.value = periodSelect.value;
+			statementModal.classList.remove('hidden');
+			loadStatement();
+		}
+
+		function closeStatement() {
+			statementModal.classList.add('hidden');
+			statementDoctorId = null;
+			statementData = null;
+		}
+
+		function exportStatementCsv() {
+			if (!statementData) return;
+			const doctor = statementData.doctor || {};
+			const rows = [['التاريخ', 'المريض', 'البيان', 'المحصّل', 'النسبة المطبقة', 'حصة الطبيب', 'حصة العيادة']];
+			(statementData.earnings || []).forEach((e) => {
+				rows.push([
+					formatDate(e.earned_at),
+					e.patient_name || '',
+					e.description || '',
+					Number(e.gross_amount || 0),
+					Number(e.applied_percent || 0),
+					Number(e.doctor_share || 0),
+					Number(e.clinic_share || 0)
+				]);
+			});
+			rows.push([]);
+			rows.push(['التسويات المسدَّدة']);
+			rows.push(['التاريخ', 'المبلغ', 'ملاحظة']);
+			(statementData.payouts || []).forEach((p) => {
+				rows.push([formatDate(p.paid_at), Number(p.amount || 0), p.note || '']);
+			});
+			rows.push([]);
+			rows.push(['الرصيد المستحق التراكمي', Number(doctor.balance_due || 0)]);
+
+			const csv = rows
+				.map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+				.join('\n');
+			// BOM ضروري حتى يفتح Excel النص العربي بترميز UTF-8 بدل رموز مشوّهة.
+			const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+			const url = URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = url;
+			link.download = `كشف_حساب_${(doctor.full_name || 'طبيب').replace(/\s+/g, '_')}.csv`;
+			document.body.appendChild(link);
+			link.click();
+			link.remove();
+			URL.revokeObjectURL(url);
+		}
+
+		function openPayout(doctorId) {
+			const doctor = currentDoctors.find((d) => String(d.id) === String(doctorId));
+			payoutDoctorId = doctorId;
+			payoutTitle.textContent = `تسجيل تسوية: ${doctor ? doctor.full_name : ''}`;
+			payoutBalanceHint.textContent = `الرصيد المستحق حالياً: ${formatMoney(doctor ? doctor.balance_due : 0)}`;
+			payoutForm.reset();
+			payoutStatus.textContent = '';
+			payoutStatus.className = 'payout-status';
+			const today = new Date();
+			payoutDateInput.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+			payoutModal.classList.remove('hidden');
+		}
+
+		function closePayout() {
+			payoutModal.classList.add('hidden');
+			payoutDoctorId = null;
+		}
+
+		async function handlePayoutSubmit(event) {
+			event.preventDefault();
+			if (payoutDoctorId == null) return;
+			const amount = Number(payoutAmountInput.value);
+			if (!Number.isFinite(amount) || amount <= 0) {
+				payoutStatus.textContent = 'قيمة التسوية يجب أن تكون أكبر من صفر.';
+				payoutStatus.className = 'payout-status is-error';
+				return;
+			}
+			const body = { amount, note: String(payoutNoteInput.value || '').trim() || null };
+			if (payoutDateInput.value) {
+				// منتصف النهار محلياً بدل منتصف الليل: يمنع انزلاق التاريخ يوماً
+				// كاملاً للخلف عند تحويله في الخادم، وهي نفس الحيلة المعتمدة في
+				// بقية حقول التاريخ الاختيارية بالمشروع.
+				body.paid_at = `${payoutDateInput.value}T12:00:00`;
+			}
+			if (window.ClinicLoader) ClinicLoader.setButtonLoading(payoutSaveBtn, true);
+			payoutStatus.textContent = 'جارٍ الحفظ...';
+			payoutStatus.className = 'payout-status';
+			try {
+				const response = await fetch(apiUrl(`/api/clinic-doctors/${payoutDoctorId}/payouts`), {
+					method: 'POST',
+					headers: getDoctorsAuthHeaders({ 'Content-Type': 'application/json' }),
+					body: JSON.stringify(body)
+				});
+				if (!response.ok) {
+					payoutStatus.textContent = await readError(response, 'تعذر تسجيل التسوية.');
+					payoutStatus.className = 'payout-status is-error';
+					return;
+				}
+				closePayout();
+				showDoctorsToast('تم تسجيل التسوية وقيدها كمصروف في المالية');
+				await loadDoctors();
+				if (statementDoctorId != null) await loadStatement();
+			} catch (err) {
+				payoutStatus.textContent = 'تعذر الاتصال بالخادم. حاول مرة أخرى.';
+				payoutStatus.className = 'payout-status is-error';
+			} finally {
+				if (window.ClinicLoader) ClinicLoader.setButtonLoading(payoutSaveBtn, false);
+			}
+		}
+
+		async function deletePayout(payoutId) {
+			if (statementDoctorId == null) return;
+			if (!window.confirm('سيتم حذف هذه التسوية وحذف مصروفها المقابل من التقارير المالية. متابعة؟')) return;
+			try {
+				const response = await fetch(
+					apiUrl(`/api/clinic-doctors/${statementDoctorId}/payouts/${payoutId}`),
+					{ method: 'DELETE', headers: getDoctorsAuthHeaders() }
+				);
+				if (!response.ok) {
+					showDoctorsToast(await readError(response, 'تعذر حذف التسوية.'));
+					return;
+				}
+				showDoctorsToast('تم حذف التسوية');
+				await loadStatement();
+				await loadDoctors();
+			} catch (err) {
+				showDoctorsToast('تعذر الاتصال بالخادم. حاول مرة أخرى.');
+			}
+		}
+
+		doctorsGrid?.addEventListener('click', (event) => {
+			const saveBtn = event.target.closest('[data-save-percent]');
+			if (saveBtn) {
+				const id = saveBtn.getAttribute('data-save-percent');
+				const input = document.querySelector(`[data-percent-for="${id}"]`);
+				const percent = Number(input?.value);
+				if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+					setDoctorFormStatus('النسبة يجب أن تكون رقماً بين 0 و 100.', true);
+					return;
+				}
+				patchDoctor(id, { commission_percent: percent }, 'تم تحديث النسبة — تسري على العمل القادم فقط');
+				return;
+			}
+			const statementBtn = event.target.closest('[data-statement-for]');
+			if (statementBtn) {
+				openStatement(statementBtn.getAttribute('data-statement-for'));
+				return;
+			}
+			const payoutBtn = event.target.closest('[data-payout-for]');
+			if (payoutBtn) {
+				openPayout(payoutBtn.getAttribute('data-payout-for'));
+				return;
+			}
+			const toggleBtn = event.target.closest('[data-toggle-active]');
+			if (toggleBtn) {
+				const id = toggleBtn.getAttribute('data-toggle-active');
+				const doctor = currentDoctors.find((d) => String(d.id) === String(id));
+				const nextActive = !(doctor && doctor.is_active);
+				patchDoctor(id, { is_active: nextActive }, nextActive ? 'تم تفعيل الطبيب' : 'تم تعطيل الطبيب');
+				return;
+			}
+			const deleteBtn = event.target.closest('[data-delete-doctor]');
+			if (deleteBtn) {
+				deleteDoctor(deleteBtn.getAttribute('data-delete-doctor'));
+			}
+		});
+
+		statementPayoutsBody?.addEventListener('click', (event) => {
+			const btn = event.target.closest('[data-delete-payout]');
+			if (btn) deletePayout(btn.getAttribute('data-delete-payout'));
+		});
+
+		periodSelect?.addEventListener('change', loadDoctors);
+		statementPeriodSelect?.addEventListener('change', loadStatement);
+		statementCloseBtn?.addEventListener('click', closeStatement);
+		statementExportBtn?.addEventListener('click', exportStatementCsv);
+		statementModal?.addEventListener('click', (event) => {
+			if (event.target === statementModal) closeStatement();
+		});
+		payoutCloseBtn?.addEventListener('click', closePayout);
+		payoutCancelBtn?.addEventListener('click', closePayout);
+		payoutModal?.addEventListener('click', (event) => {
+			if (event.target === payoutModal) closePayout();
+		});
+		payoutForm?.addEventListener('submit', handlePayoutSubmit);
+		doctorForm?.addEventListener('submit', handleDoctorSubmit);
+		upgradeForm?.addEventListener('submit', submitDoctorsUpgradeCode);
+		logoutBtn?.addEventListener('click', handleLogout);
+		mobileLogoutBtn?.addEventListener('click', handleLogout);
+
+		if (mobileMenuToggle && mobileMenuDropdown) {
+			mobileMenuToggle.addEventListener('click', () => {
+				const isHidden = mobileMenuDropdown.classList.contains('hidden');
+				mobileMenuDropdown.classList.toggle('hidden');
+				mobileMenuToggle.setAttribute('aria-expanded', String(isHidden));
+			});
+		}
+
+		window.addEventListener('DOMContentLoaded', async () => {
+			const activeGateTier = localStorage.getItem('user_tier');
+			if (activeGateTier === 'pending_activation' || activeGateTier === 'expired_subscription') {
+				return;
+			}
+			fillPeriodSelect(periodSelect);
+			fillPeriodSelect(statementPeriodSelect);
+
+			if (clinicTitle) clinicTitle.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادة الطبيب';
+			if (mobileClinicTitle) mobileClinicTitle.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادة الطبيب';
+			renderTierBadge();
+
+			try {
+				const response = await fetch(apiUrl('/api/auth/profile'), { headers: getDoctorsAuthHeaders() });
+				if (response.ok) {
+					const profile = await response.json();
+					const freshName = (profile.doctor_name || '').trim();
+					if (freshName) {
+						localStorage.setItem('doctor_name', freshName);
+						if (clinicTitle) clinicTitle.textContent = `عيادة ${freshName}`;
+						if (mobileClinicTitle) mobileClinicTitle.textContent = `عيادة ${freshName}`;
+					}
+				}
+			} catch (err) {
+				// تجاهل: يبقى الاسم المخزَّن محلياً كما هو عند انقطاع الشبكة
+			}
+
+			if (setDoctorsGateState()) {
+				await loadDoctors();
+			}
+		});
+
+	
+	function applyDoctorAvatarToHeaderLogo() {
+		const avatarUrl = localStorage.getItem('user_avatar_url');
+		const logoTargets = [document.getElementById('clinicLogoImg'), document.getElementById('mobileClinicLogoImg')].filter(Boolean);
+		if (!avatarUrl) return;
+		logoTargets.forEach((img) => {
+			// نحفظ الشعار الافتراضي logo.png وأصنافه قبل استبداله بصورة الطبيب، حتى نرجع
+			// إليه تلقائياً إن فشل تحميل الصورة (رابط معطوب أو محذوف من التخزين المؤقت
+			// على Render) بدل ترك أيقونة صورة مكسورة ظاهرة للزائر (2026-08-25).
+			const fallbackSrc = img.getAttribute('src');
+			const fallbackClassName = img.className;
+			img.onerror = () => {
+				img.onerror = null;
+				img.src = fallbackSrc;
+				img.className = fallbackClassName;
+			};
+			img.src = window.apiUrl ? apiUrl(avatarUrl) : avatarUrl;
+			img.classList.remove('object-contain', 'p-2', 'p-1.5', 'rounded-xl');
+			img.classList.add('object-cover', 'rounded-full');
+		});
+	}
+
+	applyDoctorAvatarToHeaderLogo();
+</script>
+</body>
+</html>

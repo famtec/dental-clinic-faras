@@ -39,4 +39,19 @@ class FinanceSummary {
       day: json['day'] as int?,
     );
   }
+
+  /// عكس [fromJson] -- لتخزين آخر نسخة معروفة محلياً (cache_kv) وعرضها عند
+  /// انقطاع الاتصال بدل رسالة خطأ فوق أرقام كانت صحيحة قبل قليل. أُضيف
+  /// 2026-09-02.
+  Map<String, dynamic> toJson() => {
+        'total_income': totalIncome,
+        'total_expenses': totalExpenses,
+        'net_profit': netProfit,
+        'total_revenue': totalRevenue,
+        'opening_balance_income': openingBalanceIncome,
+        'all_time': allTime,
+        'year': year,
+        'month': month,
+        'day': day,
+      };
 }

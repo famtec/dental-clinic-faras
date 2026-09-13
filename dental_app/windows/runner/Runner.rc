@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "dental_app" "\0"
+            VALUE "CompanyName", "Digital Clinic" "\0"
+            VALUE "FileDescription", "Digital Clinic - Dental Practice Manager" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "dental_app" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
+            VALUE "InternalName", "DigitalClinic" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Digital Clinic. All rights reserved." "\0"
             VALUE "OriginalFilename", "dental_app.exe" "\0"
-            VALUE "ProductName", "dental_app" "\0"
+            VALUE "ProductName", "Digital Clinic" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

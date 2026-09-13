@@ -3,19 +3,28 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../services/auth_storage.dart';
 import '../widgets/app_widgets.dart';
-import 'dashboard_screen.dart';
+import 'finance_screen.dart';
+import 'inventory_screen.dart';
 import 'more_menu_screen.dart';
 import 'patients_list_screen.dart';
 import 'today_schedule_screen.dart';
 
-/// القشرة الرئيسية بشريط تنقل من 4 تبويبات: الرئيسية / المواعيد / المرضى /
-/// المزيد (بوابة التقارير المالية، مخزن المواد، حسابي، وتواصل مع المطور) --
-/// بلا AppBar عام لأن كل شاشة لها رأسها المتدرّج الخاص المطابق للموقع.
+/// القشرة الرئيسية بشريط تنقل من 5 تبويبات: المرضى / المواعيد / المالية /
+/// المخزن / المزيد -- نفس شريط الموقع على الجوال حرفاً بحرف.
+///
+/// 2026-09-02: كان الشريط أربعة تبويبات أولها "الرئيسية" (لوحة قيادة
+/// بإحصائيات ومواعيد قادمة). الموقع لا يملك تلك الشاشة أصلاً -- إحصائياته
+/// فوق قائمة المرضى مباشرة -- فدُمجت البطاقات في أعلى تبويب "المرضى"
+/// (انظر PatientsListScreen) وحلّت المالية والمخزن محلّ الرئيسية في
+/// الشريط، بقرار صريح من المستخدم لتطابق التطبيق مع الموقع تماماً.
+/// dashboard_screen.dart ما زال موجوداً على القرص لكنه لم يعد مستخدماً.
 class HomeScreen extends StatefulWidget {
   final ApiService apiService;
   final AuthStorage authStorage;
   final VoidCallback onLogout;
-  final GlobalKey<DashboardScreenState> dashboardKey;
+  /// حلّ محلّ dashboardKey السابق -- إشعار حجز جديد يُحدّث الآن قائمة
+  /// المرضى (التي صارت تحمل بطاقات الإحصائيات) بدل لوحة القيادة المحذوفة.
+  final GlobalKey<PatientsListScreenState> patientsKey;
   final GlobalKey<TodayScheduleScreenState> todayScheduleKey;
 
   const HomeScreen({
@@ -23,7 +32,7 @@ class HomeScreen extends StatefulWidget {
     required this.apiService,
     required this.authStorage,
     required this.onLogout,
-    required this.dashboardKey,
+    required this.patientsKey,
     required this.todayScheduleKey,
   });
 
@@ -41,10 +50,21 @@ class HomeScreenState extends State<HomeScreen> {
   // للاتجاه. بطلب المستخدم 2026-08-31.
   late final PageController _pageController = PageController(initialPage: _currentIndex);
 
+  /// عدد طلبات الحجز المعلّقة، يُغذّي الشارة الحمراء على تبويب "المواعيد".
+  /// يُحدَّث من شاشة المواعيد نفسها بعد كل تحميل، فلا يوجد استطلاع ثانٍ
+  /// للسيرفر (الموقع يستطلع كل 4 ثوانٍ لأن صفحاته منفصلة؛ هنا الشاشة
+  /// محمَّلة أصلاً داخل نفس الشجرة).
+  int _pendingBookingCount = 0;
+
+  /// تستدعيها TodayScheduleScreen بعد كل refresh.
+  void setPendingBookingCount(int count) {
+    if (!mounted || count == _pendingBookingCount) return;
+    setState(() => _pendingBookingCount = count);
+  }
+
   /// يُستدعى من main.dart عند فتح التطبيق عبر إشعار حجز جديد -- ينقل الطبيب
-  /// لتبويب "الجدول" (الفهرس 1 الآن بعد إضافة تبويب الرئيسية) مباشرة حتى لو
-  /// كان مفتوحاً على تبويب آخر وقتها. الاسم أُبقي كما هو (showTodayTab)
-  /// حفاظاً على التوافق مع main.dart دون تعديل غير ضروري هناك.
+  /// لتبويب "المواعيد" مباشرة حتى لو كان مفتوحاً على تبويب آخر وقتها.
+  /// المواعيد ما زالت الفهرس 1 بعد إعادة ترتيب التبويبات، فلا تغيير هنا.
   void showTodayTab() => _goToTab(1);
 
   /// الانتقال المتحرّك الموحّد بين التبويبات -- يُستخدم من شريط التنقل
@@ -74,13 +94,10 @@ class HomeScreenState extends State<HomeScreen> {
     // هو ما يسمح لـ main.dart بنداء refresh() عليه مباشرة.
     final screens = [
       _KeepAlivePage(
-        child: DashboardScreen(
-          key: widget.dashboardKey,
+        child: PatientsListScreen(
+          key: widget.patientsKey,
           apiService: widget.apiService,
-          authStorage: widget.authStorage,
           onSessionExpired: widget.onLogout,
-          onLogout: widget.onLogout,
-          onSeeFullSchedule: () => _goToTab(1),
         ),
       ),
       _KeepAlivePage(
@@ -88,10 +105,17 @@ class HomeScreenState extends State<HomeScreen> {
           key: widget.todayScheduleKey,
           apiService: widget.apiService,
           onSessionExpired: widget.onLogout,
+          onPendingCountChanged: setPendingBookingCount,
         ),
       ),
       _KeepAlivePage(
-        child: PatientsListScreen(
+        child: FinanceScreen(
+          apiService: widget.apiService,
+          onSessionExpired: widget.onLogout,
+        ),
+      ),
+      _KeepAlivePage(
+        child: InventoryScreen(
           apiService: widget.apiService,
           onSessionExpired: widget.onLogout,
         ),
@@ -107,6 +131,12 @@ class HomeScreenState extends State<HomeScreen> {
     ];
 
     return Scaffold(
+      // 2026-09-05: الشريط السفلي صار كبسولة عائمة بهامش من كل جانب، فلو بقي
+      // الجسم متوقّفاً عند حافته العليا لظهر شريط من لون الـ Scaffold تحته
+      // بلا محتوى. extendBody يمدّ الجسم خلفه فتمرّ الخلفية وكرات الضوء تحت
+      // الكبسولة كما في التصميم. الثمن: كل قائمة تحتاج حشوة سفلية 112 =
+      // 16 هامش + 66 ارتفاع + تنفّس -- وقد ضُبطت في التبويبات الخمسة كلها.
+      extendBody: true,
       body: PageView(
         controller: _pageController,
         // بلا سحب يدوي بين التبويبات -- التنقل يبقى عبر الشريط السفلي فقط
@@ -121,11 +151,23 @@ class HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: GlassBottomNav(
         currentIndex: _currentIndex,
         onTap: _goToTab,
-        items: const [
-          GlassNavItem(icon: Icons.home_outlined, activeIcon: Icons.home, label: 'الرئيسية'),
-          GlassNavItem(icon: Icons.today_outlined, activeIcon: Icons.today, label: 'المواعيد'),
-          GlassNavItem(icon: Icons.people_outline, activeIcon: Icons.people, label: 'المرضى'),
-          GlassNavItem(icon: Icons.apps_outlined, activeIcon: Icons.apps, label: 'المزيد'),
+        items: [
+          const GlassNavItem(
+              icon: Icons.people_outline, activeIcon: Icons.people, label: 'المرضى'),
+          GlassNavItem(
+            icon: Icons.calendar_today_outlined,
+            activeIcon: Icons.calendar_today,
+            label: 'المواعيد',
+            // شارة طلبات الحجز المعلّقة -- تختفي على تبويب المواعيد نفسه،
+            // تماماً كما يتجاهل notification-badge.js صفحة appointments.html.
+            badgeCount: _currentIndex == 1 ? 0 : _pendingBookingCount,
+          ),
+          const GlassNavItem(
+              icon: Icons.bar_chart_outlined, activeIcon: Icons.bar_chart, label: 'المالية'),
+          const GlassNavItem(
+              icon: Icons.inventory_2_outlined, activeIcon: Icons.inventory_2, label: 'المخزن'),
+          const GlassNavItem(
+              icon: Icons.more_horiz, activeIcon: Icons.more_horiz, label: 'المزيد'),
         ],
       ),
     );

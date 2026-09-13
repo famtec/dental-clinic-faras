@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/finance_summary.dart';
+import '../models/finance_transaction.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
@@ -28,7 +29,399 @@ class FinanceScreen extends StatefulWidget {
   State<FinanceScreen> createState() => _FinanceScreenState();
 }
 
+/// شريط نسبة الواردات إلى المصاريف داخل بطاقة صافي الربح -- طبق الأصل عن
+/// ‎#financeRatioBar في finance.html.
+class _IncomeExpenseRatioBar extends StatelessWidget {
+  final double income;
+  final double expenses;
+
+  const _IncomeExpenseRatioBar({required this.income, required this.expenses});
+
+  @override
+  Widget build(BuildContext context) {
+    final safeIncome = income < 0 ? 0.0 : income;
+    final safeExpenses = expenses < 0 ? 0.0 : expenses;
+    final total = safeIncome + safeExpenses;
+    final incomeShare = total > 0 ? (safeIncome / total * 100).round() : 50;
+    final expenseShare = total > 0 ? 100 - incomeShare : 50;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: SizedBox(
+            height: 8,
+            child: Row(
+              children: [
+                Expanded(
+                  flex: incomeShare,
+                  child: Container(color: AppColors.emerald500),
+                ),
+                Expanded(
+                  flex: expenseShare,
+                  child: Container(color: AppColors.rose500),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 9),
+        Row(
+          children: [
+            _RatioLegendChip(
+              color: AppColors.emerald500,
+              label: total > 0 ? 'واردات $incomeShare%' : 'واردات',
+              textColor: const Color(0xFFA7F3D0),
+            ),
+            const Spacer(),
+            _RatioLegendChip(
+              color: AppColors.rose500,
+              label: total > 0 ? 'مصاريف $expenseShare%' : 'مصاريف',
+              textColor: AppColors.rose200,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _RatioLegendChip extends StatelessWidget {
+  final Color color;
+  final String label;
+  final Color textColor;
+
+  const _RatioLegendChip({
+    required this.color,
+    required this.label,
+    required this.textColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+              color: textColor, fontSize: 11, fontWeight: FontWeight.w700),
+        ),
+      ],
+    );
+  }
+}
+
+/// شارة نسبة التغيّر عن الشهر السابق داخل بطاقة الربح.
+class _GrowthBadge extends StatelessWidget {
+  final int? changePercent;
+
+  const _GrowthBadge({required this.changePercent});
+
+  @override
+  Widget build(BuildContext context) {
+    final change = changePercent;
+    if (change == null || change == 0) return const SizedBox.shrink();
+    final isUp = change > 0;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: (isUp ? AppColors.emerald500 : AppColors.rose500)
+            .withValues(alpha: .15),
+        border: Border.all(
+          color: (isUp ? AppColors.emerald500 : AppColors.rose500)
+              .withValues(alpha: .45),
+        ),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isUp ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+            size: 12,
+            color: isUp ? const Color(0xFF6EE7B7) : AppColors.rose200,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            '${change.abs()}%',
+            style: TextStyle(
+              color: isUp ? const Color(0xFF6EE7B7) : AppColors.rose200,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// قسم "آخر الحركات" -- قائمة الدفعات والمصاريف التي كوّنت الأرقام أعلاه.
+/// لم يكن للشاشة (ولا لصفحة الموقع قبل 2026-09-02) أي طريقة لرؤيتها.
+/// 2026-09-07: كل حركة أصبحت قابلة للضغط لتعديلها (onTapMove) -- طبق الأصل
+/// عن نافذة #financeEditForm في patient_record.html.
+class _MovesSection extends StatelessWidget {
+  final List<FinanceTransaction> moves;
+  final ValueChanged<FinanceTransaction> onTapMove;
+
+  const _MovesSection({required this.moves, required this.onTapMove});
+
+  static String _formatAmount(double value) {
+    final digits = value.round().abs().toString();
+    final buffer = StringBuffer();
+    for (var i = 0; i < digits.length; i++) {
+      if (i > 0 && (digits.length - i) % 3 == 0) buffer.write(',');
+      buffer.write(digits[i]);
+    }
+    return buffer.toString();
+  }
+
+  static String _formatDate(DateTime? date) {
+    if (date == null) return '—';
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${two(date.day)}/${two(date.month)} · ${two(date.hour)}:${two(date.minute)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final surf = context.surface;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Text(
+              'آخر الحركات',
+              style: AppType.kufi(
+                  color: surf.textPrimary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                  letterSpacing: -0.4),
+            ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+              decoration: BoxDecoration(
+                color: surf.iconBoxBg,
+                border: Border.all(color: surf.iconBoxBorder),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                'هذه الفترة',
+                style: TextStyle(
+                    color: surf.iconBoxFg,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 11.5),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 11),
+        if (moves.isEmpty)
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: surf.chipBg,
+              border: Border.all(color: surf.chipBorder),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              'لا توجد حركات مالية في هذه الفترة.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  color: surf.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600),
+            ),
+          )
+        else
+          Column(
+            children: [
+              for (final move in moves) ...[
+                _MoveRow(move: move, onTap: () => onTapMove(move)),
+                if (move != moves.last) const SizedBox(height: 8),
+              ],
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+class _MoveRow extends StatelessWidget {
+  final FinanceTransaction move;
+  final VoidCallback onTap;
+
+  const _MoveRow({required this.move, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final surf = context.surface;
+    final isIncome = move.isIncome;
+    final accent = isIncome ? AppColors.emerald600 : AppColors.rose700text;
+
+    // Padding انتقل من SectionCard إلى داخل InkWell كي تمتد موجة اللمس على
+    // كامل مساحة البطاقة (بما فيها ما كان هامشاً خارجياً)، بدل أن تُقتطع عند
+    // حدود منطقة أضيق داخلياً.
+    return SectionCard(
+      radius: 20,
+      padding: EdgeInsets.zero,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+            child: Row(
+              children: [
+          Container(
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: isIncome ? AppColors.emerald50 : AppColors.rose50,
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Icon(
+              isIncome ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+              size: 16,
+              color: accent,
+            ),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  move.description.trim().isEmpty
+                      ? (isIncome ? 'دفعة' : 'مصروف')
+                      : move.description,
+                  textAlign: TextAlign.right,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppType.kufi(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: surf.textPrimary),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  _MovesSection._formatDate(move.createdAt),
+                  textAlign: TextAlign.right,
+                  style: AppType.kufi(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w500,
+                      color: surf.textMuted),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          // الإشارة تبقى يسار الرقم كما في كشوف الحسابات، فلا تنقلب مع RTL.
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Text(
+              '${isIncome ? '+' : '-'} ${_MovesSection._formatAmount(move.amount)}',
+              style: TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w800, color: accent),
+            ),
+          ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// بطاقة بيضاء صغيرة للإيرادات أو المصاريف تحت بطاقة الربح.
+class _MoneyCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color tint;
+  final Color iconColor;
+  final Color valueColor;
+
+  const _MoneyCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.tint,
+    required this.iconColor,
+    required this.valueColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final surf = context.surface;
+    return SectionCard(
+      radius: 22,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: tint,
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Icon(icon, size: 17, color: iconColor),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            textAlign: TextAlign.right,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              color: valueColor,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            label,
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+              color: surf.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _FinanceScreenState extends State<FinanceScreen> {
+  /// نسبة تغيّر صافي الربح عن الشهر السابق. null = لا تُعرض الشارة (فترة
+  /// "كل الوقت"/يوم واحد، أو شهر سابق بلا ربح فلا قاعدة مقارنة له).
+  int? _profitChangePercent;
+
+  /// آخر الحركات المالية للفترة المعروضة. قائمة فارغة = لا حركات أو تعذّر
+  /// جلبها (المسار غير منشور بعد على الخادم)؛ في الحالتين تُعرض حالة
+  /// "لا توجد حركات" ولا شيء يُقاطع الأرقام أعلاه.
+  List<FinanceTransaction> _moves = const [];
   FinanceSummary? _summary;
   List<({int year, int month})> _months = [];
   // null/null + _allTime=false + _isToday=false يعني "الشهر الحالي" (سلوك
@@ -83,6 +476,8 @@ class _FinanceScreenState extends State<FinanceScreen> {
         _summary = summary;
         _isLoading = false;
       });
+      _loadProfitComparison(summary);
+      _loadMoves();
     } on ApiException catch (e) {
       if (!mounted) return;
       if (e.isSessionExpired) {
@@ -154,6 +549,31 @@ class _FinanceScreenState extends State<FinanceScreen> {
     }
   }
 
+  /// فتح ورقة تعديل حركة مالية واحدة (دفعة أو مصروف) من قسم "آخر الحركات" --
+  /// طبق الأصل عن نافذة #financeEditForm في patient_record.html، لكنها تعمل
+  /// هنا على أي حركة بلا تمييز نوعها لأن PUT /api/finance/transaction/{id}
+  /// عام لكل صفوف FinancialTransaction (انظر شرح updateFinanceTransaction في
+  /// api_service.dart). 2026-09-07.
+  Future<void> _openEditMoveSheet(FinanceTransaction move) async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _EditTransactionSheet(
+        apiService: widget.apiService,
+        move: move,
+        onSessionExpired: widget.onSessionExpired,
+      ),
+    );
+    if (saved == true) {
+      _loadMonths();
+      _loadSummary();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('تم حفظ التعديل بنجاح.')));
+    }
+  }
+
   String _money(double value) => value.toStringAsFixed(0);
 
   @override
@@ -166,44 +586,10 @@ class _FinanceScreenState extends State<FinanceScreen> {
           child: ListView(
             padding: EdgeInsets.zero,
             children: [
-              AnimatedHeroHeader(
-                padding: EdgeInsets.fromLTRB(
-                    20, MediaQuery.of(context).padding.top + 8, 20, 26),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    // زر رجوع -- الشاشة تُفتح دائماً عبر Navigator.push من تبويب
-                    // "المزيد"، وبلا AppBar هنا لا يوجد أي طريق آخر للعودة (تمت
-                    // إضافته بعد أن لاحظ الطبيب غيابه 2026-08-29).
-                    Row(
-                      children: [
-                        IconButton(
-                          onPressed: () => Navigator.of(context).maybePop(),
-                          icon: const Icon(Icons.arrow_forward, color: Colors.white),
-                        ),
-                        const Spacer(),
-                      ],
-                    ),
-                    const Text(
-                      'التقارير المالية',
-                      textAlign: TextAlign.right,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'متابعة الدخل والمصروفات وصافي الأرباح شهرياً',
-                      textAlign: TextAlign.right,
-                      style: TextStyle(color: Colors.white70, fontSize: 12.5),
-                    ),
-                  ],
-                ),
-              ),
+              const ClinicTopBar(),
+              const OfflineSyncBanner(),
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                padding: EdgeInsets.fromLTRB(20, 16, 20, floatingNavInset(context) + 84),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -231,50 +617,89 @@ class _FinanceScreenState extends State<FinanceScreen> {
                                           color: Colors.white.withValues(alpha: .14)),
                                     ),
                                     child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
                                       children: [
-                                        Text(
-                                          'صافي الربح',
-                                          style: TextStyle(
-                                              color: Colors.white.withValues(alpha: .7),
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w700),
+                                        Row(
+                                          children: [
+                                            Text(
+                                              'صافي أرباح العيادة',
+                                              style: TextStyle(
+                                                  color: Colors.white
+                                                      .withValues(alpha: .7),
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w700),
+                                            ),
+                                            const Spacer(),
+                                            _GrowthBadge(
+                                                changePercent:
+                                                    _profitChangePercent),
+                                          ],
                                         ),
-                                        const SizedBox(height: 6),
+                                        const SizedBox(height: 8),
                                         Text(
                                           _money(summary.netProfit),
+                                          textAlign: TextAlign.right,
                                           style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 30,
                                             fontWeight: FontWeight.w900,
                                           ),
                                         ),
-                                        const SizedBox(height: 18),
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: _statColumn(
-                                                'إجمالي الدخل',
-                                                _money(summary.totalIncome),
-                                                AppColors.cyan300,
-                                              ),
-                                            ),
-                                            Container(
-                                                width: 1,
-                                                height: 34,
-                                                color: Colors.white.withValues(alpha: .14)),
-                                            Expanded(
-                                              child: _statColumn(
-                                                'إجمالي المصروفات',
-                                                _money(summary.totalExpenses),
-                                                const Color(0xFFFCA5A5),
-                                              ),
-                                            ),
-                                          ],
+                                        const SizedBox(height: 16),
+                                        _IncomeExpenseRatioBar(
+                                          income: summary.totalIncome,
+                                          expenses: summary.totalExpenses,
                                         ),
                                       ],
                                     ),
                                   ),
                                 ),
+                                const SizedBox(height: 11),
+                                // الإيرادات والمصاريف بطاقتان بيضاوان تحت
+                                // بطاقة الربح -- نفس ترتيب الصفحة المالية على
+                                // الجوال في الموقع، بدل عمودين داخل البطاقة
+                                // الداكنة كما كانا.
+                                // IntrinsicHeight يمنح البطاقتين ارتفاعاً
+                                // واحداً كما في شبكة الموقع. بدونه لا يمكن
+                                // استخدام CrossAxisAlignment.stretch هنا:
+                                // الصف داخل ListView فيرث ارتفاعاً لانهائياً،
+                                // وstretch يمرّره كقيد ضيّق فيرمي Flutter
+                                // خطأ "BoxConstraints forces an infinite
+                                // height" عند التشغيل.
+                                IntrinsicHeight(
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                    Expanded(
+                                      child: _MoneyCard(
+                                        label: 'إجمالي الإيرادات',
+                                        value: _money(summary.totalIncome),
+                                        icon: Icons.arrow_upward_rounded,
+                                        tint: AppColors.emerald50,
+                                        iconColor: AppColors.emerald600,
+                                        valueColor: AppColors.emerald600,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: _MoneyCard(
+                                        label: 'تكلفة المواد والمستلزمات',
+                                        value: _money(summary.totalExpenses),
+                                        icon: Icons.arrow_downward_rounded,
+                                        tint: AppColors.rose50,
+                                        iconColor: AppColors.rose700text,
+                                        valueColor: AppColors.rose700text,
+                                      ),
+                                    ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                _MovesSection(
+                                    moves: _moves,
+                                    onTapMove: _openEditMoveSheet),
                                 if (summary.openingBalanceIncome != 0) ...[
                                   const SizedBox(height: 12),
                                   SectionCard(
@@ -316,21 +741,55 @@ class _FinanceScreenState extends State<FinanceScreen> {
     );
   }
 
-  Widget _statColumn(String label, String value, Color valueColor) {
-    return Column(
-      children: [
-        Text(value,
-            style: TextStyle(
-                color: valueColor, fontSize: 18, fontWeight: FontWeight.w900)),
-        const SizedBox(height: 4),
-        Text(label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-                color: Colors.white.withValues(alpha: .68),
-                fontSize: 10.5,
-                fontWeight: FontWeight.w600)),
-      ],
-    );
+  /// آخر الحركات للفترة المعروضة حالياً -- بنفس معاملات الملخّص تماماً.
+  Future<void> _loadMoves() async {
+    final today = DateTime.now();
+    try {
+      final moves = await widget.apiService.fetchFinanceTransactions(
+        year: _isToday ? today.year : _selectedYear,
+        month: _isToday ? today.month : _selectedMonth,
+        day: _isToday ? today.day : null,
+        allTime: _allTime,
+      );
+      if (mounted) setState(() => _moves = moves);
+    } catch (_) {
+      // قسم توضيحي -- فشله لا يجب أن يمسّ المجاميع ولا يُظهر رسالة خطأ.
+      if (mounted) setState(() => _moves = const []);
+    }
+  }
+
+  /// مقارنة صافي الربح بالشهر السابق -- طلب إضافي واحد لنفس مسار الملخّص.
+  /// لا تُعرض الشارة إطلاقاً في وضع "كل الوقت" أو "اليوم" (لا معنى لمقارنة
+  /// يوم بشهر)، ولا حين يكون ربح الشهر السابق صفراً أو أقل (لا قاعدة نسبة).
+  /// أي فشل هنا يُخفي الشارة فقط ولا يمسّ الأرقام المعروضة.
+  Future<void> _loadProfitComparison(FinanceSummary summary) async {
+    if (_allTime || _isToday || summary.year == null || summary.month == null) {
+      if (mounted) setState(() => _profitChangePercent = null);
+      return;
+    }
+
+    final year = summary.year!;
+    final month = summary.month!;
+    final previousMonth = month == 1 ? 12 : month - 1;
+    final previousYear = month == 1 ? year - 1 : year;
+
+    try {
+      final previous = await widget.apiService.fetchFinanceSummary(
+        year: previousYear,
+        month: previousMonth,
+      );
+      if (!mounted) return;
+      final previousProfit = previous.netProfit;
+      if (previousProfit <= 0) {
+        setState(() => _profitChangePercent = null);
+        return;
+      }
+      final change =
+          ((summary.netProfit - previousProfit) / previousProfit * 100).round();
+      setState(() => _profitChangePercent = change);
+    } catch (_) {
+      if (mounted) setState(() => _profitChangePercent = null);
+    }
   }
 
   /// زر قائمة منسدلة لاختيار فترة التقرير -- مطابق حرفياً للقائمة المنسدلة
@@ -341,6 +800,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
   /// الافتراضي يبقى أول شهر (الشهر الحالي) وليس "اليوم" -- نفس سلوك
   /// populateMonthSelect() بالموقع، الذي يضيف خيار اليوم بلا تغيير الافتراضي.
   Widget _buildMonthSelector() {
+    final surf = context.surface;
     final now = DateTime.now();
     final monthEntries =
         _months.isEmpty ? [(year: now.year, month: now.month)] : _months;
@@ -378,25 +838,26 @@ class _FinanceScreenState extends State<FinanceScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text(
+        Text(
           'عرض التقرير المالي لشهر',
           textAlign: TextAlign.right,
-          style: TextStyle(
-              fontWeight: FontWeight.w800, fontSize: 13.5, color: AppColors.indigo700),
+          style: AppType.kufi(
+              fontWeight: FontWeight.w600, fontSize: 13, color: surf.heroCaption),
         ),
         const SizedBox(height: 8),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: surf.fieldBg,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.slate200),
+            border: Border.all(color: surf.fieldBorder),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: selectedValue,
               isExpanded: true,
-              icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.slate500),
+              icon: Icon(Icons.keyboard_arrow_down, color: surf.textSecondary),
+              dropdownColor: surf.sheetBg,
               borderRadius: BorderRadius.circular(16),
               items: items,
               onChanged: (value) {
@@ -417,7 +878,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
         Text(
           _periodHintText(),
           textAlign: TextAlign.right,
-          style: const TextStyle(fontSize: 11.5, color: AppColors.slate500),
+          style: TextStyle(fontSize: 11.5, color: surf.textSecondary),
         ),
       ],
     );
@@ -510,13 +971,14 @@ class _AddExpenseSheetState extends State<_AddExpenseSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final surf = context.surface;
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+        decoration: BoxDecoration(
+          color: surf.sheetBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
         ),
         child: Form(
           key: _formKey,
@@ -530,7 +992,7 @@ class _AddExpenseSheetState extends State<_AddExpenseSheet> {
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: AppColors.slate200,
+                    color: surf.divider,
                     borderRadius: BorderRadius.circular(999),
                   ),
                 ),
@@ -586,12 +1048,13 @@ class _AddExpenseSheetState extends State<_AddExpenseSheet> {
   /// العربي بالضبط، ونفس التحقق الشرطي في submitExpense() هناك (اسم مادة
   /// غير فارغ وكمية أكبر من صفر إلزاميان فقط عند تفعيل المفتاح).
   Widget _buildInventoryLinkSection() {
+    final surf = context.surface;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.indigo50,
+        color: surf.iconBoxBg,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.indigo600.withValues(alpha: .18)),
+        border: Border.all(color: surf.iconBoxBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -652,12 +1115,210 @@ class _AddExpenseSheetState extends State<_AddExpenseSheet> {
             ),
           ],
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'إن وجدت مادة بنفس الاسم في المخزن سيتم زيادة كميتها تلقائياً، وإلا سيتم إنشاء مادة جديدة.',
             textAlign: TextAlign.right,
-            style: TextStyle(fontSize: 11, color: AppColors.slate500),
+            style: TextStyle(fontSize: 11, color: surf.textSecondary),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// ورقة "تعديل الحركة المالية" -- طبق الأصل عن نافذة #financeEditForm في
+/// patient_record.html (نفس الحقول الثلاثة بالضبط: المبلغ / الوصف / تسوية
+/// رصيد قديم أو سابق)، لكنها تُفتح هنا من قسم "آخر الحركات" في الشاشة
+/// المالية العامة بدل شاشة فاتورة مريض محدَّدة، وتعمل على أي حركة (دفعة أو
+/// مصروف) بلا تمييز نوعها -- PUT /api/finance/transaction/{id} عام لكل صفوف
+/// FinancialTransaction (انظر توثيق updateFinanceTransaction في
+/// api_service.dart). الحفظ يمر عبر OfflineAwareApiService كأي عملية أخرى:
+/// أوفلاين لحركة سُجِّلت أوفلاين ولم تُزامَن بعد (id سالب) يُصحَّح payload
+/// عملية الإنشاء المعلَّقة نفسها فوراً بلا محاولة اتصال؛ أوفلاين لحركة
+/// مُزامَنة فعلاً (id موجب) يُسجَّل تعديل outbox منفصل يُطبَّق عند عودة
+/// الاتصال -- كلا المسارين مبنيان مسبقاً في الخدمة، هذه الورقة مجرد واجهة.
+/// 2026-09-07.
+class _EditTransactionSheet extends StatefulWidget {
+  final ApiService apiService;
+  final FinanceTransaction move;
+  final VoidCallback onSessionExpired;
+
+  const _EditTransactionSheet({
+    required this.apiService,
+    required this.move,
+    required this.onSessionExpired,
+  });
+
+  @override
+  State<_EditTransactionSheet> createState() => _EditTransactionSheetState();
+}
+
+class _EditTransactionSheetState extends State<_EditTransactionSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _amountController;
+  late final TextEditingController _descriptionController;
+  late bool _isOpeningBalance;
+  bool _isSaving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _amountController =
+        TextEditingController(text: widget.move.amount.toStringAsFixed(0));
+    _descriptionController =
+        TextEditingController(text: widget.move.description);
+    _isOpeningBalance = widget.move.isOpeningBalance;
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() {
+      _isSaving = true;
+      _error = null;
+    });
+    try {
+      await widget.apiService.updateFinanceTransaction(
+        widget.move.id,
+        amount: double.parse(_amountController.text.trim()),
+        description: _descriptionController.text.trim(),
+        isOpeningBalance: _isOpeningBalance,
+      );
+      if (mounted) Navigator.of(context).pop(true);
+    } on ApiException catch (e) {
+      if (e.isSessionExpired) {
+        widget.onSessionExpired();
+        return;
+      }
+      setState(() {
+        _error = e.message;
+        _isSaving = false;
+      });
+    } catch (_) {
+      setState(() {
+        _error = 'تعذر حفظ التعديل. حاول مرة أخرى.';
+        _isSaving = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final surf = context.surface;
+    final isIncome = widget.move.isIncome;
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+        decoration: BoxDecoration(
+          color: surf.sheetBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+        ),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: surf.divider,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              Text(
+                isIncome ? 'تعديل الدفعة المالية' : 'تعديل المصروف',
+                textAlign: TextAlign.right,
+                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _amountController,
+                textAlign: TextAlign.right,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'المبلغ'),
+                validator: (value) {
+                  final parsed = double.tryParse((value ?? '').trim());
+                  if (parsed == null || parsed <= 0) return 'أدخل قيمة صحيحة أكبر من صفر';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _descriptionController,
+                textAlign: TextAlign.right,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'الوصف'),
+                validator: (value) =>
+                    (value == null || value.trim().isEmpty) ? 'الوصف مطلوب' : null,
+              ),
+              const SizedBox(height: 12),
+              // نفس نص #financeEditOpeningBalance في patient_record.html
+              // حرفياً، ونفس أسلوب مفتاح "أضفها إلى مخزن المواد" أعلاه
+              // (Container ملوّن + InkWell على كامل الصف يبدّل قيمة
+              // Checkbox، بدل الاعتماد على النقر داخل مربع الفحص وحده).
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: surf.iconBoxBg,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: surf.iconBoxBorder),
+                ),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () =>
+                      setState(() => _isOpeningBalance = !_isOpeningBalance),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'هذه تسوية رصيد قديم/سابق (تُستبعد من تقرير أي شهر محدَّد، وتبقى ضمن الإجمالي الكلي)',
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.indigo700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Checkbox(
+                        value: _isOpeningBalance,
+                        activeColor: AppColors.indigo600,
+                        onChanged: (value) =>
+                            setState(() => _isOpeningBalance = value ?? false),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                Text(_error!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: AppColors.rose700text)),
+              ],
+              const SizedBox(height: 18),
+              GradientButton(
+                label: 'حفظ التعديل',
+                isLoading: _isSaving,
+                onPressed: _isSaving ? null : _submit,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

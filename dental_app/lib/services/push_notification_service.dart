@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'api_service.dart';
+import 'platform_support.dart';
 
 /// معرّف قناة الإشعارات الافتراضية -- يجب أن يطابق بالضبط القيمة الموضوعة في
 /// android/app/src/main/AndroidManifest.xml (com.google.firebase.messaging.default_notification_channel_id).
@@ -57,7 +58,20 @@ class PushNotificationService {
 
   bool _initialized = false;
 
+  /// هل يدعم هذا الجهاز إشعارات Push أصلاً؟ **firebase_messaging لا يملك
+  /// تطبيقاً على ويندوز إطلاقاً** (لا سطح مكتب عموماً) -- لمس
+  /// `FirebaseMessaging.instance` هناك يرمي MissingPluginException. لذلك
+  /// نخرج مبكراً بدل الاعتماد على try/catch في الطرف المستدعي: الخروج المبكر
+  /// يوثّق السبب، والـ catch يخفيه.
+  ///
+  /// أثر ذلك على نسخة ويندوز: لا يصل "طلب حجز جديد" ولا "تذكير العيادة
+  /// اليومي" كإشعار نظام. البديل المخطَّط له (المرحلة 3) هو استطلاع دوري
+  /// لنقطة `/api/appointments/pending-count` -- وهي موجودة وتعمل بالفعل على
+  /// الموقع لشارة العدّاد -- ثم عرض إشعار ويندوز أصلي منها.
+  bool get isSupportedOnThisPlatform => isMobilePlatform;
+
   Future<void> initialize() async {
+    if (!isSupportedOnThisPlatform) return;
     if (_initialized) return;
     _initialized = true;
 

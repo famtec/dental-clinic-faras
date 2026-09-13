@@ -11,6 +11,14 @@ class Patient {
   final double paidAmount;
   final String? chartStateRaw;
 
+  /// حالة المزامنة مع السيرفر -- 'synced' دائماً لأي مريض قادم فعلياً من
+  /// الـ backend (fromJson). القيم الأخرى ('pending_create' / 'pending_update')
+  /// لا تظهر إلا لمريض أُنشئ/عُدِّلت بياناته الأساسية أو مخطط أسنانه أوفلاين
+  /// وما زال بانتظار الاتصال بالإنترنت ليصل فعلياً للسيرفر -- انظر
+  /// OfflineAwareApiService وLocalDb. أُضيف 2026-09-02 (توسيع دعم العمل بدون
+  /// إنترنت من المواعيد إلى المرضى/مخطط الأسنان).
+  final String syncStatus;
+
   const Patient({
     required this.id,
     required this.fullName,
@@ -21,7 +29,10 @@ class Patient {
     required this.totalTreatmentCost,
     required this.paidAmount,
     this.chartStateRaw,
+    this.syncStatus = 'synced',
   });
+
+  bool get isPendingSync => syncStatus != 'synced';
 
   double get remainingBalance {
     final remaining = totalTreatmentCost - paidAmount;
@@ -60,17 +71,28 @@ class Patient {
     return const {};
   }
 
-  Patient copyWith({String? chartStateRaw}) {
+  Patient copyWith({
+    String? fullName,
+    String? phone,
+    String? gender,
+    DateTime? birthDate,
+    String? medicalHistory,
+    double? totalTreatmentCost,
+    double? paidAmount,
+    String? chartStateRaw,
+    String? syncStatus,
+  }) {
     return Patient(
       id: id,
-      fullName: fullName,
-      phone: phone,
-      gender: gender,
-      birthDate: birthDate,
-      medicalHistory: medicalHistory,
-      totalTreatmentCost: totalTreatmentCost,
-      paidAmount: paidAmount,
+      fullName: fullName ?? this.fullName,
+      phone: phone ?? this.phone,
+      gender: gender ?? this.gender,
+      birthDate: birthDate ?? this.birthDate,
+      medicalHistory: medicalHistory ?? this.medicalHistory,
+      totalTreatmentCost: totalTreatmentCost ?? this.totalTreatmentCost,
+      paidAmount: paidAmount ?? this.paidAmount,
       chartStateRaw: chartStateRaw ?? this.chartStateRaw,
+      syncStatus: syncStatus ?? this.syncStatus,
     );
   }
 

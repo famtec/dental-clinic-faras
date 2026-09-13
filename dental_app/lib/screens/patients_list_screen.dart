@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/patient.dart';
+import '../models/patient_stats.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
@@ -18,20 +19,48 @@ class PatientsListScreen extends StatefulWidget {
   });
 
   @override
-  State<PatientsListScreen> createState() => _PatientsListScreenState();
+  State<PatientsListScreen> createState() => PatientsListScreenState();
 }
 
-class _PatientsListScreenState extends State<PatientsListScreen> {
+/// عامّ (لا خاص) لأن main.dart يمسك GlobalKey<PatientsListScreenState> وينادي
+/// refresh() عند وصول إشعار حجز جديد -- الدور الذي كانت تؤدّيه لوحة القيادة
+/// قبل دمجها هنا.
+class PatientsListScreenState extends State<PatientsListScreen> {
   List<Patient>? _patients;
+  PatientStats? _stats;
   String? _errorMessage;
   bool _isSubscriptionBlocked = false;
   bool _isLoading = true;
   String _searchQuery = '';
 
+  /// 0 = الكل، 1 = عليه رصيد، 2 = مسدّد. تصفية محلية بحتة على القائمة
+  /// المحمَّلة أصلاً -- لا نداء إضافي للسيرفر، والأعداد على الشرائح محسوبة
+  /// من نفس القائمة لا مخمَّنة.
+  int _filterIndex = 0;
+
   @override
   void initState() {
     super.initState();
     _load();
+    _loadStats();
+  }
+
+  /// يُستدعى من main.dart عبر GlobalKey عند فتح التطبيق من إشعار حجز جديد.
+  Future<void> refresh() async {
+    await _load();
+    await _loadStats();
+  }
+
+  /// بطاقات الإحصائيات فوق القائمة -- نفس GET /api/patients/stats الذي
+  /// يستخدمه الموقع في index.html. فشلها لا يمسّ القائمة إطلاقاً: تبقى
+  /// البطاقات على "--" بدل إظهار خطأ يحجب المرضى.
+  Future<void> _loadStats() async {
+    try {
+      final stats = await widget.apiService.fetchPatientStats();
+      if (mounted) setState(() => _stats = stats);
+    } catch (_) {
+      // تُترك البطاقات على قيمتها الافتراضية.
+    }
   }
 
   Future<void> _load() async {
@@ -113,45 +142,37 @@ class _PatientsListScreenState extends State<PatientsListScreen> {
     _openPatientDetail(created);
   }
 
+  /// سطر الترحيب تحت اسم العيادة. العدد يأتي من نفس إحصائيات السيرفر التي
+  /// تغذّي بطاقة الرأس، فإن لم تصل بعد يبقى السطر تحية مجرّدة بلا رقم مخترع.
+  String _greetingLine() {
+    final hour = DateTime.now().hour;
+    final greeting = hour < 12
+        ? 'صباح الخير'
+        : hour < 17
+            ? 'نهارك سعيد'
+            : 'مساء الخير';
+    final active = _stats?.activeAppointments;
+    if (active == null) return greeting;
+    if (active == 0) return '$greeting · لا مواعيد نشطة حالياً';
+    if (active == 1) return '$greeting · لديك موعد نشط واحد';
+    if (active == 2) return '$greeting · لديك موعدان نشطان';
+    if (active <= 10) return '$greeting · لديك $active مواعيد نشطة';
+    return '$greeting · لديك $active موعداً نشطاً';
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Column(
-          children: [
-            AnimatedHeroHeader(
-              padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 18, 20, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text(
-                    'المرضى',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'ابحث بالاسم أو رقم الهاتف',
-                      hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
-                      prefixIcon: Icon(Icons.search, color: Colors.white.withValues(alpha: 0.85)),
-                      filled: true,
-                      fillColor: Colors.white.withValues(alpha: 0.14),
-                      isDense: true,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                    onChanged: (value) => setState(() => _searchQuery = value),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: AtmosphereBackground(
+    // AtmosphereBackground صارت تغلّف الشاشة كاملةً (لا منطقة القائمة وحدها)
+    // حتى تمرّ كرات الضوء خلف الترويسة أيضاً كما في التصميم -- الترويسة لم
+    // تعد كتلة داكنة مصمتة تحجبها.
+    return AtmosphereBackground(
+      child: Stack(
+        children: [
+          Column(
+            children: [
+              ClinicTopBar(subtitle: _greetingLine()),
+              const OfflineSyncBanner(),
+              Expanded(
                 child: LoadingErrorEmpty(
                   isLoading: _isLoading,
                   errorMessage: _errorMessage,
@@ -160,104 +181,411 @@ class _PatientsListScreenState extends State<PatientsListScreen> {
                   child: _buildList(),
                 ),
               ),
+            ],
+          ),
+          // الزر العائم على الجهة الأخرى (end = يسار الشاشة تحت RTL)
+          // مطابقةً للتصميم. المسافة من الأسفل تُحسَب من فوق الشريط العائم
+          // لا من حافة الشاشة -- بعد extendBody صار الجسم يمتدّ خلف الشريط،
+          // فـ bottom:20 كان يخفي الزر تحته تماماً (انظر floatingNavInset).
+          PositionedDirectional(
+            bottom: floatingNavInset(context) + 16,
+            end: 18,
+            child: GradientFab(
+              onPressed: _openAddPatientSheet,
+              label: 'مريض جديد',
             ),
-          ],
-        ),
-        PositionedDirectional(
-          bottom: 20,
-          end: 20,
-          child: GradientFab(onPressed: _openAddPatientSheet),
-        ),
-      ],
+          ),
+        ],
+      ),
     );
   }
 
+  /// سطر "34 سنة · 0991234567" تحت الاسم -- نفس تركيبة بطاقة الموقع.
+  /// الهاتف بلا مسافات عمداً: أرقام مفصولة بمسافات تنقلب ترتيباً داخل نص
+  /// عربي (RTL) فتظهر "567 234 0991".
+  String _patientMetaLine(Patient patient) {
+    final parts = <String>[];
+    final age = patient.age;
+    if (age != null) parts.add('$age سنة');
+    final phone = patient.phone.replaceAll(RegExp(r'\s+'), '');
+    parts.add(phone.isEmpty ? 'بدون رقم هاتف' : phone);
+    return parts.join(' · ');
+  }
+
+  /// التصفية المحلية للشرائح الثلاث. "مسدّد" تعني: له فواتير فعلاً ولا
+  /// رصيد متبقٍ -- مريض بلا أي فاتورة ليس مسدّداً، هو ببساطة خارج التصنيف
+  /// المالي، فلا يظهر تحت أيٍّ من الشريحتين.
+  bool _matchesFilter(Patient patient) {
+    switch (_filterIndex) {
+      case 1:
+        return patient.remainingBalance > 0;
+      case 2:
+        return patient.totalTreatmentCost > 0 && patient.remainingBalance <= 0;
+      default:
+        return true;
+    }
+  }
+
   Widget _buildList() {
+    final surf = context.surface;
     final allPatients = _patients ?? [];
     final query = _searchQuery.trim();
-    final filtered = query.isEmpty
+    // البحث أولاً ثم التصفية: أعداد الشرائح محسوبة على نتيجة البحث لا على
+    // القائمة كاملةً، فلا يعِد الرقمُ الطبيبَ بمرضى لن يراهم وهو يبحث.
+    final searched = query.isEmpty
         ? allPatients
         : allPatients
             .where((patient) =>
                 patient.fullName.contains(query) || patient.phone.contains(query))
             .toList();
+    final filtered = searched.where(_matchesFilter).toList();
 
+    final dueCount = searched.where((p) => p.remainingBalance > 0).length;
+    final paidCount = searched
+        .where((p) => p.totalTreatmentCost > 0 && p.remainingBalance <= 0)
+        .length;
+
+    // العنصر 0 هو رأس القائمة (بطاقة الرأس + البحث + الشرائح) حتى يتمرّر مع
+    // المرضى بدل أن يبقى مثبّتاً فوقهم.
     return RefreshIndicator(
-      onRefresh: _load,
-      child: filtered.isEmpty
-          ? ListView(
+      onRefresh: refresh,
+      child: ListView.builder(
+        padding: EdgeInsets.fromLTRB(18, 12, 18, floatingNavInset(context) + 84),
+        itemCount: filtered.length + 1 + (filtered.isEmpty ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 120),
-                Icon(
-                  allPatients.isEmpty ? Icons.people_outline : Icons.search_off,
-                  size: 56,
-                  color: AppColors.slate400,
+                _HeroCard(stats: _stats),
+                const SizedBox(height: 15),
+                SoftSearchField(
+                  hintText: 'ابحث بالاسم أو رقم الهاتف',
+                  onChanged: (value) => setState(() => _searchQuery = value),
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  allPatients.isEmpty ? 'لا يوجد مرضى مسجّلون بعد' : 'لا نتائج مطابقة',
-                  textAlign: TextAlign.center,
+                const SizedBox(height: 13),
+                FilterChipsBar(
+                  labels: const ['الكل', 'عليه رصيد', 'مسدّد'],
+                  counts: [searched.length, dueCount, paidCount],
+                  selectedIndex: _filterIndex,
+                  onSelect: (value) => setState(() => _filterIndex = value),
                 ),
+                const SizedBox(height: 13),
               ],
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-              itemCount: filtered.length,
-              itemBuilder: (context, index) {
-                final patient = filtered[index];
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(20),
-                      onTap: () => _openPatientDetail(patient),
-                      child: SectionCard(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.chevron_left, color: AppColors.slate400),
-                            const SizedBox(width: 6),
-                            if (patient.phone.isNotEmpty)
-                              IconButton(
-                                icon: const Icon(Icons.call, color: AppColors.emerald600),
-                                onPressed: () => _callPatient(patient.phone),
-                              ),
-                            Expanded(
-                              // CrossAxisAlignment.start -- تحت اتجاه RTL العام
-                              // للتطبيق (main.dart) "start" = يمين، وليس .end
-                              // كما كان سابقاً (.end = يسار فعلياً) -- كان هذا
-                              // هو سبب ظهور اسم/هاتف المريض ملتصقين بالحافة
-                              // اليسرى لعمود Expanded الواسع بدل حافته اليمنى
-                              // الملاصقة لبقية الصف، فيبدوان "مكتوبين من
-                              // اليسار لليمين". أُصلح 2026-08-31.
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    patient.fullName,
-                                    textAlign: TextAlign.right,
-                                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    patient.phone.isEmpty ? 'بدون رقم هاتف' : patient.phone,
-                                    textAlign: TextAlign.right,
-                                    style: const TextStyle(color: AppColors.slate500, fontSize: 12.5),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            InitialsAvatar(name: patient.fullName),
-                          ],
-                        ),
-                      ),
+            );
+          }
+
+          if (filtered.isEmpty) {
+            final isSearchOrFilter = query.isNotEmpty || _filterIndex != 0;
+            return Padding(
+              padding: const EdgeInsets.only(top: 56),
+              child: Column(
+                children: [
+                  Icon(
+                    isSearchOrFilter ? Icons.search_off : Icons.people_outline,
+                    size: 52,
+                    color: surf.textMuted,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    isSearchOrFilter
+                        ? 'لا نتائج مطابقة'
+                        : 'لا يوجد مرضى مسجّلون بعد',
+                    textAlign: TextAlign.center,
+                    style: AppType.kufi(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: surf.textSecondary,
                     ),
                   ),
-                );
-              },
+                ],
+              ),
+            );
+          }
+
+          final patient = filtered[index - 1];
+          return _PatientCard(
+            patient: patient,
+            metaLine: _patientMetaLine(patient),
+            onOpen: () => _openPatientDetail(patient),
+            onCall: patient.phone.isEmpty
+                ? null
+                : () => _callPatient(patient.phone),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// بطاقة الرأس في شاشة المرضى -- حلّت محلّ بطاقات الإحصاء الداكنة الثلاث
+/// المتلاصقة. البنية نفسها في الوضعين: رقم مالي واحد كبير يحمل الثقل
+/// البصري، وتحته صفّ عدّادَين بحدّ علوي وفاصل رأسي. الإحصائيات هي نفسها
+/// التي كانت تُعرض سابقاً (GET /api/patients/stats) بلا أي تغيير في
+/// المصدر -- التغيير في العرض وحده.
+class _HeroCard extends StatelessWidget {
+  final PatientStats? stats;
+
+  const _HeroCard({required this.stats});
+
+  static String _formatCount(int? value) => value == null ? '--' : '$value';
+
+  static String _formatMoney(double? value) {
+    if (value == null) return '--';
+    final digits = value.round().abs().toString();
+    final buffer = StringBuffer(value < 0 ? '-' : '');
+    for (var i = 0; i < digits.length; i++) {
+      if (i > 0 && (digits.length - i) % 3 == 0) buffer.write(',');
+      buffer.write(digits[i]);
+    }
+    return buffer.toString();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final surf = context.surface;
+    final data = stats;
+    return HeroPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const LivePulseDot(),
+              const SizedBox(width: 7),
+              Flexible(
+                child: Text(
+                  'المستحقات المالية بالخارج',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                    color: surf.heroCaption,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          HeroBigNumber(
+            value: _formatMoney(data?.pendingBalances),
+            unit: 'ل.س',
+          ),
+          HeroStatsRow(
+            children: [
+              HeroMiniStat(
+                icon: Icons.groups_outlined,
+                value: _formatCount(data?.totalPatients),
+                label: 'مريض في العيادة',
+              ),
+              HeroMiniStat(
+                icon: Icons.event_available_outlined,
+                value: _formatCount(data?.activeAppointments),
+                label: 'موعد نشط',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// بطاقة المريض في القائمة. الترتيب انقلب عمّا كان: الصورة الرمزية أولاً
+/// (يمين الشاشة تحت RTL) ثم الاسم ثم أزرار الإجراءات في أقصى اليسار --
+/// وهذا ترتيب التصميم المعتمد، وهو أيضاً الأسهل مسحاً بالعين: العين تبدأ من
+/// الهوية لا من الأزرار.
+class _PatientCard extends StatelessWidget {
+  final Patient patient;
+  final String metaLine;
+  final VoidCallback onOpen;
+  final VoidCallback? onCall;
+
+  const _PatientCard({
+    required this.patient,
+    required this.metaLine,
+    required this.onOpen,
+    this.onCall,
+  });
+
+  /// ثلاثة تدرّجات للصورة الرمزية تتناوب حسب الاسم، فلا تبدو القائمة صفّاً
+  /// واحداً من البطاقات المتطابقة. الاختيار من مجموع رموز الاسم لا من
+  /// hashCode -- الأخير غير مضمون الثبات، فقد يتبدّل لون المريض بين تشغيل
+  /// وآخر بلا سبب مفهوم للطبيب.
+  static const _avatarGradients = <LinearGradient>[
+    LinearGradient(
+      begin: Alignment.topRight,
+      end: Alignment.bottomLeft,
+      colors: [Color(0xFF6366F1), Color(0xFF7C3AED)],
+    ),
+    LinearGradient(
+      begin: Alignment.topRight,
+      end: Alignment.bottomLeft,
+      colors: [Color(0xFF4338CA), Color(0xFF9333EA)],
+    ),
+    LinearGradient(
+      begin: Alignment.topRight,
+      end: Alignment.bottomLeft,
+      colors: [Color(0xFF0891B2), Color(0xFF4F46E5)],
+    ),
+  ];
+
+  String _formatAmount(double value) {
+    final digits = value.round().toString();
+    final buffer = StringBuffer();
+    for (var i = 0; i < digits.length; i++) {
+      if (i > 0 && (digits.length - i) % 3 == 0) buffer.write(',');
+      buffer.write(digits[i]);
+    }
+    return buffer.toString();
+  }
+
+  /// شارة الحالة المالية. نموذج Patient في التطبيق يحمل
+  /// totalTreatmentCost/paidAmount/remainingBalance (وهي بيانات لا تُرجعها
+  /// قائمة المرضى في الموقع أصلاً)، فالشارة تعرض الحالة المالية الحقيقية.
+  /// لا تُخترع أي قيمة.
+  Widget _statusPill(BuildContext context) {
+    final surf = context.surface;
+    final remaining = patient.remainingBalance;
+    final hasInvoice = patient.totalTreatmentCost > 0;
+
+    if (!hasInvoice) {
+      return SoftStatusPill(
+        label: 'لا فواتير بعد',
+        foreground: surf.pillNoneFg,
+        background: surf.pillNoneBg,
+        border: surf.pillNoneBorder,
+      );
+    }
+    if (remaining > 0) {
+      return SoftStatusPill(
+        label: 'متبقٍ ${_formatAmount(remaining)}',
+        foreground: surf.pillDueFg,
+        background: surf.pillDueBg,
+        border: surf.pillDueBorder,
+      );
+    }
+    return SoftStatusPill(
+      label: 'مسدّد بالكامل',
+      foreground: surf.pillPaidFg,
+      background: surf.pillPaidBg,
+      border: surf.pillPaidBorder,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final surf = context.surface;
+    var sum = 0;
+    for (final unit in patient.fullName.codeUnits) {
+      sum += unit;
+    }
+    final gradient = _avatarGradients[sum % _avatarGradients.length];
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onOpen,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: surf.cardBg,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: surf.cardBorder),
+              boxShadow: surf.cardShadow,
             ),
+            child: Row(
+              children: [
+                InitialsAvatar(
+                  name: patient.fullName,
+                  size: 42,
+                  borderRadius: 15,
+                  spacedInitials: true,
+                  gradient: gradient,
+                  foreground: Colors.white,
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  // CrossAxisAlignment.start -- تحت اتجاه RTL العام للتطبيق
+                  // "start" = يمين، و .end = يسار فعلياً (إصلاح 2026-08-31).
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              patient.fullName,
+                              textAlign: TextAlign.right,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppType.kufi(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                color: surf.textPrimary,
+                                letterSpacing: -0.2,
+                              ),
+                            ),
+                          ),
+                          // مريض أُنشئ/عُدّل أوفلاين وما زال بانتظار الاتصال
+                          // ليصل فعلاً للسيرفر (انظر OfflineAwareApiService).
+                          if (patient.isPendingSync) ...[
+                            const SizedBox(width: 6),
+                            Icon(Icons.cloud_off_outlined,
+                                size: 14, color: surf.pillDueFg),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        metaLine,
+                        textAlign: TextAlign.right,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppType.kufi(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: surf.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      _statusPill(context),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SoftIconButton(
+                      icon: Icons.folder_open_outlined,
+                      foreground: surf.iconBoxFg,
+                      tooltip: 'فتح الملف الطبي',
+                      onPressed: onOpen,
+                    ),
+                    if (onCall != null) ...[
+                      const SizedBox(height: 6),
+                      // الاتصال بديل زر الحذف الموجود في الموقع: الحذف من
+                      // قائمة على الهاتف أخطر بكثير من نفعه.
+                      SoftIconButton(
+                        icon: Icons.call_outlined,
+                        foreground: surf.pillPaidFg,
+                        tooltip: 'اتصال',
+                        onPressed: onCall!,
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -333,12 +661,13 @@ class _AddPatientSheetState extends State<_AddPatientSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final surf = context.surface;
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+        decoration: BoxDecoration(
+          color: surf.sheetBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
         child: Form(
@@ -352,13 +681,13 @@ class _AddPatientSheetState extends State<_AddPatientSheet> {
                   width: 42,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: AppColors.slate200,
+                    color: surf.divider,
                     borderRadius: BorderRadius.circular(999),
                   ),
                 ),
               ),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 'إضافة مريض جديد',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800),

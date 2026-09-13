@@ -6,6 +6,7 @@ import '../models/appointment.dart';
 import '../models/booking_settings.dart';
 import '../models/doctor_profile.dart';
 import '../models/finance_summary.dart';
+import '../models/finance_transaction.dart';
 import '../models/inventory_item.dart';
 import '../models/patient.dart';
 import '../models/patient_archive_file.dart';
@@ -679,6 +680,46 @@ class ApiService {
       _throwForResponse(response, 'تعذر تحميل التقرير المالي.');
     }
     return FinanceSummary.fromJson(_decodeBody(response) as Map<String, dynamic>);
+  }
+
+  /// آخر الحركات المالية للفترة نفسها التي يعرضها fetchFinanceSummary --
+  /// نفس المعاملات بالضبط حتى لا تنحرف القائمة عن المجاميع فوقها.
+  ///
+  /// المسار /api/finance/transactions أُضيف للـ backend في 2026-09-02.
+  /// قبل نشره على Render يعيد 404، ولذلك تتعامل الشاشة مع الفشل بإظهار
+  /// "لا توجد حركات" بدل رسالة خطأ فوق الأرقام الصحيحة.
+  Future<List<FinanceTransaction>> fetchFinanceTransactions({
+    int? year,
+    int? month,
+    int? day,
+    bool allTime = false,
+    int limit = 8,
+  }) async {
+    final headers = await _authHeaders();
+    final query = <String, String>{
+      if (allTime) 'all_time': 'true',
+      if (!allTime && year != null) 'year': '$year',
+      if (!allTime && month != null) 'month': '$month',
+      if (!allTime && day != null) 'day': '$day',
+      'limit': '$limit',
+    };
+    final uri = Uri.parse('${AppConfig.apiBaseUrl}/api/finance/transactions')
+        .replace(queryParameters: query);
+    late http.Response response;
+    try {
+      response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 25));
+    } catch (_) {
+      throw const ApiException('تعذر الاتصال بالسيرفر. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.');
+    }
+    if (response.statusCode != 200) {
+      _throwForResponse(response, 'تعذر تحميل آخر الحركات المالية.');
+    }
+    final decoded = _decodeBody(response);
+    if (decoded is! List) return const [];
+    return decoded
+        .whereType<Map<String, dynamic>>()
+        .map(FinanceTransaction.fromJson)
+        .toList();
   }
 
   /// الأشهر التي فيها حركات مالية فعلية لهذا الطبيب (لبناء قائمة اختيار

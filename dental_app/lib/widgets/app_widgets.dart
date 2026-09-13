@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../services/auth_storage.dart';
+import '../services/offline_sync_status.dart';
+
 import '../theme/app_theme.dart';
 
 /// زر بيضاوي بتدرج لوني -- نفس شكل الأزرار الرئيسية في الموقع (تسجيل
@@ -56,12 +59,23 @@ class GradientButton extends StatelessWidget {
                         Icon(icon, size: 18, color: Colors.white),
                         const SizedBox(width: 8),
                       ],
-                      Text(
-                        label,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 15,
+                      // Noto Sans Arabic أعرض من Tajawal عند نفس المقاس،
+                      // فنصوص كانت تتّسع صارت تلتفّ سطرين داخل زر نصف
+                      // العرض ("تخلّف عن الموعد"). FittedBox يصغّرها قليلاً
+                      // بدل أن تنكسر، و maxLines يمنع الالتفاف نهائياً.
+                      Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            softWrap: false,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -109,6 +123,32 @@ class StatusBadge extends StatelessWidget {
   }
 }
 
+/// المسافة التي يحجزها الشريط السفلي العائم من حافة الشاشة السفلية:
+/// هامشه (16) + ارتفاعه (66) + منطقة الإيماءات الآمنة في الجهاز.
+///
+/// **لماذا يلزم هذا:** بعد `extendBody: true` في home_screen صار جسم كل
+/// تبويب يمتدّ خلف الشريط حتى حافة الشاشة، فأي `bottom:` يُقاس من الحافة لا
+/// من أعلى الشريط. الزر العائم الذي كان على `bottom: 20` صار مختبئاً خلف
+/// الشريط تماماً. كل ما يجلس أسفل الشاشة (زر عائم، حشوة قائمة) يجمع هذه
+/// القيمة أولاً.
+///
+/// **‼️ `viewPadding` وليس `padding`:** داخل جسم Scaffold مضبوط على
+/// `extendBody: true` تستبدل Flutter نفسها قيمة `padding.bottom` بارتفاع
+/// الشريط السفلي **كاملاً** (`_BodyBuilder`: `max(padding.bottom,
+/// size.height - bottomNavigationBarTop)`) حتى يتفادى أي `SafeArea` داخل
+/// الجسم الشريطَ تلقائياً. فحساب `16 + 66 + padding.bottom` هنا كان يجمع
+/// الشريط مرتين ⇒ الزر يطفو ~١٤٠ بكسل فوق مكانه. أما `viewPadding` فلا
+/// تلمسها Flutter أبداً: تبقى منطقة إيماءات الجهاز الحقيقية وحدها.
+///
+/// نأخذ `max` بين القراءتين لأنهما تتساويان تحت `extendBody: true` (كلتاهما
+/// = أعلى الشريط)، وعند غيابه تبقى `padding.bottom` منطقة إيماءات فقط
+/// فيفوز الحساب الصريح. الصيغة صحيحة في الحالتين ولا تضاعف في أيّهما.
+double floatingNavInset(BuildContext context) {
+  final mq = MediaQuery.of(context);
+  final computed = 16 + 66 + mq.viewPadding.bottom;
+  return mq.padding.bottom > computed ? mq.padding.bottom : computed;
+}
+
 /// بطاقة بيضاء بحواف مدوّرة وحدود رفيعة وظل خفيف -- نفس شكل كل بطاقات
 /// الموقع/التصميم (rounded-2xl border-slate-200 shadow).
 class SectionCard extends StatelessWidget {
@@ -116,29 +156,35 @@ class SectionCard extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final double radius;
 
+  /// سطح مصمت بدل الزجاج الشفّاف. الزجاج جميل فوق خلفية الصفحة، لكنه يفضح
+  /// ما تحته: بطاقة تطفو فوق ترويسة متدرّجة (بطاقة ملف المريض مثلاً، مسحوبة
+  /// 30px فوق الترويسة البنفسجية) يظهر التدرّج من خلال نصفها العلوي ويتوقّف
+  /// فجأة عند حدّ الترويسة، فتبدو **مقطوعة أفقياً**. أي بطاقة تتقاطع مع سطح
+  /// ملوّن آخر يجب أن تكون معتمة.
+  final bool opaque;
+
   const SectionCard({
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(16),
     this.radius = 20,
+    this.opaque = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    // 2026-09-05: صارت تقرأ AppSurface بدل الأبيض/slate200 الثابتين، فتصبح
+    // زجاجية شفّافة في الوضع الليلي ومصمتة بظلّ نيلي ناعم في النهاري -- بلا
+    // أي تغيير في توقيعها، فكل مستدعياتها القائمة تعمل كما هي.
+    final surf = context.surface;
     return Container(
       width: double.infinity,
       padding: padding,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: opaque ? surf.sheetBg : surf.cardBg,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: AppColors.slate200),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.slate900.withValues(alpha: 0.06),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        border: Border.all(color: surf.cardBorder),
+        boxShadow: surf.cardShadow,
       ),
       child: child,
     );
@@ -152,6 +198,12 @@ class InitialsAvatar extends StatelessWidget {
   final double size;
   final Color background;
   final Color foreground;
+  /// تدرّج بدل اللون المسطّح -- حين يُمرَّر يتجاهل [background].
+  final Gradient? gradient;
+  /// نصف قطر الحواف. null = دائرة كاملة (السلوك الأصلي).
+  final double? borderRadius;
+  /// مسافة بين الحرفين، لمطابقة "م ع" في بطاقة المريض بالموقع.
+  final bool spacedInitials;
 
   const InitialsAvatar({
     super.key,
@@ -159,6 +211,9 @@ class InitialsAvatar extends StatelessWidget {
     this.size = 46,
     this.background = AppColors.indigo50,
     this.foreground = AppColors.indigo700,
+    this.gradient,
+    this.borderRadius,
+    this.spacedInitials = false,
   });
 
   String get _initials {
@@ -168,7 +223,10 @@ class InitialsAvatar extends StatelessWidget {
     final first = parts.isNotEmpty && parts[0].isNotEmpty ? parts[0][0] : '';
     final second =
         parts.length > 1 && parts[1].isNotEmpty ? parts[1][0] : '';
-    final result = '$first$second'.trim();
+    final joined = spacedInitials && first.isNotEmpty && second.isNotEmpty
+        ? '$first $second'
+        : '$first$second';
+    final result = joined.trim();
     return result.isEmpty ? trimmed[0] : result;
   }
 
@@ -178,7 +236,13 @@ class InitialsAvatar extends StatelessWidget {
       width: size,
       height: size,
       alignment: Alignment.center,
-      decoration: BoxDecoration(color: background, shape: BoxShape.circle),
+      decoration: BoxDecoration(
+        color: gradient == null ? background : null,
+        gradient: gradient,
+        shape: borderRadius == null ? BoxShape.circle : BoxShape.rectangle,
+        borderRadius:
+            borderRadius == null ? null : BorderRadius.circular(borderRadius!),
+      ),
       child: Text(
         _initials,
         style: TextStyle(
@@ -320,6 +384,10 @@ class AppointmentUtilityButton extends StatelessWidget {
   final AppointmentUtilityStyle style;
   final bool isLoading;
 
+  /// مربّع 40x40 بالأيقونة وحدها -- [label] يبقى مطلوباً ويُستخدم كـ Tooltip
+  /// ولقارئ الشاشة. هذا ما تعرضه بطاقة الموقع على الجوال بعد إخفاء النصوص.
+  final bool iconOnly;
+
   const AppointmentUtilityButton({
     super.key,
     required this.label,
@@ -327,6 +395,7 @@ class AppointmentUtilityButton extends StatelessWidget {
     required this.onPressed,
     this.style = AppointmentUtilityStyle.neutral,
     this.isLoading = false,
+    this.iconOnly = false,
   });
 
   @override
@@ -361,10 +430,15 @@ class AppointmentUtilityButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           onTap: disabled ? null : onPressed,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            width: iconOnly ? 40 : null,
+            height: iconOnly ? 40 : null,
+            alignment: iconOnly ? Alignment.center : null,
+            padding: iconOnly
+                ? null
+                : const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
             decoration: BoxDecoration(
               gradient: gradient,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(iconOnly ? 13 : 12),
               border: Border.all(color: borderColor),
             ),
             child: isLoading
@@ -376,25 +450,32 @@ class AppointmentUtilityButton extends StatelessWidget {
                       valueColor: AlwaysStoppedAnimation(contentColor),
                     ),
                   )
-                : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(icon, size: 15, color: contentColor),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          label,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            color: contentColor,
+                : iconOnly
+                    ? Tooltip(
+                        message: label,
+                        child: Icon(icon, size: 17, color: contentColor),
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(icon, size: 15, color: contentColor),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              label,
+                              maxLines: 1,
+                              softWrap: false,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: contentColor,
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
-                    ],
-                  ),
           ),
         ),
       ),
@@ -425,6 +506,7 @@ class LoadingErrorEmpty extends StatelessWidget {
       return const Center(child: CircularProgressIndicator());
     }
     if (errorMessage != null) {
+      final surf = context.surface;
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -434,13 +516,13 @@ class LoadingErrorEmpty extends StatelessWidget {
               Icon(
                 isLocked ? Icons.lock_outline : Icons.error_outline,
                 size: 44,
-                color: AppColors.slate400,
+                color: surf.textMuted,
               ),
               const SizedBox(height: 12),
               Text(
                 errorMessage!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.slate600),
+                style: TextStyle(color: surf.textSecondary),
               ),
               const SizedBox(height: 16),
               OutlinedButton(onPressed: onRetry, child: const Text('إعادة المحاولة')),
@@ -679,45 +761,110 @@ class _AnimatedHeroHeaderState extends State<AnimatedHeroHeader>
 /// خلفية جوّية فاتحة -- دوائر ضبابية ملوّنة معلّقة خلف المحتوى، نفس أسلوب
 /// الخلفية في كل صفحات الموقع الفاتحة (index.html وغيرها) بدل الخلفية
 /// البيضاء/الرمادية المسطّحة السابقة. تُستخدم كغلاف Stack خلف محتوى الشاشة.
-class AtmosphereBackground extends StatelessWidget {
+/// 2026-09-05 -- أُعيدت كتابتها لنظام «الليل النيلي»: ثلاث كرات ضوء تنجرف
+/// ببطء خلف المحتوى، وهي المصدر البصري الوحيد للعمق في الوضعين. ليلاً هي
+/// مصدر الإضاءة فعلياً على سطح ‎#07061A؛ نهاراً تصير تلويناً بنفسجياً خفيفاً
+/// على الأبيض -- نفس المواضع ونفس التوقيت، اللون وحده يتبدّل.
+///
+/// التمويه: تدرّج شعاعي يتلاشى إلى شفاف كامل، لا `ImageFiltered` بـ blur --
+/// الأخير يعيد رسم ثلاث طبقات ضبابية في كل إطار على شاشة متحرّكة أصلاً،
+/// والفرق البصري لا يُذكر مقابل كلفته على أجهزة الفئة المتوسطة.
+class AtmosphereBackground extends StatefulWidget {
   final Widget child;
 
   const AtmosphereBackground({super.key, required this.child});
 
   @override
+  State<AtmosphereBackground> createState() => _AtmosphereBackgroundState();
+}
+
+class _AtmosphereBackgroundState extends State<AtmosphereBackground>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 16),
+  )..repeat(reverse: true);
+
+  late final Animation<double> _t = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeInOut,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Widget _orb({
+    required double size,
+    required Color color,
+    required Offset drift,
+    double? top,
+    double? bottom,
+    double? start,
+    double? end,
+  }) {
+    return PositionedDirectional(
+      top: top,
+      bottom: bottom,
+      start: start,
+      end: end,
+      child: IgnorePointer(
+        child: AnimatedBuilder(
+          animation: _t,
+          builder: (context, child) => Transform.translate(
+            offset: Offset(drift.dx * _t.value, drift.dy * _t.value),
+            child: child,
+          ),
+          child: Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [color, color.withValues(alpha: 0)],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Positioned(
-          top: 140,
-          right: -50,
-          child: IgnorePointer(
-            child: Container(
-              width: 200,
-              height: 200,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.indigo600.withValues(alpha: .09),
-              ),
-            ),
+    final surf = context.surface;
+    return ColoredBox(
+      color: surf.pageBg,
+      // Stack يقصّ افتراضياً (Clip.hardEdge)، وهذا مقصود: الكرات موضوعة
+      // بإزاحات سالبة فتظهر أنصافها فقط من حواف الشاشة كما في التصميم.
+      child: Stack(
+        children: [
+          _orb(
+            size: 300,
+            color: surf.orb1,
+            top: -120,
+            end: -80,
+            drift: const Offset(-22, 26),
           ),
-        ),
-        Positioned(
-          top: 320,
-          left: -60,
-          child: IgnorePointer(
-            child: Container(
-              width: 220,
-              height: 220,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.violet600.withValues(alpha: .07),
-              ),
-            ),
+          _orb(
+            size: 260,
+            color: surf.orb2,
+            top: 120,
+            start: -110,
+            drift: const Offset(26, -20),
           ),
-        ),
-        child,
-      ],
+          _orb(
+            size: 240,
+            color: surf.orb3,
+            bottom: -70,
+            end: -60,
+            drift: const Offset(22, -26),
+          ),
+          widget.child,
+        ],
+      ),
     );
   }
 }
@@ -730,7 +877,16 @@ class GlassNavItem {
   final IconData activeIcon;
   final String label;
 
-  const GlassNavItem({required this.icon, required this.activeIcon, required this.label});
+  /// عدد يظهر في شارة حمراء فوق الأيقونة (طلبات الحجز المعلّقة) -- 0 يعني
+  /// بلا شارة. نفس شارة notification-badge.js على تبويب "المواعيد" بالموقع.
+  final int badgeCount;
+
+  const GlassNavItem({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+    this.badgeCount = 0,
+  });
 }
 
 class GlassBottomNav extends StatelessWidget {
@@ -745,47 +901,95 @@ class GlassBottomNav extends StatelessWidget {
     required this.items,
   });
 
+  /// حصّة العرض التي يأخذها التبويب النشط مقابل ١ لغيره -- هي `flex: 1.45`
+  /// في التصميم. العرض يُحسَب يدوياً بدل `Expanded(flex:)` لأن flex عدد صحيح
+  /// ولا يتحرّك: تغييره يقفز قفزة واحدة، بينما AnimatedContainer بعرض محسوب
+  /// ينزلق فعلاً.
+  static const _activeFlex = 1.45;
+  static const _gap = 4.0;
+  static const _innerPadding = 8.0;
+
   @override
   Widget build(BuildContext context) {
+    final surf = context.surface;
     final bottomInset = MediaQuery.of(context).padding.bottom;
-    return Container(
-      padding: EdgeInsets.fromLTRB(10, 10, 10, 10 + bottomInset),
-      decoration: BoxDecoration(
-        gradient: AppColors.bottomNavGradient,
-        border: Border(top: BorderSide(color: Colors.white.withValues(alpha: .08))),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          for (var i = 0; i < items.length; i++) _tab(i),
-        ],
+
+    // 2026-09-05: الشريط صار **عائماً** لا ملتصقاً بحافة الشاشة -- كبسولة
+    // بحوافّ 26 وهامش 16 من كل جانب، تماماً كما في التصميم المعتمد. لهذا
+    // اختفت الحواف العلوية وحدها (BorderRadius.vertical) وصار الحدّ محيطاً.
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + bottomInset),
+      child: Container(
+        height: 66,
+        padding: const EdgeInsets.all(_innerPadding),
+        decoration: BoxDecoration(
+          color: surf.navBg,
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: surf.navBorder),
+          boxShadow: surf.navShadow,
+        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // نصف بكسل احتياطي: مجموع العروض المحسوبة + الفواصل يساوي العرض
+            // المتاح بالضبط رياضياً، وأي خطأ فاصلة عائمة يجعل Row يبلّغ عن
+            // تجاوز. الخصم أرخص من التعامل مع شريط عليه خطوط التحذير.
+            final available =
+                constraints.maxWidth - _gap * (items.length - 1) - 0.5;
+            // مجموع الحصص: النشط 1.45 والبقية 1 لكلٍّ.
+            final unit = available / (items.length - 1 + _activeFlex);
+            return Row(
+              // stretch حتى تملأ كبسولة التبويب النشط ارتفاع الشريط كاملاً
+              // بدل أن تنكمش على ارتفاع الأيقونة والنص. آمنة هنا تحديداً لأن
+              // الأب حاوية بارتفاع ثابت (66) لا قائمة قابلة للتمرير -- تلك
+              // الحالة هي التي تعطي maxHeight لانهائياً وتُسقط الإطار.
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < items.length; i++) ...[
+                  if (i > 0) const SizedBox(width: _gap),
+                  _tab(
+                    context: context,
+                    index: i,
+                    width: i == currentIndex ? unit * _activeFlex : unit,
+                    surf: surf,
+                  ),
+                ],
+              ],
+            );
+          },
+        ),
       ),
     );
   }
 
-  Widget _tab(int index) {
+  Widget _tab({
+    required BuildContext context,
+    required int index,
+    required double width,
+    required AppSurface surf,
+  }) {
     final selected = index == currentIndex;
     final item = items[index];
-    final color = selected ? AppColors.cyan300 : Colors.white.withValues(alpha: .62);
+    final color = selected ? surf.onAccent : surf.navInactive;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(19),
         onTap: () => onTap(index),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+          duration: const Duration(milliseconds: 340),
+          curve: Curves.easeOutCubic,
+          width: width,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            color: selected ? AppColors.cyan400.withValues(alpha: .14) : Colors.transparent,
-            border: selected
-                ? Border.all(color: AppColors.cyan400.withValues(alpha: .30))
-                : null,
+            borderRadius: BorderRadius.circular(19),
+            gradient: selected ? surf.accentGradient : null,
             boxShadow: selected
                 ? [
                     BoxShadow(
-                      color: AppColors.cyan400.withValues(alpha: .18),
-                      blurRadius: 18,
+                      color: surf.accentGlow,
+                      blurRadius: 22,
+                      offset: const Offset(0, 8),
                     ),
                   ]
                 : null,
@@ -793,16 +997,281 @@ class GlassBottomNav extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(selected ? item.activeIcon : item.icon, size: 21, color: color),
-              const SizedBox(height: 4),
+              // Stack مع clipBehavior: none حتى تخرج الشارة عن حدود الأيقونة
+              // بدل أن تُقصّ عند حافتها.
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(selected ? item.activeIcon : item.icon,
+                      size: 20, color: color),
+                  if (item.badgeCount > 0)
+                    PositionedDirectional(
+                      top: -5,
+                      end: -8,
+                      child: Container(
+                        constraints: const BoxConstraints(minWidth: 16),
+                        height: 16,
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppColors.rose500,
+                          borderRadius: BorderRadius.circular(999),
+                          // حلقة بلون الشريط نفسه تفصل الشارة عن الأيقونة
+                          // مهما كان الوضع -- بديل ‎box-shadow 0 0 0 2px
+                          // في التصميم.
+                          border: Border.all(color: surf.navBg, width: 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.rose500.withValues(alpha: .6),
+                              blurRadius: 10,
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          item.badgeCount > 99 ? '99+' : '${item.badgeCount}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w800,
+                            height: 1,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 3),
               Text(
                 item.label,
-                style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: color),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                  height: 1.25,
+                ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// ترويسة علوية موحّدة لكل تبويبات التطبيق -- طبق الأصل عن الترويسة الداكنة
+/// المضغوطة في الموقع على الجوال: مربّع الشعار، اسم العيادة، ثم شارة الباقة.
+/// مبنية فوق [AnimatedHeroHeader] فتحتفظ بانيميشن التدرّج "المتنفّس" الذي
+/// كانت عليه ترويسات الشاشات قبل التوحيد.
+class ClinicTopBar extends StatefulWidget {
+  /// عنصر اختياري في أقصى اليسار (زر إشعارات، رجوع، إضافة...) -- المكان
+  /// الذي تضع فيه صفحات الموقع أزرارها في الترويسة نفسها.
+  final Widget? trailing;
+
+  /// سطر رمادي صغير تحت اسم العيادة (تحية، تاريخ اليوم، عدد المواعيد...).
+  /// اختياري: الشاشات التي لا تمرّره تبقى بسطر واحد كما كانت.
+  final String? subtitle;
+
+  const ClinicTopBar({super.key, this.trailing, this.subtitle});
+
+  @override
+  State<ClinicTopBar> createState() => _ClinicTopBarState();
+}
+
+class _ClinicTopBarState extends State<ClinicTopBar> {
+  final AuthStorage _authStorage = AuthStorage();
+  String _clinicName = 'عيادة الطبيب';
+  String _tier = 'standard';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final name = await _authStorage.getDoctorName();
+    final tier = await _authStorage.getTier();
+    if (!mounted) return;
+    setState(() {
+      if (name != null && name.trim().isNotEmpty) {
+        _clinicName = 'عيادة ${name.trim()}';
+      }
+      _tier = tier ?? 'standard';
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 2026-09-05: لم تعد ترويسة داكنة بتدرّج -- في نظام «الليل النيلي»
+    // الترويسة تجلس مباشرة على خلفية الصفحة (وكرات الضوء تمرّ خلفها)، فصارت
+    // شفّافة تماماً وتستمدّ ألوانها من AppSurface. AnimatedHeroHeader بقيت
+    // موجودة كما هي للشاشات التي ما زالت تستعملها (ملف المريض، حسابي...).
+    final surf = context.surface;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        18,
+        MediaQuery.of(context).padding.top + 14,
+        18,
+        0,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: surf.iconBoxBg,
+              border: Border.all(color: surf.iconBoxBorder),
+              borderRadius: BorderRadius.circular(15),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.violet600.withValues(alpha: .22),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Icon(Icons.medical_services_outlined,
+                size: 20, color: surf.iconBoxFg),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _clinicName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
+                  style: AppType.kufi(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: surf.textPrimary,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                if (widget.subtitle != null) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    widget.subtitle!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w500,
+                      color: surf.textSecondary,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          // شارة الباقة مرسومة هنا بتوكنات AppSurface بدل [TierBadge] --
+          // تلك مبنية على أبيض شفاف فوق ترويسة داكنة، وتختفي تماماً على
+          // خلفية بيضاء. TierBadge تُركت كما هي لأن شاشات أخرى ما زالت
+          // تضعها فوق ترويسات داكنة.
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: surf.tierBorder),
+              color: surf.tierBg,
+            ),
+            child: Text(
+              _tier.toLowerCase() == 'premium' ? 'Premium' : 'Standard',
+              style: TextStyle(
+                color: surf.tierFg,
+                fontSize: 9.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          if (widget.trailing != null) ...[
+            const SizedBox(width: 6),
+            widget.trailing!,
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// شريط رفيع يعكس حالة المزامنة الأوفلاين (انظر OfflineSyncStatus/
+/// OfflineAwareApiService) -- يظهر فقط عند وجود ما يستحق إخبار الطبيب به
+/// (عمليات بانتظار الاتصال، أو عمليات رفضها السيرفر رفضاً حقيقياً)، ويختفي
+/// تلقائياً بعد اكتمال المزامنة. عام (غير خاص بملف واحد) منذ 2026-09-02 --
+/// كان خاصاً بشاشة المواعيد وحدها (_OfflineSyncBanner في
+/// today_schedule_screen.dart) قبل توسيع دعم العمل بدون إنترنت لبقية
+/// الشاشات (مرضى/مخزون/مالية/ملف مريض)، فنُقل هنا ليُستخدَم من الجميع بلا
+/// تكرار. الرسائل عامة عمداً ("عملية/عمليات") لأنها لا تميّز نوع الكيان
+/// (موعد/مريض/مادة مخزون/فاتورة) -- التفاصيل تظهر بدلاً من ذلك كأيقونة
+/// "قيد المزامنة" صغيرة بجانب كل سجل معلَّق تحديداً.
+class OfflineSyncBanner extends StatelessWidget {
+  const OfflineSyncBanner({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<int>(
+      valueListenable: OfflineSyncStatus.instance.pendingCount,
+      builder: (context, pending, _) {
+        return ValueListenableBuilder<int>(
+          valueListenable: OfflineSyncStatus.instance.failedCount,
+          builder: (context, failed, _) {
+            if (pending == 0 && failed == 0) return const SizedBox.shrink();
+            return ValueListenableBuilder<bool>(
+              valueListenable: OfflineSyncStatus.instance.isOnline,
+              builder: (context, online, _) {
+                final messages = <String>[];
+                if (pending > 0) {
+                  messages.add(online
+                      ? 'جارٍ مزامنة $pending ${pending == 1 ? 'عملية' : 'عمليات'}...'
+                      : 'غير متصل بالإنترنت -- $pending ${pending == 1 ? 'عملية' : 'عمليات'} ستُرفَع تلقائياً عند عودة الاتصال');
+                }
+                if (failed > 0) {
+                  messages.add(
+                      'تعذّرت مزامنة $failed ${failed == 1 ? 'عملية' : 'عمليات'} بسبب رفض من السيرفر');
+                }
+                final isWarning = failed > 0 || !online;
+                final surf = context.surface;
+                return Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                  color: isWarning ? surf.warnBg : surf.chipBg,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        online ? Icons.sync : Icons.cloud_off_outlined,
+                        size: 15,
+                        color: isWarning ? surf.warnFg : surf.textSecondary,
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          messages.join(' -- '),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: isWarning ? surf.warnFg : surf.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -814,32 +1283,71 @@ class GradientFab extends StatelessWidget {
   final VoidCallback? onPressed;
   final IconData icon;
 
-  const GradientFab({super.key, required this.onPressed, this.icon = Icons.add});
+  /// حين يُمرَّر نص يصبح الزر شريطاً ممتداً بأيقونة ونص (نفس زر "مريض
+  /// جديد" العائم في الموقع)، وإلا يبقى دائرة 56px كما كان.
+  final String? label;
+
+  const GradientFab({
+    super.key,
+    required this.onPressed,
+    this.icon = Icons.add,
+    this.label,
+  });
 
   @override
   Widget build(BuildContext context) {
+    // 2026-09-05: صار كبسولة كاملة الاستدارة (999) بتدرّج التمييز وتوهّجه من
+    // AppSurface، بدل مستطيل نصف قطره 20 بتدرّج نيلي/بنفسجي ثابت. النصّ
+    // والأيقونة يستعملان onAccent لأن التمييز الليلي فاتح ويحتاج نصّاً
+    // داكناً، بينما النهاري مُغمَّق ويحتاج نصّاً أبيض.
+    final surf = context.surface;
+    final text = label;
+    final shape = text == null
+        ? const CircleBorder()
+        : RoundedRectangleBorder(borderRadius: BorderRadius.circular(999));
+
     return Material(
       color: Colors.transparent,
-      shape: const CircleBorder(),
+      shape: shape,
       child: InkWell(
-        customBorder: const CircleBorder(),
+        customBorder: shape,
         onTap: onPressed,
         child: Container(
-          width: 56,
-          height: 56,
+          width: text == null ? 56 : null,
+          height: text == null ? 56 : 52,
           alignment: Alignment.center,
+          padding: text == null
+              ? null
+              : const EdgeInsets.symmetric(horizontal: 20),
           decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: AppColors.primaryButtonGradient,
+            shape: text == null ? BoxShape.circle : BoxShape.rectangle,
+            borderRadius: text == null ? null : BorderRadius.circular(999),
+            gradient: surf.accentGradient,
             boxShadow: [
               BoxShadow(
-                color: AppColors.indigoAccent.withValues(alpha: .40),
-                blurRadius: 18,
-                offset: const Offset(0, 8),
+                color: surf.accentGlow,
+                blurRadius: 28,
+                offset: const Offset(0, 12),
               ),
             ],
           ),
-          child: Icon(icon, color: Colors.white, size: 26),
+          child: text == null
+              ? Icon(icon, color: surf.onAccent, size: 26)
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, color: surf.onAccent, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      text,
+                      style: AppType.kufi(
+                        color: surf.onAccent,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
         ),
       ),
     );
@@ -874,12 +1382,13 @@ class AuthFieldWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final surf = context.surface;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.pageBg.withValues(alpha: 0.7),
+        color: surf.chipBg,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.slate200),
+        border: Border.all(color: surf.cardBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -890,10 +1399,10 @@ class AuthFieldWrapper extends StatelessWidget {
               Text(
                 label,
                 textAlign: TextAlign.right,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.slate700,
+                  color: surf.textSecondary,
                 ),
               ),
               if (trailing != null) trailing!,
@@ -914,26 +1423,32 @@ class AuthFieldWrapper extends StatelessWidget {
 /// ديكوريشن حقل الإدخال الأبيض داخل [AuthFieldWrapper] -- مطابق تماماً
 /// لِـ `rounded-xl border-slate-300 bg-white focus:border-indigo-500
 /// focus:ring-4 focus:ring-indigo-100` في login.html/register.html.
-InputDecoration authInputDecoration({required String hint}) {
+/// [context] اختياري للتوافق مع أي استدعاء قديم؛ حين يُمرَّر تتبع ألوان
+/// الحقل وضع الإضاءة بدل أن تبقى بيضاء ثابتة داخل بطاقة داكنة.
+InputDecoration authInputDecoration({
+  required String hint,
+  BuildContext? context,
+}) {
+  final surf = context == null ? AppSurface.light : context.surface;
   final radius = BorderRadius.circular(12);
   return InputDecoration(
     isDense: true,
     hintText: hint,
-    hintStyle: const TextStyle(color: AppColors.slate400, fontSize: 13),
+    hintStyle: TextStyle(color: surf.fieldHint, fontSize: 13),
     filled: true,
-    fillColor: Colors.white,
+    fillColor: surf.fieldBg,
     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
     border: OutlineInputBorder(
       borderRadius: radius,
-      borderSide: const BorderSide(color: AppColors.slate300),
+      borderSide: BorderSide(color: surf.fieldBorder),
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: radius,
-      borderSide: const BorderSide(color: AppColors.slate300),
+      borderSide: BorderSide(color: surf.fieldBorder),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: radius,
-      borderSide: const BorderSide(color: AppColors.indigo500, width: 1.6),
+      borderSide: BorderSide(color: surf.accentSolid, width: 1.6),
     ),
     errorBorder: OutlineInputBorder(
       borderRadius: radius,
@@ -968,13 +1483,14 @@ class AuthStatusBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final surf = context.surface;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.indigo50.withValues(alpha: 0.8),
+        color: surf.iconBoxBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.indigo100),
+        border: Border.all(color: surf.iconBoxBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -984,10 +1500,10 @@ class AuthStatusBanner extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.indigo800,
+                  color: surf.isDark ? surf.textPrimary : AppColors.indigo800,
                 ),
               ),
               Container(
@@ -1025,7 +1541,7 @@ class AuthStatusBanner extends StatelessWidget {
               // الملف -- انظر تعليق الألوان في app_theme.dart)، وهي المطابقة
               // الصحيحة لِـ text-indigo-800/80 في login.html/register.html
               // بالموقع (وليس indigo800 التي تحمل قيمة indigo-900 فعلياً).
-              color: AppColors.indigo700.withValues(alpha: 0.8),
+              color: surf.iconBoxFg.withValues(alpha: 0.85),
             ),
           ),
         ],
@@ -1188,9 +1704,15 @@ class AuthMessageBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = isError ? AppColors.rose200 : AppColors.emerald200;
-    final bgColor = isError ? AppColors.rose50 : AppColors.emerald50;
-    final textColor = isError ? AppColors.rose700text : AppColors.emerald700text;
+    final surf = context.surface;
+    // الدلالة ثابتة (أحمر خطأ، أخضر نجاح) لكن الدرجات الفاتحة المصمتة
+    // rose50/emerald50 تصير بقعتين ساطعتين داخل بطاقة داكنة.
+    final base = isError ? AppColors.rose500 : AppColors.emerald500;
+    final borderColor = base.withValues(alpha: surf.isDark ? .30 : .35);
+    final bgColor = base.withValues(alpha: surf.isDark ? .12 : .08);
+    final textColor = isError
+        ? (surf.isDark ? AppColors.rose400 : AppColors.rose700text)
+        : surf.pillPaidFg;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -1218,19 +1740,16 @@ class AuthPageBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 2026-09-06: كانت تدرّجاً نيلياً فاتحاً ثابتاً، فتبقى شاشات المصادقة
+    // نهارية داخل الوضع الليلي ثم يقفز التطبيق إلى ‎#07061A بعد الدخول
+    // مباشرة. صارت تقرأ نفس توكنات AtmosphereBackground: السطح وكرات الضوء
+    // بمواضعها -- بلا انجراف هنا عمداً، فشاشة الدخول لحظة سكون لا حركة.
+    final surf = context.surface;
     return Positioned.fill(
       child: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [AppColors.pageBg, AppColors.indigo50, AppColors.indigo100],
-          ),
-        ),
+        decoration: BoxDecoration(color: surf.pageBg),
         child: Stack(
           children: [
-            // نفس radial-gradient(circle_at_top_left, rgba(99,102,241,0.22),
-            // transparent_30%) في الموقع.
             Positioned.fill(
               child: IgnorePointer(
                 child: DecoratedBox(
@@ -1238,23 +1757,27 @@ class AuthPageBackground extends StatelessWidget {
                     gradient: RadialGradient(
                       center: Alignment.topLeft,
                       radius: 1.0,
-                      colors: [AppColors.indigo500.withValues(alpha: 0.22), Colors.transparent],
+                      colors: [
+                        surf.accentSolid
+                            .withValues(alpha: surf.isDark ? 0.18 : 0.16),
+                        Colors.transparent,
+                      ],
                       stops: const [0.0, 0.3],
                     ),
                   ),
                 ),
               ),
             ),
-            Positioned(top: 60, right: -50, child: _blurCircle(180, AppColors.indigo200, 0.35)),
-            Positioned(top: 220, left: -60, child: _blurCircle(200, const Color(0xFFC4B5FD), 0.25)),
-            Positioned(bottom: 0, right: 60, child: _blurCircle(190, AppColors.indigo200, 0.25)),
+            Positioned(top: 60, right: -50, child: _blurCircle(220, surf.orb1)),
+            Positioned(top: 220, left: -60, child: _blurCircle(240, surf.orb2)),
+            Positioned(bottom: 0, right: 60, child: _blurCircle(200, surf.orb3)),
           ],
         ),
       ),
     );
   }
 
-  Widget _blurCircle(double size, Color color, double alpha) {
+  Widget _blurCircle(double size, Color color) {
     return IgnorePointer(
       child: Container(
         width: size,
@@ -1262,9 +1785,586 @@ class AuthPageBackground extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: RadialGradient(
-            colors: [color.withValues(alpha: alpha), color.withValues(alpha: 0)],
+            colors: [color, color.withValues(alpha: 0)],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// مكوّنات نظام «الليل النيلي» (2026-09-05)
+// ═══════════════════════════════════════════════════════════════════════════
+// بنية واحدة لوضعين لونيين: كل ما هنا يقرأ [AppSurface] عبر `context.surface`
+// ولا يحمل أي لون ثابت. المقاسات وأنصاف الأقطار والحركات متطابقة في
+// الوضعين -- اللون وحده يتبدّل، وهذا هو نص طلب المستخدم.
+
+/// بطاقة الرأس: الحاوية التي تحمل الرقم الكبير وصفّ العدّادين في أعلى كل
+/// تبويب. تحمل ثلاث طبقات فوق بعضها:
+///   1. لون السطح + الحدّ + الظلّ (من AppSurface).
+///   2. غَسلة شعاعية بنفسجية في الزاوية العليا -- تعطي البطاقة عمقاً بلا
+///      تدرّج صريح يُثقل التصميم.
+///   3. لمعة تمرّ عرضياً كل ٨ ثوانٍ. لونها أبيض شفاف ليلاً ونيلي شفاف
+///      نهاراً، لأن اللمعة البيضاء تختفي تماماً على سطح أبيض.
+/// اللمعة تسافر من اليمين لليسار فيزيائياً (Positioned.right) في الوضعين --
+/// اتجاهها ليس اتجاه قراءة بل اتجاه ضوء، فلا ينعكس مع RTL.
+class HeroPanel extends StatefulWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final double radius;
+
+  const HeroPanel({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.fromLTRB(17, 16, 17, 16),
+    this.radius = 26,
+  });
+
+  @override
+  State<HeroPanel> createState() => _HeroPanelState();
+}
+
+class _HeroPanelState extends State<HeroPanel>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 8),
+  )..repeat();
+
+  // اللمعة تعبر في أول ٥٥٪ من الدورة ثم تتوقف خارج الإطار حتى نهايتها --
+  // فتظهر كومضة عابرة كل ٨ ثوانٍ لا كشريط يتحرّك بلا انقطاع.
+  late final Animation<double> _sweep = CurvedAnimation(
+    parent: _controller,
+    curve: const Interval(0, 0.55, curve: Curves.easeInOut),
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final surf = context.surface;
+    final radius = BorderRadius.circular(widget.radius);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: surf.heroBg,
+        borderRadius: radius,
+        border: Border.all(color: surf.heroBorder),
+        boxShadow: surf.heroShadow,
+      ),
+      child: ClipRRect(
+        borderRadius: radius,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      center: const Alignment(0.8, -1.1),
+                      radius: 1.1,
+                      colors: [surf.heroWash, surf.heroWash.withValues(alpha: 0)],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned.fill(
+              child: IgnorePointer(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final width = constraints.maxWidth;
+                    return AnimatedBuilder(
+                      animation: _sweep,
+                      builder: (context, _) {
+                        return Stack(
+                          children: [
+                            Positioned(
+                              right: -90 + _sweep.value * (width + 180),
+                              top: -40,
+                              bottom: -40,
+                              width: 80,
+                              child: Transform(
+                                alignment: Alignment.center,
+                                transform: Matrix4.skewX(-0.28),
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.centerLeft,
+                                      end: Alignment.centerRight,
+                                      colors: [
+                                        surf.sheen.withValues(alpha: 0),
+                                        surf.sheen,
+                                        surf.sheen.withValues(alpha: 0),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ),
+            Padding(padding: widget.padding, child: widget.child),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// النقطة "الحيّة" النابضة بجانب عنوان بطاقة الرأس -- إشارة إلى أن الرقم
+/// أدناه محسوب من بيانات السيرفر لا مخزَّن مسبقاً. الهالة حولها ثابتة
+/// والنبض في الشفافية وحدها (أرخص من تحريك ظلّ، ولا يحرّك التخطيط).
+class LivePulseDot extends StatefulWidget {
+  const LivePulseDot({super.key});
+
+  @override
+  State<LivePulseDot> createState() => _LivePulseDotState();
+}
+
+class _LivePulseDotState extends State<LivePulseDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2000),
+  )..repeat(reverse: true);
+
+  late final Animation<double> _opacity = Tween<double>(begin: 1, end: .35)
+      .animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final surf = context.surface;
+    return FadeTransition(
+      opacity: _opacity,
+      child: Container(
+        width: 6,
+        height: 6,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: surf.liveDot,
+          boxShadow: [
+            BoxShadow(color: surf.liveDotHalo, blurRadius: 0, spreadRadius: 3),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// الرقم الكبير في بطاقة الرأس + وحدته الصغيرة بجانبه. التوهّج خلفه يأتي من
+/// [AppSurface.bigNumberGlow] وهو null نهاراً عمداً: التوهّج على أبيض يقرأ
+/// كضبابية لا كفخامة، والوزن هناك يأتي من اللون الداكن نفسه.
+class HeroBigNumber extends StatelessWidget {
+  final String value;
+  final String? unit;
+  final double fontSize;
+
+  const HeroBigNumber({
+    super.key,
+    required this.value,
+    this.unit,
+    this.fontSize = 32,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final surf = context.surface;
+    final glow = surf.bigNumberGlow;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Flexible(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppType.kufi(
+              fontSize: fontSize,
+              fontWeight: FontWeight.w700,
+              color: surf.bigNumber,
+              letterSpacing: -1.2,
+              height: 1.15,
+            ).copyWith(
+              shadows: glow == null
+                  ? null
+                  : [Shadow(color: glow.withValues(alpha: .55), blurRadius: 32)],
+            ),
+          ),
+        ),
+        if (unit != null) ...[
+          const SizedBox(width: 5),
+          Text(
+            unit!,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: surf.bigNumberUnit,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// عدّاد صغير داخل صفّ العدّادين أسفل الرقم الكبير: صندوق أيقونة، ثم الرقم
+/// فوق تسميته.
+class HeroMiniStat extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final String label;
+
+  const HeroMiniStat({
+    super.key,
+    required this.icon,
+    required this.value,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final surf = context.surface;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: surf.iconBoxBg,
+            border: Border.all(color: surf.iconBoxBorder),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, size: 16, color: surf.iconBoxFg),
+        ),
+        const SizedBox(width: 9),
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+                style: AppType.kufi(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w700,
+                  color: surf.textPrimary,
+                  letterSpacing: -0.5,
+                  height: 1.15,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w600,
+                  color: surf.textSecondary,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// صفّ العدّادين أسفل الرقم الكبير: حدّ علوي رفيع، وفاصل رأسي بين كل عدّاد
+/// والذي يليه. ارتفاع الفاصل ثابت (34) عمداً بدل `CrossAxisAlignment.stretch`
+/// داخل IntrinsicHeight -- الأخير يعطي `maxHeight: infinity` داخل قائمة
+/// قابلة للتمرير فينهار الإطار (وقعنا في هذا فعلاً 2026-09-02).
+class HeroStatsRow extends StatelessWidget {
+  final List<Widget> children;
+
+  const HeroStatsRow({super.key, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    final surf = context.surface;
+    final row = <Widget>[];
+    for (var i = 0; i < children.length; i++) {
+      if (i > 0) {
+        row.add(Container(
+          width: 1,
+          height: 34,
+          margin: const EdgeInsets.symmetric(horizontal: 13),
+          color: surf.divider,
+        ));
+      }
+      row.add(Expanded(child: children[i]));
+    }
+    return Container(
+      margin: const EdgeInsets.only(top: 15),
+      padding: const EdgeInsets.only(top: 14),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: surf.divider)),
+      ),
+      child: Row(children: row),
+    );
+  }
+}
+
+/// شريط شرائح التصفية. الشريحة النشطة تأخذ تدرّج التمييز ونصّ [onAccent]،
+/// والساكنة تبقى بلون السطح وحدّه. العدّ اختياري لكل شريحة.
+class FilterChipsBar extends StatelessWidget {
+  final List<String> labels;
+  final List<int>? counts;
+  final int selectedIndex;
+  final ValueChanged<int> onSelect;
+
+  const FilterChipsBar({
+    super.key,
+    required this.labels,
+    required this.selectedIndex,
+    required this.onSelect,
+    this.counts,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final surf = context.surface;
+    return Row(
+      children: [
+        for (var i = 0; i < labels.length; i++) ...[
+          if (i > 0) const SizedBox(width: 7),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(999),
+              onTap: () => onSelect(i),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+                decoration: BoxDecoration(
+                  color: i == selectedIndex ? null : surf.chipBg,
+                  gradient: i == selectedIndex ? surf.accentGradient : null,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: i == selectedIndex
+                        ? Colors.transparent
+                        : surf.chipBorder,
+                  ),
+                  boxShadow: i == selectedIndex
+                      ? [
+                          BoxShadow(
+                            color: surf.accentGlow,
+                            blurRadius: 22,
+                            offset: const Offset(0, 8),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      labels[i],
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: i == selectedIndex ? surf.onAccent : surf.chipFg,
+                      ),
+                    ),
+                    if (counts != null && i < counts!.length) ...[
+                      const SizedBox(width: 6),
+                      Text(
+                        '${counts![i]}',
+                        style: AppType.kufi(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w500,
+                          color: (i == selectedIndex
+                                  ? surf.onAccent
+                                  : surf.chipFg)
+                              .withValues(alpha: .68),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// حقل بحث كبسولي بظلّ ناعم بدل الحدّ الرمادي الصلب.
+class SoftSearchField extends StatelessWidget {
+  final String hintText;
+  final ValueChanged<String> onChanged;
+
+  const SoftSearchField({
+    super.key,
+    required this.hintText,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final surf = context.surface;
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: surf.cardShadow,
+      ),
+      child: TextField(
+        textAlign: TextAlign.right,
+        onChanged: onChanged,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          color: surf.textPrimary,
+        ),
+        decoration: InputDecoration(
+          hintText: hintText,
+          hintStyle: TextStyle(
+            color: surf.fieldHint,
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+          ),
+          prefixIcon: Icon(Icons.search, size: 18, color: surf.fieldHint),
+          filled: true,
+          fillColor: surf.fieldBg,
+          isDense: true,
+          contentPadding:
+              const EdgeInsets.symmetric(vertical: 15, horizontal: 16),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(999),
+            borderSide: BorderSide(color: surf.fieldBorder),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(999),
+            borderSide: BorderSide(color: surf.accentSolid, width: 1.4),
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(999),
+            borderSide: BorderSide(color: surf.fieldBorder),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// زر أيقونة مربّع 34px داخل البطاقات (فتح الملف، اتصال، تعديل، واتساب).
+/// لونه الأمامي يُمرَّر صراحةً لأن دلالته لونية (نيلي = ملف، أخضر = اتصال)
+/// وهي ثابتة في الوضعين، بينما خلفيته وحدّه من AppSurface.
+class SoftIconButton extends StatelessWidget {
+  final IconData icon;
+  final Color foreground;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  const SoftIconButton({
+    super.key,
+    required this.icon,
+    required this.foreground,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final surf = context.surface;
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onPressed,
+          child: Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: surf.actionBg,
+              border: Border.all(color: surf.actionBorder),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, size: 16, color: foreground),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// شارة حالة صغيرة بنقطة ملوّنة -- الحالة المالية على بطاقة المريض، وحالة
+/// الموعد على بطاقة الموعد.
+class SoftStatusPill extends StatelessWidget {
+  final String label;
+  final Color foreground;
+  final Color background;
+  final Color border;
+
+  const SoftStatusPill({
+    super.key,
+    required this.label,
+    required this.foreground,
+    required this.background,
+    required this.border,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 5,
+            height: 5,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: foreground),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: AppType.kufi(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: foreground,
+            ),
+          ),
+        ],
       ),
     );
   }

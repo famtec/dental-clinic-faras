@@ -4,7 +4,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/appointment.dart';
 import '../models/patient.dart';
 import '../services/api_service.dart';
-import '../services/offline_sync_status.dart';
 import '../theme/app_theme.dart';
 import '../utils/appointment_status.dart';
 import '../widgets/app_widgets.dart';
@@ -29,16 +28,30 @@ String _normalizeWhatsappPhone(String phone) {
   return digits;
 }
 
+/// أسماء أيام الأسبوع بالعربية، مرتّبة على ترتيب DateTime.weekday
+/// (1 = الإثنين ... 7 = الأحد) -- تُستخدم في سطر التاريخ أعلى الشاشة.
+const _scheduleArabicWeekdays = <String>[
+  'الإثنين',
+  'الثلاثاء',
+  'الأربعاء',
+  'الخميس',
+  'الجمعة',
+  'السبت',
+  'الأحد',
+];
+
 /// بطاقة خيار حالة واحدة داخل ورقة "تغيير حالة الموعد" -- تُبرز الحالة
 /// الحالية بلون شارتها نفسه (نفس appointmentStatusStyle المستخدَم في بطاقة
 /// الموعد وباقي الشاشة).
 Widget _statusOptionTile({
+  required BuildContext context,
   required String label,
   required String statusValue,
   required bool isSelected,
   required VoidCallback onTap,
 }) {
-  final style = appointmentStatusStyle(statusValue);
+  final surf = context.surface;
+  final style = appointmentStatusStyle(statusValue, isDark: surf.isDark);
   return Material(
     color: Colors.transparent,
     child: InkWell(
@@ -47,10 +60,12 @@ Widget _statusOptionTile({
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? style.background : AppColors.slate100,
+          color: isSelected ? style.background : surf.chipBg,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isSelected ? style.foreground.withValues(alpha: .35) : AppColors.slate200,
+            color: isSelected
+                ? style.foreground.withValues(alpha: .35)
+                : surf.chipBorder,
           ),
         ),
         child: Row(
@@ -66,7 +81,7 @@ Widget _statusOptionTile({
                 style: TextStyle(
                   fontWeight: FontWeight.w800,
                   fontSize: 13.5,
-                  color: isSelected ? style.foreground : AppColors.slate600,
+                  color: isSelected ? style.foreground : surf.textSecondary,
                 ),
               ),
             ),
@@ -77,68 +92,91 @@ Widget _statusOptionTile({
   );
 }
 
-/// شريط رفيع أعلى شاشة المواعيد يعكس حالة المزامنة الأوفلاين (انظر
-/// OfflineSyncStatus/OfflineAwareApiService) -- يظهر فقط عند وجود ما
-/// يستحق إخبار الطبيب به (عمليات بانتظار الاتصال، أو عمليات رفضها السيرفر
-/// رفضاً حقيقياً)، ويختفي تلقائياً بعد اكتمال المزامنة. أُضيف 2026-08-31.
-class _OfflineSyncBanner extends StatelessWidget {
-  const _OfflineSyncBanner();
+/// كبسولة يوم واحد داخل شريط الأيام -- طبق الأصل عن ‎.week-day في
+/// appointments.html: اسم اليوم فوق الرقم، ونقطة سفلية للأيام التي فيها
+/// مواعيد، والمحدَّد بتدرّج نيلي/بنفسجي.
+class _WeekDayChip extends StatelessWidget {
+  final String topLabel;
+  final String bottomLabel;
+  final double bottomFontSize;
+  final bool isSelected;
+  final bool isBusy;
+  final VoidCallback onTap;
+
+  const _WeekDayChip({
+    required this.topLabel,
+    required this.bottomLabel,
+    required this.isSelected,
+    required this.isBusy,
+    required this.onTap,
+    this.bottomFontSize = 15,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<int>(
-      valueListenable: OfflineSyncStatus.instance.pendingCount,
-      builder: (context, pending, _) {
-        return ValueListenableBuilder<int>(
-          valueListenable: OfflineSyncStatus.instance.failedCount,
-          builder: (context, failed, _) {
-            if (pending == 0 && failed == 0) return const SizedBox.shrink();
-            return ValueListenableBuilder<bool>(
-              valueListenable: OfflineSyncStatus.instance.isOnline,
-              builder: (context, online, _) {
-                final messages = <String>[];
-                if (pending > 0) {
-                  messages.add(online
-                      ? 'جارٍ مزامنة $pending ${pending == 1 ? 'عملية' : 'عمليات'}...'
-                      : 'غير متصل بالإنترنت -- $pending ${pending == 1 ? 'عملية' : 'عمليات'} ستُرفَع تلقائياً عند عودة الاتصال');
-                }
-                if (failed > 0) {
-                  messages.add(
-                      'تعذّرت مزامنة $failed ${failed == 1 ? 'عملية' : 'عمليات'} بسبب رفض من السيرفر');
-                }
-                final isWarning = failed > 0 || !online;
-                return Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-                  color: isWarning ? AppColors.amber50 : AppColors.slate100,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        online ? Icons.sync : Icons.cloud_off_outlined,
-                        size: 15,
-                        color: isWarning ? AppColors.amber900 : AppColors.slate600,
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          messages.join(' -- '),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: isWarning ? AppColors.amber900 : AppColors.slate600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            );
-          },
-        );
-      },
+    final surf = context.surface;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          height: 56,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            gradient: isSelected ? surf.accentGradient : null,
+            color: isSelected ? null : surf.chipBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isSelected ? Colors.transparent : surf.chipBorder,
+            ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: surf.accentGlow,
+                      blurRadius: 22,
+                      offset: const Offset(0, 10),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                topLabel,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected
+                      ? surf.onAccent.withValues(alpha: .85)
+                      : surf.textMuted,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                bottomLabel,
+                style: TextStyle(
+                  fontSize: bottomFontSize,
+                  fontWeight: FontWeight.w800,
+                  color: isSelected ? surf.onAccent : surf.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Container(
+                width: 5,
+                height: 5,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: !isBusy
+                      ? Colors.transparent
+                      : (isSelected ? surf.onAccent : surf.accentSolid),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -147,10 +185,16 @@ class TodayScheduleScreen extends StatefulWidget {
   final ApiService apiService;
   final VoidCallback onSessionExpired;
 
+  /// يُبلّغ القشرة الرئيسية بعدد طلبات الحجز المعلّقة بعد كل تحميل، لتضيء
+  /// الشارة الحمراء على تبويب "المواعيد". تمريره اختياري حتى تبقى الشاشة
+  /// قابلة للاستخدام وحدها في أي سياق آخر (اختبار مثلاً).
+  final ValueChanged<int>? onPendingCountChanged;
+
   const TodayScheduleScreen({
     super.key,
     required this.apiService,
     required this.onSessionExpired,
+    this.onPendingCountChanged,
   });
 
   @override
@@ -159,6 +203,11 @@ class TodayScheduleScreen extends StatefulWidget {
 
 class TodayScheduleScreenState extends State<TodayScheduleScreen> {
   List<Appointment>? _appointments;
+  /// كل المواعيد العادية بأي تاريخ -- المصدر الذي يفلتره شريط الأيام.
+  List<Appointment> _allNormalAppointments = const [];
+  /// '' تعني "عرض الكل". تبدأ باليوم الحالي فيبقى سلوك الشاشة الافتراضي
+  /// كما كان تماماً قبل إضافة الشريط.
+  String _selectedDayKey = '';
   // طلبات الحجز العام (pending_confirmation) -- بلا قيد تاريخ اليوم (تماماً
   // كـ bookingRequests في appointments.html بالموقع)، لها لوحتها الخاصة
   // بالأعلى (انظر _buildBookingRequestsSection). أُضيف 2026-08-31.
@@ -172,6 +221,9 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
   @override
   void initState() {
     super.initState();
+    final now = DateTime.now();
+    _selectedDayKey =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
     refresh();
   }
 
@@ -198,17 +250,22 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
               ? dateCompare
               : a.appointmentTime.compareTo(b.appointmentTime);
         });
-      final today = all.where((appointment) {
+      // كل المواعيد العادية بأي تاريخ -- شريط الأيام يفلترها محلياً بلا أي
+      // طلب إضافي للسيرفر. قبل هذا الشريط كانت الشاشة تحتفظ بمواعيد اليوم
+      // وحدها، فلم يكن هناك أي وسيلة لرؤية يوم آخر من التطبيق.
+      final normal = all.where((appointment) {
         final status = appointment.status.toLowerCase();
-        return appointment.isToday && status != 'pending_confirmation' && status != 'rejected';
+        return status != 'pending_confirmation' && status != 'rejected';
       }).toList()
         ..sort((a, b) => a.appointmentTime.compareTo(b.appointmentTime));
       if (!mounted) return;
       setState(() {
-        _appointments = today;
+        _allNormalAppointments = normal;
+        _appointments = _filterAppointmentsForSelectedDay(normal);
         _bookingRequests = bookingRequests;
         _isLoading = false;
       });
+      widget.onPendingCountChanged?.call(bookingRequests.length);
     } on ApiException catch (e) {
       if (!mounted) return;
       if (e.isSessionExpired) {
@@ -308,14 +365,15 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
       ('no_show', 'تخلّف عن الموعد'),
     ];
     final currentStatus = appointment.status.toLowerCase();
+    final surf = context.surface;
     final selected = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+          decoration: BoxDecoration(
+            color: surf.sheetBg,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
           ),
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
           child: Column(
@@ -328,7 +386,7 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: AppColors.slate200,
+                    color: surf.divider,
                     borderRadius: BorderRadius.circular(999),
                   ),
                 ),
@@ -341,6 +399,7 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
               const SizedBox(height: 14),
               for (final option in options) ...[
                 _statusOptionTile(
+                  context: sheetContext,
                   label: option.$2,
                   statusValue: option.$1,
                   isSelected: currentStatus == option.$1,
@@ -458,9 +517,10 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
               padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
               child: Container(
                 constraints: BoxConstraints(maxHeight: MediaQuery.of(sheetContext).size.height * 0.85),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+                decoration: BoxDecoration(
+                  color: context.surface.sheetBg,
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(26)),
                 ),
                 padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
                 child: SingleChildScrollView(
@@ -474,7 +534,7 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
                           height: 4,
                           margin: const EdgeInsets.only(bottom: 16),
                           decoration: BoxDecoration(
-                            color: AppColors.slate200,
+                            color: context.surface.divider,
                             borderRadius: BorderRadius.circular(999),
                           ),
                         ),
@@ -618,27 +678,96 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
     }
   }
 
+  /// مفتاح يوم محلي (YYYY-MM-DD). يُبنى من مكوّنات التاريخ المحلية عمداً لا
+  /// من toIso8601String() في UTC، وإلا انتقلت مواعيد المساء إلى اليوم التالي.
+  String _dayKey(DateTime? date) {
+    if (date == null) return '';
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '${date.year}-$month-$day';
+  }
+
+  List<Appointment> _filterAppointmentsForSelectedDay(List<Appointment> source) {
+    if (_selectedDayKey.isEmpty) return source;
+    return source
+        .where((appointment) => _dayKey(appointment.appointmentDate) == _selectedDayKey)
+        .toList();
+  }
+
+  void _selectDay(String dayKey) {
+    setState(() {
+      _selectedDayKey = dayKey;
+      _appointments = _filterAppointmentsForSelectedDay(_allNormalAppointments);
+    });
+  }
+
+  /// شريط أيام الأسبوع -- طبق الأصل عن ‎#weekStrip في appointments.html:
+  /// كبسولة "عرض الكل" ثم ستة أيام تبدأ من الأمس، ونقطة تحت كل يوم فيه
+  /// مواعيد فعلاً.
+  Widget _buildWeekStrip() {
+    const dayNames = ['أحد', 'إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت'];
+    final busyDays = _allNormalAppointments
+        .map((appointment) => _dayKey(appointment.appointmentDate))
+        .where((key) => key.isNotEmpty)
+        .toSet();
+
+    final start = DateTime.now().subtract(const Duration(days: 1));
+    final chips = <Widget>[
+      Expanded(
+        child: _WeekDayChip(
+          topLabel: 'عرض',
+          bottomLabel: 'الكل',
+          bottomFontSize: 12,
+          isSelected: _selectedDayKey.isEmpty,
+          isBusy: false,
+          onTap: () => _selectDay(''),
+        ),
+      ),
+    ];
+
+    for (var i = 0; i < 6; i++) {
+      final date = DateTime(start.year, start.month, start.day + i);
+      final key = _dayKey(date);
+      chips.add(const SizedBox(width: 6));
+      chips.add(
+        Expanded(
+          child: _WeekDayChip(
+            topLabel: dayNames[date.weekday % 7],
+            bottomLabel: date.day.toString().padLeft(2, '0'),
+            isSelected: _selectedDayKey == key,
+            isBusy: busyDays.contains(key),
+            onTap: () => _selectDay(key),
+          ),
+        ),
+      );
+    }
+
+    return Row(children: chips);
+  }
+
+  /// سطر التاريخ تحت اسم العيادة -- تاريخ اليوم الفعلي، لا اليوم المختار
+  /// في شريط الأيام: الترويسة تقول "أين نحن الآن"، والشريط هو أداة التنقّل.
+  String _todayLabel() {
+    final now = DateTime.now();
+    final weekday = _scheduleArabicWeekdays[now.weekday - 1];
+    final month = _scheduleArabicMonthNames[now.month - 1];
+    return '$weekday · ${now.day} $month ${now.year}';
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Column(
-          children: [
-            AnimatedHeroHeader(
-              padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 18, 20, 18),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'المواعيد',
-                    style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800),
-                  ),
-                ],
-              ),
-            ),
-            const _OfflineSyncBanner(),
-            Expanded(
-              child: AtmosphereBackground(
+    // 2026-09-05: الخلفية الجوّية تغلّف الشاشة كاملةً بدل منطقة القائمة
+    // وحدها. حين كانت داخل Expanded كانت كرات الضوء تُقصّ عند حافتها العليا
+    // فيظهر **خطّ أفقي حادّ تحت الترويسة مباشرة** -- وهو "الحدود" التي رآها
+    // المستخدم على شاشة المواعيد. الآن تمرّ الكرات خلف الترويسة بلا فاصل.
+    return AtmosphereBackground(
+      child: Stack(
+        children: [
+          Column(
+            children: [
+              ClinicTopBar(subtitle: _todayLabel()),
+              const OfflineSyncBanner(),
+              Expanded(
                 child: LoadingErrorEmpty(
                   isLoading: _isLoading,
                   errorMessage: _errorMessage,
@@ -647,15 +776,15 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
                   child: _buildList(),
                 ),
               ),
-            ),
-          ],
-        ),
-        PositionedDirectional(
-          bottom: 20,
-          end: 20,
-          child: GradientFab(onPressed: _openAddAppointmentSheet),
-        ),
-      ],
+            ],
+          ),
+          PositionedDirectional(
+            bottom: floatingNavInset(context) + 16,
+            end: 20,
+            child: GradientFab(onPressed: _openAddAppointmentSheet),
+          ),
+        ],
+      ),
     );
   }
 
@@ -671,8 +800,10 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
     return RefreshIndicator(
       onRefresh: refresh,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+        padding: EdgeInsets.fromLTRB(16, 12, 16, floatingNavInset(context) + 84),
         children: [
+          _buildWeekStrip(),
+          const SizedBox(height: 13),
           _buildBookingRequestsSection(),
           const SizedBox(height: 16),
           _buildAppointmentsFrame(appointments),
@@ -689,20 +820,15 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
   /// btn-accept-request/btn-reject-request الحقيقية (كبسولة فاتحة -- التدرج
   /// المملوء هناك حالة :hover لماوس سطح مكتب فقط، لا تنطبق على تطبيق جوّال).
   Widget _buildBookingRequestsSection() {
+    final surf = context.surface;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.amber50.withValues(alpha: .6),
+        color: surf.warnBg,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.amber200),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.slate900.withValues(alpha: .08),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
-          ),
-        ],
+        border: Border.all(color: surf.warnBorder),
+        boxShadow: surf.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -714,17 +840,20 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    const Row(
+                    Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.notifications_outlined, size: 18, color: AppColors.amber900),
-                        SizedBox(width: 8),
+                        Icon(Icons.notifications_outlined,
+                            size: 18, color: surf.warnFg),
+                        const SizedBox(width: 8),
                         Text(
                           'طلبات حجز جديدة',
-                          style: TextStyle(
-                              color: AppColors.amber900,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 18),
+                          style: AppType.kufi(
+                            color: surf.warnFg,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 17,
+                            letterSpacing: -0.4,
+                          ),
                         ),
                       ],
                     ),
@@ -735,7 +864,7 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
                       // amber900text قيمته فعلياً amber-700 الحقيقي (انظر
                       // تعليقها في app_theme.dart) -- هذا هو استخدامها الصحيح.
                       style: TextStyle(
-                          color: AppColors.amber900text.withValues(alpha: .8), fontSize: 12.5),
+                          color: surf.warnFg.withValues(alpha: .8), fontSize: 12.5),
                     ),
                   ],
                 ),
@@ -744,22 +873,24 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                 decoration: BoxDecoration(
-                  color: AppColors.amber100,
+                  color: surf.warnFg.withValues(alpha: surf.isDark ? .16 : .22),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
                   '${_bookingRequests.length}',
-                  style: const TextStyle(
-                      color: AppColors.amber800text, fontWeight: FontWeight.w800, fontSize: 13.5),
+                  style: AppType.kufi(
+                      color: surf.warnFg,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 14),
           if (_bookingRequests.isEmpty)
-            const Text(
+            Text(
               'لا توجد طلبات حجز جديدة حالياً.',
-              style: TextStyle(color: AppColors.slate500, fontSize: 13.5),
+              style: TextStyle(color: surf.textSecondary, fontSize: 13),
             )
           else
             Column(
@@ -785,20 +916,15 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
   /// "محدث تلقائيًا")؛ يحتوي بطاقات مواعيد اليوم (نفس تصميم SectionCard
   /// المعتمد لكل موعد، انظر [_buildAppointmentCard]).
   Widget _buildAppointmentsFrame(List<Appointment> appointments) {
+    final surf = context.surface;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: surf.cardBg,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.slate200),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.slate900.withValues(alpha: .06),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
-          ),
-        ],
+        border: Border.all(color: surf.cardBorder),
+        boxShadow: surf.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -807,36 +933,54 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
             children: [
               // نفس text-indigo-900 الحقيقي في الموقع (indigo800 هنا قيمته
               // فعلياً indigo-900 رغم اسمها -- انظر تعليقها في app_theme.dart).
-              const Text(
+              Text(
                 'المواعيد',
+                style: AppType.kufi(
+                    color: surf.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 17,
+                    letterSpacing: -0.4),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                appointments.length == 1 ? 'موعد واحد' : '${appointments.length} مواعيد',
                 style: TextStyle(
-                    color: AppColors.indigo800, fontWeight: FontWeight.w800, fontSize: 18),
+                    color: surf.textSecondary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 11.5),
               ),
               const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
                 decoration: BoxDecoration(
-                  color: AppColors.indigo50,
+                  color: surf.iconBoxBg,
+                  border: Border.all(color: surf.iconBoxBorder),
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: const Text(
+                child: Text(
                   'محدث تلقائيًا',
                   style: TextStyle(
-                      color: AppColors.indigo700, fontWeight: FontWeight.w600, fontSize: 12.5),
+                      color: surf.iconBoxFg,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 11.5),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 14),
           if (appointments.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 28),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 28),
               child: Center(
                 child: Column(
                   children: [
-                    Icon(Icons.event_available_outlined, size: 44, color: AppColors.slate400),
-                    SizedBox(height: 10),
-                    Text('لا توجد مواعيد اليوم'),
+                    Icon(Icons.event_available_outlined,
+                        size: 44, color: surf.textMuted),
+                    const SizedBox(height: 10),
+                    Text(
+                      'لا توجد مواعيد في هذا اليوم',
+                      style: TextStyle(color: surf.textSecondary),
+                    ),
                   ],
                 ),
               ),
@@ -864,70 +1008,128 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
   Widget _buildAppointmentCard(Appointment appointment) {
     final isUpdating = _updatingIds.contains(appointment.id);
     final isDeleting = _deletingIds.contains(appointment.id);
-    final style = appointmentStatusStyle(appointment.status);
+    final surf = context.surface;
+    final style =
+        appointmentStatusStyle(appointment.status, isDark: surf.isDark);
 
     return SectionCard(
+      padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // الصف العلوي: شارة وقت متدرّجة على اليمين (‎.ap-cell-time في
+          // appointments.html) واسم المريض والإجراء بجانبها.
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              StatusBadge(
-                label: appointment.statusLabel,
-                background: style.background,
-                foreground: style.foreground,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // اسم المريض قابل للضغط -- يفتح ورقة "تغيير حالة الموعد"
+                    // بدل القائمة المنسدلة الدائمة الظهور في الموقع.
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () => _openStatusPicker(appointment),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                appointment.patientName,
+                                textAlign: TextAlign.right,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppType.kufi(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13.5,
+                                  color: surf.textPrimary,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(Icons.unfold_more,
+                                size: 16, color: surf.accentSolid),
+                            // موعد أُنشئ/عُدِّل أوفلاين وما زال بانتظار الاتصال
+                            // بالإنترنت ليصل فعلياً للسيرفر -- انظر
+                            // OfflineAwareApiService.
+                            if (appointment.isPendingSync) ...[
+                              const SizedBox(width: 6),
+                              Icon(Icons.cloud_off_outlined,
+                                  size: 15, color: surf.pillDueFg),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (appointment.procedureType.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 3),
+                        child: Text(
+                          appointment.procedureType,
+                          textAlign: TextAlign.right,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: surf.textSecondary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 7),
+                    // شارة الحالة -- بمظهر كبسولة الموقع، وتفتح نفس ورقة
+                    // تغيير الحالة عند الضغط (الموقع يستخدم قائمة منسدلة،
+                    // والتطبيق ورقة سفلية؛ المظهر واحد والوظيفة محفوظة).
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(999),
+                        onTap: () => _openStatusPicker(appointment),
+                        child: StatusBadge(
+                          label: appointment.statusLabel,
+                          background: style.background,
+                          foreground: style.foreground,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              const Spacer(),
+              const SizedBox(width: 11),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                width: 60,
+                height: 56,
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: AppColors.indigo50,
-                  borderRadius: BorderRadius.circular(8),
+                  gradient: AppColors.primaryButtonGradient,
+                  borderRadius: BorderRadius.circular(17),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.violet600.withValues(alpha: .45),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
                 ),
                 child: Text(
-                  appointment.appointmentTime,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w800, color: AppColors.indigo700),
+                  appointment.appointmentTime.isEmpty
+                      ? '--:--'
+                      : appointment.appointmentTime,
+                  textAlign: TextAlign.center,
+                  style: AppType.kufi(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    letterSpacing: -0.4,
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          // اسم المريض قابل للضغط -- يفتح ورقة "تغيير حالة الموعد" بدل
-          // القائمة المنسدلة الدائمة الظهور في الموقع.
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(8),
-              onTap: () => _openStatusPicker(appointment),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Flexible(
-                    child: Text(
-                      appointment.patientName,
-                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  const Icon(Icons.unfold_more, size: 17, color: AppColors.indigo600),
-                  // موعد أُنشئ/عُدِّل أوفلاين وما زال بانتظار الاتصال بالإنترنت
-                  // ليصل فعلياً للسيرفر -- انظر OfflineAwareApiService.
-                  if (appointment.isPendingSync) ...[
-                    const SizedBox(width: 6),
-                    const Icon(Icons.cloud_off_outlined,
-                        size: 15, color: AppColors.amber900),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          if (appointment.procedureType.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text(appointment.procedureType,
-                  style: const TextStyle(color: AppColors.slate500)),
-            ),
           AppointmentActionButtons(
             status: appointment.status,
             isUpdating: isUpdating,
@@ -944,33 +1146,32 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
           // صف "تعديل/حذف/تذكير واتساب" -- كبسولات فاتحة مطابقة تماماً
           // لأزرار appointment-action-btn في appointments.html بالموقع.
           const SizedBox(height: 10),
+          // أزرار بأيقونات فقط بمقاس 40px -- نفس ما تعرضه بطاقة الموقع على
+          // الجوال بعد إخفاء نصوصها (‎.appointment-action-btn > span).
           Row(
             children: [
-              Expanded(
-                child: AppointmentUtilityButton(
-                  label: 'تعديل',
-                  icon: Icons.edit_outlined,
-                  onPressed: () => _openEditAppointmentSheet(appointment),
-                ),
+              AppointmentUtilityButton(
+                label: 'تعديل',
+                icon: Icons.edit_outlined,
+                iconOnly: true,
+                onPressed: () => _openEditAppointmentSheet(appointment),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: AppointmentUtilityButton(
-                  label: 'حذف',
-                  icon: Icons.delete_outline,
-                  isLoading: isDeleting,
-                  onPressed:
-                      isDeleting ? null : () => _confirmDeleteAppointment(appointment),
-                ),
+              const SizedBox(width: 6),
+              AppointmentUtilityButton(
+                label: 'حذف',
+                icon: Icons.delete_outline,
+                iconOnly: true,
+                isLoading: isDeleting,
+                onPressed:
+                    isDeleting ? null : () => _confirmDeleteAppointment(appointment),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: AppointmentUtilityButton(
-                  label: 'واتساب',
-                  icon: Icons.chat_bubble_outline,
-                  style: AppointmentUtilityStyle.whatsapp,
-                  onPressed: () => _sendWhatsappReminder(appointment),
-                ),
+              const SizedBox(width: 6),
+              AppointmentUtilityButton(
+                label: 'واتساب',
+                icon: Icons.chat_bubble_outline,
+                iconOnly: true,
+                style: AppointmentUtilityStyle.whatsapp,
+                onPressed: () => _sendWhatsappReminder(appointment),
               ),
             ],
           ),
@@ -1006,20 +1207,15 @@ class _BookingRequestCard extends StatelessWidget {
         : '—';
     final phone = appointment.patientPhone?.trim();
     final notes = appointment.notes?.trim();
+    final surf = context.surface;
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: surf.cardBg,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.amber200),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.slate900.withValues(alpha: .04),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        border: Border.all(color: surf.warnBorder),
+        boxShadow: surf.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1031,14 +1227,18 @@ class _BookingRequestCard extends StatelessWidget {
             children: [
               Text(
                 appointment.patientName,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w800, fontSize: 14.5, color: AppColors.slate900),
+                style: AppType.kufi(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13.5,
+                    color: surf.textPrimary,
+                    letterSpacing: -0.2),
               ),
               if (phone != null && phone.isNotEmpty)
                 Text(
                   phone,
                   textDirection: TextDirection.ltr,
-                  style: const TextStyle(fontSize: 12.5, color: AppColors.slate500),
+                  style: AppType.kufi(
+                      fontSize: 12, color: surf.textSecondary),
                 ),
             ],
           ),
@@ -1046,16 +1246,19 @@ class _BookingRequestCard extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.calendar_today_outlined, size: 13, color: AppColors.slate600),
+              Icon(Icons.calendar_today_outlined,
+                  size: 13, color: surf.textSecondary),
               const SizedBox(width: 5),
-              Text(dateLabel, style: const TextStyle(fontSize: 12.5, color: AppColors.slate600)),
+              Text(dateLabel,
+                  style: TextStyle(fontSize: 12, color: surf.textSecondary)),
               const SizedBox(width: 8),
-              const Text('—', style: TextStyle(fontSize: 12.5, color: AppColors.slate600)),
+              Text('—',
+                  style: TextStyle(fontSize: 12, color: surf.textSecondary)),
               const SizedBox(width: 8),
-              const Icon(Icons.schedule, size: 13, color: AppColors.slate600),
+              Icon(Icons.schedule, size: 13, color: surf.textSecondary),
               const SizedBox(width: 5),
               Text(appointment.appointmentTime,
-                  style: const TextStyle(fontSize: 12.5, color: AppColors.slate600)),
+                  style: TextStyle(fontSize: 12, color: surf.textSecondary)),
             ],
           ),
           if (notes != null && notes.isNotEmpty) ...[
@@ -1063,13 +1266,14 @@ class _BookingRequestCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.description_outlined, size: 12, color: AppColors.slate500),
+                Icon(Icons.description_outlined,
+                    size: 12, color: surf.textMuted),
                 const SizedBox(width: 5),
                 Expanded(
                   child: Text(
                     notes,
                     textAlign: TextAlign.right,
-                    style: const TextStyle(fontSize: 11.5, color: AppColors.slate500),
+                    style: TextStyle(fontSize: 11.5, color: surf.textMuted),
                   ),
                 ),
               ],
@@ -1231,9 +1435,9 @@ class _AddAppointmentSheetState extends State<_AddAppointmentSheet> {
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
         constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+        decoration: BoxDecoration(
+          color: context.surface.sheetBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
         child: Column(
@@ -1245,7 +1449,7 @@ class _AddAppointmentSheetState extends State<_AddAppointmentSheet> {
                 width: 42,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: AppColors.slate200,
+                  color: context.surface.divider,
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),

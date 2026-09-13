@@ -99,6 +99,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final surf = context.surface;
     return Scaffold(
       body: Stack(
         children: [
@@ -112,12 +113,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Container(
                     clipBehavior: Clip.antiAlias,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      // sheetBg لا cardBg: البطاقة تحمل الرأس المتدرّج داخلها
+                      // وتطفو فوق خلفية ملوّنة، فالزجاج الشفّاف يفضح ما تحتها.
+                      color: surf.sheetBg,
                       borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: AppColors.slate200),
+                      border: Border.all(color: surf.cardBorder),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.slate900.withValues(alpha: 0.14),
+                          color: AppColors.navy900.withValues(alpha: 0.30),
                           blurRadius: 40,
                           offset: const Offset(0, 20),
                         ),
@@ -175,6 +178,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildBody() {
+    final surf = context.surface;
     return Form(
       key: _formKey,
       child: Column(
@@ -192,8 +196,8 @@ class _LoginScreenState extends State<LoginScreen> {
               controller: _emailController,
               keyboardType: TextInputType.emailAddress,
               textAlign: TextAlign.right,
-              style: const TextStyle(fontSize: 13.5, color: AppColors.slate700),
-              decoration: authInputDecoration(hint: 'doctor@clinic.com'),
+              style: TextStyle(fontSize: 13.5, color: surf.textSecondary),
+              decoration: authInputDecoration(context: context, hint: 'doctor@clinic.com'),
               validator: (value) =>
                   (value == null || value.trim().isEmpty) ? 'البريد الإلكتروني مطلوب' : null,
             ),
@@ -208,17 +212,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.indigoAccent),
               ),
             ),
-            footer: const Text(
+            footer: Text(
               'يُفضّل استخدام كلمة مرور العيادة المعتمدة.',
               textAlign: TextAlign.right,
-              style: TextStyle(fontSize: 11, color: AppColors.slate500),
+              style: TextStyle(fontSize: 11, color: surf.textSecondary),
             ),
             child: TextFormField(
               controller: _passwordController,
               obscureText: _obscurePassword,
               textAlign: TextAlign.right,
-              style: const TextStyle(fontSize: 13.5, color: AppColors.slate700),
-              decoration: authInputDecoration(hint: '••••••••'),
+              style: TextStyle(fontSize: 13.5, color: surf.textSecondary),
+              decoration: authInputDecoration(context: context, hint: '••••••••'),
               validator: (value) => (value == null || value.isEmpty) ? 'كلمة المرور مطلوبة' : null,
               onFieldSubmitted: (_) => _submit(),
             ),
@@ -227,9 +231,9 @@ class _LoginScreenState extends State<LoginScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: surf.chipBg,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.slate200),
+              border: Border.all(color: surf.cardBorder),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -250,12 +254,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      const Text('تذكرني على هذا الجهاز',
-                          style: TextStyle(fontSize: 12.5, color: AppColors.slate700)),
+                      Text('تذكرني على هذا الجهاز',
+                          style: TextStyle(fontSize: 12.5, color: surf.textSecondary)),
                     ],
                   ),
                 ),
-                const Text('جلسة أسهل للطبيب', style: TextStyle(fontSize: 11, color: AppColors.slate500)),
+                Text('جلسة أسهل للطبيب', style: TextStyle(fontSize: 11, color: surf.textSecondary)),
               ],
             ),
           ),
@@ -272,17 +276,17 @@ class _LoginScreenState extends State<LoginScreen> {
             onTap: _goToRegister,
           ),
           const SizedBox(height: 18),
-          const Text(
+          Text(
             'إذا انتهت صلاحية الاشتراك، ستظهر لك رسالة واضحة لتجديد الوصول.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: AppColors.slate500, height: 1.6),
+            style: TextStyle(fontSize: 12, color: surf.textSecondary, height: 1.6),
           ),
           const SizedBox(height: 20),
           Text(
             'تطوير وإدارة: المهندس فارس حلاوي © 2026',
             textAlign: TextAlign.center,
             // مطابق لِـ text-indigo-500/90 في الموقع بالحرف (وليس indigo-600).
-            style: TextStyle(fontSize: 10.5, letterSpacing: 0.4, color: AppColors.indigo500.withValues(alpha: 0.9)),
+            style: TextStyle(fontSize: 10.5, letterSpacing: 0.4, color: surf.accentSolid.withValues(alpha: 0.9)),
           ),
         ],
       ),

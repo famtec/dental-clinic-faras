@@ -210,6 +210,11 @@ class TreatmentInvoice(Base):
     title = Column(String, nullable=False)
     total_cost = Column(Numeric(12, 2), nullable=False, default=0)
     created_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
+    # الطبيب المساعد المنفّذ لهذه الفاتورة (2026-09-13) -- يُستخدَم كقيمة
+    # افتراضية مقترحة عند تسجيل أي دفعة عليها، فلا يضطر المستخدم لاختيار
+    # الطبيب مع كل قسط. النسبة نفسها تُحسب دوماً على الدفعة لا على الفاتورة،
+    # انظر models.DoctorEarning. NULL = الطبيب المدير (صاحب الحساب) نفسه.
+    clinic_doctor_id = Column(Integer, ForeignKey("clinic_doctors.id"), index=True, nullable=True)
 
     patient = relationship("Patient", back_populates="treatment_invoices")
     payments = relationship("FinancialTransaction", back_populates="invoice", cascade="all, delete-orphan")
@@ -242,7 +247,117 @@ class FinancialTransaction(Base):
     # شهرها الصحيح.
     is_opening_balance = Column(Boolean, nullable=False, default=False, server_default=text("false"))
 
+    # يربط الدفعة بالطبيب المساعد الذي نفّذ العلاج/حصّل المبلغ (2026-09-13) --
+    # انظر شرح كامل عند models.ClinicDoctor بالأسفل. NULL = عمل الطبيب المدير
+    # (صاحب الحساب) نفسه، وهي القيمة الصحيحة تلقائياً لكل الصفوف التاريخية
+    # السابقة لهذه الميزة، فلا يحتاج أي ترحيل بيانات إطلاقاً.
+    clinic_doctor_id = Column(Integer, ForeignKey("clinic_doctors.id"), index=True, nullable=True)
+
     invoice = relationship("TreatmentInvoice", back_populates="payments")
+    # cascade="all, delete-orphan" ضروري هنا تحديداً: doctor_earnings يحمل FK
+    # نحو financial_transactions.id، وحذف فاتورة علاج يمرّ عبر db.delete(invoice)
+    # (حذف ORM) الذي يحذف دفعاتها -- بلا هذه العلاقة يرفض Postgres حذف صف
+    # الدفعة بانتهاك قيد الـ FK. أما مسارات الحذف الجماعي الخام (Query.delete)
+    # مثل delete_patient() فلا تمرّ من الـ ORM إطلاقاً، ولذلك تُنظَّف فيها صفوف
+    # doctor_earnings صراحةً أيضاً -- نفس درس قصة حذف المريض متعددة الطبقات.
+    earnings = relationship("DoctorEarning", back_populates="transaction", cascade="all, delete-orphan")
+
+
+# ====================================================================
+# العيادات متعددة الأطباء: الأطباء بالنسبة -- 2026-09-13
+# ====================================================================
+# الطبيب المساعد ليس مستخدماً في جدول users عمداً. كل عزل البيانات في هذا
+# المشروع مبني على doctor_email == صاحب الحساب، فلو أُعطي الطبيب المساعد
+# حساب users مستقلاً لرأى قاعدة بيانات فارغة، ولاحتاج إصلاح ذلك تعديل كل
+# استعلام في main.py. هنا الطبيب المساعد سجلٌّ مملوك لحساب العيادة
+# (clinic_email) ولا شيء أكثر؛ وعند إضافة دخول مستقل له لاحقاً (المرحلة ٢)
+# تبقى جلسته تُترجَم إلى بريد العيادة عند عزل البيانات، ويُحدَّد ما يراه عبر
+# clinic_doctor_id وحده -- فيبقى التعديل في نقطة واحدة (get_current_doctor_user).
+class ClinicDoctor(Base):
+    __tablename__ = "clinic_doctors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    # بريد حساب العيادة المالك لهذا السجل (users.email) -- نفس منطق
+    # Patient.doctor_email الموثّق أعلاه، وهو الحقل الرسمي لعزل أطباء كل عيادة.
+    clinic_email = Column(String, index=True, nullable=False)
+    full_name = Column(String, nullable=False)
+    phone = Column(String, nullable=True)
+    specialty = Column(String, nullable=True)
+    # النسبة المئوية الحالية لهذا الطبيب (0 إلى 100). تنبيه معماري جوهري:
+    # هذه القيمة تُستخدَم فقط لحساب الدفعات الجديدة من لحظة حفظها فصاعداً،
+    # ولا تُستخدَم إطلاقاً عند عرض أي حركة قديمة -- كل حركة تحمل نسختها
+    # المجمّدة من النسبة في DoctorEarning.applied_percent. بدون هذا الفصل،
+    # تعديل النسبة من 40% إلى 50% كان سيُعيد كتابة تاريخ كل الشهور الماضية
+    # بأثر رجعي، وهو أخطر خلل محاسبي ممكن في هذه الميزة.
+    commission_percent = Column(Numeric(5, 2), nullable=False, default=0, server_default=text("0"))
+    # طبيب متوقف عن العمل في العيادة: يختفي من قوائم الاختيار عند تسجيل دفعة
+    # جديدة، لكن كل سجله المالي وكشف حسابه يبقى كما هو (لا حذف للتاريخ).
+    is_active = Column(Boolean, default=True, nullable=False, server_default=text("true"))
+    notes = Column(String, nullable=True)
+    created_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
+
+    earnings = relationship("DoctorEarning", back_populates="clinic_doctor")
+    payouts = relationship("DoctorPayout", back_populates="clinic_doctor")
+
+
+class DoctorEarning(Base):
+    __tablename__ = "doctor_earnings"
+
+    # سطر استحقاق واحد مقابل كل دفعة مقبوضة فعلياً (FinancialTransaction من نوع
+    # income) نُسبت لطبيب مساعد. القاعدة المعتمدة: النسبة تُحسب على المبلغ
+    # المحصّل فعلاً لا على قيمة الفاتورة -- الطبيب لا يستحق نسبة على دين لم
+    # يُقبض بعد، والأقساط تُوزَّع تلقائياً لأن كل دفعة تولّد سطرها المستقل.
+    #
+    # العلاقة مع الدفعة هي 1:1 عمداً (transaction_id فريد فعلياً بالاستخدام):
+    # تعديل الدفعة يُحدّث هذا السطر في مكانه مع الإبقاء على applied_percent
+    # مجمّدة كما كانت، وحذف الدفعة يحذفه. هذا يُبقي كشف حساب الطبيب مطابقاً
+    # سطراً بسطر لصفحة المالية بدل أن يتضخم بأسطر عكسية لا يفهمها المستخدم.
+    id = Column(Integer, primary_key=True, index=True)
+    clinic_email = Column(String, index=True, nullable=False)
+    clinic_doctor_id = Column(Integer, ForeignKey("clinic_doctors.id"), index=True, nullable=False)
+    transaction_id = Column(Integer, ForeignKey("financial_transactions.id"), index=True, nullable=True)
+    patient_id = Column(Integer, nullable=True)
+    invoice_id = Column(Integer, nullable=True)
+    patient_name = Column(String, nullable=True)
+    description = Column(String, nullable=True)
+    # المبلغ المحصّل من المريض في هذه الدفعة تحديداً.
+    gross_amount = Column(Numeric(12, 2), nullable=False, default=0)
+    # لقطة النسبة لحظة التسجيل -- لا تتغير أبداً بعد ذلك مهما عُدّلت نسبة الطبيب.
+    applied_percent = Column(Numeric(5, 2), nullable=False, default=0)
+    doctor_share = Column(Numeric(12, 2), nullable=False, default=0)
+    clinic_share = Column(Numeric(12, 2), nullable=False, default=0)
+    # تاريخ الدفعة نفسها (وليس تاريخ إنشاء هذا السطر) -- هو ما تُبنى عليه
+    # التقارير الشهرية، حتى تبقى مطابقة تماماً لتقرير المالية لنفس الشهر
+    # حين يُسجَّل دفعة قديمة بتاريخها الحقيقي.
+    earned_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
+    # آخر مرة عُدّلت فيها الدفعة الأصلية بعد تسجيلها (NULL = لم تُعدَّل قط).
+    adjusted_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
+
+    clinic_doctor = relationship("ClinicDoctor", back_populates="earnings")
+    transaction = relationship("FinancialTransaction", back_populates="earnings")
+
+
+class DoctorPayout(Base):
+    __tablename__ = "doctor_payouts"
+
+    # تسوية: مبلغ سُلِّم فعلاً للطبيب المساعد من مستحقاته المتراكمة.
+    # الرصيد المستحق = مجموع doctor_share - مجموع التسويات.
+    #
+    # كل تسوية تُنشئ في نفس العملية حركة مصروف (FinancialTransaction من نوع
+    # expense) على حساب العيادة، وإلا يبقى "صافي أرباح العيادة" في صفحة
+    # المالية منتفخاً بمال خرج فعلاً من الصندوق. expense_transaction_id يحفظ
+    # رابط تلك الحركة ليُحذَف الاثنان معاً عند التراجع عن تسوية.
+    id = Column(Integer, primary_key=True, index=True)
+    clinic_email = Column(String, index=True, nullable=False)
+    clinic_doctor_id = Column(Integer, ForeignKey("clinic_doctors.id"), index=True, nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
+    note = Column(String, nullable=True)
+    expense_transaction_id = Column(Integer, nullable=True)
+    paid_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
+    created_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
+
+    clinic_doctor = relationship("ClinicDoctor", back_populates="payouts")
 
 
 class PatientXRay(Base):

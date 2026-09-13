@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// هوية بصرية موحّدة للتطبيق -- نفس الألوان والتدرجات المستخدمة تماماً في
 /// موقع العيادة (frontend_web/login.html و appointments.html وغيرها)، حتى
@@ -159,6 +160,19 @@ class AppColors {
     colors: [navy900, indigo800, violet700],
   );
 
+  /// كبسولة التبويب النشط في الشريط السفلي -- مطابقة لـ
+  /// linear-gradient(160deg, rgba(99,102,241,.95), rgba(139,92,246,.9))
+  /// في ‎.mshell-tab[data-active="1"] بالموقع. `final` لا `const` لأن
+  /// withValues() ليست ثابتة وقت الترجمة.
+  static final navActiveGradient = LinearGradient(
+    begin: Alignment.topRight,
+    end: Alignment.bottomLeft,
+    colors: [
+      const Color(0xFF6366F1).withValues(alpha: .95),
+      const Color(0xFF8B5CF6).withValues(alpha: .90),
+    ],
+  );
+
   static const primaryButtonGradient = LinearGradient(
     begin: Alignment.centerRight,
     end: Alignment.centerLeft,
@@ -220,68 +234,570 @@ class AppColors {
   );
 }
 
+/// ───────────────────────────────────────────────────────────────────────────
+/// نظام «الليل النيلي» -- بنية واحدة، وضعان لونيان (2026-09-05)
+/// ───────────────────────────────────────────────────────────────────────────
+///
+/// المستخدم اختار اتجاه «الليل النيلي» ثم طلب صراحةً: «لنجعله للوضع الليلي،
+/// أما النهاري فأريده نفس التصميم تماماً بالضبط ولكن بألوان فاتحة وخلفية
+/// بيضاء». لذلك لا يوجد هنا تصميمان بل **جدول تحويل ألوان** لبنية واحدة:
+/// نفس المقاسات، نفس أنصاف الأقطار، نفس الحركات، ويتبدّل اللون وحده.
+///
+/// كل قيمة تعتمد على الوضع تعيش في [AppSurface] (ThemeExtension)، لا في
+/// [AppColors]. ثوابت [AppColors] القديمة **لم تُمَسّ إطلاقاً** حتى تبقى كل
+/// الشاشات التي لم تُهاجَر بعد تعمل حرفياً كما كانت -- الهجرة تجري شاشةً
+/// شاشة، ومن يقرأ AppSurface يحصل على الوضعين، ومن يقرأ AppColors يبقى
+/// فاتحاً كما كان. لا تُضِف لوناً يعتمد على الوضع إلى AppColors.
+///
+/// الوصول: `context.surface` (انظر الامتداد أسفل الملف). لا تستعمل
+/// `Theme.of(context).extension<AppSurface>()!` مباشرةً -- الامتداد يرجع
+/// النسخة الفاتحة عند الغياب بدل الانهيار.
+@immutable
+class AppSurface extends ThemeExtension<AppSurface> {
+  /// للتفريع النادر الذي لا يمكن التعبير عنه بتوكن (مثل اختيار Brightness
+  /// لشريط الحالة). لا تستعمله لاختيار ألوان -- أضِف توكناً بدلاً من ذلك.
+  final bool isDark;
+
+  // خلفية الصفحة وكرات الضوء الثلاث (AtmosphereBackground).
+  final Color pageBg;
+  final Color orb1;
+  final Color orb2;
+  final Color orb3;
+
+  // البطاقات العادية (SectionCard، بطاقة المريض، بطاقة الموعد...).
+  final Color cardBg;
+  final Color cardBorder;
+  final Color cardBorderActive;
+  final List<BoxShadow> cardShadow;
+
+  // بطاقة الرأس (الرقم المالي + صفّ العدّادين) -- نفس البنية في الوضعين.
+  final Color heroBg;
+  final Color heroBorder;
+  final List<BoxShadow> heroShadow;
+
+  /// لون اللمعة التي تمرّ فوق بطاقة الرأس. أبيض شفاف ليلاً (تلمع على
+  /// الزجاج الداكن)، نيليّ شفاف نهاراً (اللمعة البيضاء تختفي على الأبيض).
+  final Color sheen;
+  final Color heroWash;
+
+  // النصوص.
+  final Color textPrimary;
+  final Color textSecondary;
+  final Color textMuted;
+  final Color heroCaption;
+  final Color bigNumber;
+  final Color bigNumberUnit;
+
+  /// توهّج خلف الرقم الكبير -- ليلاً فقط؛ نهاراً null (لا معنى للتوهّج على
+  /// الأبيض، والوزن يأتي من اللون نفسه).
+  final Color? bigNumberGlow;
+
+  // التمييز: سماوي ← نيلي في الوضعين. الفارق أن السلّم النهاري أغمق لأن
+  // السماوي الفاتح على أبيض لا يحمل نصّاً مقروءاً (تباين أقل من 3:1).
+  final LinearGradient accentGradient;
+
+  /// لون النص/الأيقونة فوق [accentGradient]: داكن ليلاً، أبيض نهاراً.
+  final Color onAccent;
+  final Color accentGlow;
+  final Color accentSolid;
+
+  // صناديق الأيقونات الصغيرة داخل البطاقات.
+  final Color iconBoxBg;
+  final Color iconBoxBorder;
+  final Color iconBoxFg;
+
+  /// الفواصل الرفيعة (الحدّ العلوي لصفّ العدّادين، والفاصل الرأسي بينهما).
+  final Color divider;
+
+  // النقطة "الحيّة" النابضة بجانب عنوان بطاقة الرأس.
+  final Color liveDot;
+  final Color liveDotHalo;
+
+  // الشريط السفلي العائم.
+  final Color navBg;
+  final Color navBorder;
+  final List<BoxShadow> navShadow;
+  final Color navInactive;
+
+  // شرائح التصفية في حالتها الساكنة (النشطة تستعمل accentGradient).
+  final Color chipBg;
+  final Color chipBorder;
+  final Color chipFg;
+
+  // أزرار الإجراءات المربّعة داخل البطاقات (فتح الملف / اتصال / تعديل...).
+  final Color actionBg;
+  final Color actionBorder;
+
+  // شارة الباقة.
+  final Color tierFg;
+  final Color tierBg;
+  final Color tierBorder;
+
+  // شارات الحالة المالية على بطاقة المريض.
+  final Color pillDueFg;
+  final Color pillDueBg;
+  final Color pillDueBorder;
+  final Color pillPaidFg;
+  final Color pillPaidBg;
+  final Color pillPaidBorder;
+  final Color pillNoneFg;
+  final Color pillNoneBg;
+  final Color pillNoneBorder;
+
+  // حقل البحث.
+  final Color fieldBg;
+  final Color fieldBorder;
+  final Color fieldHint;
+
+  /// خلفية الأوراق السفلية (bottom sheets) والنوافذ. **سطح مصمت لا زجاجي**:
+  /// الورقة تطفو فوق طبقة تعتيم، والزجاج الشفّاف فوق تعتيم يعطي لوناً موحلاً
+  /// ويُظهر المحتوى تحته مشوّشاً خلف النموذج.
+  final Color sheetBg;
+
+  /// السطح الكهرماني للتنبيهات القائمة بذاتها -- لوحة "طلبات حجز جديدة"
+  /// أساساً. amber-50 المصمت يصير بقعة كريمية على سطح ‎#07061A، فالنسخة
+  /// الليلية شفافية من نفس الكهرمان لا درجة فاتحة ثابتة.
+  final Color warnBg;
+  final Color warnBorder;
+  final Color warnFg;
+
+  const AppSurface({
+    required this.isDark,
+    required this.pageBg,
+    required this.orb1,
+    required this.orb2,
+    required this.orb3,
+    required this.cardBg,
+    required this.cardBorder,
+    required this.cardBorderActive,
+    required this.cardShadow,
+    required this.heroBg,
+    required this.heroBorder,
+    required this.heroShadow,
+    required this.sheen,
+    required this.heroWash,
+    required this.textPrimary,
+    required this.textSecondary,
+    required this.textMuted,
+    required this.heroCaption,
+    required this.bigNumber,
+    required this.bigNumberUnit,
+    required this.bigNumberGlow,
+    required this.accentGradient,
+    required this.onAccent,
+    required this.accentGlow,
+    required this.accentSolid,
+    required this.iconBoxBg,
+    required this.iconBoxBorder,
+    required this.iconBoxFg,
+    required this.divider,
+    required this.liveDot,
+    required this.liveDotHalo,
+    required this.navBg,
+    required this.navBorder,
+    required this.navShadow,
+    required this.navInactive,
+    required this.chipBg,
+    required this.chipBorder,
+    required this.chipFg,
+    required this.actionBg,
+    required this.actionBorder,
+    required this.tierFg,
+    required this.tierBg,
+    required this.tierBorder,
+    required this.pillDueFg,
+    required this.pillDueBg,
+    required this.pillDueBorder,
+    required this.pillPaidFg,
+    required this.pillPaidBg,
+    required this.pillPaidBorder,
+    required this.pillNoneFg,
+    required this.pillNoneBg,
+    required this.pillNoneBorder,
+    required this.fieldBg,
+    required this.fieldBorder,
+    required this.fieldHint,
+    required this.sheetBg,
+    required this.warnBg,
+    required this.warnBorder,
+    required this.warnFg,
+  });
+
+  /// الوضع النهاري -- خلفية بيضاء، بطاقات مصمتة بظلّ نيلي ناعم بدل الحدود
+  /// الصلبة، وسلّم تمييز مُغمَّق (‎#06B6D4 → #4F46E5) ليحمل نصّاً أبيض.
+  static final AppSurface light = AppSurface(
+    isDark: false,
+    pageBg: const Color(0xFFFFFFFF),
+    orb1: const Color(0xFFA78BFA).withValues(alpha: .34),
+    orb2: const Color(0xFF818CF8).withValues(alpha: .24),
+    orb3: const Color(0xFF22D3EE).withValues(alpha: .20),
+    cardBg: const Color(0xFFFFFFFF),
+    cardBorder: const Color(0xFFE2E8F0).withValues(alpha: .90),
+    cardBorderActive: const Color(0xFF818CF8).withValues(alpha: .50),
+    cardShadow: [
+      BoxShadow(
+        color: const Color(0xFF0F172A).withValues(alpha: .035),
+        blurRadius: 2,
+        offset: const Offset(0, 1),
+      ),
+      BoxShadow(
+        color: const Color(0xFF4F46E5).withValues(alpha: .16),
+        blurRadius: 26,
+        offset: const Offset(0, 14),
+      ),
+    ],
+    heroBg: const Color(0xFFFFFFFF),
+    heroBorder: const Color(0xFFE2E8F0).withValues(alpha: .90),
+    heroShadow: [
+      BoxShadow(
+        color: const Color(0xFF0F172A).withValues(alpha: .04),
+        blurRadius: 2,
+        offset: const Offset(0, 1),
+      ),
+      BoxShadow(
+        color: const Color(0xFF4F46E5).withValues(alpha: .22),
+        blurRadius: 46,
+        offset: const Offset(0, 20),
+      ),
+    ],
+    sheen: const Color(0xFF6366F1).withValues(alpha: .09),
+    heroWash: const Color(0xFF7C3AED).withValues(alpha: .075),
+    textPrimary: const Color(0xFF0F172A),
+    textSecondary: const Color(0xFF64748B),
+    textMuted: const Color(0xFF94A3B8),
+    heroCaption: const Color(0xFF4F46E5),
+    bigNumber: const Color(0xFF141034),
+    bigNumberUnit: const Color(0xFF6366F1),
+    bigNumberGlow: null,
+    accentGradient: const LinearGradient(
+      begin: Alignment.topRight,
+      end: Alignment.bottomLeft,
+      colors: [Color(0xFF06B6D4), Color(0xFF4F46E5)],
+    ),
+    onAccent: const Color(0xFFFFFFFF),
+    accentGlow: const Color(0xFF4F46E5).withValues(alpha: .55),
+    accentSolid: const Color(0xFF4F46E5),
+    iconBoxBg: const Color(0xFFEEF2FF),
+    iconBoxBorder: const Color(0xFFE0E7FF),
+    iconBoxFg: const Color(0xFF4F46E5),
+    divider: const Color(0xFFF1F5F9),
+    liveDot: const Color(0xFF06B6D4),
+    liveDotHalo: const Color(0xFF06B6D4).withValues(alpha: .16),
+    navBg: const Color(0xFFFFFFFF),
+    navBorder: const Color(0xFFE2E8F0).withValues(alpha: .90),
+    navShadow: [
+      BoxShadow(
+        color: const Color(0xFF6366F1).withValues(alpha: .10),
+        blurRadius: 30,
+        offset: const Offset(0, -2),
+      ),
+      BoxShadow(
+        color: const Color(0xFF0F172A).withValues(alpha: .14),
+        blurRadius: 36,
+        offset: const Offset(0, 18),
+      ),
+    ],
+    navInactive: const Color(0xFF94A3B8),
+    chipBg: const Color(0xFFFFFFFF),
+    chipBorder: const Color(0xFFE2E8F0),
+    chipFg: const Color(0xFF475569),
+    actionBg: const Color(0xFFF8FAFC),
+    actionBorder: const Color(0xFFEEF2FF),
+    tierFg: const Color(0xFFB45309),
+    tierBg: const Color(0xFFFBBF24).withValues(alpha: .14),
+    tierBorder: const Color(0xFFF59E0B).withValues(alpha: .42),
+    pillDueFg: const Color(0xFFB45309),
+    pillDueBg: const Color(0xFFFFFBEB),
+    pillDueBorder: const Color(0xFFFDE68A),
+    pillPaidFg: const Color(0xFF047857),
+    pillPaidBg: const Color(0xFFECFDF5),
+    pillPaidBorder: const Color(0xFFA7F3D0),
+    pillNoneFg: const Color(0xFF64748B),
+    pillNoneBg: const Color(0xFFF1F5F9),
+    pillNoneBorder: const Color(0xFFE2E8F0),
+    fieldBg: const Color(0xFFFFFFFF),
+    fieldBorder: const Color(0xFFE2E8F0),
+    fieldHint: const Color(0xFF94A3B8),
+    sheetBg: const Color(0xFFFFFFFF),
+    warnBg: const Color(0xFFFFFBEB),
+    warnBorder: const Color(0xFFFDE68A),
+    warnFg: const Color(0xFF92400E),
+  );
+
+  /// الوضع الليلي -- «الليل النيلي» كما اختاره المستخدم بلا تغيير: سطح
+  /// ‎#07061A، بطاقات زجاجية شفّافة، وتمييز سماوي فاتح بنصّ داكن.
+  static final AppSurface dark = AppSurface(
+    isDark: true,
+    pageBg: const Color(0xFF07061A),
+    orb1: const Color(0xFF6D28D9).withValues(alpha: .55),
+    orb2: const Color(0xFF312E81).withValues(alpha: .70),
+    orb3: const Color(0xFF22D3EE).withValues(alpha: .16),
+    cardBg: const Color(0xFFFFFFFF).withValues(alpha: .05),
+    cardBorder: const Color(0xFFFFFFFF).withValues(alpha: .075),
+    cardBorderActive: const Color(0xFF818CF8).withValues(alpha: .32),
+    cardShadow: [
+      BoxShadow(
+        color: const Color(0xFF818CF8).withValues(alpha: .18),
+        blurRadius: 34,
+        offset: const Offset(0, 18),
+      ),
+    ],
+    heroBg: const Color(0xFFFFFFFF).withValues(alpha: .06),
+    heroBorder: const Color(0xFFFFFFFF).withValues(alpha: .10),
+    heroShadow: [
+      BoxShadow(
+        color: const Color(0xFF7C3AED).withValues(alpha: .45),
+        blurRadius: 50,
+        offset: const Offset(0, 24),
+      ),
+    ],
+    sheen: const Color(0xFFFFFFFF).withValues(alpha: .10),
+    heroWash: const Color(0xFFA78BFA).withValues(alpha: .10),
+    textPrimary: const Color(0xFFF1F5F9),
+    textSecondary: const Color(0xFF8B8FC7),
+    textMuted: const Color(0xFF7E83B8),
+    heroCaption: const Color(0xFFA5B4FC),
+    bigNumber: const Color(0xFFFFFFFF),
+    bigNumberUnit: const Color(0xFFC4B5FD),
+    bigNumberGlow: const Color(0xFFA78BFA),
+    accentGradient: const LinearGradient(
+      begin: Alignment.topRight,
+      end: Alignment.bottomLeft,
+      colors: [Color(0xFF67E8F9), Color(0xFF818CF8)],
+    ),
+    onAccent: const Color(0xFF061019),
+    accentGlow: const Color(0xFF67E8F9).withValues(alpha: .75),
+    accentSolid: const Color(0xFF818CF8),
+    iconBoxBg: const Color(0xFF818CF8).withValues(alpha: .14),
+    iconBoxBorder: const Color(0xFF818CF8).withValues(alpha: .22),
+    iconBoxFg: const Color(0xFFA5B4FC),
+    divider: const Color(0xFFFFFFFF).withValues(alpha: .09),
+    liveDot: const Color(0xFF22D3EE),
+    liveDotHalo: const Color(0xFF22D3EE).withValues(alpha: .35),
+    navBg: const Color(0xFF15122F),
+    navBorder: const Color(0xFFFFFFFF).withValues(alpha: .10),
+    navShadow: [
+      BoxShadow(
+        color: const Color(0xFF7C3AED).withValues(alpha: .28),
+        blurRadius: 40,
+        offset: const Offset(0, -2),
+      ),
+    ],
+    navInactive: const Color(0xFF7E83B8),
+    chipBg: const Color(0xFFFFFFFF).withValues(alpha: .05),
+    chipBorder: const Color(0xFFFFFFFF).withValues(alpha: .09),
+    chipFg: const Color(0xFFA5B4FC),
+    actionBg: const Color(0xFFFFFFFF).withValues(alpha: .06),
+    actionBorder: const Color(0xFFFFFFFF).withValues(alpha: .09),
+    tierFg: const Color(0xFFFCD34D),
+    tierBg: const Color(0xFFFCD34D).withValues(alpha: .10),
+    tierBorder: const Color(0xFFFCD34D).withValues(alpha: .42),
+    pillDueFg: const Color(0xFFFBBF24),
+    pillDueBg: const Color(0xFFFBBF24).withValues(alpha: .11),
+    pillDueBorder: const Color(0xFFFBBF24).withValues(alpha: .26),
+    pillPaidFg: const Color(0xFF34D399),
+    pillPaidBg: const Color(0xFF34D399).withValues(alpha: .11),
+    pillPaidBorder: const Color(0xFF34D399).withValues(alpha: .26),
+    pillNoneFg: const Color(0xFF94A3B8),
+    pillNoneBg: const Color(0xFF94A3B8).withValues(alpha: .10),
+    pillNoneBorder: const Color(0xFF94A3B8).withValues(alpha: .22),
+    fieldBg: const Color(0xFFFFFFFF).withValues(alpha: .05),
+    fieldBorder: const Color(0xFFFFFFFF).withValues(alpha: .09),
+    fieldHint: const Color(0xFF7E83B8),
+    sheetBg: const Color(0xFF15122F),
+    warnBg: const Color(0xFFFBBF24).withValues(alpha: .10),
+    warnBorder: const Color(0xFFFBBF24).withValues(alpha: .30),
+    warnFg: const Color(0xFFFCD34D),
+  );
+
+  // ThemeExtension يفرض copyWith/lerp. لا نحتاج نسخاً جزئياً (النسختان
+  // ثابتتان ومعرَّفتان أعلاه)، والمزج التدريجي بين لوحتين متعاكستين ينتج
+  // ألواناً وسطية موحلة، فالتبديل قطعيّ عند منتصف الانتقال -- وهذا هو
+  // السلوك المقصود، لا نقص في التنفيذ.
+  @override
+  AppSurface copyWith() => this;
+
+  @override
+  AppSurface lerp(covariant AppSurface? other, double t) {
+    if (other == null) return this;
+    return t < 0.5 ? this : other;
+  }
+}
+
+/// الوصول المختصر لتوكنات الوضع الحالي. يرجع النسخة الفاتحة إن لم يكن
+/// الامتداد مسجَّلاً في الـ Theme المحيط (شاشة تُبنى داخل Theme خاص بها، أو
+/// اختبار widget بلا AppTheme) بدل أن ينهار بعلامة `!`.
+extension AppSurfaceContext on BuildContext {
+  AppSurface get surface =>
+      Theme.of(this).extension<AppSurface>() ?? AppSurface.light;
+}
+
+/// خطّا الموقع بعد تحديث التوكنات في 2026-09-04: Noto Kufi Arabic للعناوين
+/// والأرقام، و Noto Sans Arabic للمتن. كان التطبيق ما زال على Tajawal
+/// (مطابقة 2026-09-02، أي قبل التحديث بيومين)، وهذا أحد أكبر أسباب شعور
+/// المستخدم بأن التطبيق "متأخّر" عن الموقع.
+///
+/// [kufi] للأرقام والعناوين: يفعّل `FontFeature.tabularFigures` افتراضياً
+/// حتى تصطفّ خانات المبالغ عمودياً في القوائم المالية -- وهو نصف سبب اختيار
+/// Noto على الموقع أصلاً (Tajawal لا يملك وزن 600 ولا أرقاماً جدولية).
+class AppType {
+  AppType._();
+
+  static TextStyle kufi({
+    double? fontSize,
+    FontWeight? fontWeight,
+    Color? color,
+    double? letterSpacing,
+    double? height,
+    bool tabularFigures = true,
+  }) {
+    return GoogleFonts.notoKufiArabic(
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      color: color,
+      letterSpacing: letterSpacing,
+      height: height,
+      fontFeatures:
+          tabularFigures ? const <FontFeature>[FontFeature.tabularFigures()] : null,
+    );
+  }
+
+  static TextStyle sans({
+    double? fontSize,
+    FontWeight? fontWeight,
+    Color? color,
+    double? letterSpacing,
+    double? height,
+  }) {
+    return GoogleFonts.notoSansArabic(
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      color: color,
+      letterSpacing: letterSpacing,
+      height: height,
+    );
+  }
+}
+
+/// مصدر الحقيقة الوحيد لوضع الإضاءة. يُحفَظ الاختيار في نفس
+/// SharedPreferences التي تحفظ الجلسة، لكنه **لا يُمسَح عند تسجيل الخروج** --
+/// وضع الإضاءة تفضيل جهاز لا تفضيل حساب.
+class ThemeController {
+  ThemeController._();
+
+  static final ThemeController instance = ThemeController._();
+
+  /// الافتراضي نهاري: هو الوضع الذي يستعمله الطبيب في ضوء العيادة.
+  final ValueNotifier<ThemeMode> mode =
+      ValueNotifier<ThemeMode>(ThemeMode.light);
+
+  static const _kPrefKey = 'theme_mode';
+
+  Future<void> load() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString(_kPrefKey);
+      if (saved == 'dark') {
+        mode.value = ThemeMode.dark;
+      } else if (saved == 'system') {
+        mode.value = ThemeMode.system;
+      } else if (saved == 'light') {
+        mode.value = ThemeMode.light;
+      }
+    } catch (_) {
+      // تعذّر قراءة التفضيل لا يمنع إقلاع التطبيق -- يبقى على النهاري.
+    }
+  }
+
+  Future<void> set(ThemeMode value) async {
+    mode.value = value;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kPrefKey, value.name);
+    } catch (_) {
+      // الاختيار يبقى فعّالاً في هذه الجلسة حتى لو فشل الحفظ.
+    }
+  }
+}
+
 class AppTheme {
   AppTheme._();
 
-  static ThemeData get theme {
+  /// أُبقيت للتوافق مع أي استدعاء قديم لـ `AppTheme.theme`.
+  static ThemeData get theme => light;
+
+  static ThemeData get light => _build(AppSurface.light);
+
+  static ThemeData get dark => _build(AppSurface.dark);
+
+  static ThemeData _build(AppSurface surf) {
+    final brightness = surf.isDark ? Brightness.dark : Brightness.light;
     final base = ThemeData(
       useMaterial3: true,
+      brightness: brightness,
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.indigo600,
-        primary: AppColors.indigo600,
+        brightness: brightness,
+        primary: surf.accentSolid,
         secondary: AppColors.violet600,
+        surface: surf.cardBg,
       ),
-      scaffoldBackgroundColor: AppColors.pageBg,
-      fontFamily: GoogleFonts.tajawal().fontFamily,
+      scaffoldBackgroundColor: surf.pageBg,
+      fontFamily: GoogleFonts.notoSansArabic().fontFamily,
     );
     return base.copyWith(
-      textTheme: GoogleFonts.tajawalTextTheme(base.textTheme),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.navy900,
-        foregroundColor: Colors.white,
+      extensions: <ThemeExtension<dynamic>>[surf],
+      textTheme: GoogleFonts.notoSansArabicTextTheme(base.textTheme)
+          .apply(bodyColor: surf.textPrimary, displayColor: surf.textPrimary),
+      appBarTheme: AppBarTheme(
+        backgroundColor: surf.pageBg,
+        foregroundColor: surf.textPrimary,
         elevation: 0,
         centerTitle: true,
       ),
+      dividerColor: surf.divider,
       cardTheme: CardThemeData(
         elevation: 0,
-        color: Colors.white,
-        surfaceTintColor: Colors.white,
+        color: surf.cardBg,
+        surfaceTintColor: surf.cardBg,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: AppColors.slate200),
+          side: BorderSide(color: surf.cardBorder),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: Colors.white,
+        fillColor: surf.fieldBg,
+        hintStyle: TextStyle(color: surf.fieldHint),
+        labelStyle: TextStyle(color: surf.textSecondary),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.slate300),
+          borderSide: BorderSide(color: surf.fieldBorder),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.slate300),
+          borderSide: BorderSide(color: surf.fieldBorder),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.indigo600, width: 1.6),
+          borderSide: BorderSide(color: surf.accentSolid, width: 1.6),
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: Colors.white,
-        indicatorColor: AppColors.indigo50,
+        backgroundColor: surf.navBg,
+        indicatorColor: surf.accentSolid.withValues(alpha: .16),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return TextStyle(
             fontSize: 11,
             fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-            color: selected ? AppColors.indigoAccent : AppColors.slate400,
+            color: selected ? surf.accentSolid : surf.navInactive,
           );
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return IconThemeData(
-            color: selected ? AppColors.indigoAccent : AppColors.slate400,
+            color: selected ? surf.accentSolid : surf.navInactive,
           );
         }),
       ),

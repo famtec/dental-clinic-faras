@@ -62,6 +62,8 @@
       '<line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line>',
     inventory:
       '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line>',
+    doctors:
+      '<path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"></path><circle cx="10" cy="7" r="3.2"></circle><path d="M18 8v6"></path><path d="M21 11h-6"></path>',
     more: '<circle cx="5" cy="12" r="1.7"></circle><circle cx="12" cy="12" r="1.7"></circle><circle cx="19" cy="12" r="1.7"></circle>',
     profile:
       '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle>',
@@ -96,6 +98,7 @@
 
   /* روابط تظهر داخل لوحة "المزيد" بدل الشريط السفلي. */
   var SHEET_LINKS = [
+    { href: 'doctors.html', label: 'الأطباء والنسب', hint: 'حساب نسب الأطباء', icon: 'doctors', tone: 'violet' },
     { href: 'profile.html', label: 'حسابي', hint: 'بيانات العيادة', icon: 'profile', tone: 'indigo' },
     { href: 'qr.html', label: 'رمز الحجز', hint: 'مشاركة QR', icon: 'qr', tone: 'cyan' },
     { href: 'contact_developer.html', label: 'تواصل مع المطور', hint: 'دعم فني', icon: 'developer', tone: 'pink' }
@@ -113,6 +116,7 @@
     'appointments.html': 'المواعيد',
     'finance.html': 'المالية',
     'inventory.html': 'المخزن',
+    'doctors.html': 'الأطباء والنسب',
     'patient_record.html': 'ملف المريض',
     'profile.html': 'حسابي',
     'qr.html': 'رمز الحجز',

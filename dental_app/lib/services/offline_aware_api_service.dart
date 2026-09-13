@@ -2,33 +2,51 @@ import 'dart:async';
 import 'dart:convert';
 
 import '../models/appointment.dart';
+import '../models/finance_summary.dart';
+import '../models/finance_transaction.dart';
+import '../models/inventory_item.dart';
+import '../models/patient.dart';
+import '../models/patient_stats.dart';
+import '../models/treatment_invoice.dart';
 import 'api_service.dart';
 import 'connectivity_service.dart';
 import 'local_db.dart';
 import 'offline_sync_status.dart';
 
-/// نسخة من ApiService تعمل بدون إنترنت لشاشة المواعيد تحديداً (تجربة أولى
-/// -- سيُوسَّع لاحقاً لبقية الشاشات إن نجحت). الفكرة العامة:
+/// نسخة من ApiService تعمل بدون إنترنت. بدأت 2026-08-31 بشاشة المواعيد
+/// وحدها (تجربة أولى)، ثم وُسِّعت 2026-09-02 لتغطي المرضى/مخطط الأسنان/
+/// المخزون/الفواتير أيضاً (بطلب المستخدم "ابني نفس النمط على جميع
+/// الشاشات..."). الفكرة العامة، مطابقة لكل الكيانات:
 ///
-/// - القراءة (fetchAppointments): تحاول السيرفر أولاً كالمعتاد؛ عند نجاحها
-///   تُحدَّث النسخة المحلية وتُرجَع؛ عند فشلها بسبب انقطاع اتصال (لا رفض
-///   حقيقي من السيرفر) تُقرَأ آخر نسخة محفوظة محلياً بدل رمي خطأ يوقف
-///   الشاشة.
-/// - الكتابة (create/update/delete/status): تحاول السيرفر أولاً؛ عند فشلها
-///   بانقطاع اتصال، تُطبَّق التغييرات محلياً فوراً (فيراها الطبيب مباشرة في
-///   القائمة) وتُسجَّل بقائمة انتظار (outbox) لتُرسَل تلقائياً بمجرد عودة
-///   الشبكة، دون أي إجراء إضافي من الطبيب.
+/// - القراءة: تحاول السيرفر أولاً كالمعتاد؛ عند نجاحها تُحدَّث النسخة
+///   المحلية وتُرجَع؛ عند فشلها بسبب انقطاع اتصال فعلي (لا رفض حقيقي من
+///   السيرفر) تُقرَأ آخر نسخة محفوظة محلياً بدل رمي خطأ يوقف الشاشة.
+/// - الكتابة: تحاول السيرفر أولاً؛ عند فشلها بانقطاع اتصال، تُطبَّق التغييرات
+///   محلياً فوراً (فيراها الطبيب مباشرة) وتُسجَّل بقائمة انتظار (outbox) لتُرسَل
+///   تلقائياً بمجرد عودة الشبكة، دون أي إجراء إضافي من الطبيب.
 ///
-/// كل الدوال الموروثة الأخرى (مرضى، فواتير، مخزون، ...) تعمل كما هي دون أي
-/// تغيير -- تحتاج اتصالاً بالإنترنت تماماً كما كانت.
+/// كيانان لهما جدول محلي مدمَج حقيقي (نفس بنية المواعيد بالضبط) لأن قوائمهما
+/// تحتاج عرضاً كاملاً أوفلاين حتى بعد إغلاق الشاشة وإعادة فتحها: المرضى
+/// (patients، ويحمل عمود chart_state فمخطط الأسنان جزء منه) والمخزون
+/// (inventory_items). أما فواتير العلاج/دفعاتها والتقرير المالي/آخر
+/// الحركات/إحصائيات المرضى فحقولها محسوبة من طرف السيرفر (متبقٍ/صافي
+/// ربح/...)، فتخزينها محلياً بجدول مدمَج مماثل يعني إعادة بناء تلك الحسابات
+/// هنا أيضاً -- خطر حقيقي على دقة الأرقام المالية. بدلاً من ذلك:
+/// - القراءة منها تُخزَّن مؤقتاً (cache_kv، آخر استجابة ناجحة فقط) وتُعرض كما
+///   هي عند انقطاع الاتصال (بلا أي تعديل عليها).
+/// - الكتابة عليها (فاتورة/دفعة/مصروف جديد، أو تعديل دفعة) تمر عبر outbox
+///   فقط، وتُعيد نسخة **تقديرية** محسوبة من آخر بيانات معروفة (محلياً أو من
+///   outbox نفسه) لعرضها فوراً في الشاشة الحالية؛ الأرقام النهائية الدقيقة
+///   تصل فعلياً بعد المزامنة (أول فتح تالٍ للشاشة بعد عودة الاتصال).
+///
+/// حالتان مستثناتان صراحة من الدعم الأوفلاين (بنفس فلسفة respondToBooking
+/// أدناه -- حالات نادرة، أوضح كخطأ صريح من محاولة دعمها بمنطق هش): إنشاء
+/// فاتورة أو تسجيل دفعة لمريض أُنشئ هو نفسه أوفلاين ولم يُزامَن بعد (تعديل
+/// مخطط أسنانه ممنوع للسبب نفسه)، لأن ربطها الصحيح بالمريض الحقيقي على
+/// السيرفر يحتاج مزامنة المريض أولاً.
 ///
 /// **مهم**: التمييز بين "انقطاع اتصال" و"رفض حقيقي من السيرفر" يعتمد على
-/// ApiException.statusCode: كل دالة بـ ApiService الأصلية ترمي استثناءً
-/// بلا statusCode (null) حصراً حين يفشل http نفسه (SocketException/Timeout/
-/// إلخ في catch (_))، وبـ statusCode فعلي (400/401/402/...) حين يردّ
-/// السيرفر فعلاً برفض. الحالة الأولى فقط تُعامَل كأوفلاين وتُوضَع
-/// بقائمة الانتظار؛ الثانية تُمرَّر للشاشة كما هي فوراً (لا داعي لتأجيل
-/// خطأ تحقّق حقيقي، مثل موعد بحقل ناقص).
+/// ApiException.statusCode كما في النسخة الأصلية (انظر [_isConnectivityFailure]).
 class OfflineAwareApiService extends ApiService {
   OfflineAwareApiService(super.authStorage) {
     _connectivitySub = _connectivity.onStatusChange.listen((online) {
@@ -62,9 +80,10 @@ class OfflineAwareApiService extends ApiService {
     OfflineSyncStatus.instance.failedCount.value = await _db.countFailedOps();
   }
 
-  // ---------------------------------------------------------------------
-  // القراءة
-  // ---------------------------------------------------------------------
+  // ===========================================================================
+  // مواعيد -- كما كانت منذ 2026-08-31، بلا أي تعديل جوهري (انظر
+  // _applyAppointmentOp أدناه لمكان انتقال منطق المزامنة نفسه بلا تغيير).
+  // ===========================================================================
 
   @override
   Future<List<Appointment>> fetchAppointments() async {
@@ -80,10 +99,6 @@ class OfflineAwareApiService extends ApiService {
       return await _db.getAllAppointmentsMerged();
     }
   }
-
-  // ---------------------------------------------------------------------
-  // الكتابة
-  // ---------------------------------------------------------------------
 
   @override
   Future<Appointment> createAppointment({
@@ -153,11 +168,6 @@ class OfflineAwareApiService extends ApiService {
     } on ApiException catch (e) {
       if (!_isConnectivityFailure(e)) rethrow;
       final existing = await _db.getAppointment(appointmentId);
-      // إن كان الموعد أصلاً معلّق الإنشاء (id سالب لم يُزامَن بعد) يبقى
-      // pending_create كما هو، ونكتفي بتحديث الصف المحلي دون تسجيل عملية
-      // outbox جديدة -- عملية الإنشاء المعلّقة نفسها ستقرأ أحدث نسخة من
-      // الصف المحلي وقت مزامنتها فعلياً (انظر _applyOp حالة 'create')، فلا
-      // داعي لعملية تعديل منفصلة لموعد لم يصل للسيرفر أصلاً بعد.
       final keepCreateStatus =
           existing != null && existing.syncStatus == 'pending_create';
       final placeholder = (existing ??
@@ -201,8 +211,6 @@ class OfflineAwareApiService extends ApiService {
     } on ApiException catch (e) {
       if (!_isConnectivityFailure(e)) rethrow;
       if (appointmentId < 0) {
-        // لم يُزامَن أصلاً بعد -- يكفي حذفه محلياً وإلغاء عملياته المعلّقة
-        // (إنشاء/تعديل) بدل إرسال حذف لموعد لن يوجد على السيرفر أصلاً.
         await _db.deleteAppointmentRow(appointmentId);
         await _db.cancelPendingOpsFor(appointmentId);
       } else {
@@ -227,9 +235,6 @@ class OfflineAwareApiService extends ApiService {
     } on ApiException catch (e) {
       if (!_isConnectivityFailure(e)) rethrow;
       final existing = await _db.getAppointment(appointmentId);
-      // نفس منطق updateAppointment أعلاه: موعد لم يُزامَن بعد (pending_create)
-      // يكفي تحديث حالته بالصف المحلي فقط، وستقرأ عملية الإنشاء المعلّقة
-      // هذه الحالة الجديدة وترسلها فور نجاح المزامنة (انظر _applyOp).
       final keepCreateStatus =
           existing != null && existing.syncStatus == 'pending_create';
       await _db.updateAppointmentStatusLocal(
@@ -253,25 +258,716 @@ class OfflineAwareApiService extends ApiService {
   Future<void> respondToBooking(int appointmentId, String decision) async {
     try {
       await super.respondToBooking(appointmentId, decision);
-      // الرد على طلب حجز يغيّر حالته على السيرفر (قُبل/رُفض) -- أبسط طريقة
-      // صحيحة لعكس ذلك محلياً هي حذف النسخة القديمة وترك refresh() التالي
-      // (تستدعيه الشاشة دائماً بعد هذا النداء) يجلب حالته الجديدة من
-      // السيرفر بدل تخمينها هنا.
       await _db.deleteAppointmentRow(appointmentId);
     } on ApiException catch (e) {
       if (!_isConnectivityFailure(e)) rethrow;
-      // قبول/رفض طلب حجز عام يحتاج رؤية الطلب لحظياً وقراراً نهائياً، وهي
-      // حالة نادرة الحدوث أوفلاين -- بخلاف باقي عمليات المواعيد، لا نُقدِّم
-      // دعماً أوفلاين لها في هذه المرحلة (تجربة أولى) ونطلب من الطبيب
-      // المحاولة عند عودة الشبكة بدل تعقيد سيناريو نادر.
       throw const ApiException(
           'قبول/رفض طلبات الحجز يحتاج اتصالاً بالإنترنت حالياً. حاول عند عودة الشبكة.');
     }
   }
 
-  // ---------------------------------------------------------------------
-  // محرّك المزامنة
-  // ---------------------------------------------------------------------
+  // ===========================================================================
+  // مرضى + مخطط الأسنان -- أُضيف 2026-09-02.
+  // ===========================================================================
+
+  @override
+  Future<List<Patient>> fetchPatients() async {
+    try {
+      final fresh = await super.fetchPatients();
+      await _db.replaceServerPatients(fresh);
+      OfflineSyncStatus.instance.isOnline.value = true;
+      unawaited(_trySync());
+      return await _db.getAllPatientsMerged();
+    } on ApiException catch (e) {
+      if (!_isConnectivityFailure(e)) rethrow;
+      OfflineSyncStatus.instance.isOnline.value = false;
+      return await _db.getAllPatientsMerged();
+    }
+  }
+
+  /// بطاقات الإحصائيات فوق قائمة المرضى -- قراءة بسيطة بلا كيان قابل
+  /// للتعديل، فتُخزَّن مؤقتاً (cache_kv) وتُعرض كما هي عند انقطاع الاتصال
+  /// بدل "--" الفارغة التي كانت تظهر سابقاً؛ الشاشة أصلاً تتجاهل أي فشل هنا
+  /// بصمت (انظر _loadStats في patients_list_screen.dart) فلا حاجة لأي تمييز
+  /// بين أنواع الفشل.
+  @override
+  Future<PatientStats> fetchPatientStats() async {
+    const cacheKey = 'patient_stats';
+    try {
+      final fresh = await super.fetchPatientStats();
+      await _db.setCache(cacheKey, json.encode(fresh.toJson()));
+      return fresh;
+    } on ApiException catch (e) {
+      if (!_isConnectivityFailure(e)) rethrow;
+      final cached = await _db.getCache(cacheKey);
+      if (cached == null) rethrow;
+      return PatientStats.fromJson(json.decode(cached) as Map<String, dynamic>);
+    }
+  }
+
+  @override
+  Future<Patient> createPatient({
+    required String fullName,
+    required String phone,
+    DateTime? birthDate,
+    String? gender,
+    String? medicalHistory,
+  }) async {
+    try {
+      final created = await super.createPatient(
+        fullName: fullName,
+        phone: phone,
+        birthDate: birthDate,
+        gender: gender,
+        medicalHistory: medicalHistory,
+      );
+      await _db.upsertPatient(created.copyWith(syncStatus: 'synced'));
+      return created;
+    } on ApiException catch (e) {
+      if (!_isConnectivityFailure(e)) rethrow;
+      final localId = _db.nextLocalId();
+      final placeholder = Patient(
+        id: localId,
+        fullName: fullName,
+        phone: phone,
+        gender: gender,
+        birthDate: birthDate,
+        medicalHistory: medicalHistory,
+        totalTreatmentCost: 0,
+        paidAmount: 0,
+        syncStatus: 'pending_create',
+      );
+      await _db.upsertPatient(placeholder);
+      await _db.enqueue(
+        entityType: 'patient',
+        operation: 'create',
+        targetId: localId,
+        payload: {
+          'full_name': fullName,
+          'phone': phone,
+          if (birthDate != null) 'birth_date': _formatDate(birthDate),
+          'gender': gender,
+          'medical_history': medicalHistory,
+        },
+      );
+      await _refreshPendingCount();
+      return placeholder;
+    }
+  }
+
+  @override
+  Future<Patient> updatePatient(
+    int patientId, {
+    required String fullName,
+    required String phone,
+    required String medicalHistory,
+    DateTime? birthDate,
+  }) async {
+    try {
+      final updated = await super.updatePatient(
+        patientId,
+        fullName: fullName,
+        phone: phone,
+        medicalHistory: medicalHistory,
+        birthDate: birthDate,
+      );
+      await _db.upsertPatient(updated.copyWith(syncStatus: 'synced'));
+      return updated;
+    } on ApiException catch (e) {
+      if (!_isConnectivityFailure(e)) rethrow;
+      final existing = await _db.getPatientLocal(patientId);
+      final keepCreateStatus =
+          existing != null && existing.syncStatus == 'pending_create';
+      final placeholder = (existing ??
+              Patient(
+                id: patientId,
+                fullName: fullName,
+                phone: phone,
+                totalTreatmentCost: 0,
+                paidAmount: 0,
+              ))
+          .copyWith(
+        fullName: fullName,
+        phone: phone,
+        medicalHistory: medicalHistory,
+        birthDate: birthDate,
+        syncStatus: keepCreateStatus ? 'pending_create' : 'pending_update',
+      );
+      await _db.upsertPatient(placeholder);
+      if (!keepCreateStatus) {
+        await _db.enqueue(
+          entityType: 'patient',
+          operation: 'update',
+          targetId: patientId,
+          payload: {
+            'full_name': fullName,
+            'phone': phone,
+            'medical_history': medicalHistory,
+            if (birthDate != null) 'birth_date': _formatDate(birthDate),
+          },
+        );
+      }
+      await _refreshPendingCount();
+      return placeholder;
+    }
+  }
+
+  /// تحديث مخطط الأسنان -- ممنوع صراحة لمريض أُنشئ أوفلاين ولم يُزامَن بعد
+  /// (معرّفه سالب مؤقت): ربطه الصحيح بالمريض الحقيقي على السيرفر يحتاج
+  /// مزامنة المريض أولاً، ودعم ذلك بمنطق إعادة توجيه مثل الفواتير أدناه غير
+  /// مبرَّر لحالة نادرة (إنشاء مريض وتخطيط أسنانه فوراً بينما الجهاز أوفلاين).
+  @override
+  Future<Patient> updatePatientChart(
+    int patientId,
+    Map<String, String> chartState,
+  ) async {
+    if (patientId < 0) {
+      // المريض نفسه أُنشئ أوفلاين ولم يُزامَن بعد (معرّف محلي مؤقت سالب) --
+      // لا يمكن استدعاء endpoint المخطط لمريض غير موجود على السيرفر بعد.
+      // بدل رفض التعديل كلياً (كما كان سابقاً)، نحفظه على سجل المريض المحلي
+      // نفسه فقط، بلا أي عملية outbox منفصلة من نوع patient_chart: مزامنة
+      // *إنشاء* هذا المريض لاحقاً (_applyPatientOp، حالة create أدناه) تتحقق
+      // أصلاً من chartStateRaw المحلي وتُرسله للسيرفر فور نجاح الإنشاء --
+      // فتصل بيانات المخطط تلقائياً مع أول مزامنة، دون تعقيد إضافي هنا ودون
+      // أي عملية outbox يتيمة تحمل معرّفاً سالباً لن يُعاد ربطه لاحقاً.
+      final existing = await _db.getPatientLocal(patientId);
+      final placeholder = (existing ??
+              Patient(
+                id: patientId,
+                fullName: '',
+                phone: '',
+                totalTreatmentCost: 0,
+                paidAmount: 0,
+              ))
+          .copyWith(chartStateRaw: json.encode(chartState));
+      await _db.upsertPatient(placeholder);
+      return placeholder;
+    }
+    try {
+      final updated = await super.updatePatientChart(patientId, chartState);
+      await _db.upsertPatient(updated.copyWith(syncStatus: 'synced'));
+      return updated;
+    } on ApiException catch (e) {
+      if (!_isConnectivityFailure(e)) rethrow;
+      final existing = await _db.getPatientLocal(patientId);
+      final keepCreateStatus =
+          existing != null && existing.syncStatus == 'pending_create';
+      final placeholder = (existing ??
+              Patient(
+                id: patientId,
+                fullName: '',
+                phone: '',
+                totalTreatmentCost: 0,
+                paidAmount: 0,
+              ))
+          .copyWith(
+        chartStateRaw: json.encode(chartState),
+        syncStatus: keepCreateStatus ? 'pending_create' : 'pending_update',
+      );
+      await _db.upsertPatient(placeholder);
+      // عملية "chart" لا تحمل payload فعلياً -- وقت المزامنة تُقرأ أحدث نسخة
+      // محلية لمخطط هذا المريض مباشرة (انظر _applyPatientChartOp)، لا القيمة
+      // المحفوظة هنا وقت الإنشاء، حتى تصل دائماً آخر حالة حتى لو تراكمت عدة
+      // تعديلات أوفلاين متتالية (تسجيل عدة أسنان قبل عودة الاتصال).
+      await _db.enqueue(
+        entityType: 'patient_chart',
+        operation: 'chart',
+        targetId: patientId,
+        payload: const {},
+      );
+      await _refreshPendingCount();
+      return placeholder;
+    }
+  }
+
+  static String _formatDate(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+  // ===========================================================================
+  // مخزون -- أُضيف 2026-09-02، نفس نمط المواعيد بالضبط (لا تبعية على أي كيان
+  // آخر، فلا تعقيد إعادة توجيه كالفواتير أدناه).
+  // ===========================================================================
+
+  @override
+  Future<List<InventoryItem>> fetchInventory() async {
+    try {
+      final fresh = await super.fetchInventory();
+      await _db.replaceServerInventoryItems(fresh);
+      unawaited(_trySync());
+      return await _db.getAllInventoryItemsMerged();
+    } on ApiException catch (e) {
+      if (!_isConnectivityFailure(e)) rethrow;
+      return await _db.getAllInventoryItemsMerged();
+    }
+  }
+
+  @override
+  Future<InventoryItem> createInventoryItem({
+    required String itemName,
+    required int quantity,
+    int minAlertQuantity = 5,
+  }) async {
+    try {
+      final created = await super.createInventoryItem(
+        itemName: itemName,
+        quantity: quantity,
+        minAlertQuantity: minAlertQuantity,
+      );
+      await _db.upsertInventoryItem(created.copyWith(syncStatus: 'synced'));
+      return created;
+    } on ApiException catch (e) {
+      if (!_isConnectivityFailure(e)) rethrow;
+      final localId = _db.nextLocalId();
+      final placeholder = InventoryItem(
+        id: localId,
+        doctorEmail: '',
+        itemName: itemName,
+        quantity: quantity,
+        minAlertQuantity: minAlertQuantity,
+        updatedAt: DateTime.now(),
+        syncStatus: 'pending_create',
+      );
+      await _db.upsertInventoryItem(placeholder);
+      await _db.enqueue(
+        entityType: 'inventory',
+        operation: 'create',
+        targetId: localId,
+        payload: {
+          'item_name': itemName,
+          'quantity': quantity,
+          'min_alert_quantity': minAlertQuantity,
+        },
+      );
+      await _refreshPendingCount();
+      return placeholder;
+    }
+  }
+
+  @override
+  Future<InventoryItem> updateInventoryItem(
+    int itemId, {
+    String? itemName,
+    int? quantity,
+    int? minAlertQuantity,
+  }) async {
+    try {
+      final updated = await super.updateInventoryItem(
+        itemId,
+        itemName: itemName,
+        quantity: quantity,
+        minAlertQuantity: minAlertQuantity,
+      );
+      await _db.upsertInventoryItem(updated.copyWith(syncStatus: 'synced'));
+      return updated;
+    } on ApiException catch (e) {
+      if (!_isConnectivityFailure(e)) rethrow;
+      final existing = await _db.getInventoryItemLocal(itemId);
+      final keepCreateStatus =
+          existing != null && existing.syncStatus == 'pending_create';
+      final placeholder = (existing ??
+              InventoryItem(
+                id: itemId,
+                doctorEmail: '',
+                itemName: itemName ?? '',
+                quantity: quantity ?? 0,
+                minAlertQuantity: minAlertQuantity ?? 5,
+                updatedAt: DateTime.now(),
+              ))
+          .copyWith(
+        itemName: itemName,
+        quantity: quantity,
+        minAlertQuantity: minAlertQuantity,
+        updatedAt: DateTime.now(),
+        syncStatus: keepCreateStatus ? 'pending_create' : 'pending_update',
+      );
+      await _db.upsertInventoryItem(placeholder);
+      if (!keepCreateStatus) {
+        await _db.enqueue(
+          entityType: 'inventory',
+          operation: 'update',
+          targetId: itemId,
+          payload: {
+            if (itemName != null) 'item_name': itemName,
+            if (quantity != null) 'quantity': quantity,
+            if (minAlertQuantity != null) 'min_alert_quantity': minAlertQuantity,
+          },
+        );
+      }
+      await _refreshPendingCount();
+      return placeholder;
+    }
+  }
+
+  @override
+  Future<void> deleteInventoryItem(int itemId) async {
+    try {
+      await super.deleteInventoryItem(itemId);
+      await _db.deleteInventoryItemRow(itemId);
+    } on ApiException catch (e) {
+      if (!_isConnectivityFailure(e)) rethrow;
+      if (itemId < 0) {
+        await _db.deleteInventoryItemRow(itemId);
+        await _db.cancelPendingOpsFor(itemId);
+      } else {
+        final existing = await _db.getInventoryItemLocal(itemId);
+        if (existing != null) {
+          await _db.upsertInventoryItem(existing.copyWith(syncStatus: 'pending_delete'));
+        }
+        await _db.enqueue(
+          entityType: 'inventory',
+          operation: 'delete',
+          targetId: itemId,
+          payload: const {},
+        );
+      }
+      await _refreshPendingCount();
+    }
+  }
+
+  // ===========================================================================
+  // فواتير العلاج + الدفعات + المصاريف + التقرير المالي -- أُضيف 2026-09-02.
+  // انظر الشرح المطوَّل أعلى الملف لسبب عدم وجود جدول محلي مدمَج هنا.
+  // ===========================================================================
+
+  @override
+  Future<List<TreatmentInvoice>> fetchPatientInvoices(int patientId) async {
+    final cacheKey = 'patient_invoices:$patientId';
+    try {
+      final fresh = await super.fetchPatientInvoices(patientId);
+      await _db.setCache(cacheKey, json.encode(fresh.map((i) => i.toJson()).toList()));
+      return fresh;
+    } on ApiException catch (e) {
+      if (!_isConnectivityFailure(e)) rethrow;
+      return await _cachedInvoices(patientId);
+    }
+  }
+
+  Future<List<TreatmentInvoice>> _cachedInvoices(int patientId) async {
+    final cached = await _db.getCache('patient_invoices:$patientId');
+    if (cached == null) return const [];
+    final decoded = json.decode(cached) as List;
+    return decoded
+        .map((item) => TreatmentInvoice.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<TreatmentInvoice?> _cachedInvoice(int patientId, int invoiceId) async {
+    final all = await _cachedInvoices(patientId);
+    for (final invoice in all) {
+      if (invoice.id == invoiceId) return invoice;
+    }
+    return null;
+  }
+
+  /// كل الدفعات المعلَّقة (أوفلاين ولم تُزامَن بعد) المسجَّلة على فاتورة معيّنة،
+  /// مستخرَجة مباشرة من outbox نفسه (لا نسخة محلية منفصلة لها) -- تُستخدَم
+  /// لبناء نسخة تقديرية من الفاتورة تُعرض فوراً في addInvoicePayment أدناه.
+  Future<({List<InvoicePayment> payments, double total})> _pendingPaymentsFor(
+      int invoiceId) async {
+    final ops = await _db.getPendingOpsByEntity('invoice_payment');
+    final payments = <InvoicePayment>[];
+    double total = 0;
+    for (final op in ops) {
+      final payload = json.decode(op['payload'] as String) as Map<String, dynamic>;
+      if (payload['invoice_id'] != invoiceId) continue;
+      final amount = (payload['amount'] as num).toDouble();
+      total += amount;
+      payments.add(InvoicePayment(
+        id: op['target_id'] as int,
+        amount: amount,
+        description: (payload['description'] as String?) ?? '',
+        createdAt: DateTime.fromMillisecondsSinceEpoch(op['created_at'] as int),
+        isOpeningBalance: payload['is_opening_balance'] == true,
+        syncStatus: 'pending',
+      ));
+    }
+    return (payments: payments, total: total);
+  }
+
+  @override
+  Future<TreatmentInvoice> createInvoice(
+    int patientId, {
+    required String title,
+    required double totalCost,
+  }) async {
+    if (patientId < 0) {
+      throw const ApiException(
+          'يجب أن تتم مزامنة بيانات هذا المريض أولاً (بعد عودة الاتصال بالإنترنت) قبل إنشاء فاتورة له أوفلاين.');
+    }
+    try {
+      return await super.createInvoice(patientId, title: title, totalCost: totalCost);
+    } on ApiException catch (e) {
+      if (!_isConnectivityFailure(e)) rethrow;
+      final localId = _db.nextLocalId();
+      await _db.enqueue(
+        entityType: 'invoice',
+        operation: 'create',
+        targetId: localId,
+        payload: {'patient_id': patientId, 'title': title, 'total_cost': totalCost},
+      );
+      await _refreshPendingCount();
+      return TreatmentInvoice(
+        id: localId,
+        patientId: patientId,
+        title: title,
+        totalCost: totalCost,
+        paidAmount: 0,
+        remainingAmount: totalCost,
+        status: 'open',
+        createdAt: DateTime.now(),
+        payments: const [],
+        syncStatus: 'pending_create',
+      );
+    }
+  }
+
+  @override
+  Future<TreatmentInvoice> addInvoicePayment(
+    int patientId,
+    int invoiceId, {
+    required double amount,
+    String? description,
+    bool isOpeningBalance = false,
+  }) async {
+    if (patientId < 0) {
+      throw const ApiException(
+          'يجب أن تتم مزامنة بيانات هذا المريض أولاً (بعد عودة الاتصال بالإنترنت) قبل تسجيل دفعة له أوفلاين.');
+    }
+    try {
+      return await super.addInvoicePayment(
+        patientId,
+        invoiceId,
+        amount: amount,
+        description: description,
+        isOpeningBalance: isOpeningBalance,
+      );
+    } on ApiException catch (e) {
+      if (!_isConnectivityFailure(e)) rethrow;
+      await _db.enqueue(
+        entityType: 'invoice_payment',
+        operation: 'create',
+        targetId: _db.nextLocalId(),
+        payload: {
+          'patient_id': patientId,
+          'invoice_id': invoiceId,
+          'amount': amount,
+          'description': description,
+          'is_opening_balance': isOpeningBalance,
+        },
+      );
+      await _refreshPendingCount();
+
+      // نبني نسخة تقديرية من الفاتورة لعرضها فوراً: التكلفة الإجمالية/العنوان
+      // من آخر نسخة معروفة (من التخزين المؤقت إن كانت الفاتورة نفسها متزامنة
+      // أصلاً، أو من payload عملية إنشائها المعلَّقة إن كانت هي الأخرى ما
+      // زالت أوفلاين)، والمدفوع = مجموع كل الدفعات المعلَّقة على نفس الفاتورة
+      // (بما فيها هذه الدفعة) فوق أي مدفوع سابق مؤكَّد من السيرفر.
+      double totalCost;
+      String title;
+      double basePaid;
+      List<InvoicePayment> basePayments;
+      if (invoiceId < 0) {
+        final createOps = await _db.getPendingOpsByEntity('invoice');
+        Map<String, dynamic>? invoicePayload;
+        for (final op in createOps) {
+          if (op['target_id'] == invoiceId) {
+            invoicePayload = json.decode(op['payload'] as String) as Map<String, dynamic>;
+            break;
+          }
+        }
+        totalCost = (invoicePayload?['total_cost'] as num?)?.toDouble() ?? amount;
+        title = (invoicePayload?['title'] as String?) ?? '';
+        basePaid = 0;
+        basePayments = const [];
+      } else {
+        final cached = await _cachedInvoice(patientId, invoiceId);
+        totalCost = cached?.totalCost ?? amount;
+        title = cached?.title ?? '';
+        basePaid = cached?.paidAmount ?? 0;
+        basePayments = cached?.payments ?? const [];
+      }
+      final pending = await _pendingPaymentsFor(invoiceId);
+      final newPaidAmount = basePaid + pending.total;
+      final remaining = totalCost - newPaidAmount;
+      return TreatmentInvoice(
+        id: invoiceId,
+        patientId: patientId,
+        title: title,
+        totalCost: totalCost,
+        paidAmount: newPaidAmount,
+        remainingAmount: remaining < 0 ? 0 : remaining,
+        status: remaining <= 0 ? 'closed' : 'open',
+        createdAt: DateTime.now(),
+        payments: [...basePayments, ...pending.payments],
+        syncStatus: invoiceId < 0 ? 'pending_create' : 'pending_update',
+      );
+    }
+  }
+
+  @override
+  Future<void> updateFinanceTransaction(
+    int transactionId, {
+    required double amount,
+    required String description,
+    bool? isOpeningBalance,
+  }) async {
+    if (transactionId < 0) {
+      // دفعة/مصروف سُجِّل أوفلاين ولم يصل للسيرفر بعد أصلاً -- لا حاجة لعملية
+      // "تعديل" منفصلة، يكفي تصحيح payload عملية الإنشاء المعلَّقة نفسها (نفس
+      // فلسفة keepCreateStatus في updateAppointment أعلاه) بلا أي محاولة
+      // اتصال فعلية.
+      final patch = {
+        'amount': amount,
+        'description': description,
+        if (isOpeningBalance != null) 'is_opening_balance': isOpeningBalance,
+      };
+      await _db.patchPendingOpPayload(
+        entityType: 'invoice_payment',
+        targetId: transactionId,
+        operation: 'create',
+        patch: patch,
+      );
+      await _db.patchPendingOpPayload(
+        entityType: 'expense',
+        targetId: transactionId,
+        operation: 'create',
+        patch: patch,
+      );
+      return;
+    }
+    try {
+      await super.updateFinanceTransaction(
+        transactionId,
+        amount: amount,
+        description: description,
+        isOpeningBalance: isOpeningBalance,
+      );
+      await _invalidateFinanceCaches();
+    } on ApiException catch (e) {
+      if (!_isConnectivityFailure(e)) rethrow;
+      await _db.enqueue(
+        entityType: 'finance_transaction',
+        operation: 'update',
+        targetId: transactionId,
+        payload: {
+          'amount': amount,
+          'description': description,
+          if (isOpeningBalance != null) 'is_opening_balance': isOpeningBalance,
+        },
+      );
+      await _refreshPendingCount();
+    }
+  }
+
+  @override
+  Future<({bool inventorySynced, String? inventoryAction})> createExpense({
+    required double amount,
+    required String description,
+    bool addToInventory = false,
+    String? inventoryItemName,
+    int? inventoryQuantity,
+  }) async {
+    try {
+      final result = await super.createExpense(
+        amount: amount,
+        description: description,
+        addToInventory: addToInventory,
+        inventoryItemName: inventoryItemName,
+        inventoryQuantity: inventoryQuantity,
+      );
+      await _invalidateFinanceCaches();
+      return result;
+    } on ApiException catch (e) {
+      if (!_isConnectivityFailure(e)) rethrow;
+      await _db.enqueue(
+        entityType: 'expense',
+        operation: 'create',
+        targetId: _db.nextLocalId(),
+        payload: {
+          'amount': amount,
+          'description': description,
+          if (addToInventory) 'add_to_inventory': true,
+          if (addToInventory) 'inventory_item_name': inventoryItemName,
+          if (addToInventory) 'inventory_quantity': inventoryQuantity,
+        },
+      );
+      await _refreshPendingCount();
+      // لا سبيل لمعرفة نتيجة الربط بالمخزون قبل وصول المصروف فعلياً للسيرفر
+      // -- رسالة النجاح "الأغنى" في finance_screen.dart تُستبدَل هنا تلقائياً
+      // بالرسالة العادية (inventorySynced: false)، وتُطبَّق نتيجة الربط
+      // الحقيقية على المخزون بصمت وقت المزامنة.
+      return (inventorySynced: false, inventoryAction: null);
+    }
+  }
+
+  @override
+  Future<FinanceSummary> fetchFinanceSummary({
+    int? year,
+    int? month,
+    int? day,
+    bool allTime = false,
+  }) async {
+    final cacheKey = _financePeriodCacheKey('finance_summary', year, month, day, allTime);
+    try {
+      final fresh =
+          await super.fetchFinanceSummary(year: year, month: month, day: day, allTime: allTime);
+      await _db.setCache(cacheKey, json.encode(fresh.toJson()));
+      return fresh;
+    } on ApiException catch (e) {
+      if (!_isConnectivityFailure(e)) rethrow;
+      final cached = await _db.getCache(cacheKey);
+      if (cached == null) rethrow;
+      return FinanceSummary.fromJson(json.decode(cached) as Map<String, dynamic>);
+    }
+  }
+
+  @override
+  Future<List<FinanceTransaction>> fetchFinanceTransactions({
+    int? year,
+    int? month,
+    int? day,
+    bool allTime = false,
+    int limit = 8,
+  }) async {
+    final cacheKey =
+        '${_financePeriodCacheKey('finance_transactions', year, month, day, allTime)}:$limit';
+    try {
+      final fresh = await super.fetchFinanceTransactions(
+          year: year, month: month, day: day, allTime: allTime, limit: limit);
+      await _db.setCache(cacheKey, json.encode(fresh.map((t) => t.toJson()).toList()));
+      return fresh;
+    } on ApiException catch (e) {
+      if (!_isConnectivityFailure(e)) rethrow;
+      final cached = await _db.getCache(cacheKey);
+      if (cached == null) return const [];
+      final decoded = json.decode(cached) as List;
+      return decoded
+          .map((item) => FinanceTransaction.fromJson(item as Map<String, dynamic>))
+          .toList();
+    }
+  }
+
+  static String _financePeriodCacheKey(
+      String prefix, int? year, int? month, int? day, bool allTime) {
+    if (allTime) return '$prefix:all';
+    return '$prefix:${year ?? ''}-${month ?? ''}-${day ?? ''}';
+  }
+
+  /// تُبطِل (تحذف) كل قراءات الفواتير/التقرير المالي/آخر الحركات المخزَّنة
+  /// مؤقتاً -- تُستدعى فور نجاح مزامنة أي عملية مالية معلَّقة (invoice/
+  /// invoice_payment/finance_transaction/expense) حتى لا يُعرض في انقطاع
+  /// اتصال لاحق رقم قديم يسبق تلك المزامنة. إبطال شامل عمداً بدل محاولة
+  /// تحديث كل قراءة بدقة -- أسلم بكثير لبيانات مالية، وثمنه مجرد طلب شبكة
+  /// إضافي واحد في المرة التالية التي تُفتح فيها الشاشة المعنية.
+  Future<void> _invalidateFinanceCaches() async {
+    await _db.deleteCacheWithPrefix('patient_invoices:');
+    await _db.deleteCacheWithPrefix('finance_transactions:');
+    await _db.deleteCacheWithPrefix('finance_summary:');
+  }
+
+  // ===========================================================================
+  // محرّك المزامنة -- عام لكل الكيانات، يُشغَّل عمليات outbox بترتيب حدوثها.
+  // ===========================================================================
 
   Future<void> _trySync() async {
     if (_syncing) return;
@@ -303,11 +999,42 @@ class OfflineAwareApiService extends ApiService {
   }
 
   Future<void> _applyOp(Map<String, Object?> op) async {
+    final entityType = op['entity_type'] as String;
     final operation = op['operation'] as String;
     final targetId = op['target_id'] as int;
     final payload =
         json.decode(op['payload'] as String) as Map<String, dynamic>;
 
+    switch (entityType) {
+      case 'appointment':
+        await _applyAppointmentOp(operation, targetId, payload);
+        break;
+      case 'patient':
+        await _applyPatientOp(operation, targetId, payload);
+        break;
+      case 'patient_chart':
+        await _applyPatientChartOp(targetId);
+        break;
+      case 'inventory':
+        await _applyInventoryOp(operation, targetId, payload);
+        break;
+      case 'invoice':
+        await _applyInvoiceCreateOp(targetId, payload);
+        break;
+      case 'invoice_payment':
+        await _applyInvoicePaymentOp(payload);
+        break;
+      case 'finance_transaction':
+        await _applyFinanceTransactionUpdateOp(targetId, payload);
+        break;
+      case 'expense':
+        await _applyExpenseOp(payload);
+        break;
+    }
+  }
+
+  Future<void> _applyAppointmentOp(
+      String operation, int targetId, Map<String, dynamic> payload) async {
     switch (operation) {
       case 'create':
         // نقرأ الصف المحلي *قبل* الإرسال -- إن كان الطبيب عدّل تاريخ/وقت/
@@ -375,5 +1102,156 @@ class OfflineAwareApiService extends ApiService {
             syncStatus: 'synced');
         break;
     }
+  }
+
+  Future<void> _applyPatientOp(
+      String operation, int targetId, Map<String, dynamic> payload) async {
+    switch (operation) {
+      case 'create':
+        // نفس مبدأ appointment/create أعلاه بالضبط: الصف المحلي *قبل* الإرسال
+        // يحمل أحدث بيانات فعلية إن عدَّل الطبيب هذا المريض (أو مخطط أسنانه)
+        // أوفلاين بعد إنشائه وقبل وصول هذه اللحظة.
+        final localBeforeSync = await _db.getPatientLocal(targetId);
+        var created = await super.createPatient(
+          fullName: payload['full_name'] as String,
+          phone: payload['phone'] as String,
+          birthDate: payload['birth_date'] != null
+              ? DateTime.tryParse(payload['birth_date'] as String)
+              : null,
+          gender: payload['gender'] as String?,
+          medicalHistory: payload['medical_history'] as String?,
+        );
+        if (localBeforeSync != null) {
+          final editedAfterCreate = localBeforeSync.fullName != created.fullName ||
+              localBeforeSync.phone != created.phone ||
+              (localBeforeSync.medicalHistory ?? '') != (created.medicalHistory ?? '');
+          if (editedAfterCreate) {
+            created = await super.updatePatient(
+              created.id,
+              fullName: localBeforeSync.fullName,
+              phone: localBeforeSync.phone,
+              medicalHistory: localBeforeSync.medicalHistory ?? '',
+              birthDate: localBeforeSync.birthDate,
+            );
+          }
+          if ((localBeforeSync.chartStateRaw ?? '').trim().isNotEmpty) {
+            created = await super.updatePatientChart(created.id, localBeforeSync.chartState);
+          }
+        }
+        await _db.remapPatientLocalIdToServerId(targetId, created.id);
+        await _db.upsertPatient(created.copyWith(syncStatus: 'synced'));
+        break;
+
+      case 'update':
+        final updated = await super.updatePatient(
+          targetId,
+          fullName: payload['full_name'] as String,
+          phone: payload['phone'] as String,
+          medicalHistory: (payload['medical_history'] as String?) ?? '',
+          birthDate: payload['birth_date'] != null
+              ? DateTime.tryParse(payload['birth_date'] as String)
+              : null,
+        );
+        await _db.upsertPatient(updated.copyWith(syncStatus: 'synced'));
+        break;
+    }
+  }
+
+  Future<void> _applyPatientChartOp(int targetId) async {
+    final local = await _db.getPatientLocal(targetId);
+    if (local == null) return;
+    final updated = await super.updatePatientChart(targetId, local.chartState);
+    await _db.upsertPatient(updated.copyWith(syncStatus: 'synced'));
+  }
+
+  Future<void> _applyInventoryOp(
+      String operation, int targetId, Map<String, dynamic> payload) async {
+    switch (operation) {
+      case 'create':
+        final localBeforeSync = await _db.getInventoryItemLocal(targetId);
+        var created = await super.createInventoryItem(
+          itemName: payload['item_name'] as String,
+          quantity: payload['quantity'] as int,
+          minAlertQuantity: (payload['min_alert_quantity'] as int?) ?? 5,
+        );
+        if (localBeforeSync != null) {
+          final editedAfterCreate = localBeforeSync.itemName != created.itemName ||
+              localBeforeSync.quantity != created.quantity ||
+              localBeforeSync.minAlertQuantity != created.minAlertQuantity;
+          if (editedAfterCreate) {
+            created = await super.updateInventoryItem(
+              created.id,
+              itemName: localBeforeSync.itemName,
+              quantity: localBeforeSync.quantity,
+              minAlertQuantity: localBeforeSync.minAlertQuantity,
+            );
+          }
+        }
+        await _db.remapInventoryLocalIdToServerId(targetId, created.id);
+        await _db.upsertInventoryItem(created.copyWith(syncStatus: 'synced'));
+        break;
+
+      case 'update':
+        final updated = await super.updateInventoryItem(
+          targetId,
+          itemName: payload['item_name'] as String?,
+          quantity: payload['quantity'] as int?,
+          minAlertQuantity: payload['min_alert_quantity'] as int?,
+        );
+        await _db.upsertInventoryItem(updated.copyWith(syncStatus: 'synced'));
+        break;
+
+      case 'delete':
+        await super.deleteInventoryItem(targetId);
+        await _db.deleteInventoryItemRow(targetId);
+        break;
+    }
+  }
+
+  Future<void> _applyInvoiceCreateOp(int targetId, Map<String, dynamic> payload) async {
+    final created = await super.createInvoice(
+      payload['patient_id'] as int,
+      title: payload['title'] as String,
+      totalCost: (payload['total_cost'] as num).toDouble(),
+    );
+    // إعادة توجيه أي دفعات أُضيفت أوفلاين على هذه الفاتورة قبل مزامنتها --
+    // تُعالَج بنفسها بعد قليل بنفس دورة المزامنة (مرتَّبة دائماً بعد عملية
+    // الإنشاء زمنياً)، لكن payload كل واحدة منها ما زال يشير لمعرّفها السالب
+    // المؤقت، فيجب تصحيحه أولاً لمعرّف السيرفر الحقيقي.
+    await _db.remapPendingInvoicePayments(oldInvoiceId: targetId, newInvoiceId: created.id);
+    await _invalidateFinanceCaches();
+  }
+
+  Future<void> _applyInvoicePaymentOp(Map<String, dynamic> payload) async {
+    await super.addInvoicePayment(
+      payload['patient_id'] as int,
+      payload['invoice_id'] as int,
+      amount: (payload['amount'] as num).toDouble(),
+      description: payload['description'] as String?,
+      isOpeningBalance: payload['is_opening_balance'] == true,
+    );
+    await _invalidateFinanceCaches();
+  }
+
+  Future<void> _applyFinanceTransactionUpdateOp(
+      int targetId, Map<String, dynamic> payload) async {
+    await super.updateFinanceTransaction(
+      targetId,
+      amount: (payload['amount'] as num).toDouble(),
+      description: payload['description'] as String,
+      isOpeningBalance: payload['is_opening_balance'] as bool?,
+    );
+    await _invalidateFinanceCaches();
+  }
+
+  Future<void> _applyExpenseOp(Map<String, dynamic> payload) async {
+    await super.createExpense(
+      amount: (payload['amount'] as num).toDouble(),
+      description: payload['description'] as String,
+      addToInventory: payload['add_to_inventory'] == true,
+      inventoryItemName: payload['inventory_item_name'] as String?,
+      inventoryQuantity: payload['inventory_quantity'] as int?,
+    );
+    await _invalidateFinanceCaches();
   }
 }

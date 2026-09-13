@@ -127,6 +127,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final surf = context.surface;
     return Scaffold(
       body: Stack(
         children: [
@@ -140,12 +141,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   child: Container(
                     clipBehavior: Clip.antiAlias,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      // sheetBg لا cardBg: البطاقة تحمل الرأس المتدرّج داخلها
+                      // وتطفو فوق خلفية ملوّنة، فالزجاج الشفّاف يفضح ما تحتها.
+                      color: surf.sheetBg,
                       borderRadius: BorderRadius.circular(28),
-                      border: Border.all(color: AppColors.slate200),
+                      border: Border.all(color: surf.cardBorder),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.slate900.withValues(alpha: 0.14),
+                          color: AppColors.navy900.withValues(alpha: 0.30),
                           blurRadius: 40,
                           offset: const Offset(0, 20),
                         ),
@@ -203,6 +206,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Widget _buildBody() {
+    final surf = context.surface;
     final completed = _completedCount;
     final String badgeText;
     final Color badgeBg;
@@ -212,7 +216,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       // مطابقة متعمّدة لتفصيل غريب في كود الموقع نفسه: البادج بخلفية بيضاء
       // ونص أخضر رغم أن النموذج غير مكتمل بعد -- راجع updateRegisterInsights().
       badgeText = 'النموذج غير مكتمل';
-      badgeBg = Colors.white;
+      badgeBg = surf.chipBg;
       badgeColor = AppColors.emerald700;
       summary = 'أكمل الحقول الأربعة لنجهّز الحساب للربط مع باقة الاشتراك.';
     } else if (completed < 4) {
@@ -246,7 +250,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final Color codeHintColor;
     if (code.isEmpty) {
       codeHint = 'أدخل الكود كما وصلك من إدارة النظام.';
-      codeHintColor = AppColors.slate500;
+      codeHintColor = surf.textSecondary;
     } else if (code.toUpperCase().startsWith('FARAS-')) {
       codeHint = 'صيغة الكود تبدو صحيحة مبدئيًا.';
       codeHintColor = AppColors.emerald700;
@@ -275,8 +279,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: TextFormField(
             controller: _fullNameController,
             textAlign: TextAlign.right,
-            style: const TextStyle(fontSize: 13.5, color: AppColors.slate700),
-            decoration: authInputDecoration(hint: 'مثال: د. أحمد العلي'),
+            style: TextStyle(fontSize: 13.5, color: surf.textSecondary),
+            decoration: authInputDecoration(context: context, hint: 'مثال: د. أحمد العلي'),
           ),
         ),
         const SizedBox(height: 12),
@@ -287,14 +291,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
               : Text(
                   'سيتم ربط الحساب بالبريد: $email',
                   textAlign: TextAlign.right,
-                  style: const TextStyle(fontSize: 11, color: AppColors.slate500),
+                  style: TextStyle(fontSize: 11, color: surf.textSecondary),
                 ),
           child: TextFormField(
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
             textAlign: TextAlign.right,
-            style: const TextStyle(fontSize: 13.5, color: AppColors.slate700),
-            decoration: authInputDecoration(hint: 'doctor@clinic.com'),
+            style: TextStyle(fontSize: 13.5, color: surf.textSecondary),
+            decoration: authInputDecoration(context: context, hint: 'doctor@clinic.com'),
           ),
         ),
         const SizedBox(height: 12),
@@ -315,7 +319,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 child: LinearProgressIndicator(
                   value: strengthWidths[strength],
                   minHeight: 8,
-                  backgroundColor: AppColors.slate200,
+                  backgroundColor: surf.divider,
                   valueColor: AlwaysStoppedAnimation(strengthBarColors[strength]),
                 ),
               ),
@@ -327,8 +331,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     strengthLabels[strength],
                     style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: strengthTextColor),
                   ),
-                  const Text('8 أحرف أو أكثر يفضّل أن تتضمن أرقامًا',
-                      style: TextStyle(fontSize: 10.5, color: AppColors.slate500)),
+                  Text('8 أحرف أو أكثر يفضّل أن تتضمن أرقامًا',
+                      style: TextStyle(fontSize: 10.5, color: surf.textSecondary)),
                 ],
               ),
             ],
@@ -337,8 +341,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             controller: _passwordController,
             obscureText: _obscurePassword,
             textAlign: TextAlign.right,
-            style: const TextStyle(fontSize: 13.5, color: AppColors.slate700),
-            decoration: authInputDecoration(hint: '••••••••'),
+            style: TextStyle(fontSize: 13.5, color: surf.textSecondary),
+            decoration: authInputDecoration(context: context, hint: '••••••••'),
           ),
         ),
         const SizedBox(height: 12),
@@ -353,8 +357,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             controller: _activationCodeController,
             textAlign: TextAlign.right,
             inputFormatters: [FilteringTextInputFormatter.deny(RegExp(r'\s'))],
-            style: const TextStyle(fontSize: 13.5, color: AppColors.slate700, letterSpacing: 1.4),
-            decoration: authInputDecoration(hint: 'FARAS-30DAYS-XYZ'),
+            style: TextStyle(fontSize: 13.5, color: surf.textSecondary, letterSpacing: 1.4),
+            decoration: authInputDecoration(context: context, hint: 'FARAS-30DAYS-XYZ'),
           ),
         ),
         const SizedBox(height: 22),
@@ -374,7 +378,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'تطوير وإدارة: المهندس فارس حلاوي © 2026',
           textAlign: TextAlign.center,
           // مطابق لِـ text-indigo-500/90 في الموقع بالحرف (وليس indigo-600).
-          style: TextStyle(fontSize: 10.5, letterSpacing: 0.4, color: AppColors.indigo500.withValues(alpha: 0.9)),
+          style: TextStyle(fontSize: 10.5, letterSpacing: 0.4, color: surf.accentSolid.withValues(alpha: 0.9)),
         ),
       ],
     );

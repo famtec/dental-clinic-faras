@@ -12,7 +12,7 @@ import json
 import re
 from pydantic import AliasChoices, BaseModel, Field, ConfigDict
 from datetime import date, datetime, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import os
 from uuid import uuid4
 from google.auth.transport import requests as google_requests
@@ -1217,6 +1217,9 @@ class FinancialTransactionUpdate(BaseModel):
 class TreatmentInvoiceCreate(BaseModel):
     title: str
     total_cost: float
+    # الطبيب المساعد المنفّذ لهذه الفاتورة (2026-09-13) -- اختياري تماماً،
+    # وNone تعني "الطبيب المدير صاحب الحساب نفسه". انظر models.ClinicDoctor.
+    clinic_doctor_id: Optional[int] = None
 
 
 # 2026-08-29: يسمح بتصحيح التكلفة الإجمالية لفاتورة علاج موجودة (مثلاً عند
@@ -1224,6 +1227,11 @@ class TreatmentInvoiceCreate(BaseModel):
 # PATCH /api/patients/{patient_id}/invoices/{invoice_id} بالأسفل.
 class TreatmentInvoiceUpdate(BaseModel):
     total_cost: float
+    # 2026-09-13: تصحيح الطبيب المنفّذ للفاتورة. لا يُطبَّق إلا إن أُرسل الحقل
+    # فعلاً في جسم الطلب (يُفحَص عبر model_fields_set) -- لأن None هنا قيمة
+    # مقصودة بذاتها (الطبيب المدير) لا "لا تغيير". تغييره يؤثر على الدفعات
+    # القادمة فقط ولا يمسّ أي استحقاق مسجَّل سابقاً.
+    clinic_doctor_id: Optional[int] = None
 
 
 class TreatmentInvoicePaymentCreate(BaseModel):
@@ -1233,6 +1241,10 @@ class TreatmentInvoicePaymentCreate(BaseModel):
     # انظر شرح كامل عند get_finance_summary().
     transaction_date: Optional[datetime] = None
     is_opening_balance: bool = False
+    # الطبيب المساعد الذي يُنسَب له تحصيل هذه الدفعة (2026-09-13). إن لم يُرسَل
+    # إطلاقاً تُورَّث قيمة الفاتورة نفسها تلقائياً، فلا يضطر المستخدم لاختيار
+    # الطبيب مع كل قسط. انظر sync_doctor_earning_for_payment().
+    clinic_doctor_id: Optional[int] = None
 
 
 class TreatmentInvoicePaymentResponse(BaseModel):
@@ -1254,7 +1266,95 @@ class TreatmentInvoiceResponse(BaseModel):
     status: str
     created_at: datetime
     payments: List[TreatmentInvoicePaymentResponse] = []
+    # 2026-09-13: الطبيب المساعد المنفّذ (None = الطبيب المدير نفسه). الاسم
+    # مُرفق حتى لا تضطر الواجهة لجلب قائمة الأطباء لعرض سطر فاتورة واحد.
+    clinic_doctor_id: Optional[int] = None
+    clinic_doctor_name: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
+
+
+# ====================================================================
+# العيادات متعددة الأطباء: الأطباء بالنسبة -- 2026-09-13
+# ====================================================================
+# انظر شرح models.ClinicDoctor / models.DoctorEarning / models.DoctorPayout
+# للسياق الكامل. المبدأ المحاسبي المعتمد هنا: النسبة تُحسب على المبلغ
+# المحصّل فعلياً لا على قيمة الفاتورة، وتُجمَّد لحظة التسجيل فلا يؤثر أي
+# تعديل لاحق للنسبة على أي حركة قديمة.
+class ClinicDoctorCreate(BaseModel):
+    full_name: str
+    phone: Optional[str] = None
+    specialty: Optional[str] = None
+    commission_percent: float = 0
+    notes: Optional[str] = None
+
+
+class ClinicDoctorUpdate(BaseModel):
+    # كل الحقول اختيارية: None تعني "لا تغيير" -- تسمح للواجهة بتحرير النسبة
+    # وحدها مباشرة من بطاقة الطبيب بلا إرسال بقية بياناته.
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    specialty: Optional[str] = None
+    commission_percent: Optional[float] = None
+    is_active: Optional[bool] = None
+    notes: Optional[str] = None
+
+
+class ClinicDoctorResponse(BaseModel):
+    id: int
+    full_name: str
+    phone: Optional[str] = None
+    specialty: Optional[str] = None
+    commission_percent: float
+    is_active: bool
+    notes: Optional[str] = None
+    created_at: datetime
+    # أرقام الفترة المطلوبة (الشهر الحالي افتراضياً، نفس منطق تقارير المالية)
+    period_collected: float = 0
+    period_doctor_share: float = 0
+    period_clinic_share: float = 0
+    # أرقام تراكمية كلية -- الرصيد المستحق لا معنى له إلا تراكمياً: ما استحقه
+    # الطبيب منذ البداية ناقص ما سُلِّم له فعلاً، بصرف النظر عن الشهر المعروض.
+    total_doctor_share: float = 0
+    total_paid_out: float = 0
+    balance_due: float = 0
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DoctorPayoutCreate(BaseModel):
+    amount: float
+    note: Optional[str] = None
+    paid_at: Optional[datetime] = None
+
+
+class DoctorPayoutResponse(BaseModel):
+    id: int
+    amount: float
+    note: Optional[str] = None
+    paid_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DoctorEarningResponse(BaseModel):
+    id: int
+    patient_id: Optional[int] = None
+    patient_name: Optional[str] = None
+    invoice_id: Optional[int] = None
+    description: Optional[str] = None
+    gross_amount: float
+    applied_percent: float
+    doctor_share: float
+    clinic_share: float
+    earned_at: datetime
+    adjusted_at: Optional[datetime] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+# إعادة نسب دفعة مسجّلة مسبقاً إلى طبيب آخر (أو إلى الطبيب المدير عبر null) --
+# مسار مستقل عن FinancialTransactionUpdate عمداً: ذاك المخطط يعتبر كل حقل
+# None بمعنى "لا تغيير"، وهنا None قيمة مقصودة بذاتها (الطبيب المدير)، فدمج
+# المعنيين في حقل واحد كان سيجعل "إرجاع الدفعة للمدير" مستحيلاً.
+class TransactionDoctorAssignment(BaseModel):
+    clinic_doctor_id: Optional[int] = None
 
 
 class PatientStatsResponse(BaseModel):
@@ -2785,6 +2885,19 @@ def delete_patient(
         # حذف المريض ثلاثية الطبقات الموثقة أعلاه، وهذه طبقتها الرابعة
         # (2026-08-25): fواتير العلاج الجديدة لها FK نحو patients.id أيضاً ولا
         # نعتمد على cascade الـ ORM وحده لحذفها.
+        # الطبقة الخامسة (2026-09-13): doctor_earnings يحمل FK نحو
+        # financial_transactions.id، وهذا حذف جماعي خام (Query.delete) لا يمرّ
+        # من الـ ORM فلا تعمل فيه علاقة cascade المعرّفة في models.py -- بلا
+        # هذا السطر يرفض Postgres حذف صف الدفعة بانتهاك قيد الـ FK، فيعود
+        # حذف أي مريض له دفعة منسوبة لطبيب مساعد بالخطأ العام نفسه الموثّق
+        # أعلاه. يجب أن يسبق حذف financial_transactions لا أن يليه.
+        db.query(models.DoctorEarning).filter(
+            models.DoctorEarning.transaction_id.in_(
+                db.query(models.FinancialTransaction.id).filter(
+                    models.FinancialTransaction.patient_id == patient_id
+                )
+            )
+        ).delete(synchronize_session=False)
         db.query(models.FinancialTransaction).filter(models.FinancialTransaction.patient_id == patient_id).delete(synchronize_session=False)
         db.query(models.TreatmentInvoice).filter(models.TreatmentInvoice.patient_id == patient_id).delete(synchronize_session=False)
         # لا نحذف المواعيد نفسها (قد تكون سجلاً تاريخياً يريد الطبيب الاحتفاظ
@@ -2853,7 +2966,18 @@ def update_patient(
     return patient
 
 
-def _serialize_invoice(invoice: "models.TreatmentInvoice", payments: list) -> dict:
+def _clinic_doctor_names(db: Session, clinic_email: str) -> dict:
+    """{معرّف الطبيب: اسمه} لكل أطباء هذه العيادة -- استعلام واحد بدل استعلام
+    لكل فاتورة/حركة عند عرض قائمة طويلة."""
+    rows = (
+        db.query(models.ClinicDoctor.id, models.ClinicDoctor.full_name)
+        .filter(models.ClinicDoctor.clinic_email == clinic_email)
+        .all()
+    )
+    return {row[0]: row[1] for row in rows}
+
+
+def _serialize_invoice(invoice: "models.TreatmentInvoice", payments: list, doctor_names: Optional[dict] = None) -> dict:
     paid_amount = sum((Decimal(str(p.amount)) for p in payments), Decimal("0"))
     total_cost = Decimal(str(invoice.total_cost or 0))
     if total_cost < 0:
@@ -2868,6 +2992,10 @@ def _serialize_invoice(invoice: "models.TreatmentInvoice", payments: list) -> di
         "remaining_amount": float(remaining_amount),
         "status": "closed" if remaining_amount <= 0 else "open",
         "created_at": invoice.created_at,
+        # 2026-09-13: الطبيب المساعد المنفّذ. None = الطبيب المدير نفسه، وهي
+        # حالة كل فاتورة سابقة لهذه الميزة وكل عيادة بطبيب واحد.
+        "clinic_doctor_id": getattr(invoice, "clinic_doctor_id", None),
+        "clinic_doctor_name": (doctor_names or {}).get(getattr(invoice, "clinic_doctor_id", None)),
         "payments": [
             {
                 "id": p.id,
@@ -2890,6 +3018,197 @@ def _get_owned_patient_or_404(db: Session, patient_id: int, doctor_email: str) -
     if not patient:
         raise HTTPException(status_code=404, detail="المريض غير موجود")
     return patient
+
+
+# ====================================================================
+# العيادات متعددة الأطباء: محرّك النسب -- 2026-09-13
+# ====================================================================
+# هذه الكتلة هي نقطة الحقيقة الوحيدة لحساب استحقاق أي طبيب مساعد. أي مسار
+# يُنشئ أو يُعدّل أو يحذف دفعة مريض يجب أن يمرّ من
+# sync_doctor_earning_for_payment() ولا يكتب في doctor_earnings مباشرة أبداً،
+# وإلا انحرف كشف حساب الطبيب عن صفحة المالية.
+#
+# ثلاث قواعد محاسبية مقصودة، مُوثَّقة هنا لأن نسيان أيّ منها يُنتج خللاً
+# صامتاً لا يظهر إلا بعد شهور:
+#
+# (1) النسبة على المحصّل لا على المستحق: سطر الاستحقاق يُولَّد من الدفعة
+#     المقبوضة فعلاً (FinancialTransaction من نوع income)، لا من فتح
+#     الفاتورة. فالطبيب لا يستحق نسبة على دين لم تقبضه العيادة بعد،
+#     والأقساط تُوزَّع تلقائياً لأن كل قسط دفعة مستقلة بسطرها الخاص.
+#
+# (2) تجميد النسبة: applied_percent تُنسَخ من نسبة الطبيب الحالية لحظة
+#     التسجيل ولا تُقرأ من clinic_doctors بعد ذلك إطلاقاً. تعديل النسبة
+#     يسري على العمل القادم فقط ولا يُعيد كتابة تاريخ الشهور الماضية.
+#
+# (3) الأرصدة الافتتاحية مستثناة: حركة is_opening_balance=True تمثل مالاً
+#     حُصِّل قبل دخول النظام أصلاً (انظر FinancialTransaction.is_opening_balance)،
+#     وتُستبعَد من كل تقرير شهري -- فلو ولّدت استحقاقاً لظهر للطبيب دين وهمي
+#     عن عمل قديم غالباً سُوِّي خارج النظام، ولانحرف كشف حسابه عن تقرير
+#     المالية لنفس الشهر.
+MONEY_QUANT = Decimal("0.01")
+PERCENT_QUANT = Decimal("0.01")
+MAX_COMMISSION_PERCENT = Decimal("100")
+
+
+def _quantize_money(value: Decimal) -> Decimal:
+    return Decimal(value).quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)
+
+
+def normalize_commission_percent(value) -> Decimal:
+    """نسبة صالحة بين 0 و 100 بخانتين عشريتين، أو خطأ عربي واضح."""
+    try:
+        percent = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="النسبة يجب أن تكون رقماً بين 0 و 100")
+    if percent.is_nan() or percent < 0 or percent > MAX_COMMISSION_PERCENT:
+        raise HTTPException(status_code=400, detail="النسبة يجب أن تكون رقماً بين 0 و 100")
+    return percent.quantize(PERCENT_QUANT, rounding=ROUND_HALF_UP)
+
+
+def compute_commission_shares(gross_amount: Decimal, applied_percent: Decimal):
+    """(حصة الطبيب، حصة العيادة) لمبلغ محصّل ونسبة معطاة.
+
+    حصة العيادة تُحسب بالطرح لا بنسبة مكمّلة مستقلة، حتى لا تضيع (أو تُخلق)
+    قروش بسبب التقريب: مجموع الحصتين يساوي المبلغ المحصّل بالضبط دائماً.
+    """
+    gross = _quantize_money(Decimal(gross_amount or 0))
+    percent = Decimal(applied_percent or 0)
+    doctor_share = _quantize_money(gross * percent / Decimal("100"))
+    clinic_share = gross - doctor_share
+    return doctor_share, clinic_share
+
+
+def _get_owned_clinic_doctor_or_404(db: Session, clinic_doctor_id: int, clinic_email: str) -> "models.ClinicDoctor":
+    clinic_doctor = (
+        db.query(models.ClinicDoctor)
+        .filter(
+            models.ClinicDoctor.id == clinic_doctor_id,
+            models.ClinicDoctor.clinic_email == clinic_email,
+        )
+        .first()
+    )
+    if not clinic_doctor:
+        raise HTTPException(status_code=404, detail="الطبيب غير موجود ضمن أطباء عيادتك")
+    return clinic_doctor
+
+
+def resolve_clinic_doctor_id(db: Session, raw_value, clinic_email: str) -> Optional[int]:
+    """يحوّل قيمة clinic_doctor_id الواردة من العميل إلى معرّف موثوق، أو None.
+
+    None/0 تعني صراحةً "الطبيب المدير صاحب الحساب نفسه" -- وهي الحالة
+    الافتراضية لكل عيادة لم تُضِف أي طبيب مساعد أصلاً. أي معرّف آخر يجب أن
+    يعود لطبيب ضمن هذه العيادة تحديداً، وإلا 404 (fail closed): بلا هذا
+    الفحص يستطيع أي طبيب نسب دفعاته لطبيب في عيادة أخرى.
+    """
+    if raw_value in (None, 0, "", "0"):
+        return None
+    try:
+        clinic_doctor_id = int(raw_value)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="معرّف الطبيب غير صالح")
+    if clinic_doctor_id <= 0:
+        return None
+    _get_owned_clinic_doctor_or_404(db, clinic_doctor_id, clinic_email)
+    return clinic_doctor_id
+
+
+def sync_doctor_earning_for_payment(
+    db: Session,
+    transaction: "models.FinancialTransaction",
+    clinic_email: str,
+    patient_name: Optional[str] = None,
+) -> None:
+    """يُطابِق سطر استحقاق الطبيب مع حالة الدفعة الحالية (إنشاء/تحديث/حذف).
+
+    تُستدعى بعد أي كتابة على الدفعة وقبل الـ commit النهائي. لا تلمس الجلسة
+    بـ commit/rollback بنفسها عمداً حتى تبقى الدفعة وسطر استحقاقها في عملية
+    ذرية واحدة: إما أن يُحفظا معاً أو لا يُحفظ أيٌّ منهما.
+    """
+    existing = (
+        db.query(models.DoctorEarning)
+        .filter(models.DoctorEarning.transaction_id == transaction.id)
+        .first()
+    )
+
+    amount = Decimal(str(transaction.amount or 0))
+    eligible = (
+        transaction.clinic_doctor_id is not None
+        and (transaction.type or "") == "income"
+        and amount > 0
+        and not bool(getattr(transaction, "is_opening_balance", False))
+    )
+
+    if not eligible:
+        # الدفعة لم تعد تستحق نسبة (أُلغي نسبها لطبيب، أو صُنّفت رصيداً
+        # افتتاحياً، أو تحوّل نوعها) -- يُحذف سطرها إن وُجد فلا يبقى استحقاق
+        # يتيم يضخّم رصيد الطبيب بلا دفعة مقابلة.
+        if existing is not None:
+            db.delete(existing)
+        return
+
+    if existing is not None and existing.clinic_doctor_id == transaction.clinic_doctor_id:
+        # نفس الطبيب: النسبة المجمّدة تبقى كما هي مهما عُدّلت نسبته اليوم --
+        # ما تغيّر هو قيمة الدفعة أو تاريخها فقط.
+        applied_percent = Decimal(str(existing.applied_percent or 0))
+        earning = existing
+        earning.adjusted_at = _damascus_now().replace(tzinfo=None)
+    else:
+        # سطر جديد، أو إعادة نسب الدفعة لطبيب آخر: تُلتقَط نسبة الطبيب
+        # المسؤول الآن كلقطة جديدة مجمّدة.
+        clinic_doctor = _get_owned_clinic_doctor_or_404(db, transaction.clinic_doctor_id, clinic_email)
+        applied_percent = Decimal(str(clinic_doctor.commission_percent or 0))
+        if existing is not None:
+            earning = existing
+            earning.clinic_doctor_id = transaction.clinic_doctor_id
+            earning.applied_percent = applied_percent
+            earning.adjusted_at = _damascus_now().replace(tzinfo=None)
+        else:
+            earning = models.DoctorEarning(
+                clinic_email=clinic_email,
+                clinic_doctor_id=transaction.clinic_doctor_id,
+                transaction_id=transaction.id,
+                applied_percent=applied_percent,
+            )
+            db.add(earning)
+
+    doctor_share, clinic_share = compute_commission_shares(amount, applied_percent)
+    earning.gross_amount = _quantize_money(amount)
+    earning.doctor_share = doctor_share
+    earning.clinic_share = clinic_share
+    earning.patient_id = transaction.patient_id
+    earning.invoice_id = transaction.invoice_id
+    earning.description = transaction.description
+    earning.earned_at = transaction.created_at or _damascus_now().replace(tzinfo=None)
+    if patient_name:
+        earning.patient_name = patient_name
+    elif earning.patient_name is None and transaction.patient_id:
+        linked_patient = (
+            db.query(models.Patient).filter(models.Patient.id == transaction.patient_id).first()
+        )
+        if linked_patient:
+            earning.patient_name = linked_patient.full_name
+
+
+def require_premium_doctor_user(
+    db: Session = Depends(database.get_db),
+    doctor_email: str | None = Header(default=None, alias="X-Doctor-Email"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> models.User:
+    """حارس ميزة العيادة متعددة الأطباء: اشتراك نشط + باقة Premium.
+
+    نسخة Depends من require_premium_user_by_email (المستخدمة في المخزن) --
+    كُتبت هنا كـ dependency مباشرة بدل استدعائها يدوياً داخل كل مسار، لأن
+    مسارات هذه الميزة تحتاج أيضاً فحص انتهاء الاشتراك الموجود في
+    require_active_doctor_user. الرسالة 403 (لا 402) لتمييز "ميزة غير مشمولة
+    بباقتك" عن "حسابك بانتظار التفعيل" -- نفس تمييز صفحة المخزن.
+    """
+    user = require_active_doctor_user(db=db, doctor_email=doctor_email, authorization=authorization)
+    if (user.tier or "").strip().lower() != "premium":
+        raise HTTPException(
+            status_code=403,
+            detail="إدارة العيادة متعددة الأطباء وحساب النسب متاحة حصرياً للباقة الفخمة (Premium).",
+        )
+    return user
 
 
 # ====================================================================
@@ -2927,8 +3246,9 @@ def get_patient_invoices(
         for payment in payment_rows:
             payments_by_invoice_id.setdefault(payment.invoice_id, []).append(payment)
 
+    doctor_names = _clinic_doctor_names(db, current_user.email)
     return [
-        _serialize_invoice(invoice, payments_by_invoice_id.get(invoice.id, []))
+        _serialize_invoice(invoice, payments_by_invoice_id.get(invoice.id, []), doctor_names)
         for invoice in invoices
     ]
 
@@ -2948,21 +3268,31 @@ def create_patient_invoice(
     if invoice_create.total_cost is None or invoice_create.total_cost < 0:
         raise HTTPException(status_code=400, detail="التكلفة الإجمالية يجب أن تكون رقماً صحيحاً أكبر من أو يساوي صفر")
 
+    # 2026-09-13: الطبيب المساعد المنفّذ -- يُتحقق من ملكيته لهذه العيادة قبل
+    # أي كتابة (fail closed)، وNone تعني الطبيب المدير نفسه.
+    assigned_clinic_doctor_id = resolve_clinic_doctor_id(
+        db, invoice_create.clinic_doctor_id, current_user.email
+    )
+
     try:
         db_invoice = models.TreatmentInvoice(
             patient_id=patient_id,
             doctor_email=current_user.email,
             title=title,
             total_cost=Decimal(str(invoice_create.total_cost)),
+            clinic_doctor_id=assigned_clinic_doctor_id,
         )
         db.add(db_invoice)
         db.commit()
         db.refresh(db_invoice)
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception:
         db.rollback()
         raise HTTPException(status_code=400, detail="تعذر إنشاء فاتورة العلاج الآن. حاول مرة أخرى.")
 
-    return _serialize_invoice(db_invoice, [])
+    return _serialize_invoice(db_invoice, [], _clinic_doctor_names(db, current_user.email))
 
 
 # 2026-08-29: تصحيح التكلفة الإجمالية لفاتورة علاج قائمة (مثلاً بعد خطأ إدخال
@@ -2993,10 +3323,22 @@ def update_patient_invoice_cost(
     if invoice_update.total_cost is None or invoice_update.total_cost < 0:
         raise HTTPException(status_code=400, detail="التكلفة الإجمالية يجب أن تكون رقماً صحيحاً أكبر من أو يساوي صفر")
 
+    reassign_clinic_doctor = "clinic_doctor_id" in invoice_update.model_fields_set
+    new_clinic_doctor_id = (
+        resolve_clinic_doctor_id(db, invoice_update.clinic_doctor_id, current_user.email)
+        if reassign_clinic_doctor
+        else None
+    )
+
     try:
         invoice.total_cost = Decimal(str(invoice_update.total_cost))
+        if reassign_clinic_doctor:
+            invoice.clinic_doctor_id = new_clinic_doctor_id
         db.commit()
         db.refresh(invoice)
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception:
         db.rollback()
         raise HTTPException(status_code=400, detail="تعذر تحديث التكلفة الإجمالية الآن. حاول مرة أخرى.")
@@ -3006,7 +3348,7 @@ def update_patient_invoice_cost(
         .filter(models.FinancialTransaction.invoice_id == invoice.id)
         .all()
     )
-    return _serialize_invoice(invoice, invoice_payments)
+    return _serialize_invoice(invoice, invoice_payments, _clinic_doctor_names(db, current_user.email))
 
 
 # 2026-08-29: حذف فاتورة علاج بالكامل (بدل تصحيح تكلفتها فقط أعلاه) -- مثلاً
@@ -3084,6 +3426,17 @@ def register_invoice_payment(
 
     description = (payment.description or "").strip() or f"دفعة على فاتورة: {invoice.title}"
 
+    # 2026-09-13: نسب الدفعة لطبيب مساعد. إن لم يُرسل الحقل إطلاقاً تُورَّث
+    # قيمة الفاتورة نفسها -- فالمستخدم يختار الطبيب مرة واحدة عند فتح
+    # الفاتورة ولا يُسأل عنه مع كل قسط. فحص model_fields_set ضروري: إرسال
+    # null صراحةً يعني "الطبيب المدير" ويجب ألا يُورَّث فوقه شيء.
+    if "clinic_doctor_id" in payment.model_fields_set:
+        assigned_clinic_doctor_id = resolve_clinic_doctor_id(
+            db, payment.clinic_doctor_id, current_user.email
+        )
+    else:
+        assigned_clinic_doctor_id = getattr(invoice, "clinic_doctor_id", None)
+
     try:
         db_payment = models.FinancialTransaction(
             patient_id=patient_id,
@@ -3094,11 +3447,22 @@ def register_invoice_payment(
             description=description,
             invoice_id=invoice.id,
             is_opening_balance=bool(payment.is_opening_balance),
+            clinic_doctor_id=assigned_clinic_doctor_id,
         )
         if transaction_date is not None:
             db_payment.created_at = transaction_date
         db.add(db_payment)
+        # flush لا commit: نحتاج db_payment.id الحقيقي ليُربط به سطر الاستحقاق،
+        # مع إبقاء الاثنين في عملية واحدة -- فلا يمكن أن تُحفظ دفعة بلا
+        # استحقاقها أو العكس.
+        db.flush()
+        sync_doctor_earning_for_payment(
+            db, db_payment, current_user.email, patient_name=patient.full_name
+        )
         db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception:
         db.rollback()
         raise HTTPException(status_code=400, detail="تعذر تسجيل الدفعة الآن. حاول مرة أخرى.")
@@ -3108,7 +3472,7 @@ def register_invoice_payment(
         .filter(models.FinancialTransaction.invoice_id == invoice.id)
         .all()
     )
-    return _serialize_invoice(invoice, invoice_payments)
+    return _serialize_invoice(invoice, invoice_payments, _clinic_doctor_names(db, current_user.email))
 
 
 @app.put("/api/patients/{patient_id}/chart", response_model=PatientResponse)
@@ -4157,8 +4521,15 @@ def update_financial_transaction(
             transaction.is_opening_balance = bool(transaction_update.is_opening_balance)
         if new_transaction_date is not None:
             transaction.created_at = new_transaction_date
+        # 2026-09-13: أي تعديل على قيمة الدفعة أو تاريخها أو تصنيفها يجب أن
+        # ينعكس فوراً على استحقاق الطبيب المنسوبة له -- وإلا انحرف كشف حسابه
+        # عن صفحة المالية بصمت. النسبة المجمّدة لا تتغير هنا إطلاقاً.
+        sync_doctor_earning_for_payment(db, transaction, current_user.email)
         db.commit()
         db.refresh(transaction)
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception:
         db.rollback()
         raise HTTPException(status_code=400, detail="تعذر تحديث الدفعة المالية حالياً. حاول مرة أخرى.")
@@ -4191,6 +4562,502 @@ def delete_financial_transaction(
         raise HTTPException(status_code=400, detail="تعذر حذف الدفعة المالية حالياً. حاول مرة أخرى.")
 
     return {"message": "تم حذف الدفعة المالية بنجاح"}
+
+
+# ====================================================================
+# العيادات متعددة الأطباء: المسارات -- 2026-09-13
+# ====================================================================
+# كل مسارات هذه الميزة محروسة بـ require_premium_doctor_user (Premium فقط)،
+# وكلها معزولة بـ clinic_email == بريد الحساب الحالي بلا استثناء.
+def _doctor_period_totals(db: Session, clinic_email: str, period_start, period_end) -> dict:
+    """مجاميع استحقاقات كل أطباء العيادة ضمن فترة (أو كلياً إن كانت None)."""
+    query = (
+        db.query(
+            models.DoctorEarning.clinic_doctor_id,
+            func.coalesce(func.sum(models.DoctorEarning.gross_amount), 0),
+            func.coalesce(func.sum(models.DoctorEarning.doctor_share), 0),
+            func.coalesce(func.sum(models.DoctorEarning.clinic_share), 0),
+        )
+        .filter(models.DoctorEarning.clinic_email == clinic_email)
+        .group_by(models.DoctorEarning.clinic_doctor_id)
+    )
+    if period_start is not None and period_end is not None:
+        query = query.filter(
+            models.DoctorEarning.earned_at >= period_start,
+            models.DoctorEarning.earned_at < period_end,
+        )
+    return {
+        row[0]: {
+            "collected": Decimal(row[1] or 0),
+            "doctor_share": Decimal(row[2] or 0),
+            "clinic_share": Decimal(row[3] or 0),
+        }
+        for row in query.all()
+    }
+
+
+def _doctor_payout_totals(db: Session, clinic_email: str) -> dict:
+    """مجموع ما سُلِّم فعلاً لكل طبيب -- تراكمي دائماً، انظر ClinicDoctorResponse."""
+    rows = (
+        db.query(
+            models.DoctorPayout.clinic_doctor_id,
+            func.coalesce(func.sum(models.DoctorPayout.amount), 0),
+        )
+        .filter(models.DoctorPayout.clinic_email == clinic_email)
+        .group_by(models.DoctorPayout.clinic_doctor_id)
+        .all()
+    )
+    return {row[0]: Decimal(row[1] or 0) for row in rows}
+
+
+def _serialize_clinic_doctor(
+    clinic_doctor: "models.ClinicDoctor",
+    period_totals: dict,
+    lifetime_totals: dict,
+    payout_totals: dict,
+) -> dict:
+    period = period_totals.get(clinic_doctor.id) or {}
+    lifetime = lifetime_totals.get(clinic_doctor.id) or {}
+    total_doctor_share = Decimal(lifetime.get("doctor_share", 0) or 0)
+    total_paid_out = Decimal(payout_totals.get(clinic_doctor.id, 0) or 0)
+    return {
+        "id": clinic_doctor.id,
+        "full_name": clinic_doctor.full_name,
+        "phone": clinic_doctor.phone,
+        "specialty": clinic_doctor.specialty,
+        "commission_percent": float(Decimal(str(clinic_doctor.commission_percent or 0))),
+        "is_active": bool(clinic_doctor.is_active),
+        "notes": clinic_doctor.notes,
+        "created_at": clinic_doctor.created_at,
+        "period_collected": float(Decimal(period.get("collected", 0) or 0)),
+        "period_doctor_share": float(Decimal(period.get("doctor_share", 0) or 0)),
+        "period_clinic_share": float(Decimal(period.get("clinic_share", 0) or 0)),
+        "total_doctor_share": float(total_doctor_share),
+        "total_paid_out": float(total_paid_out),
+        # الرصيد قد يكون سالباً بشكل مشروع تماماً: العيادة سلّمت الطبيب
+        # سلفة تفوق ما استحقه حتى الآن. لا نقصّه عند صفر عمداً حتى لا
+        # تختفي السلفة من الحساب.
+        "balance_due": float(total_doctor_share - total_paid_out),
+    }
+
+
+@app.get("/api/clinic-doctors", response_model=List[ClinicDoctorResponse])
+def list_clinic_doctors(
+    year: Optional[int] = Query(None),
+    month: Optional[int] = Query(None),
+    day: Optional[int] = Query(None),
+    all_time: bool = Query(False),
+    include_inactive: bool = Query(True),
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_premium_doctor_user),
+):
+    # نفس معاملات الفترة المستخدمة في /api/finance/summary حرفياً، وعبر نفس
+    # الدالة -- حتى يطابق "محصّل الشهر" في صفحة الأطباء ما تعرضه صفحة
+    # المالية للشهر ذاته بلا أي انحراف.
+    period_start, period_end, _y, _m, _d = _resolve_finance_period(year, month, day, all_time)
+
+    query = db.query(models.ClinicDoctor).filter(
+        models.ClinicDoctor.clinic_email == current_user.email
+    )
+    if not include_inactive:
+        query = query.filter(models.ClinicDoctor.is_active.is_(True))
+    clinic_doctors = query.order_by(
+        models.ClinicDoctor.is_active.desc(), models.ClinicDoctor.full_name.asc()
+    ).all()
+
+    period_totals = _doctor_period_totals(db, current_user.email, period_start, period_end)
+    lifetime_totals = _doctor_period_totals(db, current_user.email, None, None)
+    payout_totals = _doctor_payout_totals(db, current_user.email)
+
+    return [
+        _serialize_clinic_doctor(clinic_doctor, period_totals, lifetime_totals, payout_totals)
+        for clinic_doctor in clinic_doctors
+    ]
+
+
+@app.post("/api/clinic-doctors", response_model=ClinicDoctorResponse, status_code=201)
+def create_clinic_doctor(
+    doctor_create: ClinicDoctorCreate,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_premium_doctor_user),
+):
+    full_name = (doctor_create.full_name or "").strip()
+    if not full_name:
+        raise HTTPException(status_code=400, detail="اسم الطبيب مطلوب")
+
+    # حارس تكرار الاسم ضمن نفس العيادة -- طبيبان بنفس الاسم يجعلان كشوف
+    # الحسابات غير قابلة للتمييز عملياً، وهو نفس الحارس المعتمد على أسماء
+    # المرضى في هذا المشروع.
+    duplicate = (
+        db.query(models.ClinicDoctor)
+        .filter(
+            models.ClinicDoctor.clinic_email == current_user.email,
+            func.lower(func.trim(models.ClinicDoctor.full_name)) == full_name.lower(),
+        )
+        .first()
+    )
+    if duplicate:
+        raise HTTPException(status_code=400, detail="يوجد طبيب بهذا الاسم في عيادتك بالفعل")
+
+    commission_percent = normalize_commission_percent(doctor_create.commission_percent or 0)
+
+    try:
+        clinic_doctor = models.ClinicDoctor(
+            clinic_email=current_user.email,
+            full_name=full_name,
+            phone=(doctor_create.phone or "").strip() or None,
+            specialty=(doctor_create.specialty or "").strip() or None,
+            commission_percent=commission_percent,
+            notes=(doctor_create.notes or "").strip() or None,
+            is_active=True,
+        )
+        db.add(clinic_doctor)
+        db.commit()
+        db.refresh(clinic_doctor)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر إضافة الطبيب الآن. حاول مرة أخرى.")
+
+    return _serialize_clinic_doctor(clinic_doctor, {}, {}, {})
+
+
+@app.patch("/api/clinic-doctors/{clinic_doctor_id}", response_model=ClinicDoctorResponse)
+def update_clinic_doctor(
+    clinic_doctor_id: int,
+    doctor_update: ClinicDoctorUpdate,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_premium_doctor_user),
+):
+    clinic_doctor = _get_owned_clinic_doctor_or_404(db, clinic_doctor_id, current_user.email)
+
+    if doctor_update.full_name is not None:
+        full_name = doctor_update.full_name.strip()
+        if not full_name:
+            raise HTTPException(status_code=400, detail="اسم الطبيب مطلوب")
+        clinic_doctor.full_name = full_name
+    if doctor_update.phone is not None:
+        clinic_doctor.phone = doctor_update.phone.strip() or None
+    if doctor_update.specialty is not None:
+        clinic_doctor.specialty = doctor_update.specialty.strip() or None
+    if doctor_update.notes is not None:
+        clinic_doctor.notes = doctor_update.notes.strip() or None
+    if doctor_update.is_active is not None:
+        clinic_doctor.is_active = bool(doctor_update.is_active)
+    if doctor_update.commission_percent is not None:
+        # تنبيه: تغيير النسبة هنا يسري على الدفعات القادمة فقط. كل حركة
+        # مسجّلة تحتفظ بنسختها المجمّدة في DoctorEarning.applied_percent ولا
+        # تتأثر إطلاقاً -- انظر شرح محرّك النسب أعلاه.
+        clinic_doctor.commission_percent = normalize_commission_percent(
+            doctor_update.commission_percent
+        )
+
+    try:
+        db.commit()
+        db.refresh(clinic_doctor)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر تحديث بيانات الطبيب الآن. حاول مرة أخرى.")
+
+    period_totals = _doctor_period_totals(db, current_user.email, None, None)
+    payout_totals = _doctor_payout_totals(db, current_user.email)
+    return _serialize_clinic_doctor(clinic_doctor, period_totals, period_totals, payout_totals)
+
+
+@app.delete("/api/clinic-doctors/{clinic_doctor_id}", status_code=200)
+def delete_clinic_doctor(
+    clinic_doctor_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_premium_doctor_user),
+):
+    clinic_doctor = _get_owned_clinic_doctor_or_404(db, clinic_doctor_id, current_user.email)
+
+    # طبيب له سجل مالي لا يُحذف أبداً: حذفه يعني إما فقدان تاريخ محاسبي
+    # حقيقي، أو ترك دفعات منسوبة لمعرّف لا وجود له. البديل الصحيح هو
+    # تعطيله (is_active=false): يختفي من قوائم الاختيار ويبقى كشف حسابه
+    # كاملاً. هذا قرار مقصود ولا يجوز تحويله إلى حذف متسلسل لاحقاً.
+    earnings_count = (
+        db.query(func.count(models.DoctorEarning.id))
+        .filter(models.DoctorEarning.clinic_doctor_id == clinic_doctor.id)
+        .scalar()
+        or 0
+    )
+    payouts_count = (
+        db.query(func.count(models.DoctorPayout.id))
+        .filter(models.DoctorPayout.clinic_doctor_id == clinic_doctor.id)
+        .scalar()
+        or 0
+    )
+    if earnings_count or payouts_count:
+        raise HTTPException(
+            status_code=400,
+            detail="لا يمكن حذف طبيب له سجل مالي. يمكنك تعطيله بدلاً من ذلك ليختفي من قوائم الاختيار مع الاحتفاظ بكشف حسابه.",
+        )
+
+    try:
+        # فك ربط أي فواتير فُتحت باسمه ولم تُسجَّل عليها أي دفعة بعد (لا سجل
+        # مالي لها، ولذلك وصلنا إلى هنا أصلاً) -- وإلا بقي فيها معرّف ميت.
+        db.query(models.TreatmentInvoice).filter(
+            models.TreatmentInvoice.clinic_doctor_id == clinic_doctor.id
+        ).update({models.TreatmentInvoice.clinic_doctor_id: None}, synchronize_session=False)
+        db.query(models.FinancialTransaction).filter(
+            models.FinancialTransaction.clinic_doctor_id == clinic_doctor.id
+        ).update({models.FinancialTransaction.clinic_doctor_id: None}, synchronize_session=False)
+        db.delete(clinic_doctor)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر حذف الطبيب الآن. حاول مرة أخرى.")
+
+    return {"message": "تم حذف الطبيب بنجاح"}
+
+
+@app.get("/api/clinic-doctors/{clinic_doctor_id}/statement")
+def get_clinic_doctor_statement(
+    clinic_doctor_id: int,
+    year: Optional[int] = Query(None),
+    month: Optional[int] = Query(None),
+    day: Optional[int] = Query(None),
+    all_time: bool = Query(False),
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_premium_doctor_user),
+):
+    """كشف حساب طبيب واحد: حركاته ضمن الفترة + تسوياته + الرصيد التراكمي."""
+    clinic_doctor = _get_owned_clinic_doctor_or_404(db, clinic_doctor_id, current_user.email)
+    period_start, period_end, resolved_year, resolved_month, resolved_day = _resolve_finance_period(
+        year, month, day, all_time
+    )
+
+    earnings_query = db.query(models.DoctorEarning).filter(
+        models.DoctorEarning.clinic_email == current_user.email,
+        models.DoctorEarning.clinic_doctor_id == clinic_doctor.id,
+    )
+    payouts_query = db.query(models.DoctorPayout).filter(
+        models.DoctorPayout.clinic_email == current_user.email,
+        models.DoctorPayout.clinic_doctor_id == clinic_doctor.id,
+    )
+    if period_start is not None and period_end is not None:
+        earnings_query = earnings_query.filter(
+            models.DoctorEarning.earned_at >= period_start,
+            models.DoctorEarning.earned_at < period_end,
+        )
+        payouts_query = payouts_query.filter(
+            models.DoctorPayout.paid_at >= period_start,
+            models.DoctorPayout.paid_at < period_end,
+        )
+
+    earnings = earnings_query.order_by(
+        models.DoctorEarning.earned_at.desc(), models.DoctorEarning.id.desc()
+    ).all()
+    payouts = payouts_query.order_by(
+        models.DoctorPayout.paid_at.desc(), models.DoctorPayout.id.desc()
+    ).all()
+
+    period_collected = sum((Decimal(str(e.gross_amount or 0)) for e in earnings), Decimal("0"))
+    period_doctor_share = sum((Decimal(str(e.doctor_share or 0)) for e in earnings), Decimal("0"))
+    period_clinic_share = sum((Decimal(str(e.clinic_share or 0)) for e in earnings), Decimal("0"))
+    period_paid_out = sum((Decimal(str(p.amount or 0)) for p in payouts), Decimal("0"))
+
+    lifetime_totals = _doctor_period_totals(db, current_user.email, None, None)
+    payout_totals = _doctor_payout_totals(db, current_user.email)
+    summary = _serialize_clinic_doctor(clinic_doctor, {}, lifetime_totals, payout_totals)
+
+    return {
+        "doctor": summary,
+        "period": {
+            "year": resolved_year,
+            "month": resolved_month,
+            "day": resolved_day,
+            "all_time": all_time,
+            "collected": float(period_collected),
+            "doctor_share": float(period_doctor_share),
+            "clinic_share": float(period_clinic_share),
+            "paid_out": float(period_paid_out),
+        },
+        "earnings": [
+            {
+                "id": e.id,
+                "patient_id": e.patient_id,
+                "patient_name": e.patient_name,
+                "invoice_id": e.invoice_id,
+                "description": e.description,
+                "gross_amount": float(Decimal(str(e.gross_amount or 0))),
+                "applied_percent": float(Decimal(str(e.applied_percent or 0))),
+                "doctor_share": float(Decimal(str(e.doctor_share or 0))),
+                "clinic_share": float(Decimal(str(e.clinic_share or 0))),
+                "earned_at": e.earned_at,
+                "adjusted_at": e.adjusted_at,
+            }
+            for e in earnings
+        ],
+        "payouts": [
+            {
+                "id": p.id,
+                "amount": float(Decimal(str(p.amount or 0))),
+                "note": p.note,
+                "paid_at": p.paid_at,
+            }
+            for p in payouts
+        ],
+    }
+
+
+@app.post("/api/clinic-doctors/{clinic_doctor_id}/payouts", response_model=DoctorPayoutResponse, status_code=201)
+def create_doctor_payout(
+    clinic_doctor_id: int,
+    payout_create: DoctorPayoutCreate,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_premium_doctor_user),
+):
+    """تسجيل تسوية: مبلغ سُلِّم للطبيب من مستحقاته.
+
+    تُنشئ في نفس العملية حركة مصروف على حساب العيادة -- وهذا ليس تفصيلاً
+    تجميلياً: بدونه يبقى "صافي أرباح العيادة" في صفحة المالية محسوباً على
+    أنه يملك مالاً خرج فعلاً من الصندوق إلى جيب الطبيب.
+    """
+    clinic_doctor = _get_owned_clinic_doctor_or_404(db, clinic_doctor_id, current_user.email)
+
+    if payout_create.amount is None or payout_create.amount <= 0:
+        raise HTTPException(status_code=400, detail="قيمة التسوية يجب أن تكون أكبر من صفر")
+
+    paid_at = payout_create.paid_at
+    if paid_at is not None:
+        if paid_at.tzinfo is not None:
+            paid_at = paid_at.replace(tzinfo=None)
+        if paid_at > datetime.utcnow():
+            raise HTTPException(status_code=400, detail="تاريخ التسوية لا يمكن أن يكون في المستقبل")
+    else:
+        paid_at = _damascus_now().replace(tzinfo=None)
+
+    amount = _quantize_money(Decimal(str(payout_create.amount)))
+    note = (payout_create.note or "").strip() or None
+    expense_description = f"تسوية مستحقات الطبيب: {clinic_doctor.full_name}"
+    if note:
+        expense_description = f"{expense_description} — {note}"
+
+    try:
+        expense = models.FinancialTransaction(
+            patient_id=None,
+            doctor_name=(current_user.doctor_name or current_user.email),
+            doctor_email=current_user.email,
+            amount=amount,
+            type="expense",
+            description=expense_description,
+            is_opening_balance=False,
+        )
+        expense.created_at = paid_at
+        db.add(expense)
+        db.flush()
+
+        payout = models.DoctorPayout(
+            clinic_email=current_user.email,
+            clinic_doctor_id=clinic_doctor.id,
+            amount=amount,
+            note=note,
+            expense_transaction_id=expense.id,
+            paid_at=paid_at,
+        )
+        db.add(payout)
+        db.commit()
+        db.refresh(payout)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر تسجيل التسوية الآن. حاول مرة أخرى.")
+
+    return {
+        "id": payout.id,
+        "amount": float(Decimal(str(payout.amount or 0))),
+        "note": payout.note,
+        "paid_at": payout.paid_at,
+    }
+
+
+@app.delete("/api/clinic-doctors/{clinic_doctor_id}/payouts/{payout_id}", status_code=200)
+def delete_doctor_payout(
+    clinic_doctor_id: int,
+    payout_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_premium_doctor_user),
+):
+    _get_owned_clinic_doctor_or_404(db, clinic_doctor_id, current_user.email)
+
+    payout = (
+        db.query(models.DoctorPayout)
+        .filter(
+            models.DoctorPayout.id == payout_id,
+            models.DoctorPayout.clinic_doctor_id == clinic_doctor_id,
+            models.DoctorPayout.clinic_email == current_user.email,
+        )
+        .first()
+    )
+    if not payout:
+        raise HTTPException(status_code=404, detail="التسوية غير موجودة")
+
+    try:
+        # حركة المصروف المقابلة تُحذف مع التسوية دائماً -- وإلا بقي في صفحة
+        # المالية مصروف لتسوية لم تعد موجودة، فيظهر ربح العيادة أقل من
+        # حقيقته بلا سبب مرئي.
+        if payout.expense_transaction_id:
+            linked_expense = (
+                db.query(models.FinancialTransaction)
+                .filter(
+                    models.FinancialTransaction.id == payout.expense_transaction_id,
+                    models.FinancialTransaction.doctor_email == current_user.email,
+                )
+                .first()
+            )
+            if linked_expense is not None:
+                db.delete(linked_expense)
+        db.delete(payout)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر حذف التسوية الآن. حاول مرة أخرى.")
+
+    return {"message": "تم حذف التسوية بنجاح"}
+
+
+@app.patch("/api/finance/transaction/{transaction_id}/doctor", status_code=200)
+def assign_transaction_doctor(
+    transaction_id: int,
+    assignment: TransactionDoctorAssignment,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_premium_doctor_user),
+):
+    """تصحيح نسب دفعة مسجّلة إلى طبيب آخر، أو إعادتها للطبيب المدير (null).
+
+    النسبة المستخدَمة عند إعادة النسب هي نسبة الطبيب الجديد الحالية، وتُجمَّد
+    من جديد على السطر -- لأن النسبة المجمّدة القديمة كانت تخصّ طبيباً آخر
+    ولا معنى لتوريثها.
+    """
+    transaction = (
+        db.query(models.FinancialTransaction)
+        .filter(
+            models.FinancialTransaction.id == transaction_id,
+            models.FinancialTransaction.doctor_email == current_user.email,
+        )
+        .first()
+    )
+    if not transaction:
+        raise HTTPException(status_code=404, detail="الدفعة المالية غير موجودة")
+    if (transaction.type or "") != "income":
+        raise HTTPException(status_code=400, detail="لا يمكن نسب مصروف لطبيب. النسب تُحسب على دفعات المرضى فقط.")
+
+    new_clinic_doctor_id = resolve_clinic_doctor_id(
+        db, assignment.clinic_doctor_id, current_user.email
+    )
+
+    try:
+        transaction.clinic_doctor_id = new_clinic_doctor_id
+        sync_doctor_earning_for_payment(db, transaction, current_user.email)
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر تحديث نسب الدفعة الآن. حاول مرة أخرى.")
+
+    return {"message": "تم تحديث الطبيب المنسوبة له الدفعة بنجاح", "clinic_doctor_id": new_clinic_doctor_id}
 
 
 @app.get("/api/finance/backup")

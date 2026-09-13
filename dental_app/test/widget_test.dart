@@ -1,30 +1,57 @@
-// This is a basic Flutter widget test.
+// اختبار ودجات أساسي للتطبيق.
 //
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+// كان هذا الملف منذ إنشاء المشروع هو ملف القالب الافتراضي الذي يولّده
+// `flutter create`: كان يستدعي DentalApp() -- وهي دالة/صنف غير موجود أصلاً
+// (جذر التطبيق الحقيقي اسمه DentalDoctorApp في lib/main.dart) -- ويتحقق من
+// عدّاد "0"/"1" لتطبيق العدّاد النموذجي الذي لم يوجد في هذا المشروع قط.
+// لذلك كان `flutter analyze` يُظهر خطأ undefined_function دائماً، وهو الخطأ
+// الوحيد في المشروع كله، فيُخفي أي خطأ حقيقي جديد وسط الضجيج.
+//
+// استُبدل باختبار حقيقي صغير لا يحتاج شبكة ولا Firebase: يتحقق من سلوك
+// InitialsAvatar، ومنه الخيار الجديد spacedInitials المستخدَم في بطاقة
+// المريض. تعمّدنا عدم تشغيل DentalDoctorApp نفسه هنا لأنه يبدأ فحص الجلسة
+// وتهيئة الإشعارات، وهذا يحتاج محاكاة كاملة لا قيمة لها في اختبار دخان.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:dental_app/main.dart';
+import 'package:dental_app/widgets/app_widgets.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(DentalApp());
+  Future<void> pump(WidgetTester tester, Widget child) {
+    return tester.pumpWidget(
+      MaterialApp(
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(body: Center(child: child)),
+        ),
+      ),
+    );
+  }
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  testWidgets('InitialsAvatar يعرض أول حرف من أول كلمتين', (tester) async {
+    await pump(tester, const InitialsAvatar(name: 'محمد العلي'));
+    expect(find.text('ما'), findsOneWidget);
+  });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+  testWidgets('spacedInitials يفصل الحرفين بمسافة', (tester) async {
+    await pump(
+      tester,
+      const InitialsAvatar(name: 'محمد العلي', spacedInitials: true),
+    );
+    expect(find.text('م ا'), findsOneWidget);
+  });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  testWidgets('اسم من كلمة واحدة يعطي حرفاً واحداً بلا مسافة', (tester) async {
+    await pump(
+      tester,
+      const InitialsAvatar(name: 'سامر', spacedInitials: true),
+    );
+    expect(find.text('س'), findsOneWidget);
+  });
+
+  testWidgets('الاسم الفارغ لا يُسقط الودجة', (tester) async {
+    await pump(tester, const InitialsAvatar(name: '   '));
+    expect(find.text('؟'), findsOneWidget);
   });
 }

@@ -136,39 +136,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
               child: ListView(
                 padding: EdgeInsets.zero,
                 children: [
-                  AnimatedHeroHeader(
-                    padding: EdgeInsets.fromLTRB(
-                        20, MediaQuery.of(context).padding.top + 8, 20, 26),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        // زر رجوع -- انظر نفس التعليق في finance_screen.dart.
-                        Row(
-                          children: [
-                            IconButton(
-                              onPressed: () => Navigator.of(context).maybePop(),
-                              icon: const Icon(Icons.arrow_forward, color: Colors.white),
-                            ),
-                            const Spacer(),
-                          ],
-                        ),
-                        const Text(
-                          'مخزن المواد',
-                          textAlign: TextAlign.right,
-                          style: TextStyle(
-                              color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900),
-                        ),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'متابعة كميات مستلزمات العيادة وتنبيهات النقص',
-                          textAlign: TextAlign.right,
-                          style: TextStyle(color: Colors.white70, fontSize: 12.5),
-                        ),
-                      ],
-                    ),
-                  ),
+                  const ClinicTopBar(),
+                  const OfflineSyncBanner(),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
+                    padding: EdgeInsets.fromLTRB(20, 16, 20, floatingNavInset(context) + 84),
                     child: LoadingErrorEmpty(
                       isLoading: _isLoading,
                       errorMessage: _isPremiumLocked ? null : _errorMessage,
@@ -177,15 +148,22 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       child: _isPremiumLocked
                           ? _buildPremiumLockCard()
                           : items.isEmpty
-                              ? const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 48),
+                              ? Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 48),
                                   child: Center(
                                     child: Column(
                                       children: [
                                         Icon(Icons.inventory_2_outlined,
-                                            size: 44, color: AppColors.slate400),
-                                        SizedBox(height: 10),
-                                        Text('لا توجد مواد مسجّلة بعد'),
+                                            size: 44,
+                                            color: context.surface.textMuted),
+                                        const SizedBox(height: 10),
+                                        Text(
+                                          'لا توجد مواد مسجّلة بعد',
+                                          style: TextStyle(
+                                              color: context
+                                                  .surface.textSecondary),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -201,7 +179,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
           ),
           if (!_isPremiumLocked)
             PositionedDirectional(
-              bottom: 20,
+              bottom: floatingNavInset(context) + 16,
               end: 20,
               child: GradientFab(onPressed: _openAddItemSheet),
             ),
@@ -258,6 +236,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   Widget _buildItemCard(InventoryItem item) {
+    final surf = context.surface;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: SectionCard(
@@ -268,7 +247,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
               height: 44,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: item.isLowStock ? AppColors.rose50 : AppColors.indigo50,
+                color: item.isLowStock
+                    ? AppColors.rose500.withValues(alpha: surf.isDark ? .14 : .08)
+                    : surf.iconBoxBg,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(
@@ -281,15 +262,35 @@ class _InventoryScreenState extends State<InventoryScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(item.itemName,
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5)),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(item.itemName,
+                            textAlign: TextAlign.right,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w800, fontSize: 14.5)),
+                      ),
+                      // مادة أُنشئت/عُدِّلت/حُذفت أوفلاين وما زالت بانتظار
+                      // الاتصال بالإنترنت -- انظر OfflineAwareApiService.
+                      // أُضيف 2026-09-02.
+                      if (item.isPendingSync) ...[
+                        const SizedBox(width: 6),
+                        const Icon(Icons.cloud_off_outlined,
+                            size: 14, color: AppColors.amber900),
+                      ],
+                    ],
+                  ),
                   const SizedBox(height: 4),
                   Text(
                     'الكمية: ${item.quantity}  •  حد التنبيه: ${item.minAlertQuantity}',
                     textAlign: TextAlign.right,
                     style: TextStyle(
-                      color: item.isLowStock ? AppColors.rose700text : AppColors.slate500,
+                      color: item.isLowStock
+                          ? (surf.isDark ? AppColors.rose400 : AppColors.rose700text)
+                          : surf.textSecondary,
                       fontSize: 12,
                       fontWeight: item.isLowStock ? FontWeight.w800 : FontWeight.w500,
                     ),
@@ -298,7 +299,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
               ),
             ),
             PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert, color: AppColors.slate500),
+              icon: Icon(Icons.more_vert, color: surf.textSecondary),
               onSelected: (value) {
                 if (value == 'edit') _openEditItemSheet(item);
                 if (value == 'delete') _confirmDelete(item);
@@ -391,13 +392,14 @@ class _InventoryItemSheetState extends State<_InventoryItemSheet> {
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.item != null;
+    final surf = context.surface;
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+        decoration: BoxDecoration(
+          color: surf.sheetBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
         ),
         child: Form(
           key: _formKey,
@@ -411,7 +413,7 @@ class _InventoryItemSheetState extends State<_InventoryItemSheet> {
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: AppColors.slate200,
+                    color: surf.divider,
                     borderRadius: BorderRadius.circular(999),
                   ),
                 ),

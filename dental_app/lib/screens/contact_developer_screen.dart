@@ -31,6 +31,7 @@ class ContactDeveloperScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final surf = context.surface;
     return Scaffold(
       body: AtmosphereBackground(
         child: ListView(
@@ -120,7 +121,7 @@ class ContactDeveloperScreen extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppColors.indigo50,
+                      color: surf.iconBoxBg,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: AppColors.indigo600.withValues(alpha: .18)),
                     ),
@@ -133,13 +134,15 @@ class ContactDeveloperScreen extends StatelessWidget {
                               height: 44,
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
-                                color: Colors.white,
+                                color: surf.iconBoxBg,
+                                border: Border.all(color: surf.iconBoxBorder),
                                 borderRadius: BorderRadius.circular(14),
                               ),
-                              child: const Icon(Icons.credit_card, color: AppColors.indigo700),
+                              child: Icon(Icons.credit_card,
+                                  color: surf.iconBoxFg),
                             ),
                             const SizedBox(width: 10),
-                            const Expanded(
+                            Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
@@ -149,7 +152,7 @@ class ContactDeveloperScreen extends StatelessWidget {
                                   SizedBox(height: 2),
                                   Text('امسح الكود لإتمام الدفع مباشرة',
                                       textAlign: TextAlign.right,
-                                      style: TextStyle(fontSize: 11, color: AppColors.slate500)),
+                                      style: TextStyle(fontSize: 11, color: surf.textSecondary)),
                                 ],
                               ),
                             ),
@@ -159,16 +162,18 @@ class ContactDeveloperScreen extends StatelessWidget {
                         ClipRRect(
                           borderRadius: BorderRadius.circular(14),
                           child: Container(
+                            // يبقى أبيض في الوضعين عمداً: رمز QR يحتاج هامشاً
+                            // أبيض ليقرأه الماسح، وخلفية داكنة تكسر قراءته.
                             color: Colors.white,
                             padding: const EdgeInsets.all(8),
                             child: Image.network(
                               _shamCashQrUrl,
                               width: 150,
                               height: 150,
-                              errorBuilder: (context, error, stackTrace) => const SizedBox(
+                              errorBuilder: (context, error, stackTrace) => SizedBox(
                                 width: 150,
                                 height: 150,
-                                child: Icon(Icons.qr_code_2, size: 60, color: AppColors.slate400),
+                                child: Icon(Icons.qr_code_2, size: 60, color: surf.textMuted),
                               ),
                             ),
                           ),
@@ -184,10 +189,10 @@ class ContactDeveloperScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  const Center(
+                  Center(
                     child: Text(
                       'تطوير وإدارة: المهندس فارس حلاوي © 2026',
-                      style: TextStyle(fontSize: 11, color: AppColors.slate400),
+                      style: TextStyle(fontSize: 11, color: surf.textMuted),
                     ),
                   ),
                 ],
@@ -217,6 +222,7 @@ class _ContactTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final surf = context.surface;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -253,7 +259,7 @@ class _ContactTile extends StatelessWidget {
                     const SizedBox(height: 3),
                     Text(subtitle,
                         textAlign: TextAlign.right,
-                        style: const TextStyle(fontSize: 11.5, color: AppColors.slate500)),
+                        style: TextStyle(fontSize: 11.5, color: surf.textSecondary)),
                   ],
                 ),
               ),

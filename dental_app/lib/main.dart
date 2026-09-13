@@ -8,11 +8,17 @@ import 'screens/today_schedule_screen.dart';
 import 'services/api_service.dart';
 import 'services/auth_storage.dart';
 import 'services/offline_aware_api_service.dart';
+import 'services/platform_support.dart';
 import 'services/push_notification_service.dart';
 import 'theme/app_theme.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // 2026-09-10: تهيئة المنصّة قبل أول إطار -- على ويندوز تضبط محرّك SQLite
+  // (sqflite_common_ffi) وحجم النافذة وعنوانها، وعلى الجوال لا تفعل شيئاً
+  // سوى ضبط سياسة الخطوط المرفقة. **يجب أن تسبق runApp**: أول شاشة قد تفتح
+  // قاعدة البيانات المحلية فوراً، وفتحها قبل ضبط المصنع يفشل على ويندوز.
+  await initPlatformServices();
   runApp(const DentalDoctorApp());
 }
 
@@ -55,6 +61,10 @@ class _DentalDoctorAppState extends State<DentalDoctorApp> {
   }
 
   Future<void> _bootstrap() async {
+    // وضع الإضاءة يُقرأ قبل أول إطار حتى لا يومض التطبيق نهارياً ثم ينقلب
+    // ليلياً أمام عين الطبيب. فشل القراءة يُبقيه على النهاري (انظر
+    // ThemeController.load).
+    await ThemeController.instance.load();
     final token = await _authStorage.getToken();
     final loggedIn = token != null && token.isNotEmpty;
     if (!mounted) return;
@@ -106,12 +116,25 @@ class _DentalDoctorAppState extends State<DentalDoctorApp> {
 
   @override
   Widget build(BuildContext context) {
+    // ValueListenableBuilder بدل setState: مبدّل الوضع يعيش في شاشة "المزيد"
+    // (عمق أربع طبقات تحت هذه)، وربطه برفع الحالة إلى هنا كان سيمرّر
+    // callback عبر كل شاشة بينهما. ThemeController مصدر حقيقة واحد يستمع له
+    // الجذر مباشرة.
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeController.instance.mode,
+      builder: (context, themeMode, _) => _buildApp(themeMode),
+    );
+  }
+
+  Widget _buildApp(ThemeMode themeMode) {
     return MaterialApp(
       title: 'عيادتي الرقمية',
       debugShowCheckedModeBanner: false,
-      // الهوية البصرية الجديدة المطابقة لموقع العيادة (انظر theme/app_theme.dart)
-      // -- كانت الشاشات تستخدم ThemeData افتراضية بسيطة قبل هذا التحديث.
-      theme: AppTheme.theme,
+      // نظام «الليل النيلي»: بنية واحدة ووضعان لونيان (انظر
+      // theme/app_theme.dart). النهاري هو الافتراضي لأنه وضع ضوء العيادة.
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: themeMode,
       // كل واجهات التطبيق بالعربي، والتخطيط من اليمين لليسار بالكامل -- بلا
       // حاجة لحزمة flutter_localizations الإضافية لأن كل النصوص هنا مكتوبة
       // يدوياً بالعربي أصلاً وليست نصوص إطار عمل مترجَمة تلقائياً.

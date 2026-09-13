@@ -76,8 +76,9 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
 
   @override
   Widget build(BuildContext context) {
+    final surf = context.surface;
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: surf.pageBg,
       body: Stack(
         children: [
           Positioned.fill(child: _buildGlowLayer()),
@@ -87,7 +88,9 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
           Positioned.fill(
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-              child: Container(color: Colors.white.withValues(alpha: 0.55)),
+              // كانت طبقة بيضاء ثابتة تُبيّض الشاشة كاملةً حتى في الوضع
+              // الليلي، فيومض التطبيق أبيض قبل أن يفتح على سطح ‎#07061A.
+              child: Container(color: surf.pageBg.withValues(alpha: 0.55)),
             ),
           ),
           SafeArea(
@@ -97,10 +100,10 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                 children: [
                   _buildLogo(),
                   const SizedBox(height: 28),
-                  const Text(
+                  Text(
                     'مرحبًا بك في عيادتي الرقمية',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.slate900),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: surf.textPrimary),
                   ),
                   const SizedBox(height: 8),
                   _buildSubText(),
@@ -225,21 +228,23 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   }
 
   Widget _buildSubText() {
+    final surf = context.surface;
     return AnimatedBuilder(
       animation: _subTextCurve,
       builder: (context, child) => Opacity(
         opacity: 1 - 0.25 * _subTextCurve.value,
         child: child,
       ),
-      child: const Text(
+      child: Text(
         'رجاء الانتظار...',
         textAlign: TextAlign.center,
-        style: TextStyle(fontSize: 13.5, color: AppColors.slate500),
+        style: TextStyle(fontSize: 13.5, color: surf.textSecondary),
       ),
     );
   }
 
   Widget _buildLoaderRing() {
+    final surf = context.surface;
     return SizedBox(
       width: 72,
       height: 72,
@@ -248,13 +253,13 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
         children: [
           // المسار الثابت الفاتح -- نفس .clinic-loader-track (حلقة 6px
           // إندگو-50) بالموقع بالحرف.
-          const SizedBox(
+          SizedBox(
             width: 72,
             height: 72,
             child: CircularProgressIndicator(
               value: 1,
               strokeWidth: 6,
-              valueColor: AlwaysStoppedAnimation(AppColors.indigo50),
+              valueColor: AlwaysStoppedAnimation(surf.iconBoxBg),
             ),
           ),
           // الحلقة المتدرّجة الدوّارة -- نفس conic-gradient(from 0deg,
@@ -299,8 +304,8 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white,
-                border: Border.all(color: AppColors.indigo50),
+                color: surf.sheetBg,
+                border: Border.all(color: surf.iconBoxBorder),
                 boxShadow: [
                   BoxShadow(
                     color: AppColors.indigo600.withValues(alpha: 0.18),

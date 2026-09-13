@@ -413,6 +413,66 @@ def init_db():
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE users ADD COLUMN green_api_token VARCHAR"))
 
+    # ====================================================================
+    # العيادات متعددة الأطباء: الأطباء بالنسبة -- 2026-09-13
+    # ====================================================================
+    # الجداول الثلاثة الجديدة (clinic_doctors / doctor_earnings /
+    # doctor_payouts) تُنشئها Base.metadata.create_all() في أول سطر من هذه
+    # الدالة تلقائياً لأنها جداول جديدة بالكامل. ما يحتاج ترحيلاً يدوياً هنا
+    # هو العمودان المُضافان على جدولين قائمين فقط.
+    #
+    # كلاهما nullable بالكامل بلا أي قيمة افتراضية، وNULL يعني صراحةً "الطبيب
+    # المدير صاحب الحساب نفسه" -- ولهذا لا يحتاج أي صف تاريخي أي تعبئة
+    # (backfill) إطلاقاً، وتبقى كل حسابات العيادات ذات الطبيب الواحد صحيحة
+    # حرفياً كما كانت قبل هذا التحديث.
+    #
+    # بلا شرط نوع قاعدة البيانات (خلافاً لكتلة SQLite بالأعلى)، لنفس السبب
+    # الموثّق مراراً في هذا الملف: الإنتاج الحقيقي على Render يستخدم Supabase
+    # Postgres وليس SQLite.
+    #
+    # ملاحظة مقصودة: نضيف العمود بلا قيد REFERENCES في جملة ALTER TABLE.
+    # SQLite لا يدعم إضافة قيد مفتاح خارجي إلى جدول قائم عبر ALTER TABLE
+    # أصلاً، والقيد على مستوى قاعدة البيانات ليس ضرورياً هنا لأن main.py
+    # يتحقق من ملكية clinic_doctor_id لنفس العيادة قبل أي كتابة، وتنظيف
+    # الصفوف عند حذف طبيب مساعد يتم صراحةً في مسار الحذف نفسه.
+    inspector = inspect(engine)
+
+    if "financial_transactions" in inspector.get_table_names():
+        finance_doctor_columns = {column["name"] for column in inspector.get_columns("financial_transactions")}
+        if "clinic_doctor_id" not in finance_doctor_columns:
+            with engine.begin() as connection:
+                connection.execute(
+                    text("ALTER TABLE financial_transactions ADD COLUMN clinic_doctor_id INTEGER")
+                )
+
+    if "treatment_invoices" in inspector.get_table_names():
+        invoice_doctor_columns = {column["name"] for column in inspector.get_columns("treatment_invoices")}
+        if "clinic_doctor_id" not in invoice_doctor_columns:
+            with engine.begin() as connection:
+                connection.execute(
+                    text("ALTER TABLE treatment_invoices ADD COLUMN clinic_doctor_id INTEGER")
+                )
+
+    # فهارس البحث الأكثر تكراراً في هذه الميزة: كشف حساب طبيب واحد ضمن شهر
+    # محدد، ورصيد كل أطباء عيادة واحدة. CREATE INDEX IF NOT EXISTS مدعومة في
+    # SQLite وPostgres معاً، والعملية آمنة للتكرار في كلتيهما.
+    if "doctor_earnings" in inspector.get_table_names():
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_doctor_earnings_doctor_earned_at "
+                    "ON doctor_earnings (clinic_doctor_id, earned_at)"
+                )
+            )
+    if "doctor_payouts" in inspector.get_table_names():
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_doctor_payouts_doctor_paid_at "
+                    "ON doctor_payouts (clinic_doctor_id, paid_at)"
+                )
+            )
+
 
 def get_db():
     db = SessionLocal()
