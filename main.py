@@ -4136,6 +4136,7 @@ def create_expense(
     # ملاحظة: transaction_type يجب أن يُحسب هنا -- قبل فحص expense.patient_id
     # أسفله الذي يعتمد عليه لإلزامية invoice_id.
 
+    payment_invoice = None
     if expense.patient_id is not None:
         patient = (
             db.query(models.Patient)
@@ -4164,6 +4165,9 @@ def create_expense(
             )
             if not invoice:
                 raise HTTPException(status_code=404, detail="فاتورة العلاج غير موجودة")
+            # 2026-09-13: الدفعة هنا ترث الطبيب المنفّذ من فاتورتها تماماً
+            # كما في register_invoice_payment -- انظر الملاحظة أسفله.
+            payment_invoice = invoice
 
     # 2026-08-24: ربط تلقائي اختياري -- عند تسجيل مصروف لشراء مادة، يمكن للطبيب
     # طلب إضافتها/تحديث كميتها في مخزن المواد بنفس العملية، بدل الانتقال يدوياً إلى
@@ -4201,10 +4205,18 @@ def create_expense(
             description=description,
             invoice_id=expense.invoice_id,
             is_opening_balance=bool(expense.is_opening_balance),
+            # دفعة مريض عبر هذا المسار المشترك تُنسب لنفس طبيب فاتورتها،
+            # تماماً كما في register_invoice_payment. بدون هذا السطر والـ
+            # sync أسفله كانت أي دفعة تُسجَّل من هنا تختفي من كشف حساب
+            # الطبيب بصمت -- لا خطأ، لا تحذير، فقط مستحقات ناقصة.
+            clinic_doctor_id=(payment_invoice.clinic_doctor_id if payment_invoice is not None else None),
         )
         if transaction_date is not None:
             db_expense.created_at = transaction_date
         db.add(db_expense)
+        if payment_invoice is not None:
+            db.flush()
+            sync_doctor_earning_for_payment(db, db_expense, current_user.email)
 
         inventory_item = None
         inventory_action = None

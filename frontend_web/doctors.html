@@ -339,6 +339,121 @@
 		   مكتوب هنا وليس md:col-span-4 لأن ذلك الصنف غير موجود في بناء
 		   tailwind.css الإنتاجي الحالي فلن يُطبَّق. */
 		.form-span-all { grid-column: 1 / -1; }
+
+		/* ============================================================
+		   مخطط توزيع المحصّل (حلقة) -- 2026-09-13
+		   ============================================================
+		   الألوان أدناه ليست اختياراً ذوقياً: هي لوحة تصنيفية مُتحقَّق منها آلياً
+		   ضد عمى الألوان على خلفية بيضاء (فصل ΔE ≥ 8 بين كل شريحتين
+		   متجاورتين، وأرضية الرؤية الطبيعية ≥ 15). ثلاثة منها (الأخضر المائي
+		   والأصفر والوردي) تحت عتبة تباين 3:1 مع الخلفية البيضاء، ولهذا
+		   **قائمة البيان المجاورة إلزامية ولا يجوز حذفها**: هي التي تحمل الاسم
+		   والمبلغ نصاً، فلا يعتمد القارئ على تمييز اللون وحده أبداً.
+		   ترتيب الشرائح حول الحلقة هو آلية الأمان نفسها -- لا تُعِد ترتيبها. */
+		.viz-root {
+			--viz-surface: #ffffff;
+			--viz-ink: #1e293b;
+			--viz-ink-soft: #64748b;
+			--viz-grid: #e2e8f0;
+			/* شريحة العيادة: رمادي أردوازي مقصود -- العيادة ليست "طبيباً" بل
+			   المتبقّي، فتأخذ لوناً محايداً لا يزاحم هويات الأطباء. */
+			--viz-clinic: #475569;
+			--viz-1: #2a78d6;
+			--viz-2: #eb6834;
+			--viz-3: #1baf7a;
+			--viz-4: #eda100;
+			--viz-5: #e87ba4;
+			--viz-6: #008300;
+			--viz-7: #4a3aa7;
+			--viz-other: #94a3b8;
+		}
+		.viz-layout { display: grid; gap: 20px; align-items: center; justify-content: start; }
+		@media (min-width: 860px) { .viz-layout { grid-template-columns: 260px minmax(0, 460px); } }
+
+		.viz-chart-col { display: flex; flex-direction: column; align-items: center; }
+		.viz-chart-wrap { position: relative; width: 240px; height: 240px; }
+		.viz-donut { width: 240px; height: 240px; display: block; }
+		/* "إعادة الجلب تُبقي الإطار": أثناء التحميل تبقى الحلقة السابقة ظاهرة
+		   بشفافية أقل بدل وميض أو قفزة في التخطيط. */
+		.viz-loading .viz-donut, .viz-loading .viz-legend { opacity: 0.55; }
+		.viz-seg {
+			fill: none;
+			stroke-linecap: butt;
+			cursor: pointer;
+			transition: stroke-dasharray 0.55s cubic-bezier(0.4, 0, 0.2, 1),
+			            stroke-dashoffset 0.55s cubic-bezier(0.4, 0, 0.2, 1),
+			            stroke-width 0.15s ease, opacity 0.15s ease;
+		}
+		.viz-seg:focus { outline: none; }
+		.viz-donut.is-hovering .viz-seg { opacity: 0.32; }
+		.viz-donut.is-hovering .viz-seg.is-active { opacity: 1; stroke-width: 26; }
+		.viz-track { fill: none; stroke: var(--viz-grid); stroke-width: 22; }
+
+		.viz-center {
+			position: absolute;
+			inset: 0;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			text-align: center;
+			pointer-events: none;
+			/* الحشوة محسوبة على قطر الثقب الفعلي (2×59 من أصل 200 على عرض
+			   240px ≈ 141px): أي نص أعرض من ذلك يطفح فوق الحلقة نفسها. */
+			padding: 0 54px;
+		}
+		.viz-center-label { font-size: 10.5px; font-weight: 700; color: var(--viz-ink-soft); white-space: nowrap; }
+		/* رقم البطل: أرقام تناسبية لا tabular -- الأخيرة تجعل الرقم مفكّكاً
+		   بصرياً في الأحجام الكبيرة. */
+		.viz-center-value {
+			margin-top: 1px;
+			font-family: 'Noto Kufi Arabic', 'Segoe UI', Tahoma, system-ui, sans-serif;
+			font-size: 32px;
+			font-weight: 800;
+			line-height: 1.1;
+			color: var(--viz-ink);
+			font-variant-numeric: proportional-nums;
+			white-space: nowrap;
+		}
+		.viz-center-unit { margin-top: 1px; font-size: 12px; font-weight: 800; color: var(--viz-ink); white-space: nowrap; }
+		/* القيمة الدقيقة خارج الحلقة: لا مكان لها داخل الثقب بلا اصطدام. */
+		.viz-exact { margin-top: 8px; text-align: center; font-size: 12px; font-weight: 700; color: var(--viz-ink-soft); font-variant-numeric: tabular-nums; }
+
+		/* لا تلميح عائم: أي صندوق يتبع المؤشر فوق حلقة بهذا القطر إما يغطي
+		   رقم البطل في قلبها أو يخرج من البطاقة. قلب الحلقة فارغ أصلاً
+		   ومحجوز للقراءة، فهو شاشة القراءة الطبيعية -- يعرض الإجمالي في
+		   الوضع الساكن، وتفاصيل الشريحة عند المرور عليها أو التركيز عليها
+		   بلوحة المفاتيح. */
+		.viz-center-key { width: 16px; height: 3px; border-radius: 2px; margin: 0 auto 4px; }
+		.viz-center-key[hidden] { display: none; }
+		.viz-center-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+
+		.viz-legend { display: flex; flex-direction: column; gap: 2px; min-width: 0; max-width: 460px; }
+		.viz-legend-row {
+			display: flex;
+			align-items: flex-start;
+			gap: 10px;
+			width: 100%;
+			border: 0;
+			border-radius: 12px;
+			background: transparent;
+			padding: 8px 10px;
+			font-family: inherit;
+			text-align: start;
+			cursor: pointer;
+			transition: background 0.15s ease;
+		}
+		.viz-legend-row:hover, .viz-legend-row.is-active { background: #f1f5f9; }
+		.viz-legend-row:focus-visible { outline: 2px solid #6366f1; outline-offset: 1px; }
+		.viz-legend-row[data-static="1"] { cursor: default; }
+		.viz-swatch { width: 12px; height: 12px; border-radius: 4px; flex-shrink: 0; margin-top: 4px; }
+		.viz-legend-name { flex: 1; min-width: 0; font-size: 13px; font-weight: 700; color: var(--viz-ink); line-height: 1.5; overflow-wrap: anywhere; }
+		.viz-legend-sub { display: block; font-size: 10.5px; font-weight: 600; color: var(--viz-ink-soft); line-height: 1.6; }
+		.viz-legend-amount { padding-top: 1px; font-size: 13px; font-weight: 800; color: var(--viz-ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+		.viz-legend-pct { width: 52px; flex-shrink: 0; padding-top: 2px; text-align: end; font-size: 12px; font-weight: 700; color: var(--viz-ink-soft); font-variant-numeric: tabular-nums; }
+
+		.viz-empty { padding: 28px 10px; text-align: center; font-size: 13px; font-weight: 700; color: var(--viz-ink-soft); }
+		.viz-foot { margin-top: 12px; font-size: 11px; line-height: 1.9; color: var(--viz-ink-soft); }
 	</style>
 	<link rel="icon" type="image/svg+xml" href="favicon.svg" />
 	<link rel="alternate icon" type="image/png" href="favicon.png" />
@@ -468,6 +583,45 @@
 						<p class="mt-3 text-xs leading-6 text-ink-500">
 							النسبة تُحسب على المبلغ المحصّل فعلياً من المريض، لا على قيمة الفاتورة. وأي تعديل للنسبة يسري على العمل القادم فقط ولا يغيّر أي حركة مسجّلة سابقاً.
 						</p>
+					</section>
+
+					<section id="distributionSection" class="panel-soft hidden rounded-[28px] border border-white/70 bg-white/90 p-4 shadow-xl shadow-ink-200/70 sm:p-6">
+						<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+							<div>
+								<h3 class="text-xl font-bold text-brand-900">توزيع المحصّل</h3>
+								<p class="mt-1 text-sm text-ink-500">من كل ليرة دخلت العيادة في الفترة المختارة: كم بقيت للعيادة وكم ذهب لكل طبيب.</p>
+							</div>
+							<span id="distributionPeriodBadge" class="rounded-full bg-brand-50 px-3 py-1 text-sm font-medium text-brand-700">الشهر الحالي</span>
+						</div>
+
+						<div class="viz-root">
+							<div id="distributionEmpty" class="viz-empty hidden">لا يوجد تحصيل مسجَّل في هذه الفترة.</div>
+
+							<div id="distributionLayout" class="viz-layout">
+								<div class="viz-chart-col">
+								<div class="viz-chart-wrap">
+									<svg id="distributionDonut" class="viz-donut" viewBox="0 0 200 200" role="img" aria-labelledby="distributionDonutTitle">
+										<title id="distributionDonutTitle">حلقة توزيع المحصّل بين العيادة والأطباء</title>
+										<circle class="viz-track" cx="100" cy="100" r="70"></circle>
+										<g id="distributionSegments" transform="rotate(-90 100 100)"></g>
+									</svg>
+									<div class="viz-center" role="status" aria-live="polite">
+										<span id="distributionKey" class="viz-center-key" hidden></span>
+										<span id="distributionLabel" class="viz-center-label">إجمالي المحصّل</span>
+										<span id="distributionTotal" class="viz-center-value">0</span>
+										<span id="distributionTotalUnit" class="viz-center-unit">ل.س</span>
+									</div>
+								</div>
+								<p id="distributionTotalExact" class="viz-exact">0 ل.س</p>
+								</div>
+
+								<div id="distributionLegend" class="viz-legend"></div>
+							</div>
+
+							<p class="viz-foot">
+								الشرائح تُقرأ من القائمة المجاورة لا من اللون وحده. حصة العيادة تشمل ما حصّلته أنت مباشرةً بالإضافة إلى ما تبقّى لها من عمل الأطباء بعد حسم نسبهم.
+							</p>
+						</div>
 					</section>
 
 					<section class="panel-soft rounded-[28px] border border-white/70 bg-white/90 p-4 shadow-xl shadow-ink-200/70 sm:p-6">
@@ -981,20 +1135,20 @@
 		   all_time) حتى تطابق أرقام هذه الصفحة تقرير المالية للفترة نفسها. */
 		function buildPeriodOptions() {
 			const now = new Date();
-			const options = [
-				{ value: 'today', label: 'اليوم' },
-				{ value: 'all', label: 'كل الفترات' }
-			];
+			// الشهر الحالي أولاً ليكون هو الافتراضي -- نفس سلوك صفحة المالية
+			// بالضبط، وإلا فتحت الصفحتان على فترتين مختلفتين وبدت الأرقام
+			// متناقضة بلا سبب مرئي.
+			const months = [];
 			for (let i = 0; i < 18; i += 1) {
 				const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-				const year = d.getFullYear();
-				const month = d.getMonth() + 1;
-				options.splice(1 + i, 0, {
-					value: `${year}-${month}`,
-					label: i === 0 ? `${ARABIC_MONTHS[d.getMonth()]} ${year} (الشهر الحالي)` : `${ARABIC_MONTHS[d.getMonth()]} ${year}`
+				months.push({
+					value: `${d.getFullYear()}-${d.getMonth() + 1}`,
+					label: i === 0
+						? `${ARABIC_MONTHS[d.getMonth()]} ${d.getFullYear()} (الشهر الحالي)`
+						: `${ARABIC_MONTHS[d.getMonth()]} ${d.getFullYear()}`
 				});
 			}
-			return options;
+			return [months[0], { value: 'today', label: 'اليوم' }, ...months.slice(1), { value: 'all', label: 'كل الفترات' }];
 		}
 
 		function fillPeriodSelect(selectEl) {
@@ -1133,17 +1287,42 @@
 		}
 
 		async function loadDoctors() {
+			const query = periodQuery(periodSelect.value);
+			// "إعادة الجلب تُبقي الإطار": الحلقة الحالية تبقى معروضة بشفافية
+			// أقل أثناء التحميل بدل وميض أو قفزة في التخطيط.
+			if (distributionSection) distributionSection.classList.add('viz-loading');
 			try {
-				const response = await fetch(apiUrl(`/api/clinic-doctors?${periodQuery(periodSelect.value)}`), {
-					headers: getDoctorsAuthHeaders()
-				});
-				if (!response.ok) {
-					setDoctorFormStatus(await readError(response, 'تعذر تحميل قائمة الأطباء.'), true);
+				// الطلبان متوازيان: ملخص المالية يعطي دخل الفترة كاملاً، وهو
+				// ما يسمح لحصة العيادة في الحلقة أن تشمل تحصيل الطبيب المدير
+				// المباشر أيضاً لا حصته من عمل الأطباء وحدها.
+				const [doctorsResponse, financeResponse] = await Promise.all([
+					fetch(apiUrl(`/api/clinic-doctors?${query}`), { headers: getDoctorsAuthHeaders() }),
+					fetch(apiUrl(`/api/finance/summary?${query}`), { headers: getDoctorsAuthHeaders() })
+						.catch(() => null)
+				]);
+				if (!doctorsResponse.ok) {
+					setDoctorFormStatus(await readError(doctorsResponse, 'تعذر تحميل قائمة الأطباء.'), true);
 					return;
 				}
-				renderDoctors(await response.json());
+				const doctors = await doctorsResponse.json();
+				renderDoctors(doctors);
+
+				// فشل ملخص المالية لا يُسقط الصفحة: نرجع عندها إلى ما حصّله
+				// الأطباء وحدهم كإجمالي، فتبقى الحلقة صحيحة النِّسَب.
+				let totalIncome = 0;
+				if (financeResponse && financeResponse.ok) {
+					try {
+						const summary = await financeResponse.json();
+						totalIncome = Number(summary?.total_income || 0);
+					} catch (err) {
+						totalIncome = 0;
+					}
+				}
+				renderDistributionChart(doctors, totalIncome);
 			} catch (err) {
 				setDoctorFormStatus('تعذر الاتصال بالخادم لتحميل قائمة الأطباء.', true);
+			} finally {
+				if (distributionSection) distributionSection.classList.remove('viz-loading');
 			}
 		}
 
@@ -1416,6 +1595,307 @@
 			} catch (err) {
 				showDoctorsToast('تعذر الاتصال بالخادم. حاول مرة أخرى.');
 			}
+		}
+
+
+		// ================================================================
+		// مخطط توزيع المحصّل (حلقة تفاعلية) -- 2026-09-13
+		// ================================================================
+		// مرسوم بـ SVG خام عمداً، بلا أي مكتبة رسوم من CDN: الموقع أُخرج
+		// أصلاً من الاعتماد على CDN (بناء Tailwind إنتاجي محلي)، وتبعية
+		// خارجية هنا تعني حلقة فارغة عند ضعف الشبكة أو تعطّل المزوّد --
+		// وحلقة كهذه ليست إلا بضعة <circle> مع stroke-dasharray.
+		//
+		// "live" هنا تعني: يتحرّك فوراً مع كل تغيير يفعله المستخدم (تبديل
+		// الفترة، تعديل نسبة، تسجيل تسوية) بانتقال سلس -- لا استقصاء دوري
+		// للخادم. الاستقصاء كان سيضيف حِملاً دائماً على باقة Render المجانية
+		// فوق notification-badge.js الذي يستدعي الـ API كل 4 ثوانٍ أصلاً،
+		// مقابل قيمة شبه معدومة: البيانات لا تتغير إلا بفعل هذا المستخدم.
+		const DONUT_RADIUS = 70;
+		const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS;
+		// فجوة بلون السطح تفصل الشرائح -- الفصل يتم بالفراغ لا بحدّ مرسوم
+		// حول الشريحة (الحدّ حِبر لا يمثل بيانات). 2.2 وحدة viewBox ≈ 2px
+		// على العرض المعروض 240px.
+		const DONUT_GAP = 2.2;
+		// أقصى عدد شرائح: الحلقة تُقرأ "بنظرة" فقط، وتفقد معناها تماماً بعد
+		// ست شرائح. ما زاد يُطوى في شريحة "أخرى" -- ولا يُولَّد لون جديد أبداً.
+		const DONUT_MAX_SEGMENTS = 6;
+		// ترتيب ثابت مُتحقَّق منه ضد عمى الألوان -- لا يُعاد ترتيبه.
+		const DOCTOR_COLOR_SLOTS = [
+			'var(--viz-1)', 'var(--viz-2)', 'var(--viz-3)',
+			'var(--viz-4)', 'var(--viz-5)', 'var(--viz-6)', 'var(--viz-7)'
+		];
+
+		const distributionSection = document.getElementById('distributionSection');
+		const distributionLayout = document.getElementById('distributionLayout');
+		const distributionEmpty = document.getElementById('distributionEmpty');
+		const distributionSegments = document.getElementById('distributionSegments');
+		const distributionLegend = document.getElementById('distributionLegend');
+		const distributionDonut = document.getElementById('distributionDonut');
+		const distributionKeyEl = document.getElementById('distributionKey');
+		const distributionLabelEl = document.getElementById('distributionLabel');
+		const distributionTotalEl = document.getElementById('distributionTotal');
+		const distributionTotalExactEl = document.getElementById('distributionTotalExact');
+		const distributionTotalUnitEl = document.getElementById('distributionTotalUnit');
+		const distributionPeriodBadge = document.getElementById('distributionPeriodBadge');
+		const distributionChartWrap = distributionDonut ? distributionDonut.parentElement : null;
+
+		// اللون يتبع الطبيب لا ترتيبه في القائمة: الخريطة تُبنى من المعرّفات
+		// مرتّبةً تصاعدياً (ترتيب الإنشاء)، فيحتفظ كل طبيب بلونه مهما تغيّرت
+		// الفترة أو رُتّبت القائمة أو عُطّل زميل له. إعادة التلوين عند الفلترة
+		// تضلّل من تعلّم أن "د. سامر أزرق".
+		function buildDoctorColorMap(doctors) {
+			const map = new Map();
+			[...doctors]
+				.sort((a, b) => Number(a.id) - Number(b.id))
+				.forEach((d, index) => {
+					map.set(String(d.id), DOCTOR_COLOR_SLOTS[index % DOCTOR_COLOR_SLOTS.length]);
+				});
+			return map;
+		}
+
+		// يعيد {value, unit} منفصلين: الرقم يُعرض بحجم كبير والوحدة تحته،
+		// لأن "12.2 مليون" في سطر واحد لا يتسع لثقب الحلقة ويلتف فوقها.
+		function formatCompactMoney(value) {
+			const num = Math.round(Number(value || 0));
+			if (!Number.isFinite(num)) return { value: '0', unit: 'ل.س' };
+			const abs = Math.abs(num);
+			const trim = (n) => {
+				const rounded = Math.round(n * 10) / 10;
+				return rounded.toLocaleString('en-US', { maximumFractionDigits: 1 });
+			};
+			if (abs >= 1e9) return { value: trim(num / 1e9), unit: 'مليار ل.س' };
+			if (abs >= 1e6) return { value: trim(num / 1e6), unit: 'مليون ل.س' };
+			if (abs >= 1000) return { value: trim(num / 1000), unit: 'ألف ل.س' };
+			return { value: formatMoney(num), unit: 'ل.س' };
+		}
+
+		// نسبة الشريحة من الكل: خانة عشرية واحدة بلا صفر زائد. خانتان
+		// ("66.02%") ضجيج بصري لا يضيف أي معنى لقارئ يريد حجم الشريحة.
+		function formatSharePercent(value) {
+			const num = Number(value || 0);
+			if (!Number.isFinite(num)) return '0%';
+			const rounded = Math.round(num * 10) / 10;
+			return `${rounded.toLocaleString('en-US', { maximumFractionDigits: 1 })}%`;
+		}
+
+		function buildDistributionSlices(doctors, totalIncome) {
+			const colorMap = buildDoctorColorMap(doctors);
+
+			let doctorsCollected = 0;
+			let doctorsShare = 0;
+			const doctorSlices = [];
+			doctors.forEach((d) => {
+				const collected = Number(d.period_collected || 0);
+				const share = Number(d.period_doctor_share || 0);
+				doctorsCollected += collected;
+				doctorsShare += share;
+				if (share > 0) {
+					doctorSlices.push({
+						key: `doctor-${d.id}`,
+						doctorId: d.id,
+						name: d.full_name,
+						sub: `${formatPercent(d.commission_percent)} من ${formatMoney(collected)}`,
+						value: share,
+						color: colorMap.get(String(d.id)) || 'var(--viz-other)',
+						clickable: true
+					});
+				}
+			});
+
+			// حصة العيادة = ما حصّلته العيادة مباشرةً (دخل الفترة كله ناقص ما
+			// مرّ عبر الأطباء) + ما تبقّى لها من عمل الأطباء بعد نسبهم.
+			// الحدّ الأدنى صفر: تضارب بيانات نادر يجب ألا يُنتج شريحة سالبة
+			// تكسر الحلقة بصرياً.
+			const ownCollected = Math.max(Number(totalIncome || 0) - doctorsCollected, 0);
+			const clinicValue = Math.max(ownCollected + (doctorsCollected - doctorsShare), 0);
+
+			doctorSlices.sort((a, b) => b.value - a.value);
+
+			let shown = doctorSlices;
+			if (doctorSlices.length > DONUT_MAX_SEGMENTS - 1) {
+				const keep = doctorSlices.slice(0, DONUT_MAX_SEGMENTS - 2);
+				const rest = doctorSlices.slice(DONUT_MAX_SEGMENTS - 2);
+				const restTotal = rest.reduce((sum, s) => sum + s.value, 0);
+				shown = keep.concat([{
+					key: 'other',
+					doctorId: null,
+					name: `أطباء آخرون (${rest.length.toLocaleString('en-US')})`,
+					sub: '',
+					value: restTotal,
+					color: 'var(--viz-other)',
+					clickable: false
+				}]);
+			}
+
+			const clinicSlice = {
+				key: 'clinic',
+				doctorId: null,
+				name: 'العيادة',
+				sub: ownCollected > 0 ? `منها من تحصيلك المباشر: ${formatMoney(ownCollected)}` : '',
+				value: clinicValue,
+				color: 'var(--viz-clinic)',
+				clickable: false
+			};
+
+			const slices = [clinicSlice, ...shown].filter((s) => s.value > 0);
+			const total = slices.reduce((sum, s) => sum + s.value, 0);
+			return { slices, total };
+		}
+
+		let distributionActiveKey = null;
+		let distributionSlices = [];
+		let distributionTotal = 0;
+
+		// شاشة القراءة في قلب الحلقة: الإجمالي في الوضع الساكن، وتفاصيل
+		// الشريحة عند المرور/التركيز. الأسماء بيانات غير موثوقة فتُدرَج
+		// بـ textContent لا بتركيب innerHTML.
+		function renderDistributionReadout(slice) {
+			if (!distributionLabelEl) return;
+			if (!slice) {
+				if (distributionKeyEl) distributionKeyEl.hidden = true;
+				distributionLabelEl.textContent = 'إجمالي المحصّل';
+				const compact = formatCompactMoney(distributionTotal);
+				distributionTotalEl.textContent = compact.value;
+				if (distributionTotalUnitEl) distributionTotalUnitEl.textContent = compact.unit;
+				return;
+			}
+			const pct = distributionTotal > 0 ? (slice.value / distributionTotal) * 100 : 0;
+			if (distributionKeyEl) {
+				distributionKeyEl.hidden = false;
+				distributionKeyEl.style.background = slice.color;
+			}
+			distributionLabelEl.textContent = slice.name;
+			const compact = formatCompactMoney(slice.value);
+			distributionTotalEl.textContent = compact.value;
+			if (distributionTotalUnitEl) {
+				distributionTotalUnitEl.textContent = `${compact.unit} — ${formatSharePercent(pct)}`;
+			}
+		}
+
+		function setDistributionActive(key) {
+			distributionActiveKey = key;
+			if (!distributionDonut) return;
+			distributionDonut.classList.toggle('is-hovering', Boolean(key));
+			distributionSegments.querySelectorAll('.viz-seg').forEach((seg) => {
+				seg.classList.toggle('is-active', seg.dataset.key === key);
+			});
+			distributionLegend.querySelectorAll('.viz-legend-row').forEach((row) => {
+				row.classList.toggle('is-active', row.dataset.key === key);
+			});
+			renderDistributionReadout(key ? distributionSlices.find((s) => s.key === key) : null);
+		}
+
+		function renderDistributionChart(doctors, totalIncome) {
+			if (!distributionSection) return;
+			const list = Array.isArray(doctors) ? doctors : [];
+
+			// بلا أطباء لا يوجد "توزيع" أصلاً -- القسم كله يختفي بدل عرض
+			// حلقة من شريحة واحدة (شريحة واحدة ليست مخططاً، هي رقم).
+			if (!list.length) {
+				distributionSection.classList.add('hidden');
+				return;
+			}
+			distributionSection.classList.remove('hidden');
+			if (distributionPeriodBadge) distributionPeriodBadge.textContent = periodLabel(periodSelect);
+
+			const { slices, total } = buildDistributionSlices(list, totalIncome);
+
+			if (!total || !slices.length) {
+				distributionLayout.classList.add('hidden');
+				distributionEmpty.classList.remove('hidden');
+				return;
+			}
+			distributionEmpty.classList.add('hidden');
+			distributionLayout.classList.remove('hidden');
+
+			distributionSlices = slices;
+			distributionTotal = total;
+			renderDistributionReadout(null);
+			distributionTotalExactEl.textContent = `${formatMoney(total)} ل.س`;
+
+			// --- الحلقة ---
+			distributionSegments.textContent = '';
+			let cursor = 0;
+			slices.forEach((slice) => {
+				const arcLength = (slice.value / total) * DONUT_CIRCUMFERENCE;
+				// شريحة أصغر من الفجوة نفسها تُرسم بحدّ أدنى مرئي بدل أن تختفي.
+				const drawn = Math.max(arcLength - DONUT_GAP, 0.8);
+				const seg = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+				seg.setAttribute('class', 'viz-seg');
+				seg.setAttribute('cx', '100');
+				seg.setAttribute('cy', '100');
+				seg.setAttribute('r', String(DONUT_RADIUS));
+				seg.setAttribute('stroke', slice.color);
+				seg.setAttribute('stroke-width', '22');
+				seg.setAttribute('stroke-dasharray', `${drawn} ${DONUT_CIRCUMFERENCE - drawn}`);
+				seg.setAttribute('stroke-dashoffset', String(-(cursor + DONUT_GAP / 2)));
+				seg.setAttribute('tabindex', '0');
+				seg.setAttribute('role', 'button');
+				seg.dataset.key = slice.key;
+				// نفس التفاصيل عند التركيز بلوحة المفاتيح كما عند المرور بالفأرة.
+				seg.addEventListener('pointerenter', () => setDistributionActive(slice.key));
+				seg.addEventListener('pointerleave', () => setDistributionActive(null));
+				seg.addEventListener('focus', () => setDistributionActive(slice.key));
+				seg.addEventListener('blur', () => setDistributionActive(null));
+				const open = () => { if (slice.clickable && slice.doctorId != null) openStatement(slice.doctorId); };
+				seg.addEventListener('click', open);
+				seg.addEventListener('keydown', (event) => {
+					if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); }
+				});
+				const label = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+				label.textContent = `${slice.name}: ${formatMoney(slice.value)} ل.س`;
+				seg.appendChild(label);
+				distributionSegments.appendChild(seg);
+				cursor += arcLength;
+			});
+
+			// --- قائمة البيان: هي أيضاً جدول القيم الدقيقة، وهي الإعفاء
+			// المطلوب للشرائح التي لا تبلغ عتبة التباين 3:1 مع الخلفية. ---
+			distributionLegend.textContent = '';
+			slices.forEach((slice) => {
+				const pct = (slice.value / total) * 100;
+				const row = document.createElement(slice.clickable ? 'button' : 'div');
+				row.className = 'viz-legend-row';
+				row.dataset.key = slice.key;
+				if (slice.clickable) {
+					row.type = 'button';
+					row.addEventListener('click', () => openStatement(slice.doctorId));
+				} else {
+					row.dataset.static = '1';
+				}
+
+				const swatch = document.createElement('span');
+				swatch.className = 'viz-swatch';
+				swatch.style.background = slice.color;
+
+				const nameWrap = document.createElement('span');
+				nameWrap.className = 'viz-legend-name';
+				nameWrap.appendChild(document.createTextNode(slice.name));
+				if (slice.sub) {
+					const sub = document.createElement('span');
+					sub.className = 'viz-legend-sub';
+					sub.textContent = slice.sub;
+					nameWrap.appendChild(sub);
+				}
+
+				const amount = document.createElement('span');
+				amount.className = 'viz-legend-amount';
+				amount.textContent = formatMoney(slice.value);
+
+				const pctEl = document.createElement('span');
+				pctEl.className = 'viz-legend-pct';
+				pctEl.textContent = formatSharePercent(pct);
+
+				row.append(swatch, nameWrap, amount, pctEl);
+				row.addEventListener('pointerenter', () => setDistributionActive(slice.key));
+				row.addEventListener('pointerleave', () => setDistributionActive(null));
+				distributionLegend.appendChild(row);
+			});
+
+			setDistributionActive(distributionActiveKey && slices.some((s) => s.key === distributionActiveKey)
+				? distributionActiveKey
+				: null);
 		}
 
 		doctorsGrid?.addEventListener('click', (event) => {
