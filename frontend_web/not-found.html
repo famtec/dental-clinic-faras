@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<!--
+  عيادتي الرقمية — صفحة "المسار غير موجود"
+  أضيفت 2026-09-14. تُقدَّم من معالج 404 في main.py (وليس من app.mount)،
+  ولذلك هي مستقلة تماماً: كل تنسيقها مضمّن هنا بلا tailwind.css وبلا أي ملف
+  خارجي -- لأن سبب وصول الزائر إلى هنا قد يكون بالضبط أن مسارات الملفات لديه
+  لا تُحلّ كما يجب، فصفحة الخطأ يجب أن تظهر سليمة مهما كان العطل.
+-->
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>عيادتي الرقمية — الصفحة غير موجودة</title>
+<link rel="icon" href="/favicon.png">
+<style>
+  :root{
+    --brand-600:#4f46e5; --brand-700:#4338ca; --brand-50:#eef2ff; --brand-200:#c7d2fe;
+    --ink-900:#0f172a; --ink-600:#475569; --ink-500:#64748b; --ink-200:#e2e8f0; --ink-50:#f8fafc;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+    padding:24px; background:var(--ink-50); color:var(--ink-900);
+    font-family:"Noto Kufi Arabic","Segoe UI",Tahoma,Arial,sans-serif; line-height:1.9;
+  }
+  .card{
+    width:100%; max-width:560px; background:#fff; border:1px solid var(--ink-200);
+    border-radius:20px; padding:40px 32px; text-align:center;
+    box-shadow:0 10px 30px rgba(15,23,42,.06);
+  }
+  .badge{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:84px; height:84px; border-radius:50%; background:var(--brand-50);
+    color:var(--brand-600); font-size:30px; font-weight:700; letter-spacing:1px;
+    border:1px solid var(--brand-200); margin-bottom:20px;
+  }
+  h1{font-size:24px; margin:0 0 10px}
+  p{margin:0 0 8px; color:var(--ink-600); font-size:15px}
+  .hint{font-size:14px; color:var(--ink-500); margin-top:14px}
+  code{
+    direction:ltr; unicode-bidi:embed; display:inline-block; background:var(--ink-50);
+    border:1px solid var(--ink-200); border-radius:8px; padding:2px 8px;
+    font-family:Consolas,Menlo,monospace; font-size:13px; color:var(--ink-900);
+    max-width:100%; overflow-wrap:anywhere;
+  }
+  .actions{display:flex; flex-wrap:wrap; gap:12px; justify-content:center; margin-top:26px}
+  a.btn{
+    text-decoration:none; border-radius:12px; padding:12px 22px; font-size:15px;
+    font-weight:600; display:inline-block; transition:background .15s,border-color .15s;
+  }
+  a.primary{background:var(--brand-600); color:#fff}
+  a.primary:hover{background:var(--brand-700)}
+  a.ghost{background:#fff; color:var(--brand-700); border:1px solid var(--brand-200)}
+  a.ghost:hover{background:var(--brand-50)}
+  .foot{margin-top:26px; font-size:13px; color:var(--ink-500)}
+  @media (max-width:420px){ .card{padding:30px 20px} h1{font-size:20px} }
+</style>
+</head>
+<body>
+  <main class="card">
+    <div class="badge">٤٠٤</div>
+    <h1>هذه الصفحة غير موجودة</h1>
+    <p>الموقع يعمل بشكل طبيعي، لكن العنوان المكتوب لا يقابل أي صفحة لدينا — غالباً حرف زائد أو ناقص في الرابط.</p>
+    <p class="hint">العنوان المطلوب: <code id="requestedPath">—</code></p>
+
+    <div class="actions">
+      <a class="btn primary" href="/login.html">تسجيل الدخول</a>
+      <a class="btn ghost" href="/landing.html">الصفحة الرئيسية</a>
+    </div>
+
+    <p class="foot">إن تكرّر ظهور هذه الصفحة رغم كتابة الرابط الصحيح، تواصل مع المهندس فارس حلاوي.</p>
+  </main>
+
+<script>
+  // إظهار المسار المطلوب فعلياً يختصر التشخيص عن بُعد: يكفي أن يصوّر المستخدم
+  // الشاشة ليُعرف إن كان الخطأ في اسم الصفحة أم في شيء آخر.
+  try {
+    document.getElementById('requestedPath').textContent =
+      window.location.pathname + window.location.search;
+  } catch (e) {}
+</script>
+</body>
+</html>
