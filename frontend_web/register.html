@@ -333,7 +333,10 @@
           localStorage.setItem("user_email", email);
           localStorage.setItem("user_tier", data.tier);
           if (!data?.tier) {
-            localStorage.setItem("user_tier", "standard");
+          // 2026-09-14: لا افتراض لأي باقة عند غياب الحقل من رد الخادم.
+          // بعد توحيد الباقات صارت "standard" مرادفاً لـ premium، فافتراضها
+          // هنا كان سيُظهر واجهة مشترك مدفوع لحساب لم يُفعَّل أصلاً.
+            localStorage.setItem("user_tier", "");
           }
           window.location.href = 'login.html';
           return;

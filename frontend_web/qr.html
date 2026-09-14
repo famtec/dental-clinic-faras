@@ -48,7 +48,7 @@
  <img src="logo.png" alt="شعار العيادة" class="h-12 w-12 rounded-xl border border-white/10 bg-white/10 object-contain p-2 shadow-lg shadow-brand-950/25" />
  <div class="flex items-center gap-3">
  <p id="clinicTitle" class="text-lg font-extrabold tracking-tight text-white sm:text-xl">عيادتي الرقمية</p>
- <span id="tierBadge" class="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Standard</span>
+ <span id="tierBadge" class="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Premium</span>
  </div>
  </div>
 
@@ -72,7 +72,7 @@
  <div class="min-w-0">
  <div class="flex min-w-0 items-center gap-2">
  <p id="mobileClinicTitle" class="truncate text-sm font-extrabold tracking-tight text-white">عيادتي الرقمية</p>
- <span id="mobileTierBadge" class="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[11px] font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Standard</span>
+ <span id="mobileTierBadge" class="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[11px] font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Premium</span>
  </div>
  </div>
  </div>
@@ -140,6 +140,7 @@
  </div>
 
  <script src="api-config.js"></script>
+	<script src="tier-access.js"></script>
  <script src="notification-badge.js"></script>
  <!-- إشعارات المتصفح (Web Push) -- 2026-09-05: firebase-web-config.js يحمل
       إعدادات Firebase للويب ومفتاح VAPID، ويستورده أيضاً firebase-messaging-sw.js
@@ -173,9 +174,9 @@
     }
 
     function renderTierBadge() {
-      const isPremium = userTier === 'premium';
+      const isPremium = ClinicTier.hasPremium(userTier);
       const sharedClass = isPremium ? 'badge-premium' : 'badge-standard';
-      const label = isPremium ? 'Premium' : 'Standard';
+      const label = ClinicTier.badgeLabel();
       if (tierBadge) {
         tierBadge.className = `${sharedClass} rounded-full px-3 py-1 text-xs font-extrabold tracking-wide`;
         tierBadge.textContent = label;

@@ -182,7 +182,7 @@
 
     function persistLoginSession(data, fallbackEmail = '') {
       const token = data?.token || data?.accessToken || data?.access_token || data?.authToken || data?.auth_token;
-      const tier = (data?.tier || 'standard').toString().toLowerCase();
+      const tier = (data?.tier || '').toString().toLowerCase();
       const resolvedEmail = String(data?.email || fallbackEmail || '').trim().toLowerCase();
 
       if (rememberMeCheckbox.checked) {
@@ -258,7 +258,7 @@ async function loginUser(event) {
         if (response.ok) {
             const data = await response.json();
             localStorage.setItem("user_email", data.email || emailInput.value.trim());
-            localStorage.setItem("user_tier", data.tier || "standard");
+            localStorage.setItem("user_tier", data.tier || "");
             if (data.token) {
                 localStorage.setItem("authToken", data.token);
             }

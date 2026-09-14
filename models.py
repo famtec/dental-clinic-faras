@@ -74,12 +74,16 @@ class ActivationKey(Base):
     duration_days = Column(Integer, default=30, nullable=False)
     is_used = Column(Boolean, default=False, nullable=False)
     used_by_email = Column(String, nullable=True)
-    # الرتبة الصريحة المقصودة لهذا الكود ("premium" أو "standard" أو "trial"
-    # -- الأخيرة أُضيفت 2026-08-30 لأكواد التجربة المجانية، وتُفعِّل صلاحيات
-    # premium كاملة عبر /api/activate)، تُضبط دائماً عند توليد أكواد التجديد
-    # الشهرية الجديدة عبر /api/admin/renewal-keys/generate.
-    # قد تكون NULL للأكواد الثابتة القديمة المزروعة يدوياً -- /api/activate يرجع
-    # عندها لتخمين نصي احتياطي (duration_days/كلمات مفتاحية في الكود نفسه).
+    # الباقة الصريحة المقصودة لهذا الكود، تُضبط دائماً عند التوليد عبر
+    # /api/admin/renewal-keys/generate. القيم الصالحة (2026-09-14):
+    #   "premium"      -- الباقة الفخمة
+    #   "premium_plus" -- باقة العيادات (تفتح إدارة نسب الأطباء)
+    #   "trial"        -- كود تجربة مجانية، يفتح premium_plus كاملة لمدته
+    #   "standard"     -- مرادف قديم فقط، لم تعد تُولَّد؛ يفتح premium
+    # القيمة "trial" تبقى محفوظة هنا بعد الاستهلاك للمحاسبة الإدارية، ولا
+    # تُكتب إطلاقاً في users.tier -- لا توجد حالة مستخدم اسمها trial.
+    # قد تكون NULL للأكواد الثابتة القديمة المزروعة يدوياً -- عندها يرجع
+    # resolve_activation_key_tier لتخمين نصي احتياطي من الكود نفسه.
     intended_tier = Column(String, nullable=True)
 
 

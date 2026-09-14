@@ -453,6 +453,37 @@ def init_db():
                     text("ALTER TABLE treatment_invoices ADD COLUMN clinic_doctor_id INTEGER")
                 )
 
+    # ====================================================================
+    # توحيد الباقات: standard -> premium  (2026-09-14)
+    # ====================================================================
+    # قرار صريح من صاحب المنصة: لم تعد هناك إلا باقة مدفوعة واحدة (Premium)،
+    # وفوقها "باقة العيادات (Premium Plus)" لميزة إدارة نسب الأطباء وحدها.
+    #
+    # الترحيل يرفع كل صف قديم من standard إلى premium -- **رفع لا تخفيض**:
+    # طبيب اشترى سابقاً لا يجوز أن يجد نفسه بصلاحيات أقل مما يحصل عليه مشترك
+    # اليوم. وينطبق الأمر نفسه على أكواد التفعيل غير المستخدمة التي وُزِّعت
+    # بالفعل على أطباء ولم تُستهلك بعد -- تبقى صالحة وتفتح Premium كاملة.
+    #
+    # آمن للتكرار: بعد أول تشغيل ناجح لا يبقى صف واحد بقيمة standard فلا
+    # تفعل الجملتان شيئاً. وmain.py يترجم "standard" إلى premium في وقت
+    # التشغيل أيضاً (normalize_tier)، فحتى لو فشل هذا الترحيل لأي سبب لا
+    # يُحرَم أي طبيب من صلاحياته.
+    if "users" in inspector.get_table_names():
+        with engine.begin() as connection:
+            connection.execute(
+                text("UPDATE users SET tier = 'premium' WHERE LOWER(TRIM(tier)) = 'standard'")
+            )
+    if "activation_keys" in inspector.get_table_names():
+        activation_columns = {column["name"] for column in inspector.get_columns("activation_keys")}
+        if "intended_tier" in activation_columns:
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "UPDATE activation_keys SET intended_tier = 'premium' "
+                        "WHERE LOWER(TRIM(intended_tier)) = 'standard'"
+                    )
+                )
+
     # فهارس البحث الأكثر تكراراً في هذه الميزة: كشف حساب طبيب واحد ضمن شهر
     # محدد، ورصيد كل أطباء عيادة واحدة. CREATE INDEX IF NOT EXISTS مدعومة في
     # SQLite وPostgres معاً، والعملية آمنة للتكرار في كلتيهما.

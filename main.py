@@ -137,11 +137,91 @@ def seed_default_activation_key() -> None:
 
 # --- محرّك تجديد الاشتراك الشهري (Renewal Retention Engine) ---------------
 
-def generate_renewal_activation_code(tier: str = "premium") -> str:
-    # يولّد كوداً عشوائياً عالي الإنتروبيا بصيغة "PM-xxxxxxxxxxxxx" (فخمة/شهرية)
-    # أو "STD-xxxxxxxxxxxxx" (قياسية)، باستخدام وحدة secrets (وليس random العادية)
-    # لأنه سيُستخدم كتوكن دفع فعلي -- يجب ألا يكون قابلاً للتخمين.
-    prefix = "PM" if tier == "premium" else "STD"
+# ====================================================================
+# باقات الاشتراك -- نقطة الحقيقة الوحيدة (2026-09-14)
+# ====================================================================
+# تُوحِّد هذه الكتلة كل ما يخص الباقات في مكان واحد. قبلها كان المشروع
+# يقارن الباقة بالمساواة الحرفية في مواضع متفرقة (`user.tier == "premium"`)،
+# وهذا نمط خطير مُثبَت بالتجربة في هذا المشروع تحديداً: خلل 2026-08-30 في
+# تصنيف أكواد التفعيل نشأ حرفياً من تكرار المنطق نفسه بشكل متفاوت في ثلاثة
+# مسارات (انظر resolve_activation_key_tier). وإضافة باقة أعلى (premium_plus)
+# فوق منطق المساواة الحرفية كانت ستُنتج نفس فئة الخلل بشكل أسوأ: **مشترك
+# الباقة الأعلى يُمنع من ميزة أدنى** (المخزن، الاسترجاع التلقائي...) لأنه
+# ببساطة لا يساوي السلسلة "premium".
+#
+# القاعدة الملزمة: **لا تقارن الباقة بسلسلة نصية في أي مكان آخر.** استخدم
+# user_has_premium_access() و user_has_doctors_access() حصراً، فالصلاحية
+# تُقاس بالمستوى لا بالتطابق، وأي باقة أعلى تحصل تلقائياً على كل ما دونها.
+TIER_PENDING = "pending_activation"
+TIER_EXPIRED = "expired_subscription"
+TIER_PREMIUM = "premium"
+TIER_PREMIUM_PLUS = "premium_plus"
+
+# "standard" لم تعد باقة تُباع: وُحِّدت كل الباقات في Premium واحدة
+# (2026-09-14، بقرار صريح من صاحب المنصة). تبقى هنا كمرادف قديم فقط، لأن
+# القاعدة الحية قد تحوي صفوف users أو أكواد activation_keys قديمة تحملها،
+# وأي كود "STD-..." وُزِّع على طبيب سابقاً يجب أن يبقى صالحاً -- ويمنح
+# الآن Premium كاملة، لا أقل. لا يجوز إطلاقاً معاملتها كباقة أدنى.
+LEGACY_TIER_ALIASES = {"standard": TIER_PREMIUM}
+
+# مستويات الباقات المدفوعة تصاعدياً. الرقم هو ما يُقارَن، لا الاسم.
+TIER_LEVELS = {TIER_PREMIUM: 1, TIER_PREMIUM_PLUS: 2}
+PAID_TIERS = (TIER_PREMIUM, TIER_PREMIUM_PLUS, "standard")
+
+TIER_DISPLAY_NAMES = {
+    TIER_PREMIUM: "الباقة الفخمة (Premium)",
+    TIER_PREMIUM_PLUS: "باقة العيادات (Premium Plus)",
+}
+
+# مستوى كل ميزة مقيَّدة. إضافة ميزة جديدة = سطر واحد هنا + دالة حارس، لا
+# أكثر.
+FEATURE_LEVEL_PREMIUM = TIER_LEVELS[TIER_PREMIUM]
+FEATURE_LEVEL_DOCTORS = TIER_LEVELS[TIER_PREMIUM_PLUS]
+
+
+def normalize_tier(value) -> str:
+    """اسم الباقة بصيغته المعتمدة، مع ترجمة المرادفات القديمة."""
+    tier = (getattr(value, "tier", value) or "")
+    tier = str(tier).strip().lower()
+    return LEGACY_TIER_ALIASES.get(tier, tier)
+
+
+def tier_level(value) -> int:
+    """مستوى الباقة: 0 لأي حالة غير مدفوعة (بانتظار التفعيل/منتهية/فارغة)."""
+    return TIER_LEVELS.get(normalize_tier(value), 0)
+
+
+def tier_display_name(value) -> str:
+    return TIER_DISPLAY_NAMES.get(normalize_tier(value), normalize_tier(value))
+
+
+def user_has_premium_access(value) -> bool:
+    """كل المزايا المدفوعة عدا إدارة الأطباء -- أي باقة مدفوعة تكفي."""
+    return tier_level(value) >= FEATURE_LEVEL_PREMIUM
+
+
+def user_has_doctors_access(value) -> bool:
+    """إدارة العيادة متعددة الأطباء وحساب النسب -- Premium Plus فقط."""
+    return tier_level(value) >= FEATURE_LEVEL_DOCTORS
+
+
+# بادئة كل نوع كود. الأكواد الموزَّعة سابقاً بأي بادئة تبقى صالحة إلى الأبد
+# (المطابقة تتم بالعمود intended_tier لا بالبادئة) -- البادئة للقراءة
+# البشرية وفرز الدفعات فقط.
+ACTIVATION_CODE_PREFIXES = {
+    TIER_PREMIUM: "PM",
+    TIER_PREMIUM_PLUS: "PP",
+    "trial": "TRIAL",
+    "standard": "STD",
+}
+
+
+def generate_renewal_activation_code(tier: str = TIER_PREMIUM) -> str:
+    # يولّد كوداً عشوائياً عالي الإنتروبيا بصيغة "PM-xxxxxxxxxxxxx" (فخمة)
+    # أو "PP-xxxxxxxxxxxxx" (باقة العيادات) أو "TRIAL-xxxxxxxxxxxxx"
+    # (تجريبية)، باستخدام وحدة secrets (وليس random العادية) لأنه سيُستخدم
+    # كتوكن دفع فعلي -- يجب ألا يكون قابلاً للتخمين.
+    prefix = ACTIVATION_CODE_PREFIXES.get((tier or "").strip().lower(), "PM")
     alphabet = string.ascii_letters + string.digits
     suffix = "".join(secrets.choice(alphabet) for _ in range(13))
     return f"{prefix}-{suffix}"
@@ -163,7 +243,7 @@ def sweep_expired_subscriptions() -> int:
             db.query(models.User)
             .filter(models.User.subscription_expires_at.isnot(None))
             .filter(models.User.subscription_expires_at < now)
-            .filter(models.User.tier.in_(["premium", "standard"]))
+            .filter(models.User.tier.in_(list(PAID_TIERS)))
             .all()
         )
         for expired_user in expired_users:
@@ -724,9 +804,10 @@ def send_due_recall_messages() -> int:
         now = datetime.utcnow()
         recall_cooldown_cutoff = now - timedelta(days=RECALL_INTERVAL_DAYS)
 
-        # الاسترجاع التلقائي (بلا أي إجراء من الطبيب) حصري لباقة Premium -- نفس
-        # منطق باقي مزايا Premium الحصرية بالمشروع (require_premium_user_by_email).
-        doctors = db.query(models.User).filter(models.User.tier == "premium").all()
+        # الاسترجاع التلقائي (بلا أي إجراء من الطبيب) متاح لكل باقة مدفوعة.
+        # الفلترة بقائمة PAID_TIERS لا بمساواة "premium" -- وإلا حُرم مشترك
+        # الباقة الأعلى من ميزة يملكها من هو دونه (انظر كتلة الباقات أعلاه).
+        doctors = db.query(models.User).filter(models.User.tier.in_(list(PAID_TIERS))).all()
 
         for doctor in doctors:
             if not doctor.email or not doctor.is_active:
@@ -1473,7 +1554,7 @@ def ensure_user_subscription_is_active(user: models.User, db: Session | None = N
     # إصلاح هذه الثغرة (مثال: حسابات Google القديمة التي كانت تُنشأ قبل
     # إجبار tier="pending_activation" على الحسابات الجديدة).
     normalized_tier_check = (user.tier or "").strip().lower()
-    if normalized_tier_check in ("standard", "premium") and user.subscription_expires_at is None:
+    if normalized_tier_check in PAID_TIERS and user.subscription_expires_at is None:
         if (user.tier or "").strip().lower() != "pending_activation" or user.is_active:
             user.tier = "pending_activation"
             user.is_active = False
@@ -1634,7 +1715,7 @@ def require_premium_user_by_email(db: Session, authorization: str | None) -> mod
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
-    if user.tier != "premium":
+    if not user_has_premium_access(user):
         raise HTTPException(
             status_code=403,
             detail="هذه الميزة المحاسبية المتقدمة لإدارة المستودع متاحة حصرياً للباقة الفخمة (Premium).",
@@ -1725,7 +1806,7 @@ def health_check():
 
 
 def resolve_activation_key_tier(activation_key: "models.ActivationKey", activation_code: str) -> str:
-    """يحدّد فئة (premium/standard) كود تفعيل واحد -- نقطة الحقيقة الوحيدة
+    """يحدّد الباقة التي يفتحها كود تفعيل واحد -- نقطة الحقيقة الوحيدة
     المستخدمة الآن من الأماكن الثلاثة التي تحتاج هذا التصنيف: التسجيل
     (register_user)، الترقية الفورية (upgrade_user_tier)، والتفعيل/التجديد
     (activate_account). قبل 2026-08-30 كان كل مسار يعيد تنفيذ نفس المنطق
@@ -1739,19 +1820,30 @@ def resolve_activation_key_tier(activation_key: "models.ActivationKey", activati
     عبر /api/admin/renewal-keys/generate تضبطه)، ويُلجَأ للتخمين النصي
     القديم فقط للأكواد القديمة التي لا تملك هذا العمود إطلاقاً.
     """
+    # 2026-09-14: توحيد الباقات. أي كود قديم مقصود به "standard" يفتح الآن
+    # Premium كاملة عبر normalize_tier -- لا يجوز أن يحصل طبيب اشترى كوداً
+    # سابقاً على أقل مما يحصل عليه مشترك اليوم.
+    #
+    # كود التجربة (intended_tier="trial") يفتح **باقة العيادات (Premium Plus)**
+    # كاملة: المجرِّب يرى كل شيء بما فيه حساب نسب الأطباء. القيمة "trial"
+    # تبقى محفوظة على الكود نفسه للمحاسبة الإدارية فقط، ولا تُكتب إطلاقاً في
+    # users.tier -- فلا توجد في المشروع حالة مستخدم اسمها "trial" ولا حارس
+    # واحد يحتاج معرفتها.
     explicit_tier = (getattr(activation_key, "intended_tier", None) or "").strip().lower()
-    if explicit_tier in ("premium", "standard"):
-        return explicit_tier
+    if explicit_tier == "trial":
+        return TIER_PREMIUM_PLUS
+    if explicit_tier in (TIER_PREMIUM, TIER_PREMIUM_PLUS, "standard"):
+        return normalize_tier(explicit_tier)
 
+    # تخمين نصّي احتياطي للأكواد القديمة جداً التي لا تحمل intended_tier
+    # إطلاقاً. بعد التوحيد لم يعد التمييز بين "فخمة" و"قياسية" ذا معنى، فكل
+    # كود قديم يفتح Premium -- ما لم تدل بادئته صراحةً على باقة العيادات.
     upper_code = activation_code.upper()
-    is_premium = (
-        activation_key.duration_days >= 365
-        or "-Y-" in upper_code
-        or "PREMIUM" in upper_code
-        or "VIP" in upper_code
-        or upper_code.startswith("PRM-")
-    )
-    return "premium" if is_premium else "standard"
+    if upper_code.startswith("PP-") or "PLUS" in upper_code:
+        return TIER_PREMIUM_PLUS
+    if upper_code.startswith("TRIAL-"):
+        return TIER_PREMIUM_PLUS
+    return TIER_PREMIUM
 
 
 @app.post("/api/auth/register")
@@ -1988,8 +2080,11 @@ def upgrade_user_tier(upgrade_request: UpgradeTierRequest, db: Session = Depends
     # نقطة الحقيقة الوحيدة لتصنيف الكود -- انظر resolve_activation_key_tier
     # أعلاه (2026-08-30: كانت هذه الفحوصات مكررة ومتفاوتة بين ثلاثة مسارات
     # مختلفة، وهذا بالضبط ما سبّب رفض كود Premium شهري حقيقي هنا تحديداً).
-    if resolve_activation_key_tier(activation_key, activation_code) != "premium":
-        raise HTTPException(status_code=400, detail="هذا الكود لا يفعّل باقة Premium.")
+    # 2026-09-14: يقبل أي كود يفتح باقة مدفوعة، ويمنح الباقة التي يفتحها
+    # الكود فعلاً -- فكود Premium Plus يرقّي إلى Premium Plus لا إلى Premium.
+    upgrade_target_tier = resolve_activation_key_tier(activation_key, activation_code)
+    if not user_has_premium_access(upgrade_target_tier):
+        raise HTTPException(status_code=400, detail="هذا الكود لا يفعّل أي باقة مدفوعة.")
 
     user = None
     if normalized_email:
@@ -2005,7 +2100,9 @@ def upgrade_user_tier(upgrade_request: UpgradeTierRequest, db: Session = Depends
     base_date = user.subscription_expires_at if user.subscription_expires_at and user.subscription_expires_at > now else now
 
     try:
-        user.tier = "premium"
+        # لا نُنزل باقة أعلى: من يملك Premium Plus ويستخدم كود Premium شهري
+        # للتجديد يجب أن يبقى على Premium Plus، لا أن يهبط بصمت.
+        user.tier = upgrade_target_tier if tier_level(upgrade_target_tier) >= tier_level(user) else normalize_tier(user)
         user.subscription_expires_at = base_date + timedelta(days=activation_key.duration_days)
         user.is_active = True
 
@@ -2019,7 +2116,7 @@ def upgrade_user_tier(upgrade_request: UpgradeTierRequest, db: Session = Depends
         raise HTTPException(status_code=400, detail="تعذر تنفيذ الترقية حالياً. حاول مرة أخرى.")
 
     return {
-        "message": "تمت ترقية الحساب إلى Premium بنجاح.",
+        "message": f"تمت ترقية الحساب إلى {tier_display_name(user.tier)} بنجاح.",
         "doctor_name": user.doctor_name,
         "email": user.email,
         "tier": user.tier,
@@ -3203,10 +3300,10 @@ def require_premium_doctor_user(
     بباقتك" عن "حسابك بانتظار التفعيل" -- نفس تمييز صفحة المخزن.
     """
     user = require_active_doctor_user(db=db, doctor_email=doctor_email, authorization=authorization)
-    if (user.tier or "").strip().lower() != "premium":
+    if not user_has_doctors_access(user):
         raise HTTPException(
             status_code=403,
-            detail="إدارة العيادة متعددة الأطباء وحساب النسب متاحة حصرياً للباقة الفخمة (Premium).",
+            detail="إدارة العيادة متعددة الأطباء وحساب النسب متاحة حصرياً لـ باقة العيادات (Premium Plus).",
         )
     return user
 
@@ -4183,7 +4280,7 @@ def create_expense(
         if transaction_date > datetime.utcnow():
             raise HTTPException(status_code=400, detail="تاريخ الحركة لا يمكن أن يكون في المستقبل")
 
-    sync_to_inventory = bool(expense.add_to_inventory) and transaction_type == "expense" and current_user.tier == "premium"
+    sync_to_inventory = bool(expense.add_to_inventory) and transaction_type == "expense" and user_has_premium_access(current_user)
 
     inventory_item_name = None
     inventory_quantity_to_add = None
@@ -6074,7 +6171,10 @@ def activate_account(request: ActivationRequest, db: Session = Depends(database.
         now = datetime.utcnow()
         base_date = user.subscription_expires_at if user.subscription_expires_at and user.subscription_expires_at > now else now
 
-        user.tier = target_tier
+        # لا تنزيل لباقة أعلى عند التجديد بكود أدنى -- انظر نفس الحارس في
+        # upgrade_user_tier. الاستثناء الوحيد حساب منتهي الاشتراك: باقته
+        # المخزَّنة حينها "expired_subscription" ومستواها صفر أصلاً.
+        user.tier = target_tier if tier_level(target_tier) >= tier_level(user) else normalize_tier(user)
         user.subscription_expires_at = base_date + timedelta(days=activation_key.duration_days)
         user.is_active = True
 
@@ -6084,13 +6184,20 @@ def activate_account(request: ActivationRequest, db: Session = Depends(database.
         db.commit()
         db.refresh(user)
 
-        if is_renewal:
+        granted_name = tier_display_name(user.tier)
+        is_trial_code = (getattr(activation_key, "intended_tier", None) or "").strip().lower() == "trial"
+        if is_trial_code:
             success_message = (
-                f"🎉 تم تجديد اشتراكك بنجاح والعودة فوراً إلى باقة ({target_tier})! "
+                f"🎁 تم تفعيل فترتك التجريبية المجانية بنجاح لمدة {activation_key.duration_days} يوماً، "
+                f"بكامل مزايا {granted_name}!"
+            )
+        elif is_renewal:
+            success_message = (
+                f"🎉 تم تجديد اشتراكك بنجاح والعودة فوراً إلى {granted_name}! "
                 "جميع سجلات مرضاك ومواعيدك ومخزون عيادتك كما تركتها تماماً."
             )
         else:
-            success_message = f"تم تفعيل عيادتك الرقمية بنجاح وترقيتها إلى باقة ({target_tier})!"
+            success_message = f"تم تفعيل عيادتك الرقمية بنجاح وترقيتها إلى {granted_name}!"
 
         return {
             "status": "success",
@@ -6144,8 +6251,12 @@ def admin_run_idle_reminders(
 
 
 class RenewalKeyGenerateRequest(BaseModel):
-    tier: Literal["premium", "standard"] = "premium"
-    duration_days: int = 30
+    # "standard" أُزيلت من الخيارات المسموحة (وُحِّدت الباقات 2026-09-14) --
+    # الأكواد القديمة الصادرة بها تبقى صالحة وتفتح Premium، لكن لا تُولَّد
+    # أكواد جديدة منها. duration_days اختيارية: تُحسَم افتراضياً إلى 7 أيام
+    # لكود التجربة و30 يوماً لغيره.
+    tier: Literal["premium", "premium_plus", "trial"] = "premium"
+    duration_days: Optional[int] = None
     count: int = 1
 
 
@@ -6164,7 +6275,10 @@ def generate_renewal_keys(
 
     if request.count < 1 or request.count > 20:
         raise HTTPException(status_code=400, detail="يمكن توليد بين 1 و20 كوداً في كل مرة.")
-    if request.duration_days < 1:
+    resolved_duration_days = request.duration_days
+    if resolved_duration_days is None:
+        resolved_duration_days = 7 if request.tier == "trial" else 30
+    if resolved_duration_days < 1:
         raise HTTPException(status_code=400, detail="مدة الكود يجب أن تكون يوماً واحداً على الأقل.")
 
     generated_keys: list[str] = []
@@ -6187,7 +6301,7 @@ def generate_renewal_keys(
             db.add(
                 models.ActivationKey(
                     key_code=candidate_code,
-                    duration_days=request.duration_days,
+                    duration_days=resolved_duration_days,
                     intended_tier=request.tier,
                     is_used=False,
                     used_by_email=None,
@@ -6206,7 +6320,8 @@ def generate_renewal_keys(
     return {
         "generated_keys": generated_keys,
         "tier": request.tier,
-        "duration_days": request.duration_days,
+        "duration_days": resolved_duration_days,
+        "grants_tier": TIER_PREMIUM_PLUS if request.tier == "trial" else normalize_tier(request.tier),
     }
 
 
@@ -6671,6 +6786,80 @@ def redirect_to_landing():
     # كل زائر جديد صفحة التسويق أولاً، وفيها أزرار واضحة لكل من "تسجيل الدخول"
     # (للأطباء المشتركين أصلاً) و"ابدأ الآن" (تسجيل حساب جديد عبر register.html).
     return RedirectResponse(url="/landing.html", status_code=302)
+
+# =============================================================================
+# معالج 404 ودود (أضيف 2026-09-14 بعد بلاغ حقيقي من عيادة: فتحت السكرتيرة رابط
+# الموقع على لابتوبها فظهرت صفحة بيضاء مكتوب عليها "Not Found" فقط -- وهي رسالة
+# Starlette الافتراضية: لا تشرح شيئاً، ولا تعطي المستخدم غير التقني أي زر يخرج
+# به من المأزق، فيظنّ أن الموقع كله معطّل).
+#
+# ثلاث حالات مختلفة تماماً كانت تنتهي كلها بنفس الرسالة الجافة:
+#   1) رابط بلا امتداد: /login بدل /login.html -- وارد جداً لأن الرابط يُملى
+#      شفهياً أو يُكتب على ورقة، ولأن كل صفحات الموقع ملفات ثابتة يخدمها
+#      app.mount أدناه بأسمائها الكاملة فقط. الآن يُحوَّل تلقائياً للصفحة.
+#   2) خطأ إملائي في اسم صفحة -- الآن صفحة 404 عربية فيها أزرار عودة واضحة.
+#   3) طلب API خاطئ -- يبقى JSON كما هو بلا أي تغيير، لأن الواجهة الأمامية
+#      وتطبيق فلاتر يقرآن {"detail": ...} لعرض رسائل الخطأ؛ تحويله إلى HTML
+#      هنا كان سيكسر كل رسائل الخطأ في المنصة دفعة واحدة.
+#
+# ما لا يعالجه هذا الكود (مهم عند التشخيص): خطأ حرف في اسم النطاق نفسه -- مثل
+# dental-clinic-fares بدل dental-clinic-faras -- لا يصل إلى هنا إطلاقاً، لأن
+# Render يردّ "Not Found" من حافة شبكته قبل أن يصل الطلب للتطبيق أصلاً. الفرق
+# بين الحالتين مرئي للعين: رسالة Render نصّ عارٍ "Not Found"، ورسالتنا الآن
+# صفحة عربية مصمَّمة -- فإن رأى المستخدم النصّ العاري فالمشكلة في العنوان لا
+# في الموقع.
+# =============================================================================
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from fastapi.requests import Request
+from fastapi.exception_handlers import http_exception_handler
+
+
+@app.exception_handler(StarletteHTTPException)
+async def friendly_http_exception_handler(request: Request, exc: StarletteHTTPException):
+    # أي خطأ غير 404 يمرّ إلى معالج FastAPI الافتراضي حرفياً (مع هيدراته، مثل
+    # WWW-Authenticate في 401) -- لا نغيّر سلوكاً قائماً.
+    if exc.status_code != 404:
+        return await http_exception_handler(request, exc)
+
+    path = request.url.path
+
+    # مسارات البيانات تبقى JSON حصراً
+    if path.startswith("/api/") or path.startswith("/uploads/") or path == "/health":
+        return await http_exception_handler(request, exc)
+
+    # /login -> /login.html  و  /Login -> /login.html
+    #
+    # حالة الأحرف مقصودة: سيرفر Render يعمل على لينكس وأسماء الملفات عنده
+    # حسّاسة للأحرف، بينما المستخدم يكتب من ويندوز حيث لا فرق بين Login و
+    # login -- فكان "Login.html" يعطي Not Found بلا سبب مفهوم له. كل صفحات
+    # المشروع بأحرف صغيرة، فمحاولة الاسم كما كُتب ثم بأحرف صغيرة تكفي.
+    #
+    # الشرط "لا شرطة مائلة داخل الاسم" يمنع أي تسلّق خارج المجلد ("..")،
+    # وشرط اختلاف الوجهة عن المسار الأصلي يمنع أي حلقة تحويل لا نهائية.
+    candidate = path.strip("/")
+    if candidate and "/" not in candidate:
+        base = candidate[:-5] if candidate.lower().endswith(".html") else candidate
+        if base and "." not in base:
+            for name in (base, base.lower()):
+                target = "/" + name + ".html"
+                if target != path and os.path.isfile(
+                    os.path.join("frontend_web", name + ".html")
+                ):
+                    return RedirectResponse(url=target, status_code=302)
+
+    # اسم الملف "not-found.html" وليس "404.html" -- وهذا مقصود ومقاس تجريبياً:
+    # StaticFiles(html=True) يلتقط أي ملف اسمه 404.html في جذر المجلد ويقدّمه
+    # بنفسه قبل أن يُرفع أي استثناء، فلو سمّيناه 404.html لَما عمل تحويل
+    # /login -> /login.html أعلاه إطلاقاً (جُرّب فعلاً وسقط بهذا السبب).
+    error_page = os.path.join("frontend_web", "not-found.html")
+    if os.path.isfile(error_page):
+        return FileResponse(
+            error_page,
+            status_code=404,
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )
+    return await http_exception_handler(request, exc)
+
 
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 app.mount("/", StaticFiles(directory="frontend_web", html=True), name="static")
