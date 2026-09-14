@@ -1,3 +1,5 @@
+import '../utils/tier_access.dart';
+
 /// ملف بيانات الطبيب المعروض في شاشة "حسابي" -- يطابق serialize_doctor_profile
 /// في main.py حرفياً (انظر أيضاً profile.html بالموقع). كلمة السر الحقيقية لا
 /// تُرجَع أبداً من الـ backend، فقط has_password كمؤشر بسيط (ثغرة أُصلحت
@@ -29,7 +31,15 @@ class DoctorProfile {
     this.subscriptionExpiresAt,
   });
 
-  bool get isPremium => tier.toLowerCase() == 'premium';
+  /// أي باقة مدفوعة (بما فيها باقة العيادات) -- القياس بالمستوى لا
+  /// بالتطابق النصّي، وإلا حُرم مشترك الباقة الأعلى من ميزة أدنى منها.
+  bool get isPremium => ClinicTier.hasPremium(tier);
+
+  /// إدارة العيادة متعددة الأطباء وحساب النسب -- باقة العيادات وحدها.
+  bool get hasDoctorsAccess => ClinicTier.hasDoctors(tier);
+
+  /// اسم الباقة كما يُعرض للطبيب (عربي).
+  String get tierArabicName => ClinicTier.arabicName(tier);
 
   factory DoctorProfile.fromJson(Map<String, dynamic> json) {
     DateTime? expiresAt;
@@ -41,7 +51,10 @@ class DoctorProfile {
       doctorName: json['doctor_name'] as String?,
       email: (json['email'] as String?)?.trim() ?? '',
       hasPassword: json['has_password'] as bool? ?? false,
-      tier: (json['tier'] as String?)?.trim() ?? 'standard',
+      // لا افتراض لأي باقة عند غياب الحقل: بعد التوحيد صارت "standard"
+      // مرادفاً لـ premium، فافتراضها هنا كان سيمنح واجهة مشترك مدفوع
+      // لحساب لم يُفعَّل أصلاً.
+      tier: (json['tier'] as String?)?.trim() ?? '',
       clinicName: json['clinic_name'] as String?,
       clinicAddress: json['clinic_address'] as String?,
       clinicPhone: json['clinic_phone'] as String?,

@@ -108,7 +108,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
         token: (result['token'] as String?) ?? '',
         email: email,
         doctorName: fullName,
-        tier: (result['tier'] as String?) ?? 'standard',
+        // الباقة تُؤخذ من رد الخادم كما هي: كود باقة العيادات يسجّل
+        // premium_plus، وافتراض 'standard' كان سيخفض ما يعرضه التطبيق.
+        tier: (result['tier'] as String?) ?? '',
       );
       if (!mounted) return;
       // الموقع يُعيد التوجيه إلى login.html بعد نجاح التفعيل رغم حفظ التوكن

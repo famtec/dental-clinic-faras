@@ -4,6 +4,7 @@ import '../services/auth_storage.dart';
 import '../services/offline_sync_status.dart';
 
 import '../theme/app_theme.dart';
+import '../utils/tier_access.dart';
 
 /// زر بيضاوي بتدرج لوني -- نفس شكل الأزرار الرئيسية في الموقع (تسجيل
 /// الدخول، حفظ التعديلات...). يُستخدم في كل الشاشات بدل FilledButton
@@ -535,10 +536,12 @@ class LoadingErrorEmpty extends StatelessWidget {
   }
 }
 
-/// شارة مستوى الاشتراك (Standard/Premium) -- نفس الشارة البيضاوية شبه
-/// الشفافة الموجودة في هيدر كل صفحة بالموقع (tierBadge#) بجانب اسم العيادة.
-/// تُكتب "Standard"/"Premium" بالإنكليزية عمداً كما في الموقع تماماً -- ليس
-/// خطأ ترجمة.
+/// شارة الباقة -- نفس الشارة البيضاوية شبه الشفافة الموجودة في هيدر كل
+/// صفحة بالموقع (tierBadge#) بجانب اسم العيادة. يُكتب الاسم بالإنكليزية
+/// عمداً كما في الموقع تماماً -- ليس خطأ ترجمة.
+///
+/// 2026-09-14: النص يأتي من [ClinicTier.badgeLabel] لا من مقارنة نصّية،
+/// فباقة العيادات تظهر "Premium Plus" بدل أن تسقط على "Standard".
 class TierBadge extends StatelessWidget {
   final String tier;
 
@@ -546,7 +549,7 @@ class TierBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = tier.toLowerCase() == 'premium' ? 'Premium' : 'Standard';
+    final label = ClinicTier.badgeLabel(tier);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       decoration: BoxDecoration(
@@ -1082,7 +1085,7 @@ class ClinicTopBar extends StatefulWidget {
 class _ClinicTopBarState extends State<ClinicTopBar> {
   final AuthStorage _authStorage = AuthStorage();
   String _clinicName = 'عيادة الطبيب';
-  String _tier = 'standard';
+  String _tier = '';
 
   @override
   void initState() {
@@ -1098,7 +1101,7 @@ class _ClinicTopBarState extends State<ClinicTopBar> {
       if (name != null && name.trim().isNotEmpty) {
         _clinicName = 'عيادة ${name.trim()}';
       }
-      _tier = tier ?? 'standard';
+      _tier = tier ?? '';
     });
   }
 
@@ -1185,7 +1188,7 @@ class _ClinicTopBarState extends State<ClinicTopBar> {
               color: surf.tierBg,
             ),
             child: Text(
-              _tier.toLowerCase() == 'premium' ? 'Premium' : 'Standard',
+              ClinicTier.badgeLabel(_tier),
               style: TextStyle(
                 color: surf.tierFg,
                 fontSize: 9.5,
