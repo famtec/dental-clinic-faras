@@ -6221,8 +6221,7 @@ def admin_run_idle_reminders(
     # حرفياً (الأطباء المستحقون، احترام أيام العطلة، حارس التذكير الواحد يومياً).
     # dry_run=true يُرجع قائمة من كان سيصله التذكير دون إرسال أي شيء فعلياً،
     # وهي الطريقة الآمنة للتحقق قبل أول تشغيل حقيقي.
-    if not x_admin_secret or x_admin_secret != ADMIN_SECRET_KEY:
-        raise HTTPException(status_code=401, detail="مفتاح الإدارة السرّي مفقود أو غير صحيح.")
+    require_admin_secret(x_admin_secret)
 
     if dry_run:
         db = database.SessionLocal()
@@ -6250,6 +6249,20 @@ def admin_run_idle_reminders(
     return {"dry_run": False, "sent": sent_count}
 
 
+def require_admin_secret(x_admin_secret: str | None) -> None:
+    """حارس المسارات الإدارية -- نقطة الحقيقة الوحيدة (2026-09-14).
+
+    كان نفس الشرط مكرراً حرفياً في أربعة مسارات. توحيده هنا يعني أن أي
+    تشديد مستقبلي (تحديد معدّل، تسجيل محاولات، مفتاح ثانٍ للطوارئ) يُطبَّق
+    مرة واحدة ولا يُنسى مسار.
+
+    المقارنة بـ compare_digest لا بـ != : المقارنة النصّية العادية تتوقف عند
+    أول حرف مختلف، فيتسرّب طول البادئة الصحيحة عبر زمن الاستجابة.
+    """
+    if not x_admin_secret or not hmac.compare_digest(str(x_admin_secret), str(ADMIN_SECRET_KEY)):
+        raise HTTPException(status_code=401, detail="مفتاح الإدارة السرّي مفقود أو غير صحيح.")
+
+
 class RenewalKeyGenerateRequest(BaseModel):
     # "standard" أُزيلت من الخيارات المسموحة (وُحِّدت الباقات 2026-09-14) --
     # الأكواد القديمة الصادرة بها تبقى صالحة وتفتح Premium، لكن لا تُولَّد
@@ -6270,8 +6283,7 @@ def generate_renewal_keys(
     # الطلب، بدل الاعتماد على قائمة ثابتة في الكود يجب إعادة النشر لتحديثها.
     # محمي بمفتاح سرّي في الهيدر -- **اضبط ADMIN_SECRET_KEY كمتغيّر بيئة حقيقي
     # على Render قبل الاستخدام الفعلي**، القيمة الافتراضية معروفة وغير آمنة.
-    if not x_admin_secret or x_admin_secret != ADMIN_SECRET_KEY:
-        raise HTTPException(status_code=401, detail="مفتاح الإدارة السرّي مفقود أو غير صحيح.")
+    require_admin_secret(x_admin_secret)
 
     if request.count < 1 or request.count > 20:
         raise HTTPException(status_code=400, detail="يمكن توليد بين 1 و20 كوداً في كل مرة.")
@@ -6305,6 +6317,10 @@ def generate_renewal_keys(
                     intended_tier=request.tier,
                     is_used=False,
                     used_by_email=None,
+                    # 2026-09-14: تاريخ التوليد يُختَم صراحةً هنا فقط. الأكواد
+                    # الأقدم من هذا التاريخ تبقى NULL عمداً -- ختمها بتاريخ
+                    # الترحيل كان سيكذب على كل دفعة سابقة.
+                    created_at=_damascus_now(),
                 )
             )
             generated_keys.append(candidate_code)
@@ -6322,6 +6338,126 @@ def generate_renewal_keys(
         "tier": request.tier,
         "duration_days": resolved_duration_days,
         "grants_tier": TIER_PREMIUM_PLUS if request.tier == "trial" else normalize_tier(request.tier),
+    }
+
+
+# ====================================================================
+# جرد أكواد التفعيل (إداري) -- 2026-09-14
+# ====================================================================
+# يجيب على السؤال الذي لم يكن للمنصة جواب عليه: **أي كود ما زال متاحاً،
+# ومن استهلك البقية، ومتى ينتهي اشتراكه؟** قبله كان تتبّع الأكواد يدوياً في
+# ملف Excel خارجي لا يعرف حالة القاعدة الحقيقية إطلاقاً.
+#
+# ملاحظة أمنية: المسار يكشف كل الأكواد بنصّها الكامل، لكنه لا يمنح صلاحية
+# أعلى مما يملكه حامل المفتاح الإداري أصلاً -- فمُولِّد الأكواد بنفس المفتاح
+# يستطيع سكّ أكواد بلا حدّ. الخطر الحقيقي هو تسرّب ADMIN_SECRET_KEY نفسه،
+# لا هذا المسار.
+class ActivationKeyListItem(BaseModel):
+    key_code: str
+    intended_tier: Optional[str] = None
+    # الباقة التي يفتحها الكود فعلاً اليوم -- تُحسب بنفس دالة الإنتاج
+    # resolve_activation_key_tier، فلا تنحرف أبداً عمّا سيحدث عند التفعيل.
+    grants_tier: str
+    duration_days: int
+    is_used: bool
+    used_by_email: Optional[str] = None
+    created_at: Optional[datetime] = None
+    # حالة الحساب الذي استهلك الكود (فارغة للأكواد المتاحة)
+    holder_tier: Optional[str] = None
+    holder_expires_at: Optional[datetime] = None
+    holder_days_left: Optional[int] = None
+
+
+@app.get("/api/admin/activation-keys")
+def list_activation_keys(
+    used: Optional[bool] = Query(None, description="true للمستهلكة، false للمتاحة، وتُترك فارغة للكل"),
+    prefix: Optional[str] = Query(None, description="تصفية ببادئة الكود مثل PP- أو TRIAL-"),
+    grants: Optional[str] = Query(None, description="تصفية بالباقة التي يفتحها الكود"),
+    limit: int = Query(500, ge=1, le=2000),
+    offset: int = Query(0, ge=0),
+    x_admin_secret: str | None = Header(default=None, alias="X-Admin-Secret"),
+    db: Session = Depends(database.get_db),
+):
+    require_admin_secret(x_admin_secret)
+
+    query = db.query(models.ActivationKey)
+    if used is not None:
+        query = query.filter(models.ActivationKey.is_used.is_(bool(used)))
+    if prefix:
+        query = query.filter(models.ActivationKey.key_code.ilike(f"{prefix.strip()}%"))
+
+    # الترتيب: الأحدث توليداً أولاً، والأكواد بلا تاريخ (الدفعات القديمة)
+    # في الذيل -- nulls_last غير متاح في SQLite، فنرتّب على راية بديلة.
+    all_keys = query.order_by(
+        models.ActivationKey.created_at.is_(None).asc(),
+        models.ActivationKey.created_at.desc(),
+        models.ActivationKey.id.desc(),
+    ).all()
+
+    # الباقة التي يفتحها كل كود تُحسب بدالة الإنتاج نفسها، ثم تُصفّى بعدها
+    # (لا يمكن تصفيتها في SQL لأنها منطق لا عمود).
+    resolved = [(k, resolve_activation_key_tier(k, k.key_code)) for k in all_keys]
+    if grants:
+        wanted = normalize_tier(grants)
+        resolved = [(k, g) for k, g in resolved if g == wanted]
+
+    # الملخّص يُحسب على كامل المجموعة المصفّاة قبل التقسيم لصفحات، وإلا
+    # عكس أرقام الصفحة الحالية فقط وهو مضلّل تماماً.
+    summary = {
+        "total": len(resolved),
+        "used": sum(1 for k, _ in resolved if k.is_used),
+        "available": sum(1 for k, _ in resolved if not k.is_used),
+        "by_grants_tier": {},
+        "by_prefix": {},
+    }
+    for k, g in resolved:
+        bucket = summary["by_grants_tier"].setdefault(g, {"total": 0, "used": 0, "available": 0})
+        bucket["total"] += 1
+        bucket["used" if k.is_used else "available"] += 1
+        code_prefix = k.key_code.split("-", 1)[0].upper() if "-" in k.key_code else "—"
+        pbucket = summary["by_prefix"].setdefault(code_prefix, {"total": 0, "used": 0, "available": 0})
+        pbucket["total"] += 1
+        pbucket["used" if k.is_used else "available"] += 1
+
+    page = resolved[offset:offset + limit]
+
+    # حالة الحسابات التي استهلكت الأكواد: استعلام واحد لكل البُرُد الظاهرة
+    # في هذه الصفحة، لا استعلام لكل كود (نمط N+1).
+    emails = {(k.used_by_email or "").strip().lower() for k, _ in page if k.used_by_email}
+    holders = {}
+    if emails:
+        for user in db.query(models.User).filter(models.User.email.in_(list(emails))).all():
+            holders[(user.email or "").strip().lower()] = user
+
+    now = _damascus_now()
+    items = []
+    for k, granted in page:
+        holder = holders.get((k.used_by_email or "").strip().lower()) if k.used_by_email else None
+        days_left = None
+        if holder is not None and holder.subscription_expires_at is not None:
+            days_left = (holder.subscription_expires_at - now).days
+        items.append(
+            ActivationKeyListItem(
+                key_code=k.key_code,
+                intended_tier=k.intended_tier,
+                grants_tier=granted,
+                duration_days=k.duration_days,
+                is_used=bool(k.is_used),
+                used_by_email=k.used_by_email,
+                created_at=getattr(k, "created_at", None),
+                holder_tier=(normalize_tier(holder) if holder is not None else None),
+                holder_expires_at=(holder.subscription_expires_at if holder is not None else None),
+                holder_days_left=days_left,
+            )
+        )
+
+    return {
+        "summary": summary,
+        "count": len(items),
+        "limit": limit,
+        "offset": offset,
+        "has_more": offset + len(items) < len(resolved),
+        "keys": [i.model_dump() for i in items],
     }
 
 
@@ -6343,8 +6479,7 @@ def admin_reset_password(
     # مرور حقيقية يمكن للطبيب استرجاعها أو تذكّرها. محمي بنفس مفتاح الإدارة
     # السرّي المستخدم في /api/admin/renewal-keys/generate. الكلمة الجديدة تُخزَّن
     # مباشرة بصيغة الهاش الآمن PBKDF2 (وليس نصاً صريحاً قديماً).
-    if not x_admin_secret or x_admin_secret != ADMIN_SECRET_KEY:
-        raise HTTPException(status_code=401, detail="مفتاح الإدارة السرّي مفقود أو غير صحيح.")
+    require_admin_secret(x_admin_secret)
 
     normalized_email = (request.email or "").strip().lower()
     new_password = request.new_password or ""
@@ -6385,8 +6520,7 @@ def admin_backfill_opening_balance(
     # لكل الأطباء دفعة واحدة، بغض النظر عن تاريخها -- محمي بنفس مفتاح الإدارة
     # السرّي. آمن تماماً للتكرار (idempotent): الشرط "is_opening_balance = FALSE"
     # يجعله لا يُغيّر شيئاً بعد أول تشغيل ناجح.
-    if not x_admin_secret or x_admin_secret != ADMIN_SECRET_KEY:
-        raise HTTPException(status_code=401, detail="مفتاح الإدارة السرّي مفقود أو غير صحيح.")
+    require_admin_secret(x_admin_secret)
 
     legacy_invoice_title = "السجل المالي السابق (مرحّل تلقائياً)"
 
@@ -6786,80 +6920,6 @@ def redirect_to_landing():
     # كل زائر جديد صفحة التسويق أولاً، وفيها أزرار واضحة لكل من "تسجيل الدخول"
     # (للأطباء المشتركين أصلاً) و"ابدأ الآن" (تسجيل حساب جديد عبر register.html).
     return RedirectResponse(url="/landing.html", status_code=302)
-
-# =============================================================================
-# معالج 404 ودود (أضيف 2026-09-14 بعد بلاغ حقيقي من عيادة: فتحت السكرتيرة رابط
-# الموقع على لابتوبها فظهرت صفحة بيضاء مكتوب عليها "Not Found" فقط -- وهي رسالة
-# Starlette الافتراضية: لا تشرح شيئاً، ولا تعطي المستخدم غير التقني أي زر يخرج
-# به من المأزق، فيظنّ أن الموقع كله معطّل).
-#
-# ثلاث حالات مختلفة تماماً كانت تنتهي كلها بنفس الرسالة الجافة:
-#   1) رابط بلا امتداد: /login بدل /login.html -- وارد جداً لأن الرابط يُملى
-#      شفهياً أو يُكتب على ورقة، ولأن كل صفحات الموقع ملفات ثابتة يخدمها
-#      app.mount أدناه بأسمائها الكاملة فقط. الآن يُحوَّل تلقائياً للصفحة.
-#   2) خطأ إملائي في اسم صفحة -- الآن صفحة 404 عربية فيها أزرار عودة واضحة.
-#   3) طلب API خاطئ -- يبقى JSON كما هو بلا أي تغيير، لأن الواجهة الأمامية
-#      وتطبيق فلاتر يقرآن {"detail": ...} لعرض رسائل الخطأ؛ تحويله إلى HTML
-#      هنا كان سيكسر كل رسائل الخطأ في المنصة دفعة واحدة.
-#
-# ما لا يعالجه هذا الكود (مهم عند التشخيص): خطأ حرف في اسم النطاق نفسه -- مثل
-# dental-clinic-fares بدل dental-clinic-faras -- لا يصل إلى هنا إطلاقاً، لأن
-# Render يردّ "Not Found" من حافة شبكته قبل أن يصل الطلب للتطبيق أصلاً. الفرق
-# بين الحالتين مرئي للعين: رسالة Render نصّ عارٍ "Not Found"، ورسالتنا الآن
-# صفحة عربية مصمَّمة -- فإن رأى المستخدم النصّ العاري فالمشكلة في العنوان لا
-# في الموقع.
-# =============================================================================
-from starlette.exceptions import HTTPException as StarletteHTTPException
-from fastapi.requests import Request
-from fastapi.exception_handlers import http_exception_handler
-
-
-@app.exception_handler(StarletteHTTPException)
-async def friendly_http_exception_handler(request: Request, exc: StarletteHTTPException):
-    # أي خطأ غير 404 يمرّ إلى معالج FastAPI الافتراضي حرفياً (مع هيدراته، مثل
-    # WWW-Authenticate في 401) -- لا نغيّر سلوكاً قائماً.
-    if exc.status_code != 404:
-        return await http_exception_handler(request, exc)
-
-    path = request.url.path
-
-    # مسارات البيانات تبقى JSON حصراً
-    if path.startswith("/api/") or path.startswith("/uploads/") or path == "/health":
-        return await http_exception_handler(request, exc)
-
-    # /login -> /login.html  و  /Login -> /login.html
-    #
-    # حالة الأحرف مقصودة: سيرفر Render يعمل على لينكس وأسماء الملفات عنده
-    # حسّاسة للأحرف، بينما المستخدم يكتب من ويندوز حيث لا فرق بين Login و
-    # login -- فكان "Login.html" يعطي Not Found بلا سبب مفهوم له. كل صفحات
-    # المشروع بأحرف صغيرة، فمحاولة الاسم كما كُتب ثم بأحرف صغيرة تكفي.
-    #
-    # الشرط "لا شرطة مائلة داخل الاسم" يمنع أي تسلّق خارج المجلد ("..")،
-    # وشرط اختلاف الوجهة عن المسار الأصلي يمنع أي حلقة تحويل لا نهائية.
-    candidate = path.strip("/")
-    if candidate and "/" not in candidate:
-        base = candidate[:-5] if candidate.lower().endswith(".html") else candidate
-        if base and "." not in base:
-            for name in (base, base.lower()):
-                target = "/" + name + ".html"
-                if target != path and os.path.isfile(
-                    os.path.join("frontend_web", name + ".html")
-                ):
-                    return RedirectResponse(url=target, status_code=302)
-
-    # اسم الملف "not-found.html" وليس "404.html" -- وهذا مقصود ومقاس تجريبياً:
-    # StaticFiles(html=True) يلتقط أي ملف اسمه 404.html في جذر المجلد ويقدّمه
-    # بنفسه قبل أن يُرفع أي استثناء، فلو سمّيناه 404.html لَما عمل تحويل
-    # /login -> /login.html أعلاه إطلاقاً (جُرّب فعلاً وسقط بهذا السبب).
-    error_page = os.path.join("frontend_web", "not-found.html")
-    if os.path.isfile(error_page):
-        return FileResponse(
-            error_page,
-            status_code=404,
-            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
-        )
-    return await http_exception_handler(request, exc)
-
 
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 app.mount("/", StaticFiles(directory="frontend_web", html=True), name="static")

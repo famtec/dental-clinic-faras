@@ -484,6 +484,17 @@ def init_db():
                     )
                 )
 
+    # تاريخ توليد كود التفعيل (2026-09-14) -- يخدم مسار الجرد الإداري
+    # GET /api/admin/activation-keys. nullable بلا قيمة افتراضية: الأكواد
+    # القديمة تبقى NULL بصدق بدل أن تُختَم كلها بتاريخ الترحيل.
+    if "activation_keys" in inspector.get_table_names():
+        key_columns = {column["name"] for column in inspector.get_columns("activation_keys")}
+        if "created_at" not in key_columns:
+            with engine.begin() as connection:
+                # TIMESTAMP لا DATETIME -- الأخيرة نوع صالح بـ SQLite فقط
+                # ويرفضها Postgres (الدرس الموثّق عند patients.last_recall_sent_at).
+                connection.execute(text("ALTER TABLE activation_keys ADD COLUMN created_at TIMESTAMP"))
+
     # فهارس البحث الأكثر تكراراً في هذه الميزة: كشف حساب طبيب واحد ضمن شهر
     # محدد، ورصيد كل أطباء عيادة واحدة. CREATE INDEX IF NOT EXISTS مدعومة في
     # SQLite وPostgres معاً، والعملية آمنة للتكرار في كلتيهما.

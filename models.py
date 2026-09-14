@@ -85,6 +85,11 @@ class ActivationKey(Base):
     # قد تكون NULL للأكواد الثابتة القديمة المزروعة يدوياً -- عندها يرجع
     # resolve_activation_key_tier لتخمين نصي احتياطي من الكود نفسه.
     intended_tier = Column(String, nullable=True)
+    # تاريخ توليد الكود (2026-09-14) -- nullable عمداً وبلا server_default:
+    # الأكواد المولَّدة قبل هذا التاريخ لا يُعرَف تاريخها، وختمها بتاريخ
+    # الترحيل كان سيكذب على كل دفعة سابقة. يُملأ صراحةً في
+    # generate_renewal_keys وحده، فكل دفعة جديدة تحمل تاريخها الحقيقي.
+    created_at = Column(DateTime, nullable=True)
 
 
 class Patient(Base):
