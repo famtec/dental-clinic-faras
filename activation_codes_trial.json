@@ -1,16 +1,17 @@
 ﻿{
     "generated_keys":  [
-                           "TRIAL-zOGNct12Cl1TJ",
-                           "TRIAL-nzpyY12AbjyBe",
-                           "TRIAL-UZxxd7lFr9qes",
-                           "TRIAL-9Ib01XvdHffNF",
-                           "TRIAL-aiO9HYc3fGYOX",
-                           "TRIAL-NDVs18wcsE2cR",
-                           "TRIAL-xXNBbpzmrRUOD",
-                           "TRIAL-tf4kF4nY4wG1T",
-                           "TRIAL-k3dhI4gcGmYpE",
-                           "TRIAL-ljaXi779ZpYoC"
+                           "TRIAL-ueoy43AxhuQ2J",
+                           "TRIAL-FC7fee1CGhahn",
+                           "TRIAL-3NICaVW3GdB0I",
+                           "TRIAL-wAXwAq9mRdAR4",
+                           "TRIAL-Uu7XeH1L85l6f",
+                           "TRIAL-yvu9mzDk7bJyA",
+                           "TRIAL-BD2FvB7yf3EJ8",
+                           "TRIAL-IM3QjuolAP9xX",
+                           "TRIAL-pmJWReziPQ6kE",
+                           "TRIAL-3e6eTgH94jtPm"
                        ],
     "tier":  "trial",
-    "duration_days":  7
+    "duration_days":  7,
+    "grants_tier":  "premium_plus"
 }

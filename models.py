@@ -224,9 +224,17 @@ class TreatmentInvoice(Base):
     # الطبيب مع كل قسط. النسبة نفسها تُحسب دوماً على الدفعة لا على الفاتورة،
     # انظر models.DoctorEarning. NULL = الطبيب المدير (صاحب الحساب) نفسه.
     clinic_doctor_id = Column(Integer, ForeignKey("clinic_doctors.id"), index=True, nullable=True)
+    # الحالة المختارة من لائحة أسعار الطبيب (2026-09-14) -- مرجع للقراءة فقط:
+    # العنوان والتكلفة يُنسخان إلى الفاتورة لحظة إنشائها ولا يُقرآن من اللائحة
+    # بعدها أبداً، فتعديل سعر الحالة لاحقاً لا يمسّ أي فاتورة قديمة. NULL =
+    # فاتورة كُتبت يدوياً بلا حالة جاهزة (كل الفواتير السابقة للميزة).
+    catalog_item_id = Column(Integer, ForeignKey("treatment_catalog_items.id"), index=True, nullable=True)
 
     patient = relationship("Patient", back_populates="treatment_invoices")
     payments = relationship("FinancialTransaction", back_populates="invoice", cascade="all, delete-orphan")
+    material_usages = relationship(
+        "InvoiceMaterialUsage", back_populates="invoice", cascade="all, delete-orphan"
+    )
 
 
 class FinancialTransaction(Base):
@@ -402,4 +410,93 @@ class InventoryItem(Base):
     item_name = Column(String, nullable=False)
     quantity = Column(Integer, nullable=False)
     min_alert_quantity = Column(Integer, default=5, nullable=False)
+    # تكلفة شراء الوحدة الواحدة (2026-09-14) -- نقطة الحقيقة الوحيدة لتسعير
+    # المواد المستهلكة في العلاج. صفر افتراضياً لكل المواد القديمة، فلا يحتاج
+    # أي صف تاريخي تعبئة، وتظهر تكلفة العلاج صفراً بصدق حتى يُدخل الطبيب
+    # الأسعار بنفسه بدل أن نخترع له رقماً.
+    unit_cost = Column(Numeric(12, 2), nullable=False, default=0, server_default=text("0"))
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+# ====================================================================
+# لائحة أسعار العلاجات + استهلاك المواد  --  2026-09-14
+# ====================================================================
+# طلب طبيب حقيقي: لائحة أسعار يحرّرها بنفسه (اسم الحالة + تسعيرتها)، ثم عند
+# بدء فاتورة علاج لمريض يختار حالة جاهزة بدل كتابة العنوان والسعر يدوياً كل
+# مرة، ومعها المواد المستهلكة لتُخصَم من مخزن المواد وتُحسَب تكلفتها.
+#
+# **قاعدة التجميد (نفس منطق DoctorEarning.applied_percent):** كل ما يدخل
+# الفاتورة يُنسَخ لحظة التسجيل ولا يُقرأ من مصدره بعدها إطلاقاً -- العنوان
+# والسعر من TreatmentCatalogItem، واسم المادة وتكلفة وحدتها من InventoryItem.
+# بدون هذا، تعديل سعر حالة أو تكلفة مادة اليوم يعيد كتابة أرباح كل الشهور
+# الماضية بأثر رجعي، وهو أخطر ما يمكن أن يصيب نظاماً محاسبياً.
+class TreatmentCatalogItem(Base):
+    __tablename__ = "treatment_catalog_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    doctor_email = Column(String, index=True, nullable=False)
+    name = Column(String, nullable=False)
+    price = Column(Numeric(12, 2), nullable=False, default=0)
+    notes = Column(String, nullable=True)
+    # التعطيل بدل الحذف: حالة لم تعد تُقدَّم تختفي من قائمة الاختيار لكن
+    # فواتيرها القديمة تبقى مرتبطة بها فلا ينكسر أي تقرير تاريخي.
+    is_active = Column(Boolean, nullable=False, default=True, server_default=text("true"))
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    materials = relationship(
+        "TreatmentCatalogMaterial",
+        back_populates="catalog_item",
+        cascade="all, delete-orphan",
+        order_by="TreatmentCatalogMaterial.id",
+    )
+
+
+class TreatmentCatalogMaterial(Base):
+    """وصفة المواد المعتادة لحالة واحدة -- قيم مقترَحة فقط، لا استهلاك فعلي.
+
+    الاستهلاك الحقيقي يُسجَّل في InvoiceMaterialUsage وقت فتح الفاتورة، بعد أن
+    يراجع الطبيب الكميات ويعدّلها. فصل الاثنين متعمَّد: الوصفة تتغيّر مع
+    الزمن، والمستهلك فعلاً في فاتورة 2026 لا يجوز أن يتغيّر أبداً.
+    """
+
+    __tablename__ = "treatment_catalog_materials"
+
+    id = Column(Integer, primary_key=True, index=True)
+    catalog_item_id = Column(
+        Integer, ForeignKey("treatment_catalog_items.id"), index=True, nullable=False
+    )
+    # NULL = المادة حُذفت من المخزن بعد كتابة الوصفة. الاسم محفوظ أدناه فتبقى
+    # الوصفة مقروءة، ويعامَلها المسار كمادة غير قابلة للخصم.
+    inventory_item_id = Column(Integer, ForeignKey("inventory_items.id"), index=True, nullable=True)
+    item_name = Column(String, nullable=False)
+    quantity = Column(Integer, nullable=False, default=1)
+
+    catalog_item = relationship("TreatmentCatalogItem", back_populates="materials")
+
+
+class InvoiceMaterialUsage(Base):
+    """مادة استُهلكت فعلاً على فاتورة علاج -- الصف الوحيد الذي تُقرأ منه التكلفة.
+
+    unit_cost و total_cost **مجمّدتان** لحظة التسجيل (انظر شرح الكتلة أعلاه).
+    الخصم من المخزن يحدث في نفس عملية إنشاء الصف، والحذف يُرجع الكمية، فلا
+    يمكن أن ينحرف المخزون عن مجموع ما سُجِّل هنا.
+    """
+
+    __tablename__ = "invoice_material_usages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    doctor_email = Column(String, index=True, nullable=False)
+    invoice_id = Column(Integer, ForeignKey("treatment_invoices.id"), index=True, nullable=False)
+    patient_id = Column(Integer, ForeignKey("patients.id"), index=True, nullable=True)
+    inventory_item_id = Column(Integer, ForeignKey("inventory_items.id"), index=True, nullable=True)
+    item_name = Column(String, nullable=False)
+    quantity = Column(Integer, nullable=False, default=1)
+    unit_cost = Column(Numeric(12, 2), nullable=False, default=0)
+    total_cost = Column(Numeric(12, 2), nullable=False, default=0)
+    # الطبيب المنفّذ وقت التسجيل (NULL = الطبيب المدير) -- منسوخ من الفاتورة
+    # ليبقى كشف حساب الطبيب صحيحاً حتى لو أُعيد نسب الفاتورة لاحقاً.
+    clinic_doctor_id = Column(Integer, ForeignKey("clinic_doctors.id"), index=True, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    invoice = relationship("TreatmentInvoice", back_populates="material_usages")

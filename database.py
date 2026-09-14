@@ -515,6 +515,61 @@ def init_db():
                 )
             )
 
+    # ====================================================================
+    # لائحة أسعار العلاجات + استهلاك المواد  --  2026-09-14
+    # ====================================================================
+    # الجداول الثلاثة الجديدة (treatment_catalog_items /
+    # treatment_catalog_materials / invoice_material_usages) تُنشئها
+    # Base.metadata.create_all() في أول سطر من هذه الدالة. ما يحتاج ALTER هو
+    # العمودان المضافان إلى جدولين قائمين فقط.
+    #
+    # unit_cost بـ NOT NULL DEFAULT 0 -- الصياغة مدعومة في SQLite وPostgres
+    # معاً، وكل مادة قديمة تصبح بتكلفة صفر بصدق: النظام يعرض تكلفة علاج صفراً
+    # حتى يُدخل الطبيب أسعاره بنفسه، بدل أن يخترع له رقماً.
+    if "inventory_items" in inspector.get_table_names():
+        inventory_cost_columns = {column["name"] for column in inspector.get_columns("inventory_items")}
+        if "unit_cost" not in inventory_cost_columns:
+            with engine.begin() as connection:
+                connection.execute(
+                    text("ALTER TABLE inventory_items ADD COLUMN unit_cost NUMERIC(12, 2) NOT NULL DEFAULT 0")
+                )
+
+    # nullable بلا قيمة افتراضية: كل فاتورة سابقة للميزة تبقى NULL بصدق
+    # (كُتبت يدوياً بلا حالة جاهزة) فلا يحتاج أي صف تاريخي backfill.
+    if "treatment_invoices" in inspector.get_table_names():
+        invoice_catalog_columns = {column["name"] for column in inspector.get_columns("treatment_invoices")}
+        if "catalog_item_id" not in invoice_catalog_columns:
+            with engine.begin() as connection:
+                connection.execute(
+                    text("ALTER TABLE treatment_invoices ADD COLUMN catalog_item_id INTEGER")
+                )
+
+    # الاستعلامان الأكثر تكراراً في هذه الميزة: مواد فاتورة واحدة، وتكلفة كل
+    # مواد طبيب مساعد ضمن فترة. CREATE INDEX IF NOT EXISTS آمنة للتكرار في
+    # SQLite وPostgres معاً.
+    if "invoice_material_usages" in inspector.get_table_names():
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_invoice_material_usages_invoice "
+                    "ON invoice_material_usages (invoice_id)"
+                )
+            )
+            connection.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_invoice_material_usages_doctor_created "
+                    "ON invoice_material_usages (clinic_doctor_id, created_at)"
+                )
+            )
+    if "treatment_catalog_materials" in inspector.get_table_names():
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_treatment_catalog_materials_item "
+                    "ON treatment_catalog_materials (catalog_item_id)"
+                )
+            )
+
 
 def get_db():
     db = SessionLocal()

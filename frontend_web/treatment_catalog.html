@@ -1,0 +1,1290 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>لائحة الأسعار - عيادتي الرقمية</title>
+	<link rel="stylesheet" href="/tailwind.css" />
+	<link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet" />
+	<style>
+		body { font-family: 'Noto Sans Arabic', 'Segoe UI', Tahoma, system-ui, sans-serif; }
+		h1, h2, h3, .stats-value, .modal-title, .tfs-name {
+			font-family: 'Noto Kufi Arabic', 'Segoe UI', Tahoma, system-ui, sans-serif;
+		}
+		.panel-soft {
+			background: rgba(255, 255, 255, 0.92);
+			backdrop-filter: blur(12px);
+		}
+		.badge-premium {
+			background: #fef3c7;
+			border: 1px solid #fde68a;
+			color: #78350f;
+		}
+		.badge-standard {
+			background: #eef2ff;
+			border: 1px solid #c7d2fe;
+			color: #3730a3;
+		}
+		.upgrade-card-hidden {
+			opacity: 0;
+			transform: translateY(-8px);
+			pointer-events: none;
+		}
+		.danger-stock {
+			background: #ef4444;
+			color: #ffffff;
+			box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.22), 0 0 24px rgba(239, 68, 68, 0.45);
+		}
+
+		/* زر تعديل عنصر المخزون -- شريحة فاتحة تمتلئ بتدرّج إندگو/بنفسجي مع
+		   ارتفاع خفيف وتوهّج عند المرور (2026-08-25). */
+		.edit-item-btn {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			padding: 9px 14px;
+			border-radius: 12px;
+			border: 1px solid #e0e7ff;
+			background: linear-gradient(135deg, #ffffff 0%, #eef2ff 100%);
+			color: #4338ca;
+			font-family: inherit;
+			font-size: 12px;
+			font-weight: 800;
+			cursor: pointer;
+			box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+			transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+		}
+		.edit-item-btn svg { flex-shrink: 0; }
+		.edit-item-btn:hover {
+			background: linear-gradient(135deg, #4f46e5 0%, #4f46e5 100%);
+			color: #ffffff;
+			border-color: transparent;
+			transform: translateY(-2px);
+			box-shadow: 0 10px 24px rgba(79, 70, 229, 0.35);
+		}
+		.edit-item-btn:active { transform: translateY(0); box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3); }
+		.edit-item-btn:focus-visible { outline: 2px solid #a5b4fc; outline-offset: 2px; }
+
+		.modal-overlay {
+			position: fixed;
+			inset: 0;
+			z-index: 70;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			background: rgba(15, 23, 42, 0.55);
+			backdrop-filter: blur(6px);
+			padding: 16px;
+		}
+		/* لازم هذا التحديد الأدق (specificity أعلى) لأن tailwind.css يُحمَّل قبل هذا
+		   الـ<style> في <head>، وقاعدته `.hidden{display:none}` لها نفس درجة التحديد
+		   (0,1,0) لقاعدة `.modal-overlay{display:flex}` أعلاه -- فتكسبها الأخيرة في
+		   ترتيب المصدر وتبقى النافذة ظاهرة رغم إضافة class="hidden" (هذا كان سبب ظهور
+		   نافذة "تعديل مادة المخزون" تلقائياً عند فتح الصفحة، ولماذا كانت أزرار
+		   X/إلغاء "لا تعمل": كانت فعلاً تضيف class hidden لكن بلا أي تأثير بصري). */
+		.modal-overlay.hidden {
+			display: none;
+		}
+		.modal-panel {
+			width: 100%;
+			max-width: 440px;
+			background: #ffffff;
+			border-radius: 28px;
+			border: 1px solid rgba(255, 255, 255, 0.7);
+			box-shadow: 0 25px 50px -12px rgba(30, 27, 75, 0.35);
+			padding: 26px;
+		}
+		.modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; gap: 12px; }
+		.modal-title { margin: 0; font-size: 19px; font-weight: 800; color: #312e81; }
+		.modal-close {
+			width: 32px;
+			height: 32px;
+			flex-shrink: 0;
+			border-radius: 10px;
+			border: 1px solid #e2e8f0;
+			background: #f8fafc;
+			color: #64748b;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			cursor: pointer;
+			transition: all 0.15s ease;
+		}
+		.modal-close:hover { background: #fee2e2; color: #dc2626; border-color: #fecaca; }
+		.field-label { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; font-size: 13px; font-weight: 700; color: #334155; }
+		.field-input {
+			width: 100%;
+			border-radius: 16px;
+			border: 1px solid #cbd5e1;
+			background: #ffffff;
+			padding: 12px 16px;
+			font-size: 14px;
+			font-family: inherit;
+			color: #1e293b;
+			outline: none;
+			transition: border-color 0.15s ease, box-shadow 0.15s ease;
+		}
+		.field-input:focus { border-color: #6366f1; box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15); }
+		.modal-footer { display: flex; gap: 12px; margin-top: 6px; }
+		.btn-cancel {
+			flex: 1;
+			border-radius: 16px;
+			border: 1px solid #cbd5e1;
+			background: #ffffff;
+			color: #475569;
+			font-family: inherit;
+			font-weight: 700;
+			font-size: 14px;
+			padding: 12px;
+			cursor: pointer;
+			transition: background 0.15s ease;
+		}
+		.btn-cancel:hover { background: #f8fafc; }
+		.btn-save {
+			flex: 1;
+			border-radius: 16px;
+			border: none;
+			background: linear-gradient(90deg, #4f46e5, #4f46e5);
+			color: #ffffff;
+			font-family: inherit;
+			font-weight: 700;
+			font-size: 14px;
+			padding: 12px;
+			cursor: pointer;
+			box-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.4);
+			transition: transform 0.15s ease, background 0.15s ease;
+		}
+		.btn-save:hover { background: linear-gradient(90deg, #4338ca, #4338ca); transform: translateY(-1px); }
+		.btn-save:disabled { opacity: 0.7; cursor: default; transform: none; }
+
+		.toast-success {
+			position: fixed;
+			top: 24px;
+			left: 50%;
+			transform: translateX(-50%);
+			background: linear-gradient(90deg, #10b981, #059669);
+			color: #ffffff;
+			padding: 12px 22px;
+			border-radius: 16px;
+			font-weight: 700;
+			font-size: 14px;
+			box-shadow: 0 15px 30px -8px rgba(16, 185, 129, 0.5);
+			z-index: 80;
+			animation: toastIn 0.25s ease, toastOut 0.25s ease 2.35s forwards;
+		}
+		@keyframes toastIn { from { opacity: 0; transform: translate(-50%, -10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+		@keyframes toastOut { to { opacity: 0; transform: translate(-50%, -10px); } }
+	</style>
+	<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+	<link rel="alternate icon" type="image/png" href="favicon.png" />
+	<link rel="apple-touch-icon" href="favicon.png" />
+</head>
+<body class="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.22),_transparent_30%),linear-gradient(135deg,_#f8fafc_0%,_#eef2ff_45%,_#e0e7ff_100%)] text-ink-800 transition-opacity duration-300">
+	<div class="pointer-events-none absolute inset-0 overflow-hidden">
+		<div class="absolute right-[10%] top-16 h-40 w-40 rounded-full bg-brand-200/30 blur-3xl"></div>
+		<div class="absolute left-[6%] top-[22%] h-56 w-56 rounded-full bg-brand-200/20 blur-3xl"></div>
+	</div>
+
+	<div id="patientRecordApp" class="relative flex min-h-screen w-full flex-col overflow-x-hidden px-4 pt-24 pb-6 sm:px-6 sm:pt-32 md:pt-32 lg:px-8 lg:pt-32 xl:px-10">
+		<header class="fixed inset-x-0 top-0 z-50 hidden w-full border-b border-white/15 bg-[#1e1b4b]/85 shadow-2xl shadow-brand-950/35 backdrop-blur-2xl md:block">
+			<div class="mx-auto flex w-full max-w-none flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8 xl:px-10">
+				<div class="flex shrink-0 items-center gap-3 text-white">
+					<img id="clinicLogoImg" src="logo.png" alt="شعار العيادة" class="h-12 w-12 rounded-xl border border-white/10 bg-white/10 object-contain p-2 shadow-lg shadow-brand-950/25" />
+					<div class="flex items-center gap-3">
+						<h1 id="clinicTitle" class="text-lg font-extrabold tracking-tight text-white sm:text-xl">عيادة الطبيب</h1>
+						<span id="tierBadge" class="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Premium</span>
+					</div>
+				</div>
+
+				<nav class="flex flex-1 flex-wrap items-center justify-center gap-2" aria-label="أقسام العمل">
+				<a href="index.html" title="لوحة المرضى" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)] whitespace-nowrap"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span>المرضى</span></a>
+				<a href="appointments.html" title="المواعيد اليومية" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)] whitespace-nowrap"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg><span>المواعيد</span></a>
+				<a href="finance.html" title="التقارير المالية" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)] whitespace-nowrap"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg><span>المالية</span></a>
+				<a href="doctors.html" title="الأطباء والنسب" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)] whitespace-nowrap"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"></path><circle cx="10" cy="7" r="3.2"></circle><path d="M18 8v6"></path><path d="M21 11h-6"></path></svg><span>الأطباء</span></a>
+				<a href="inventory.html" title="مخزن المواد" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-info-200/40 hover:bg-white/10 hover:shadow-[0_0_24px_rgba(129,140,248,0.18)] whitespace-nowrap"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg><span>المخزن</span></a>
+				<a href="treatment_catalog.html" title="لائحة أسعار العلاجات" aria-current="page" class="inline-flex items-center gap-2 rounded-2xl border border-info-300/30 bg-info-500/15 px-4 py-2 text-sm font-extrabold text-info-50 shadow-[0_0_24px_rgba(56,189,248,0.14)] transition hover:-translate-y-0.5 hover:border-info-200/50 hover:bg-info-400/20 hover:shadow-[0_0_28px_rgba(56,189,248,0.26)] whitespace-nowrap"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L2.6 12.6a2 2 0 0 1-.6-1.4V4a2 2 0 0 1 2-2h7.2a2 2 0 0 1 1.4.6l8 8a2 2 0 0 1 0 2.8Z"></path><circle cx="7.5" cy="7.5" r="1.3"></circle></svg><span>الأسعار</span></a>
+			</nav>
+
+<div class="relative flex shrink-0 items-center gap-3">
+				<button id="accountMenuBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="accountMenu" class="inline-flex items-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-3 py-2 text-sm font-bold text-white transition hover:bg-white/15">
+					<span class="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-800 text-xs font-extrabold leading-none text-white">ع</span>
+					<span>الحساب</span>
+					<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
+				</button>
+				<div id="accountMenu" class="absolute left-0 top-full z-50 mt-2 hidden w-56 rounded-2xl border border-white/10 bg-[#1e1b4b] p-2 shadow-2xl shadow-brand-950/35">
+					<a href="profile.html" class="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-right text-sm font-semibold whitespace-nowrap text-brand-100 transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg><span>حسابي</span></a>
+					<a href="contact_developer.html" class="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-right text-sm font-semibold whitespace-nowrap text-brand-100 transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg><span>تواصل مع المطور</span></a>
+					<div class="mt-2 border-t border-white/10 pt-2">
+						<button id="logoutBtn" type="button" class="flex w-full items-center gap-3 rounded-xl border border-danger-300/30 bg-danger-500/15 px-3 py-3 text-right text-sm font-bold whitespace-nowrap text-danger-100 transition hover:bg-danger-500/25"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg><span>تسجيل الخروج</span></button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</header>
+
+		<div class="fixed inset-x-0 top-0 z-[60] border-b border-white/15 bg-[#1e1b4b]/90 shadow-2xl shadow-brand-950/35 backdrop-blur-2xl md:hidden">
+			<div class="relative mx-auto flex w-full max-w-none items-center justify-between gap-3 px-4 py-3 sm:px-6">
+				<div class="flex min-w-0 items-center gap-3 text-white">
+					<img id="mobileClinicLogoImg" src="logo.png" alt="شعار العيادة" class="h-10 w-10 rounded-xl border border-white/10 bg-white/10 object-contain p-1.5 shadow-lg shadow-brand-950/25" />
+					<div class="min-w-0">
+						<div class="flex min-w-0 items-center gap-2">
+							<p id="mobileClinicTitle" class="truncate text-sm font-extrabold tracking-tight text-white">عيادة الطبيب</p>
+							<span id="mobileTierBadge" class="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[11px] font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]">Premium</span>
+						</div>
+					</div>
+				</div>
+
+				<button id="mobileMenuToggle" type="button" class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white shadow-lg shadow-brand-950/20 transition hover:bg-white/15" aria-expanded="false" aria-controls="mobileMenuDropdown">
+					<svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+						<path d="M4 7h16"></path>
+						<path d="M4 12h16"></path>
+						<path d="M4 17h16"></path>
+					</svg>
+				</button>
+
+				<div id="mobileMenuDropdown" class="absolute left-0 right-0 top-full hidden border-t border-white/10 bg-[#1e1b4b] px-4 py-3 shadow-2xl shadow-brand-950/35 md:hidden">
+					<div class="mx-auto flex w-full max-w-none flex-col gap-2 sm:px-2">
+						<a href="index.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span>لوحة المرضى</span></a>
+						<a href="appointments.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg><span>المواعيد اليومية</span></a>
+						<a href="finance.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg><span>التقارير المالية</span></a>
+						<a href="doctors.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"></path><circle cx="10" cy="7" r="3.2"></circle><path d="M18 8v6"></path><path d="M21 11h-6"></path></svg><span>الأطباء والنسب</span></a>
+						<a href="inventory.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg><span>مخزن المواد</span></a>
+						<a href="treatment_catalog.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L2.6 12.6a2 2 0 0 1-.6-1.4V4a2 2 0 0 1 2-2h7.2a2 2 0 0 1 1.4.6l8 8a2 2 0 0 1 0 2.8Z"></path><circle cx="7.5" cy="7.5" r="1.3"></circle></svg><span>لائحة الأسعار</span></a>
+						<a href="contact_developer.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg><span>تواصل مع المطور</span></a>
+						<a href="profile.html" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg><span>حسابي</span></a>
+						<button id="mobileLogoutBtn" type="button" class="inline-flex items-center gap-2 rounded-2xl border border-danger-300/30 bg-danger-500/15 px-4 py-3 text-right text-sm font-bold text-danger-100 transition hover:bg-danger-500/25"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg><span>تسجيل الخروج</span></button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<main class="min-w-0 flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8 xl:p-10">
+			<div id="catalogLayoutWrapper" class="transition duration-300">
+				<div id="catalogBoard" class="space-y-6">
+					<section class="panel-soft rounded-[28px] border border-white/70 p-5 shadow-xl shadow-ink-200/70 sm:p-6">
+						<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+							<div>
+								<div class="inline-flex rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-bold tracking-[0.22em] text-brand-700">PRICE LIST</div>
+								<h2 class="mt-3 text-2xl font-extrabold text-ink-800 sm:text-3xl">لائحة أسعار العلاجات</h2>
+								<p class="mt-1 text-sm leading-7 text-ink-500">عرّف حالاتك العلاجية مرة واحدة بتسعيرتها وموادها المعتادة، ثم اخترها جاهزة عند بدء أي فاتورة علاج لمريض -- فتُخصم موادها من المخزن وتُحسب تكلفتها وصافي ربحك تلقائياً.</p>
+							</div>
+							<span id="catalogCountBadge" class="shrink-0 rounded-full bg-brand-50 px-3 py-1 text-sm font-semibold text-brand-700">0 حالة</span>
+						</div>
+					</section>
+
+					<section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+						<div class="panel-soft rounded-[24px] border border-white/70 p-4 shadow-lg shadow-ink-200/60">
+							<p class="text-xs font-semibold text-ink-500">حالات مفعّلة</p>
+							<p id="kpiActiveCount" class="stats-value mt-2 text-2xl font-extrabold text-brand-800">0</p>
+						</div>
+						<div class="panel-soft rounded-[24px] border border-white/70 p-4 shadow-lg shadow-ink-200/60">
+							<p class="text-xs font-semibold text-ink-500">متوسط التسعيرة</p>
+							<p id="kpiAveragePrice" class="stats-value mt-2 text-2xl font-extrabold text-brand-800">0</p>
+						</div>
+						<div class="panel-soft rounded-[24px] border border-white/70 p-4 shadow-lg shadow-ink-200/60">
+							<p class="text-xs font-semibold text-ink-500">متوسط تكلفة المواد</p>
+							<p id="kpiAverageCost" class="stats-value mt-2 text-2xl font-extrabold text-warning-700">0</p>
+						</div>
+						<div class="panel-soft rounded-[24px] border border-white/70 p-4 shadow-lg shadow-ink-200/60">
+							<p class="text-xs font-semibold text-ink-500">متوسط الربح المتوقع</p>
+							<p id="kpiAverageProfit" class="stats-value mt-2 text-2xl font-extrabold text-success-700">0</p>
+						</div>
+					</section>
+
+					<section class="panel-soft rounded-[28px] border border-white/70 bg-white/90 p-4 shadow-xl shadow-ink-200/70 sm:p-6">
+						<div class="mb-4">
+							<h3 class="text-xl font-bold text-brand-900">إضافة حالة علاجية جديدة</h3>
+							<p class="mt-1 text-sm text-ink-500">الاسم والتسعيرة إلزاميان. المواد اختيارية -- أضفها لتُخصم تلقائياً من المخزن مع كل علاج.</p>
+						</div>
+
+						<form id="catalogForm" class="grid gap-4 md:grid-cols-3">
+							<label class="block md:col-span-1">
+								<span class="mb-2 block text-sm font-semibold text-ink-700">اسم الحالة</span>
+								<input id="caseNameInput" type="text" required placeholder="مثال: تركيب تلبيسة زركونيوم" class="w-full rounded-2xl border border-ink-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100" />
+							</label>
+							<label class="block md:col-span-1">
+								<span class="mb-2 block text-sm font-semibold text-ink-700">تسعيرة العلاج (ل.س)</span>
+								<input id="casePriceInput" type="text" inputmode="decimal" required placeholder="مثال: 100000" class="w-full rounded-2xl border border-ink-300 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100" />
+							</label>
+							<label class="block md:col-span-1">
+								<span class="mb-2 block text-sm font-semibold text-ink-700">ملاحظة (اختياري)</span>
+								<input id="caseNotesInput" type="text" placeholder="مثال: تحتاج جلستين" class="w-full rounded-2xl border border-ink-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100" />
+							</label>
+
+							<div class="md:col-span-3 rounded-2xl border border-brand-100 bg-brand-50/70 p-4">
+								<p class="mb-3 text-sm font-bold text-brand-700">المواد المعتادة لهذه الحالة</p>
+								<div class="flex flex-wrap items-end gap-3">
+									<label class="block min-w-[160px] flex-1">
+										<span class="mb-2 block text-xs font-semibold text-ink-700">المادة من المخزن</span>
+										<select id="materialPickerSelect" class="w-full rounded-2xl border border-ink-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100"></select>
+									</label>
+									<label class="block w-32">
+										<span class="mb-2 block text-xs font-semibold text-ink-700">الكمية</span>
+										<input id="materialPickerQuantity" type="number" min="1" value="1" class="w-full rounded-2xl border border-ink-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100" />
+									</label>
+									<button id="addMaterialBtn" type="button" class="rounded-2xl border border-brand-200 bg-white px-4 py-3 text-sm font-bold text-brand-700 transition hover:bg-brand-100">إضافة المادة</button>
+								</div>
+								<div id="materialDraftList" class="mt-3 space-y-2"></div>
+								<p id="materialDraftEmpty" class="mt-3 rounded-xl border border-dashed border-ink-300 p-3 text-center text-xs text-ink-500">لم تُضف أي مادة بعد. يمكنك حفظ الحالة بالسعر وحده.</p>
+								<p id="materialDraftTotal" class="mt-3 text-sm font-bold text-ink-700"></p>
+							</div>
+
+							<div class="md:col-span-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+								<p id="catalogStatus" class="text-sm font-medium text-ink-500">جاهز لإضافة حالة جديدة.</p>
+								<button id="catalogSubmitBtn" type="submit" class="rounded-2xl bg-gradient-to-r from-brand-600 to-brand-800 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:from-brand-700 hover:to-brand-700">
+									حفظ الحالة في اللائحة
+								</button>
+							</div>
+						</form>
+					</section>
+
+					<section class="panel-soft rounded-[28px] border border-white/70 bg-white/90 p-4 shadow-xl shadow-ink-200/70 sm:p-6">
+						<div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+							<h3 class="text-xl font-bold text-brand-900">الحالات المسجَّلة</h3>
+							<label class="flex items-center gap-2 text-xs font-semibold text-ink-600">
+								<input id="showInactiveToggle" type="checkbox" checked class="h-4 w-4 rounded border-ink-300 text-brand-600 focus:ring-brand-400" />
+								<span>إظهار الحالات المعطّلة</span>
+							</label>
+						</div>
+
+						<div id="catalogCardsContainer" class="space-y-3"></div>
+						<div id="catalogEmptyState" class="hidden py-10 text-center text-ink-500">
+							لا توجد حالات في لائحة أسعارك بعد. أضف أول حالة من النموذج أعلاه.
+						</div>
+					</section>
+
+					<section class="panel-soft rounded-[28px] border border-white/70 bg-white/90 p-4 shadow-xl shadow-ink-200/70 sm:p-6">
+						<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+							<div>
+								<h3 class="text-xl font-bold text-brand-900">ربحية العلاجات</h3>
+								<p class="mt-1 text-xs leading-6 text-ink-500">المبلغ المفوتر ناقص تكلفة المواد المستهلكة فعلاً. الفترة تُقاس بتاريخ فتح الفاتورة لا بتاريخ تحصيلها -- التدفق النقدي مكانه صفحة التقارير المالية.</p>
+							</div>
+							<select id="profitPeriodSelect" class="shrink-0 rounded-2xl border border-ink-300 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100">
+								<option value="month">هذا الشهر</option>
+								<option value="day">اليوم</option>
+								<option value="all">كل الفترات</option>
+							</select>
+						</div>
+
+						<div class="grid gap-3 sm:grid-cols-3">
+							<div class="rounded-2xl border border-ink-200 bg-ink-50 p-3 text-center">
+								<p class="text-xs text-ink-500">إجمالي المفوتر</p>
+								<p id="profitBilled" class="mt-1 text-lg font-extrabold text-ink-800">0</p>
+							</div>
+							<div class="rounded-2xl border border-warning-200 bg-warning-50 p-3 text-center">
+								<p class="text-xs text-warning-600">تكلفة المواد</p>
+								<p id="profitMaterials" class="mt-1 text-lg font-extrabold text-warning-700">0</p>
+							</div>
+							<div class="rounded-2xl border border-success-200 bg-success-50 p-3 text-center">
+								<p class="text-xs text-success-600">صافي الربح</p>
+								<p id="profitNet" class="mt-1 text-lg font-extrabold text-success-700">0</p>
+							</div>
+						</div>
+
+						<div class="mt-4 overflow-x-auto rounded-2xl border border-ink-200">
+							<table class="min-w-full border-collapse text-right">
+								<thead>
+									<tr class="border-b border-ink-200 bg-ink-50 text-sm text-ink-600">
+										<th class="px-4 py-3 font-semibold">الحالة</th>
+										<th class="px-4 py-3 font-semibold">عدد الفواتير</th>
+										<th class="px-4 py-3 font-semibold">المفوتر</th>
+										<th class="px-4 py-3 font-semibold">تكلفة المواد</th>
+										<th class="px-4 py-3 font-semibold">صافي الربح</th>
+									</tr>
+								</thead>
+								<tbody id="profitTableBody" class="divide-y divide-ink-100 bg-white text-sm text-ink-700"></tbody>
+							</table>
+						</div>
+						<div id="profitEmptyState" class="hidden py-8 text-center text-sm text-ink-500">
+							لا توجد فواتير علاج ضمن هذه الفترة.
+						</div>
+					</section>
+				</div>
+			</div>
+
+			<div id="editCaseModal" class="modal-overlay hidden">
+				<div class="modal-panel">
+					<div class="modal-header">
+						<h3 class="modal-title">تعديل الحالة العلاجية</h3>
+						<button type="button" id="editCaseCloseBtn" class="modal-close" aria-label="إغلاق">
+							<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<path d="M18 6 6 18"></path>
+								<path d="M6 6l12 12"></path>
+							</svg>
+						</button>
+					</div>
+					<form id="editCaseForm">
+						<label class="field-label">
+							<span>اسم الحالة</span>
+							<input id="editCaseNameInput" type="text" required class="field-input" />
+						</label>
+						<label class="field-label">
+							<span>تسعيرة العلاج (ل.س)</span>
+							<input id="editCasePriceInput" type="text" inputmode="decimal" required class="field-input" />
+						</label>
+						<label class="field-label">
+							<span>ملاحظة</span>
+							<input id="editCaseNotesInput" type="text" class="field-input" />
+						</label>
+
+						<div class="mb-3 rounded-2xl border border-brand-100 bg-brand-50/70 p-3">
+							<p class="mb-2 text-xs font-bold text-brand-700">المواد المعتادة</p>
+							<div class="flex flex-wrap items-end gap-2">
+								<select id="editMaterialPickerSelect" class="min-w-[160px] flex-1 rounded-xl border border-ink-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-brand-500"></select>
+								<input id="editMaterialPickerQuantity" type="number" min="1" value="1" class="w-20 rounded-xl border border-ink-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-brand-500" />
+								<button id="editAddMaterialBtn" type="button" class="rounded-xl border border-brand-200 bg-white px-3 py-2 text-xs font-bold text-brand-700 transition hover:bg-brand-100">إضافة</button>
+							</div>
+							<div id="editMaterialDraftList" class="mt-2 space-y-2"></div>
+							<p id="editMaterialDraftEmpty" class="mt-2 text-center text-xs text-ink-500">لا مواد لهذه الحالة.</p>
+						</div>
+
+						<p id="editCaseStatus" class="mb-2 min-h-[1rem] text-sm font-medium text-danger-500"></p>
+						<div class="modal-footer">
+							<button type="button" id="editCaseCancelBtn" class="btn-cancel">إلغاء</button>
+							<button type="submit" id="editCaseSaveBtn" class="btn-save">حفظ التعديلات</button>
+						</div>
+					</form>
+				</div>
+			</div>
+
+			<footer class="mt-8 text-center text-xs font-mono tracking-wide text-brand-500/90">
+				تطوير وإدارة: المهندس فارس حلاوي © 2026
+			</footer>
+		</main>
+	</div>
+
+	<script src="api-config.js"></script>
+	<script src="tier-access.js"></script>
+	<script src="clinic-loader.js"></script>
+	<script src="notification-badge.js"></script>
+	<!-- إشعارات المتصفح (Web Push) -- 2026-09-05: firebase-web-config.js يحمل
+	     إعدادات Firebase للويب ومفتاح VAPID، ويستورده أيضاً firebase-messaging-sw.js
+	     في جذر الموقع. الميزة صامتة تماماً ما لم تُملأ تلك القيم. -->
+	<script src="firebase-web-config.js"></script>
+	<script src="web-push.js"></script>
+	<script src="mobile-shell.js"></script>
+	<script>
+		let userTier = localStorage.getItem("user_tier");
+		// 🔒 حظر فوري ومتزامن لأي زائر لم يسجّل الدخول إطلاقاً -- بدون هذا الفحص كان أي زائر مجهول (وصل مثلاً عبر قائمة تنقل صفحة عامة مثل contact_developer.html) يتجاوز الحماية لأن userTier الفارغ (null) لا يساوي 'pending_activation'، والأخطر أن دوال جلب بيانات المخزن هنا تسقط على بريد الطبيب الاحتياطي الحقيقي عند غياب تسجيل الدخول.
+		if (!localStorage.getItem('user_email')) {
+			window.location.replace('login.html');
+		}
+		// 🔒 حظر فوري ومتزامن قبل أي تسجيل لمستمع DOMContentLoaded أو أي طلب Fetch لبيانات محمية -- التوجيه وحده في نهاية الملف لم يكن كافياً.
+		if (userTier === 'pending_activation') {
+			window.location.replace('index.html');
+		}
+
+		// 🔒 قفل التجديد الشهري اللطيف (Soft Paywall) لحساب expired_subscription:
+		// غير هدّام عمداً -- ينقل عناصر body الحالية داخل غلاف مموَّه (blur) بدل
+		// حذفها، ويضيف نافذة التجديد كعنصر شقيق (وليس ابناً للغلاف) حتى لا يكسر
+		// CSS filter تموضعها الثابت (position: fixed) ولا يموّهها هي أيضاً بالخطأ.
+		function renderExpiredSubscriptionLock() {
+				if (document.getElementById('expiredSubscriptionOverlay')) return;
+
+				const blurWrap = document.createElement('div');
+				blurWrap.id = 'expiredBlurWrap';
+				blurWrap.style.filter = 'blur(8px)';
+				blurWrap.style.pointerEvents = 'none';
+				blurWrap.style.userSelect = 'none';
+				while (document.body.firstChild) {
+						blurWrap.appendChild(document.body.firstChild);
+				}
+				document.body.appendChild(blurWrap);
+
+				const overlay = document.createElement('div');
+				overlay.id = 'expiredSubscriptionOverlay';
+				overlay.setAttribute('dir', 'rtl');
+				overlay.className = 'fixed inset-0 z-[999] flex items-center justify-center bg-ink-950/80 backdrop-blur-sm p-4 font-sans';
+				overlay.innerHTML = `
+						<div class="max-w-xl w-full bg-brand-950/60 backdrop-blur-2xl border border-brand-500/25 p-8 rounded-3xl shadow-2xl shadow-brand-950/60 text-center space-y-6">
+								<div class="w-20 h-20 bg-brand-500/10 border border-brand-500/30 rounded-2xl flex items-center justify-center mx-auto text-4xl shadow-lg shadow-brand-500/10 animate-pulse">
+								<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10.5" width="16" height="10.5" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>
+								</div>
+
+								<h1 class="text-2xl font-bold text-brand-300">انتهت صلاحية باقتك</h1>
+
+								<p class="text-ink-300 leading-relaxed text-sm">
+								    مرحباً يا دكتور، نود إعلامك بأن فترة صلاحية باقتك الحالية قد انتهت. سجلات مرضاك، مواعيدك، ومخزن عيادتك في أمان تام ومحفوظة أبدياً داخل السيرفر ولا تضيع أبداً 🔒. للمتابعة الفورية واستعادة صلاحيات الإدارة كاملة، يرجى إدخال كود التجديد الشهري الجديد. للدعم الفني السريع والحصول على الكود كاش، يرجى التواصل مع مطور المنصة المهندس فارس حلاوي على الرقم: 0956907698 
+								</p>
+
+								<div class="space-y-3">
+								 <input type="text" id="renewalKeyInput" placeholder="أدخل كود التجديد الجديد هنا"
+								           class="w-full bg-ink-900 border border-brand-500/25 rounded-xl px-4 py-3 text-center text-sm focus:outline-none focus:border-brand-400 transition-colors text-white placeholder-ink-500" />
+
+								 <p id="renewalStatusMsg" class="text-xs min-h-[1rem]"></p>
+
+								 <button id="renewSubscriptionBtn" onclick="renewSubscription()"
+								            class="w-full bg-gradient-to-r from-brand-600 to-brand-800 hover:from-brand-500 hover:to-brand-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-brand-600/30 active:scale-[0.98]">
+								        تجديد الاشتراك ومتابعة العمل 
+								 </button>
+								</div>
+						</div>
+				`;
+				document.body.appendChild(overlay);
+		}
+
+		// دالة التحقق من كود التجديد الشهري -- تستدعي نفس مسار /api/activate الموحّد
+		// (مسار مزدوج الغرض: يفعّل حساباً جديداً أو يجدّد حساباً منتهياً بنفس المنطق)
+		function renewSubscription() {
+				const input = document.getElementById('renewalKeyInput');
+				const statusEl = document.getElementById('renewalStatusMsg');
+				const btn = document.getElementById('renewSubscriptionBtn');
+				const keyCode = (input && input.value || '').trim();
+
+				if (!keyCode) {
+						if (statusEl) {
+								statusEl.textContent = 'يرجى إدخال كود التجديد أولاً.';
+								statusEl.className = 'text-xs min-h-[1rem] text-danger-400';
+						}
+						return;
+				}
+
+				if (btn) {
+						btn.disabled = true;
+						btn.textContent = 'جاري التحقق من الكود...';
+				}
+				if (statusEl) {
+						statusEl.textContent = 'يتم الاتصال بالخادم الآن...';
+						statusEl.className = 'text-xs min-h-[1rem] text-brand-300';
+				}
+
+				fetch('/api/activate', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+								email: localStorage.getItem('user_email'),
+								activation_key: keyCode,
+						}),
+				})
+						.then(async (res) => {
+								let data = null;
+								try {
+								    data = await res.json();
+								} catch (parseError) {
+								    data = null;
+								}
+
+								if (!res.ok) {
+								    const message = (data && data.detail) || 'تعذر التحقق من الكود. حاول مرة أخرى.';
+								    if (statusEl) {
+								        statusEl.textContent = message;
+								        statusEl.className = 'text-xs min-h-[1rem] text-danger-400';
+								    }
+								    if (btn) {
+								        btn.disabled = false;
+								        btn.textContent = 'تجديد الاشتراك ومتابعة العمل ';
+								    }
+								    return;
+								}
+
+								localStorage.setItem('user_tier', data.user_tier);
+								if (statusEl) {
+								    statusEl.textContent = ' تم التجديد بنجاح!';
+								    statusEl.className = 'text-xs min-h-[1rem] text-success-400';
+								}
+								// رسالة تهنئة منبثقة فورية حسب الطلب، ثم إعادة تحميل الصفحة مباشرة
+								// لإظهار كامل عناصر لوحة التحكم بعد استعادة الصلاحيات.
+								showInventoryToast(' تم تجديد اشتراكك بنجاح! سيتم تحديث الصفحة الآن لإظهار كامل صلاحيات لوحة التحكم.');
+								setTimeout(() => window.location.reload(), 1800);
+						})
+						.catch(() => {
+								if (statusEl) {
+								    statusEl.textContent = 'تعذر الاتصال بالخادم. تحقق من الإنترنت وحاول مرة أخرى.';
+								    statusEl.className = 'text-xs min-h-[1rem] text-danger-400';
+								}
+								if (btn) {
+								    btn.disabled = false;
+								    btn.textContent = 'تجديد الاشتراك ومتابعة العمل ';
+								}
+						});
+		}
+
+		if (userTier === 'expired_subscription') {
+			renderExpiredSubscriptionLock();
+		}
+		const doctorName = localStorage.getItem('doctor_name') || localStorage.getItem('user_name');
+		const doctorEmail = localStorage.getItem('user_email');
+
+		function getDoctorAuthHeaders(extraHeaders = {}) {
+			const token = (localStorage.getItem('authToken') || '').trim();
+			const headers = { 'X-Doctor-Email': doctorEmail, ...extraHeaders };
+			if (token) {
+				headers.Authorization = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+			}
+			return headers;
+		}
+
+		const clinicTitle = document.getElementById('clinicTitle');
+		const tierBadge = document.getElementById('tierBadge');
+		const mobileClinicTitle = document.getElementById('mobileClinicTitle');
+		const mobileTierBadge = document.getElementById('mobileTierBadge');
+		const logoutBtn = document.getElementById('logoutBtn');
+		const mobileLogoutBtn = document.getElementById('mobileLogoutBtn');
+
+		function handleLogout() {
+			localStorage.removeItem('doctor_name');
+			localStorage.removeItem('user_email');
+			localStorage.removeItem('doctor_id');
+			localStorage.removeItem('user_tier');
+			window.location.href = 'login.html';
+		}
+
+		function renderTierBadge() {
+			if (!tierBadge) return;
+			if (ClinicTier.hasPremium(userTier)) {
+				tierBadge.className = 'badge-premium rounded-full px-3 py-1 text-xs font-extrabold tracking-wide';
+				tierBadge.textContent = ClinicTier.badgeLabel();
+				if (mobileTierBadge) {
+					mobileTierBadge.className = 'shrink-0 rounded-full border border-success-300/30 bg-success-400/15 px-2 py-1 text-[11px] font-extrabold tracking-wide text-success-50 shadow-[0_0_18px_rgba(52,211,153,0.18)]';
+					mobileTierBadge.textContent = ClinicTier.badgeLabel();
+				}
+			} else {
+				tierBadge.className = 'badge-standard rounded-full px-3 py-1 text-xs font-extrabold tracking-wide';
+				tierBadge.textContent = ClinicTier.badgeLabel();
+				if (mobileTierBadge) {
+					mobileTierBadge.className = 'shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[11px] font-extrabold tracking-wide text-white shadow-[0_0_18px_rgba(129,140,248,0.18)]';
+					mobileTierBadge.textContent = ClinicTier.badgeLabel();
+				}
+			}
+		}
+
+		function escapeHtml(value) {
+			return String(value === null || value === undefined ? '' : value)
+				.replaceAll('&', '&amp;')
+				.replaceAll('<', '&lt;')
+				.replaceAll('>', '&gt;')
+				.replaceAll('"', '&quot;')
+				.replaceAll("'", '&#39;');
+		}
+
+		// -u-nu-latn إلزامية في كل تنسيق رقم أو تاريخ في هذا المشروع، وإلا
+		// ظهرت الأرقام بالخط الهندي (٠١٢) بدل اللاتيني.
+		function formatAmount(value) {
+			const number = Number(value || 0);
+			if (!Number.isFinite(number)) return '0';
+			return number.toLocaleString('ar-SY-u-nu-latn', { maximumFractionDigits: 2 });
+		}
+
+		function parseAmount(value) {
+			const cleaned = String(value === null || value === undefined ? '' : value)
+				.replace(/[^\d.,-]/g, '')
+				.replace(/,/g, '');
+			const number = Number(cleaned);
+			return Number.isFinite(number) ? number : NaN;
+		}
+
+		function showInventoryToast(message) {
+			const toast = document.createElement('div');
+			toast.className = 'toast-success';
+			toast.textContent = message;
+			document.body.appendChild(toast);
+			setTimeout(() => toast.remove(), 2600);
+		}
+
+		function setCatalogStatus(message, type = 'normal') {
+			const el = document.getElementById('catalogStatus');
+			if (!el) return;
+			if (type === 'error') el.className = 'text-sm font-semibold text-danger-500';
+			else if (type === 'success') el.className = 'text-sm font-semibold text-success-600';
+			else el.className = 'text-sm font-medium text-ink-500';
+			el.textContent = message;
+		}
+
+		// ================================================================
+		// الحالة المحلية
+		// ================================================================
+		let inventoryItems = [];
+		let catalogItems = [];
+		// وصفة الحالة قيد الإنشاء / قيد التعديل. كل سطر: {inventory_item_id, quantity}
+		let draftMaterials = [];
+		let editDraftMaterials = [];
+		let editingCaseId = null;
+
+		function inventoryById(id) {
+			return inventoryItems.find((item) => String(item.id) === String(id)) || null;
+		}
+
+		function fillMaterialPicker(selectEl) {
+			if (!selectEl) return;
+			if (!inventoryItems.length) {
+				selectEl.innerHTML = '<option value="">لا توجد مواد في المخزن</option>';
+				selectEl.disabled = true;
+				return;
+			}
+			selectEl.disabled = false;
+			selectEl.innerHTML = inventoryItems
+				.map((item) => {
+					const cost = Number(item.unit_cost || 0);
+					const costLabel = cost > 0 ? `${formatAmount(cost)} ل.س` : 'بلا تكلفة مسجَّلة';
+					return `<option value="${escapeHtml(item.id)}">${escapeHtml(item.item_name)} — ${escapeHtml(costLabel)}</option>`;
+				})
+				.join('');
+		}
+
+		function renderDraftMaterials(draft, listId, emptyId, totalId) {
+			const list = document.getElementById(listId);
+			const empty = document.getElementById(emptyId);
+			if (!list || !empty) return;
+
+			if (!draft.length) {
+				list.innerHTML = '';
+				empty.classList.remove('hidden');
+				if (totalId) {
+					const totalEl = document.getElementById(totalId);
+					if (totalEl) totalEl.textContent = '';
+				}
+				return;
+			}
+
+			empty.classList.add('hidden');
+			let total = 0;
+			list.innerHTML = draft
+				.map((row, index) => {
+					const item = inventoryById(row.inventory_item_id);
+					const name = item ? item.item_name : 'مادة محذوفة من المخزن';
+					const unitCost = item ? Number(item.unit_cost || 0) : 0;
+					const lineCost = unitCost * Number(row.quantity || 0);
+					total += lineCost;
+					return `
+						<div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-ink-200 bg-white px-3 py-2">
+							<span class="text-sm font-semibold text-ink-800">${escapeHtml(name)}</span>
+							<span class="text-xs text-ink-500">الكمية: ${escapeHtml(row.quantity)} × ${escapeHtml(formatAmount(unitCost))} = ${escapeHtml(formatAmount(lineCost))} ل.س</span>
+							<button type="button" data-remove-draft="${index}" data-draft-scope="${escapeHtml(listId)}" class="rounded-full border border-danger-200 bg-danger-50 px-3 py-1 text-[11px] font-bold text-danger-700 transition hover:bg-danger-100">حذف</button>
+						</div>
+					`;
+				})
+				.join('');
+
+			if (totalId) {
+				const totalEl = document.getElementById(totalId);
+				if (totalEl) totalEl.textContent = `تكلفة المواد التقديرية: ${formatAmount(total)} ل.س`;
+			}
+		}
+
+		function addToDraft(draft, selectEl, quantityEl) {
+			const itemId = Number(selectEl && selectEl.value);
+			const quantity = Number(quantityEl && quantityEl.value);
+			if (!itemId) {
+				showInventoryToast('اختر مادة من المخزن أولاً.');
+				return false;
+			}
+			if (!(quantity > 0)) {
+				showInventoryToast('الكمية يجب أن تكون أكبر من صفر.');
+				return false;
+			}
+			// نفس المادة مرتين = سطر واحد بكمية مجموعة، فلا تظهر وصفة بسطرين
+			// متطابقين يصعب على الطبيب قراءتها.
+			const existing = draft.find((row) => String(row.inventory_item_id) === String(itemId));
+			if (existing) existing.quantity = Number(existing.quantity) + quantity;
+			else draft.push({ inventory_item_id: itemId, quantity });
+			if (quantityEl) quantityEl.value = '1';
+			return true;
+		}
+
+		// ================================================================
+		// عرض اللائحة
+		// ================================================================
+		function renderKpis() {
+			const active = catalogItems.filter((item) => item.is_active);
+			const count = active.length || 0;
+			const sum = (key) => active.reduce((acc, item) => acc + Number(item[key] || 0), 0);
+			document.getElementById('kpiActiveCount').textContent = formatAmount(count);
+			document.getElementById('kpiAveragePrice').textContent = count ? formatAmount(sum('price') / count) : '0';
+			document.getElementById('kpiAverageCost').textContent = count ? formatAmount(sum('materials_cost') / count) : '0';
+			document.getElementById('kpiAverageProfit').textContent = count ? formatAmount(sum('estimated_profit') / count) : '0';
+		}
+
+		function renderCatalog() {
+			const container = document.getElementById('catalogCardsContainer');
+			const empty = document.getElementById('catalogEmptyState');
+			const countBadge = document.getElementById('catalogCountBadge');
+			const showInactive = document.getElementById('showInactiveToggle').checked;
+			if (!container || !empty) return;
+
+			const visible = catalogItems.filter((item) => showInactive || item.is_active);
+			if (countBadge) countBadge.textContent = `${formatAmount(catalogItems.length)} حالة`;
+
+			if (!visible.length) {
+				container.innerHTML = '';
+				empty.classList.remove('hidden');
+				renderKpis();
+				return;
+			}
+			empty.classList.add('hidden');
+
+			container.innerHTML = visible
+				.map((item) => {
+					const materialsHtml = item.materials.length
+						? item.materials
+								.map((material) => {
+									const missing = material.available_quantity === null;
+									const low = !missing && Number(material.available_quantity) < Number(material.quantity);
+									let toneClass = 'border-ink-200 bg-white text-ink-600';
+									let suffix = `متوفر: ${escapeHtml(formatAmount(material.available_quantity))}`;
+									if (missing) {
+										toneClass = 'border-danger-200 bg-danger-50 text-danger-700';
+										suffix = 'محذوفة من المخزن';
+									} else if (low) {
+										toneClass = 'border-warning-200 bg-warning-50 text-warning-700';
+										suffix = `متوفر: ${escapeHtml(formatAmount(material.available_quantity))} فقط`;
+									}
+									return `<span class="inline-flex items-center gap-2 rounded-full border ${toneClass} px-3 py-1 text-[11px] font-semibold">${escapeHtml(material.item_name)} × ${escapeHtml(material.quantity)} <span class="text-[10px] opacity-80">(${suffix})</span></span>`;
+								})
+								.join('')
+						: '<span class="text-xs text-ink-400">بلا مواد مرتبطة</span>';
+
+					const statusBadge = item.is_active
+						? '<span class="rounded-full bg-success-100 px-3 py-1 text-[11px] font-bold text-success-700">مفعّلة</span>'
+						: '<span class="rounded-full bg-ink-100 px-3 py-1 text-[11px] font-bold text-ink-500">معطّلة</span>';
+
+					return `
+						<div class="rounded-[20px] border border-ink-100 bg-white p-4 shadow-sm transition hover:border-brand-200">
+							<div class="flex flex-wrap items-start justify-between gap-3">
+								<div class="min-w-0">
+									<div class="flex flex-wrap items-center gap-2">
+										<h4 class="tfs-name text-base font-extrabold text-ink-800">${escapeHtml(item.name)}</h4>
+										${statusBadge}
+									</div>
+									${item.notes ? `<p class="mt-1 text-xs text-ink-500">${escapeHtml(item.notes)}</p>` : ''}
+								</div>
+								<div class="flex flex-wrap items-center gap-2">
+									<button type="button" data-edit-case="${escapeHtml(item.id)}" class="edit-item-btn">
+										<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+										<span>تعديل</span>
+									</button>
+									<button type="button" data-toggle-case="${escapeHtml(item.id)}" class="rounded-full border border-ink-300 bg-white px-3 py-1.5 text-[11px] font-bold text-ink-600 transition hover:bg-ink-50">${item.is_active ? 'تعطيل' : 'تفعيل'}</button>
+									<button type="button" data-delete-case="${escapeHtml(item.id)}" class="rounded-full border border-danger-200 bg-danger-50 px-3 py-1.5 text-[11px] font-bold text-danger-700 transition hover:bg-danger-100">حذف</button>
+								</div>
+							</div>
+
+							<div class="mt-3 grid gap-2 sm:grid-cols-3">
+								<div class="rounded-xl bg-brand-50 px-3 py-2 text-center">
+									<p class="text-[10px] text-brand-600">التسعيرة</p>
+									<p class="mt-0.5 text-sm font-extrabold text-brand-800">${escapeHtml(formatAmount(item.price))} ل.س</p>
+								</div>
+								<div class="rounded-xl bg-warning-50 px-3 py-2 text-center">
+									<p class="text-[10px] text-warning-600">تكلفة المواد</p>
+									<p class="mt-0.5 text-sm font-extrabold text-warning-700">${escapeHtml(formatAmount(item.materials_cost))} ل.س</p>
+								</div>
+								<div class="rounded-xl bg-success-50 px-3 py-2 text-center">
+									<p class="text-[10px] text-success-600">الربح المتوقع</p>
+									<p class="mt-0.5 text-sm font-extrabold text-success-700">${escapeHtml(formatAmount(item.estimated_profit))} ل.س</p>
+								</div>
+							</div>
+
+							<div class="mt-3 flex flex-wrap gap-2">${materialsHtml}</div>
+						</div>
+					`;
+				})
+				.join('');
+
+			renderKpis();
+		}
+
+		// ================================================================
+		// الاتصال بالخادم
+		// ================================================================
+		async function loadInventory() {
+			try {
+				const response = await fetch(apiUrl('/api/inventory'), { headers: getDoctorAuthHeaders() });
+				if (!response.ok) {
+					inventoryItems = [];
+				} else {
+					const rows = await response.json();
+					inventoryItems = Array.isArray(rows) ? rows : [];
+				}
+			} catch (error) {
+				inventoryItems = [];
+			}
+			fillMaterialPicker(document.getElementById('materialPickerSelect'));
+			fillMaterialPicker(document.getElementById('editMaterialPickerSelect'));
+		}
+
+		async function loadCatalog() {
+			try {
+				const response = await fetch(apiUrl('/api/treatment-catalog'), { headers: getDoctorAuthHeaders() });
+				if (!response.ok) throw new Error('failed');
+				const rows = await response.json();
+				catalogItems = Array.isArray(rows) ? rows : [];
+				renderCatalog();
+			} catch (error) {
+				setCatalogStatus('تعذر تحميل لائحة الأسعار الآن. تحقق من الاتصال ثم أعد تحميل الصفحة.', 'error');
+			}
+		}
+
+		async function submitNewCase(event) {
+			event.preventDefault();
+			const nameInput = document.getElementById('caseNameInput');
+			const priceInput = document.getElementById('casePriceInput');
+			const notesInput = document.getElementById('caseNotesInput');
+			const submitBtn = document.getElementById('catalogSubmitBtn');
+
+			const name = (nameInput.value || '').trim();
+			const price = parseAmount(priceInput.value);
+			if (!name) {
+				setCatalogStatus('يرجى إدخال اسم الحالة.', 'error');
+				return;
+			}
+			if (!Number.isFinite(price) || price < 0) {
+				setCatalogStatus('يرجى إدخال تسعيرة صحيحة (صفر أو أكثر).', 'error');
+				return;
+			}
+
+			submitBtn.disabled = true;
+			submitBtn.textContent = 'جاري الحفظ...';
+			setCatalogStatus('يتم حفظ الحالة الآن...');
+
+			try {
+				const response = await fetch(apiUrl('/api/treatment-catalog'), {
+					method: 'POST',
+					headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
+					body: JSON.stringify({
+						name,
+						price,
+						notes: (notesInput.value || '').trim() || null,
+						materials: draftMaterials.map((row) => ({
+							inventory_item_id: row.inventory_item_id,
+							quantity: row.quantity,
+						})),
+					}),
+				});
+				let data = null;
+				try {
+					data = await response.json();
+				} catch (parseError) {
+					data = null;
+				}
+				if (!response.ok) {
+					setCatalogStatus((data && data.detail) || 'تعذر حفظ الحالة. حاول مرة أخرى.', 'error');
+					return;
+				}
+				nameInput.value = '';
+				priceInput.value = '';
+				notesInput.value = '';
+				draftMaterials = [];
+				renderDraftMaterials(draftMaterials, 'materialDraftList', 'materialDraftEmpty', 'materialDraftTotal');
+				setCatalogStatus('تمت إضافة الحالة إلى لائحة الأسعار.', 'success');
+				showInventoryToast('تمت إضافة الحالة إلى لائحة الأسعار.');
+				await loadCatalog();
+				await loadProfitReport();
+			} catch (error) {
+				setCatalogStatus('تعذر الاتصال بالخادم. تحقق من الإنترنت ثم حاول مجدداً.', 'error');
+			} finally {
+				submitBtn.disabled = false;
+				submitBtn.textContent = 'حفظ الحالة في اللائحة';
+			}
+		}
+
+		async function patchCase(caseId, payload, successMessage) {
+			try {
+				const response = await fetch(apiUrl(`/api/treatment-catalog/${caseId}`), {
+					method: 'PATCH',
+					headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
+					body: JSON.stringify(payload),
+				});
+				let data = null;
+				try {
+					data = await response.json();
+				} catch (parseError) {
+					data = null;
+				}
+				if (!response.ok) {
+					showInventoryToast((data && data.detail) || 'تعذر تنفيذ العملية.');
+					return false;
+				}
+				if (successMessage) showInventoryToast(successMessage);
+				await loadCatalog();
+				await loadProfitReport();
+				return true;
+			} catch (error) {
+				showInventoryToast('تعذر الاتصال بالخادم.');
+				return false;
+			}
+		}
+
+		async function deleteCase(caseId) {
+			const item = catalogItems.find((row) => String(row.id) === String(caseId));
+			if (!item) return;
+			if (!window.confirm(`هل تريد حذف "${item.name}" من لائحة الأسعار نهائياً؟`)) return;
+			try {
+				const response = await fetch(apiUrl(`/api/treatment-catalog/${caseId}`), {
+					method: 'DELETE',
+					headers: getDoctorAuthHeaders(),
+				});
+				let data = null;
+				try {
+					data = await response.json();
+				} catch (parseError) {
+					data = null;
+				}
+				if (!response.ok) {
+					// الخادم يرفض حذف حالة مستخدَمة في فواتير ويشرح البديل
+					// (التعطيل) في نص الرسالة نفسه -- تُعرض كما هي.
+					showInventoryToast((data && data.detail) || 'تعذر حذف الحالة.');
+					return;
+				}
+				showInventoryToast('تم حذف الحالة من اللائحة.');
+				await loadCatalog();
+				await loadProfitReport();
+			} catch (error) {
+				showInventoryToast('تعذر الاتصال بالخادم.');
+			}
+		}
+
+		// ================================================================
+		// نافذة التعديل
+		// ================================================================
+		function openEditCaseModal(caseId) {
+			const item = catalogItems.find((row) => String(row.id) === String(caseId));
+			if (!item) return;
+			editingCaseId = item.id;
+			document.getElementById('editCaseNameInput').value = item.name || '';
+			document.getElementById('editCasePriceInput').value = item.price != null ? item.price : '';
+			document.getElementById('editCaseNotesInput').value = item.notes || '';
+			document.getElementById('editCaseStatus').textContent = '';
+			// أسطر المواد المحذوفة من المخزن (inventory_item_id = null) تُستبعد
+			// من المسودّة: لا يمكن إعادة إرسالها للخادم وقد اختفى مرجعها.
+			editDraftMaterials = item.materials
+				.filter((material) => material.inventory_item_id !== null)
+				.map((material) => ({ inventory_item_id: material.inventory_item_id, quantity: material.quantity }));
+			renderDraftMaterials(editDraftMaterials, 'editMaterialDraftList', 'editMaterialDraftEmpty', null);
+			document.getElementById('editCaseModal').classList.remove('hidden');
+		}
+
+		function closeEditCaseModal() {
+			editingCaseId = null;
+			document.getElementById('editCaseModal').classList.add('hidden');
+		}
+
+		async function submitEditCase(event) {
+			event.preventDefault();
+			if (!editingCaseId) return;
+			const statusEl = document.getElementById('editCaseStatus');
+			const name = (document.getElementById('editCaseNameInput').value || '').trim();
+			const price = parseAmount(document.getElementById('editCasePriceInput').value);
+			if (!name) {
+				statusEl.textContent = 'اسم الحالة مطلوب.';
+				return;
+			}
+			if (!Number.isFinite(price) || price < 0) {
+				statusEl.textContent = 'تسعيرة غير صحيحة.';
+				return;
+			}
+			const saveBtn = document.getElementById('editCaseSaveBtn');
+			saveBtn.disabled = true;
+			const ok = await patchCase(
+				editingCaseId,
+				{
+					name,
+					price,
+					notes: (document.getElementById('editCaseNotesInput').value || '').trim() || null,
+					materials: editDraftMaterials.map((row) => ({
+						inventory_item_id: row.inventory_item_id,
+						quantity: row.quantity,
+					})),
+				},
+				'تم حفظ التعديلات.'
+			);
+			saveBtn.disabled = false;
+			if (ok) closeEditCaseModal();
+			else statusEl.textContent = 'تعذر حفظ التعديلات.';
+		}
+
+		// ================================================================
+		// تقرير الربحية
+		// ================================================================
+		function buildProfitQuery() {
+			const mode = document.getElementById('profitPeriodSelect').value;
+			if (mode === 'all') return '?all_time=true';
+			const now = new Date();
+			if (mode === 'day') {
+				return `?year=${now.getFullYear()}&month=${now.getMonth() + 1}&day=${now.getDate()}`;
+			}
+			return `?year=${now.getFullYear()}&month=${now.getMonth() + 1}`;
+		}
+
+		async function loadProfitReport() {
+			const body = document.getElementById('profitTableBody');
+			const empty = document.getElementById('profitEmptyState');
+			if (!body || !empty) return;
+			try {
+				const response = await fetch(apiUrl(`/api/treatment-catalog/profit-report${buildProfitQuery()}`), {
+					headers: getDoctorAuthHeaders(),
+				});
+				if (!response.ok) throw new Error('failed');
+				const data = await response.json();
+				document.getElementById('profitBilled').textContent = formatAmount(data.totals.billed);
+				document.getElementById('profitMaterials').textContent = formatAmount(data.totals.materials_cost);
+				document.getElementById('profitNet').textContent = formatAmount(data.totals.net_profit);
+
+				const rows = Array.isArray(data.items) ? data.items : [];
+				if (!rows.length) {
+					body.innerHTML = '';
+					empty.classList.remove('hidden');
+					return;
+				}
+				empty.classList.add('hidden');
+				body.innerHTML = rows
+					.map(
+						(row) => `
+						<tr class="transition hover:bg-ink-50/80">
+							<td class="px-4 py-3 font-semibold text-ink-800">${escapeHtml(row.name)}</td>
+							<td class="px-4 py-3 text-ink-600">${escapeHtml(formatAmount(row.invoices_count))}</td>
+							<td class="px-4 py-3 text-ink-700">${escapeHtml(formatAmount(row.billed))}</td>
+							<td class="px-4 py-3 text-warning-700">${escapeHtml(formatAmount(row.materials_cost))}</td>
+							<td class="px-4 py-3 font-extrabold text-success-700">${escapeHtml(formatAmount(row.net_profit))}</td>
+						</tr>
+					`
+					)
+					.join('');
+			} catch (error) {
+				body.innerHTML = '';
+				empty.classList.remove('hidden');
+			}
+		}
+
+		// ================================================================
+		// الربط
+		// ================================================================
+		document.getElementById('catalogForm').addEventListener('submit', submitNewCase);
+		document.getElementById('editCaseForm').addEventListener('submit', submitEditCase);
+		document.getElementById('editCaseCloseBtn').addEventListener('click', closeEditCaseModal);
+		document.getElementById('editCaseCancelBtn').addEventListener('click', closeEditCaseModal);
+		document.getElementById('showInactiveToggle').addEventListener('change', renderCatalog);
+		document.getElementById('profitPeriodSelect').addEventListener('change', loadProfitReport);
+
+		document.getElementById('addMaterialBtn').addEventListener('click', () => {
+			const added = addToDraft(
+				draftMaterials,
+				document.getElementById('materialPickerSelect'),
+				document.getElementById('materialPickerQuantity')
+			);
+			if (added) renderDraftMaterials(draftMaterials, 'materialDraftList', 'materialDraftEmpty', 'materialDraftTotal');
+		});
+
+		document.getElementById('editAddMaterialBtn').addEventListener('click', () => {
+			const added = addToDraft(
+				editDraftMaterials,
+				document.getElementById('editMaterialPickerSelect'),
+				document.getElementById('editMaterialPickerQuantity')
+			);
+			if (added) renderDraftMaterials(editDraftMaterials, 'editMaterialDraftList', 'editMaterialDraftEmpty', null);
+		});
+
+		document.addEventListener('click', (event) => {
+			const removeBtn = event.target.closest('[data-remove-draft]');
+			if (removeBtn) {
+				const index = Number(removeBtn.getAttribute('data-remove-draft'));
+				const scope = removeBtn.getAttribute('data-draft-scope');
+				if (scope === 'editMaterialDraftList') {
+					editDraftMaterials.splice(index, 1);
+					renderDraftMaterials(editDraftMaterials, 'editMaterialDraftList', 'editMaterialDraftEmpty', null);
+				} else {
+					draftMaterials.splice(index, 1);
+					renderDraftMaterials(draftMaterials, 'materialDraftList', 'materialDraftEmpty', 'materialDraftTotal');
+				}
+				return;
+			}
+
+			const editBtn = event.target.closest('[data-edit-case]');
+			if (editBtn) {
+				openEditCaseModal(editBtn.getAttribute('data-edit-case'));
+				return;
+			}
+
+			const toggleBtn = event.target.closest('[data-toggle-case]');
+			if (toggleBtn) {
+				const id = toggleBtn.getAttribute('data-toggle-case');
+				const item = catalogItems.find((row) => String(row.id) === String(id));
+				if (item) patchCase(id, { is_active: !item.is_active }, item.is_active ? 'تم تعطيل الحالة.' : 'تم تفعيل الحالة.');
+				return;
+			}
+
+			const deleteBtn = event.target.closest('[data-delete-case]');
+			if (deleteBtn) {
+				deleteCase(deleteBtn.getAttribute('data-delete-case'));
+			}
+		});
+
+		document.getElementById('editCaseModal').addEventListener('click', (event) => {
+			if (event.target && event.target.id === 'editCaseModal') closeEditCaseModal();
+		});
+
+		if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
+		if (mobileLogoutBtn) mobileLogoutBtn.addEventListener('click', handleLogout);
+
+		window.addEventListener('DOMContentLoaded', async () => {
+			const activeGateTier = localStorage.getItem('user_tier');
+			if (activeGateTier === 'pending_activation' || activeGateTier === 'expired_subscription') {
+				return;
+			}
+			if (clinicTitle) clinicTitle.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادة الطبيب';
+			if (mobileClinicTitle) mobileClinicTitle.textContent = doctorName ? `عيادة ${doctorName}` : 'عيادة الطبيب';
+			renderTierBadge();
+
+			try {
+				const response = await fetch(apiUrl('/api/auth/profile'), { headers: getDoctorAuthHeaders() });
+				if (response.ok) {
+					const profile = await response.json();
+					const freshName = (profile.doctor_name || '').trim();
+					if (freshName) {
+						localStorage.setItem('doctor_name', freshName);
+						if (clinicTitle) clinicTitle.textContent = `عيادة ${freshName}`;
+						if (mobileClinicTitle) mobileClinicTitle.textContent = `عيادة ${freshName}`;
+					}
+				}
+			} catch (err) {
+				/* يبقى الاسم المخزَّن محلياً كما هو عند انقطاع الشبكة */
+			}
+
+			await loadInventory();
+			renderDraftMaterials(draftMaterials, 'materialDraftList', 'materialDraftEmpty', 'materialDraftTotal');
+			await loadCatalog();
+			await loadProfitReport();
+		});
+	
+	
+	function applyDoctorAvatarToHeaderLogo() {
+		const avatarUrl = localStorage.getItem('user_avatar_url');
+		const logoTargets = [document.getElementById('clinicLogoImg'), document.getElementById('mobileClinicLogoImg')].filter(Boolean);
+		if (!avatarUrl) return;
+		logoTargets.forEach((img) => {
+			// نحفظ الشعار الافتراضي logo.png وأصنافه قبل استبداله بصورة الطبيب، حتى نرجع
+			// إليه تلقائياً إن فشل تحميل الصورة (رابط معطوب أو محذوف من التخزين المؤقت
+			// على Render) بدل ترك أيقونة صورة مكسورة ظاهرة للزائر (2026-08-25).
+			const fallbackSrc = img.getAttribute('src');
+			const fallbackClassName = img.className;
+			img.onerror = () => {
+				img.onerror = null;
+				img.src = fallbackSrc;
+				img.className = fallbackClassName;
+			};
+			img.src = window.apiUrl ? apiUrl(avatarUrl) : avatarUrl;
+			img.classList.remove('object-contain', 'p-2', 'p-1.5', 'rounded-xl');
+			img.classList.add('object-cover', 'rounded-full');
+		});
+	}
+
+	applyDoctorAvatarToHeaderLogo();
+</script>
+
+<!-- قائمة الحساب في الشريط العلوي (سطح المكتب) -->
+<script>
+(function () {
+	var btn = document.getElementById('accountMenuBtn');
+	var menu = document.getElementById('accountMenu');
+	if (!btn || !menu) return;
+	function closeMenu() { menu.classList.add('hidden'); btn.setAttribute('aria-expanded', 'false'); }
+	btn.addEventListener('click', function (e) {
+		e.stopPropagation();
+		if (menu.classList.contains('hidden')) { menu.classList.remove('hidden'); btn.setAttribute('aria-expanded', 'true'); }
+		else { closeMenu(); }
+	});
+	document.addEventListener('click', function (e) {
+		if (!menu.contains(e.target) && !btn.contains(e.target)) closeMenu();
+	});
+	document.addEventListener('keydown', function (e) { if (e.key === 'Escape' || e.key === 'Esc') closeMenu(); });
+})();
+</script>
+</body>
+</html>

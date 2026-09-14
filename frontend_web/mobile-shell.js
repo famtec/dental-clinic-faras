@@ -64,6 +64,8 @@
       '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line>',
     doctors:
       '<path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"></path><circle cx="10" cy="7" r="3.2"></circle><path d="M18 8v6"></path><path d="M21 11h-6"></path>',
+    pricing:
+      '<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L2.6 12.6a2 2 0 0 1-.6-1.4V4a2 2 0 0 1 2-2h7.2a2 2 0 0 1 1.4.6l8 8a2 2 0 0 1 0 2.8Z"></path><circle cx="7.5" cy="7.5" r="1.3"></circle>',
     more: '<circle cx="5" cy="12" r="1.7"></circle><circle cx="12" cy="12" r="1.7"></circle><circle cx="19" cy="12" r="1.7"></circle>',
     profile:
       '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle>',
@@ -98,6 +100,7 @@
 
   /* روابط تظهر داخل لوحة "المزيد" بدل الشريط السفلي. */
   var SHEET_LINKS = [
+    { href: 'treatment_catalog.html', label: 'لائحة الأسعار', hint: 'أسعار العلاجات وموادها', icon: 'pricing', tone: 'emerald' },
     { href: 'doctors.html', label: 'الأطباء والنسب', hint: 'حساب نسب الأطباء', icon: 'doctors', tone: 'violet' },
     { href: 'profile.html', label: 'حسابي', hint: 'بيانات العيادة', icon: 'profile', tone: 'indigo' },
     { href: 'qr.html', label: 'رمز الحجز', hint: 'مشاركة QR', icon: 'qr', tone: 'cyan' },
@@ -117,6 +120,7 @@
     'finance.html': 'المالية',
     'inventory.html': 'المخزن',
     'doctors.html': 'الأطباء والنسب',
+    'treatment_catalog.html': 'لائحة الأسعار',
     'patient_record.html': 'ملف المريض',
     'profile.html': 'حسابي',
     'qr.html': 'رمز الحجز',

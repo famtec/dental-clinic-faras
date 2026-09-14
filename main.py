@@ -1301,6 +1301,14 @@ class TreatmentInvoiceCreate(BaseModel):
     # الطبيب المساعد المنفّذ لهذه الفاتورة (2026-09-13) -- اختياري تماماً،
     # وNone تعني "الطبيب المدير صاحب الحساب نفسه". انظر models.ClinicDoctor.
     clinic_doctor_id: Optional[int] = None
+    # 2026-09-14: الحالة المختارة من لائحة الأسعار. مرجع للقراءة فقط: العنوان
+    # والتكلفة يصلان في title/total_cost أعلاه كأي فاتورة، فلا يستطيع تعديل
+    # سعر الحالة لاحقاً أن يمسّ هذه الفاتورة.
+    catalog_item_id: Optional[int] = None
+    # المواد المستهلكة فعلاً في هذا العلاج. تُخصَم من المخزن في نفس عملية
+    # إنشاء الفاتورة (كل شيء أو لا شيء). None = لا مواد، وهو سلوك كل عميل
+    # قديم لم يُحدَّث بعد (تطبيق أندرويد مثلاً) فلا ينكسر شيء.
+    materials: Optional[List["InvoiceMaterialInput"]] = None
 
 
 # 2026-08-29: يسمح بتصحيح التكلفة الإجمالية لفاتورة علاج موجودة (مثلاً عند
@@ -1351,7 +1359,104 @@ class TreatmentInvoiceResponse(BaseModel):
     # مُرفق حتى لا تضطر الواجهة لجلب قائمة الأطباء لعرض سطر فاتورة واحد.
     clinic_doctor_id: Optional[int] = None
     clinic_doctor_name: Optional[str] = None
+    # 2026-09-14: المواد المستهلكة وتكلفتها المجمّدة. net_profit = التكلفة
+    # الإجمالية ناقص تكلفة المواد -- ربح متوقَّع للفاتورة كاملة، مستقل عن كم
+    # حُصِّل منها فعلاً (ذاك يبقى paid_amount).
+    catalog_item_id: Optional[int] = None
+    materials: List["InvoiceMaterialResponse"] = []
+    materials_cost: float = 0.0
+    net_profit: float = 0.0
     model_config = ConfigDict(from_attributes=True)
+
+
+# ====================================================================
+# لائحة أسعار العلاجات + استهلاك المواد -- مخططات  (2026-09-14)
+# ====================================================================
+# انظر شرح الكتلة في models.py: كل رقم يدخل الفاتورة يُجمَّد لحظة التسجيل.
+class InvoiceMaterialInput(BaseModel):
+    """مادة واحدة يطلب الطبيب خصمها من المخزن على فاتورة."""
+
+    inventory_item_id: Optional[int] = None
+    # بديل عن المعرّف عند الإدخال بالاسم (مطابقة غير حساسة لحالة الأحرف،
+    # نفس نمط create_expense مع المخزن).
+    item_name: Optional[str] = None
+    quantity: int = 1
+    # تجاوز سعر المخزن لهذه الفاتورة وحدها (لا يغيّر سعر المادة العام).
+    # None = استخدم unit_cost المسجَّلة على المادة في المخزن.
+    unit_cost: Optional[float] = None
+
+
+class InvoiceMaterialResponse(BaseModel):
+    id: int
+    invoice_id: int
+    inventory_item_id: Optional[int] = None
+    item_name: str
+    quantity: int
+    unit_cost: float
+    total_cost: float
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TreatmentCatalogMaterialInput(BaseModel):
+    inventory_item_id: Optional[int] = None
+    item_name: Optional[str] = None
+    quantity: int = 1
+
+
+class TreatmentCatalogMaterialResponse(BaseModel):
+    id: int
+    inventory_item_id: Optional[int] = None
+    item_name: str
+    quantity: int
+    # تُقرأ من المخزن لحظة العرض (لا تُجمَّد هنا: الوصفة اقتراح لا سجل).
+    unit_cost: float = 0.0
+    total_cost: float = 0.0
+    available_quantity: Optional[int] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TreatmentCatalogItemCreate(BaseModel):
+    name: str
+    price: float
+    notes: Optional[str] = None
+    is_active: bool = True
+    materials: List[TreatmentCatalogMaterialInput] = []
+
+
+class TreatmentCatalogItemUpdate(BaseModel):
+    name: Optional[str] = None
+    price: Optional[float] = None
+    notes: Optional[str] = None
+    is_active: Optional[bool] = None
+    # None = لا تمسّ الوصفة إطلاقاً. قائمة فارغة = احذف كل موادها. التمييز
+    # بينهما مقصود، فبدونه يستحيل إفراغ وصفة.
+    materials: Optional[List[TreatmentCatalogMaterialInput]] = None
+
+
+class TreatmentCatalogItemResponse(BaseModel):
+    id: int
+    name: str
+    price: float
+    notes: Optional[str] = None
+    is_active: bool = True
+    created_at: datetime
+    updated_at: datetime
+    materials: List[TreatmentCatalogMaterialResponse] = []
+    # تكلفة الوصفة بأسعار المخزن الحالية + الربح المتوقَّع منها. كلاهما
+    # تقديري ويتحرك مع أسعار المخزن -- الرقم الملزِم هو ما يُجمَّد على
+    # الفاتورة وقت التنفيذ.
+    materials_cost: float = 0.0
+    estimated_profit: float = 0.0
+    model_config = ConfigDict(from_attributes=True)
+
+
+# المرجعان الأماميان في TreatmentInvoiceCreate/Response (كُتبا قبل تعريف
+# InvoiceMaterialInput/Response بعمد، ليبقى مخطط الفاتورة كتلة واحدة مقروءة).
+# Pydantic v2 يحلّهما كسولاً، لكن البناء الصريح هنا يجعل أي خطأ يظهر عند
+# الإقلاع لا عند أول طلب حقيقي من طبيب.
+TreatmentInvoiceCreate.model_rebuild()
+TreatmentInvoiceResponse.model_rebuild()
 
 
 # ====================================================================
@@ -1463,6 +1568,9 @@ class InventoryItemCreate(BaseModel):
     item_name: str
     quantity: int
     min_alert_quantity: int = 5
+    # 2026-09-14: تكلفة شراء الوحدة. اختيارية ليبقى كل عميل قديم (تطبيق
+    # أندرويد، ربط المصروفات بالمخزن) يعمل حرفياً كما كان بلا تحديث.
+    unit_cost: float = 0
 
 
 class InventoryItemResponse(BaseModel):
@@ -1471,6 +1579,7 @@ class InventoryItemResponse(BaseModel):
     item_name: str
     quantity: int
     min_alert_quantity: int
+    unit_cost: float = 0
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
@@ -2996,6 +3105,19 @@ def delete_patient(
             )
         ).delete(synchronize_session=False)
         db.query(models.FinancialTransaction).filter(models.FinancialTransaction.patient_id == patient_id).delete(synchronize_session=False)
+        # الطبقة السادسة (2026-09-14): invoice_material_usages يحمل FK نحو
+        # patients.id **و** treatment_invoices.id معاً، وهذا حذف جماعي خام
+        # (Query.delete) لا يمرّ من الـ ORM فلا تعمل فيه علاقة cascade
+        # المعرّفة في models.py -- بلا هذا السطر يفشل حذف أي مريض له فاتورة
+        # سُجِّلت عليها مادة، بنفس خطأ الـ FK الموثّق أعلاه حرفياً. يجب أن
+        # يسبق حذف treatment_invoices.
+        #
+        # **ولا تُرجَع المواد إلى المخزن هنا عمداً**: المادة استُهلكت فعلاً في
+        # فم المريض، وحذف ملفه لا يعيدها إلى الرف. (عكس حذف فاتورة أُنشئت
+        # بالخطأ، حيث الإرجاع هو الصواب -- انظر delete_patient_invoice.)
+        db.query(models.InvoiceMaterialUsage).filter(
+            models.InvoiceMaterialUsage.patient_id == patient_id
+        ).delete(synchronize_session=False)
         db.query(models.TreatmentInvoice).filter(models.TreatmentInvoice.patient_id == patient_id).delete(synchronize_session=False)
         # لا نحذف المواعيد نفسها (قد تكون سجلاً تاريخياً يريد الطبيب الاحتفاظ
         # به) -- فقط نفك ربطها بهذا المريض المحذوف، لأن Appointment.patient_name
@@ -3074,12 +3196,22 @@ def _clinic_doctor_names(db: Session, clinic_email: str) -> dict:
     return {row[0]: row[1] for row in rows}
 
 
-def _serialize_invoice(invoice: "models.TreatmentInvoice", payments: list, doctor_names: Optional[dict] = None) -> dict:
+def _serialize_invoice(
+    invoice: "models.TreatmentInvoice",
+    payments: list,
+    doctor_names: Optional[dict] = None,
+    material_usages: Optional[list] = None,
+) -> dict:
     paid_amount = sum((Decimal(str(p.amount)) for p in payments), Decimal("0"))
     total_cost = Decimal(str(invoice.total_cost or 0))
     if total_cost < 0:
         total_cost = Decimal("0")
     remaining_amount = max(total_cost - paid_amount, Decimal("0"))
+    # 2026-09-14: التكلفة تُجمع من الأسطر المجمّدة وحدها -- لا يُقرأ سعر أي
+    # مادة من المخزن هنا إطلاقاً، وإلا تغيّر ربح فواتير مغلقة منذ شهور بمجرد
+    # تصحيح الطبيب لسعر مادة اليوم.
+    usages = list(material_usages or [])
+    materials_cost = sum((Decimal(str(u.total_cost or 0)) for u in usages), Decimal("0"))
     return {
         "id": invoice.id,
         "patient_id": invoice.patient_id,
@@ -3093,6 +3225,22 @@ def _serialize_invoice(invoice: "models.TreatmentInvoice", payments: list, docto
         # حالة كل فاتورة سابقة لهذه الميزة وكل عيادة بطبيب واحد.
         "clinic_doctor_id": getattr(invoice, "clinic_doctor_id", None),
         "clinic_doctor_name": (doctor_names or {}).get(getattr(invoice, "clinic_doctor_id", None)),
+        "catalog_item_id": getattr(invoice, "catalog_item_id", None),
+        "materials_cost": float(materials_cost),
+        "net_profit": float(total_cost - materials_cost),
+        "materials": [
+            {
+                "id": u.id,
+                "invoice_id": u.invoice_id,
+                "inventory_item_id": u.inventory_item_id,
+                "item_name": u.item_name,
+                "quantity": int(u.quantity or 0),
+                "unit_cost": float(Decimal(str(u.unit_cost or 0))),
+                "total_cost": float(Decimal(str(u.total_cost or 0))),
+                "created_at": u.created_at,
+            }
+            for u in sorted(usages, key=lambda u: u.id)
+        ],
         "payments": [
             {
                 "id": p.id,
@@ -3104,6 +3252,268 @@ def _serialize_invoice(invoice: "models.TreatmentInvoice", payments: list, docto
             for p in sorted(payments, key=lambda p: (p.created_at, p.id), reverse=True)
         ],
     }
+
+
+# ====================================================================
+# لائحة أسعار العلاجات + استهلاك المواد -- دوال مشتركة  (2026-09-14)
+# ====================================================================
+# **نقطة الحقيقة الوحيدة لأي خصم أو إرجاع في المخزن بسبب علاج.** أي مسار
+# يستهلك مادة يجب أن يمرّ من _consume_materials_for_invoice ولا يعدّل
+# InventoryItem.quantity بنفسه أبداً -- نفس قاعدة
+# sync_doctor_earning_for_payment في محرّك نسب الأطباء، ولنفس السبب: حسابان
+# متوازيان للمخزون في مكانين مختلفين ينحرفان عن بعضهما بصمت خلال أسابيع.
+def _owned_inventory_items_by_id(db: Session, doctor_email: str) -> dict:
+    rows = (
+        db.query(models.InventoryItem)
+        .filter(models.InventoryItem.doctor_email == doctor_email)
+        .all()
+    )
+    return {row.id: row for row in rows}
+
+
+def _fetch_invoice_material_usages(db: Session, invoice_ids: list) -> dict:
+    """مواد كل فاتورة مجمّعة بمعرّف الفاتورة (استعلام واحد لكل الصفحة)."""
+    if not invoice_ids:
+        return {}
+    rows = (
+        db.query(models.InvoiceMaterialUsage)
+        .filter(models.InvoiceMaterialUsage.invoice_id.in_(invoice_ids))
+        .all()
+    )
+    grouped: dict = {}
+    for row in rows:
+        grouped.setdefault(row.invoice_id, []).append(row)
+    return grouped
+
+
+def _resolve_inventory_item_for_use(
+    db: Session,
+    doctor_email: str,
+    inventory_item_id: Optional[int],
+    item_name: Optional[str],
+    items_cache: Optional[dict] = None,
+) -> "models.InventoryItem":
+    """يعيد مادة المخزن المملوكة لهذا الطبيب، أو يرفع 404 عربية واضحة.
+
+    fail closed: مادة بمعرّف يخصّ عيادة أخرى تُعامَل كغير موجودة تماماً، فلا
+    يستطيع أحد خصم مخزون عيادة غيره ولا حتى استكشاف وجوده.
+    """
+    cache = items_cache if items_cache is not None else _owned_inventory_items_by_id(db, doctor_email)
+
+    if inventory_item_id is not None:
+        item = cache.get(inventory_item_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail="المادة غير موجودة في مخزن المواد")
+        return item
+
+    normalized = (item_name or "").strip().lower()
+    if not normalized:
+        raise HTTPException(status_code=400, detail="اسم المادة مطلوب")
+    for item in cache.values():
+        if (item.item_name or "").strip().lower() == normalized:
+            return item
+    raise HTTPException(
+        status_code=404,
+        detail=f'المادة "{(item_name or "").strip()}" غير موجودة في مخزن المواد. أضفها إلى المخزن أولاً.',
+    )
+
+
+def _consume_materials_for_invoice(
+    db: Session,
+    invoice: "models.TreatmentInvoice",
+    materials: list,
+    doctor_email: str,
+) -> list:
+    """يخصم المواد من المخزن ويكتب أسطر الاستهلاك المجمّدة لفاتورة واحدة.
+
+    لا تعمل commit/rollback بنفسها عمداً -- تُستدعى بعد db.flush() (ليصير
+    invoice.id متاحاً) وقبل db.commit()، فتبقى الفاتورة وخصمُها عملية ذرية
+    واحدة: إما الاثنان أو لا شيء.
+
+    **الكمية غير الكافية توقف العملية بـ 400** ولا تُخصم جزئياً ولا تُترك
+    سالبة. الرفض هنا مقصود: مخزون سالب يعني رقماً يكذب على الطبيب كل يوم بعدها،
+    والرسالة تسمّي المادة والمتوفر منها ليعرف تحديداً ما يصححه.
+    """
+    if not materials:
+        return []
+
+    items_cache = _owned_inventory_items_by_id(db, doctor_email)
+    created = []
+    for entry in materials:
+        quantity = int(getattr(entry, "quantity", 0) or 0)
+        if quantity <= 0:
+            raise HTTPException(status_code=400, detail="كمية المادة المستهلكة يجب أن تكون أكبر من صفر")
+
+        item = _resolve_inventory_item_for_use(
+            db,
+            doctor_email,
+            getattr(entry, "inventory_item_id", None),
+            getattr(entry, "item_name", None),
+            items_cache,
+        )
+
+        available = int(item.quantity or 0)
+        if available < quantity:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f'الكمية المتوفرة من "{item.item_name}" في المخزن هي {available} فقط، '
+                    f"وهذا العلاج يحتاج {quantity}. عدّل الكمية أو حدّث المخزن أولاً."
+                ),
+            )
+
+        override = getattr(entry, "unit_cost", None)
+        if override is not None:
+            if override < 0:
+                raise HTTPException(status_code=400, detail="تكلفة المادة لا يمكن أن تكون بالسالب")
+            unit_cost = Decimal(str(override))
+        else:
+            unit_cost = Decimal(str(item.unit_cost or 0))
+
+        item.quantity = available - quantity
+        item.updated_at = datetime.utcnow()
+
+        usage = models.InvoiceMaterialUsage(
+            doctor_email=doctor_email,
+            invoice_id=invoice.id,
+            patient_id=invoice.patient_id,
+            inventory_item_id=item.id,
+            # الاسم لقطة أيضاً: إعادة تسمية المادة في المخزن غداً لا تعيد
+            # كتابة ما كُتب في فاتورة اليوم.
+            item_name=item.item_name,
+            quantity=quantity,
+            unit_cost=unit_cost,
+            total_cost=unit_cost * Decimal(str(quantity)),
+            clinic_doctor_id=getattr(invoice, "clinic_doctor_id", None),
+        )
+        db.add(usage)
+        created.append(usage)
+
+    return created
+
+
+def _restore_material_usage_to_inventory(db: Session, usage: "models.InvoiceMaterialUsage") -> None:
+    """يعيد كمية سطر استهلاك إلى المخزن قبل حذفه (عكس الخصم تماماً).
+
+    إن كانت المادة نفسها قد حُذفت من المخزن بعد الاستهلاك (inventory_item_id
+    = NULL أو صف غير موجود) لا يُنشأ صف جديد: إعادة بعث مادة حذفها الطبيب
+    عمداً أسوأ من فقدان بضع وحدات من عدّاد.
+    """
+    if usage.inventory_item_id is None:
+        return
+    item = (
+        db.query(models.InventoryItem)
+        .filter(
+            models.InventoryItem.id == usage.inventory_item_id,
+            models.InventoryItem.doctor_email == usage.doctor_email,
+        )
+        .first()
+    )
+    if item is None:
+        return
+    item.quantity = int(item.quantity or 0) + int(usage.quantity or 0)
+    item.updated_at = datetime.utcnow()
+
+
+def _get_owned_catalog_item_or_404(
+    db: Session, item_id: int, doctor_email: str
+) -> "models.TreatmentCatalogItem":
+    item = (
+        db.query(models.TreatmentCatalogItem)
+        .filter(
+            models.TreatmentCatalogItem.id == item_id,
+            models.TreatmentCatalogItem.doctor_email == doctor_email,
+        )
+        .first()
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="الحالة العلاجية غير موجودة في لائحة أسعارك")
+    return item
+
+
+def _serialize_catalog_item(
+    item: "models.TreatmentCatalogItem", inventory_by_id: Optional[dict] = None
+) -> dict:
+    """يعرض حالة من اللائحة مع تكلفة وصفتها بأسعار المخزن **الحالية**.
+
+    هذه الأرقام تقديرية بطبيعتها وتتحرك مع أسعار المخزن -- وهذا صحيح هنا:
+    اللائحة أداة تسعير لا سجل محاسبي. الرقم الملزِم هو ما يُجمَّد على
+    InvoiceMaterialUsage لحظة تنفيذ العلاج.
+    """
+    inventory = inventory_by_id or {}
+    price = Decimal(str(item.price or 0))
+    materials = []
+    materials_cost = Decimal("0")
+    for material in item.materials:
+        stock = inventory.get(material.inventory_item_id)
+        unit_cost = Decimal(str(stock.unit_cost or 0)) if stock is not None else Decimal("0")
+        quantity = int(material.quantity or 0)
+        line_cost = unit_cost * Decimal(str(quantity))
+        materials_cost += line_cost
+        materials.append(
+            {
+                "id": material.id,
+                "inventory_item_id": material.inventory_item_id,
+                # اسم المخزن الحيّ إن وُجد، وإلا الاسم المحفوظ في الوصفة --
+                # فتبقى وصفة لمادة محذوفة مقروءة بدل أن تظهر فارغة.
+                "item_name": (stock.item_name if stock is not None else material.item_name),
+                "quantity": quantity,
+                "unit_cost": float(unit_cost),
+                "total_cost": float(line_cost),
+                "available_quantity": (int(stock.quantity or 0) if stock is not None else None),
+            }
+        )
+
+    return {
+        "id": item.id,
+        "name": item.name,
+        "price": float(price),
+        "notes": item.notes,
+        "is_active": bool(item.is_active),
+        "created_at": item.created_at,
+        "updated_at": item.updated_at,
+        "materials": materials,
+        "materials_cost": float(materials_cost),
+        "estimated_profit": float(price - materials_cost),
+    }
+
+
+def _replace_catalog_materials(
+    db: Session,
+    item: "models.TreatmentCatalogItem",
+    materials: list,
+    doctor_email: str,
+) -> None:
+    """يستبدل وصفة حالة بالكامل بعد التحقق من ملكية كل مادة.
+
+    الاستبدال الكامل (لا دمج) مقصود: الواجهة ترسل الوصفة كما يراها الطبيب على
+    الشاشة، فحذف سطر منها يجب أن يعني حذفه فعلاً.
+    """
+    items_cache = _owned_inventory_items_by_id(db, doctor_email)
+    resolved = []
+    for entry in materials or []:
+        quantity = int(getattr(entry, "quantity", 0) or 0)
+        if quantity <= 0:
+            raise HTTPException(status_code=400, detail="كمية المادة في الوصفة يجب أن تكون أكبر من صفر")
+        stock = _resolve_inventory_item_for_use(
+            db,
+            doctor_email,
+            getattr(entry, "inventory_item_id", None),
+            getattr(entry, "item_name", None),
+            items_cache,
+        )
+        resolved.append((stock, quantity))
+
+    item.materials.clear()
+    db.flush()
+    for stock, quantity in resolved:
+        item.materials.append(
+            models.TreatmentCatalogMaterial(
+                inventory_item_id=stock.id,
+                item_name=stock.item_name,
+                quantity=quantity,
+            )
+        )
 
 
 def _get_owned_patient_or_404(db: Session, patient_id: int, doctor_email: str) -> "models.Patient":
@@ -3344,8 +3754,14 @@ def get_patient_invoices(
             payments_by_invoice_id.setdefault(payment.invoice_id, []).append(payment)
 
     doctor_names = _clinic_doctor_names(db, current_user.email)
+    usages_by_invoice_id = _fetch_invoice_material_usages(db, invoice_ids)
     return [
-        _serialize_invoice(invoice, payments_by_invoice_id.get(invoice.id, []), doctor_names)
+        _serialize_invoice(
+            invoice,
+            payments_by_invoice_id.get(invoice.id, []),
+            doctor_names,
+            usages_by_invoice_id.get(invoice.id, []),
+        )
         for invoice in invoices
     ]
 
@@ -3371,6 +3787,14 @@ def create_patient_invoice(
         db, invoice_create.clinic_doctor_id, current_user.email
     )
 
+    # 2026-09-14: الحالة المختارة من اللائحة -- مرجع فقط، ويُتحقق من ملكيتها
+    # قبل أي كتابة تماماً كالطبيب المنفّذ (fail closed).
+    catalog_item_id = None
+    if invoice_create.catalog_item_id is not None:
+        catalog_item_id = _get_owned_catalog_item_or_404(
+            db, invoice_create.catalog_item_id, current_user.email
+        ).id
+
     try:
         db_invoice = models.TreatmentInvoice(
             patient_id=patient_id,
@@ -3378,8 +3802,16 @@ def create_patient_invoice(
             title=title,
             total_cost=Decimal(str(invoice_create.total_cost)),
             clinic_doctor_id=assigned_clinic_doctor_id,
+            catalog_item_id=catalog_item_id,
         )
         db.add(db_invoice)
+        # flush لا commit: نحتاج db_invoice.id الحقيقي لأسطر الاستهلاك، مع
+        # إبقاء الفاتورة وخصم موادها في عملية ذرية واحدة -- فلا تُحفظ فاتورة
+        # بمواد لم تُخصم، ولا يُخصم مخزون لفاتورة لم تُحفظ.
+        db.flush()
+        _consume_materials_for_invoice(
+            db, db_invoice, invoice_create.materials or [], current_user.email
+        )
         db.commit()
         db.refresh(db_invoice)
     except HTTPException:
@@ -3389,7 +3821,12 @@ def create_patient_invoice(
         db.rollback()
         raise HTTPException(status_code=400, detail="تعذر إنشاء فاتورة العلاج الآن. حاول مرة أخرى.")
 
-    return _serialize_invoice(db_invoice, [], _clinic_doctor_names(db, current_user.email))
+    return _serialize_invoice(
+        db_invoice,
+        [],
+        _clinic_doctor_names(db, current_user.email),
+        _fetch_invoice_material_usages(db, [db_invoice.id]).get(db_invoice.id, []),
+    )
 
 
 # 2026-08-29: تصحيح التكلفة الإجمالية لفاتورة علاج قائمة (مثلاً بعد خطأ إدخال
@@ -3445,7 +3882,12 @@ def update_patient_invoice_cost(
         .filter(models.FinancialTransaction.invoice_id == invoice.id)
         .all()
     )
-    return _serialize_invoice(invoice, invoice_payments, _clinic_doctor_names(db, current_user.email))
+    return _serialize_invoice(
+        invoice,
+        invoice_payments,
+        _clinic_doctor_names(db, current_user.email),
+        _fetch_invoice_material_usages(db, [invoice.id]).get(invoice.id, []),
+    )
 
 
 # 2026-08-29: حذف فاتورة علاج بالكامل (بدل تصحيح تكلفتها فقط أعلاه) -- مثلاً
@@ -3477,6 +3919,13 @@ def delete_patient_invoice(
         raise HTTPException(status_code=404, detail="فاتورة العلاج غير موجودة")
 
     try:
+        # 2026-09-14: حذف الفاتورة يُرجع موادها إلى المخزن قبل حذف أسطرها --
+        # حذف فاتورة أُنشئت بالخطأ يجب أن يعيد المخزون إلى ما كان عليه بالضبط،
+        # وإلا صار الحذف طريقة صامتة لتبخير المخزون.
+        for usage in list(invoice.material_usages):
+            _restore_material_usage_to_inventory(db, usage)
+        # أسطر الاستهلاك نفسها تُحذف عبر cascade="all, delete-orphan" على
+        # TreatmentInvoice.material_usages (حذف ORM، لا Query.delete خام).
         db.delete(invoice)
         db.commit()
     except Exception:
@@ -3569,7 +4018,394 @@ def register_invoice_payment(
         .filter(models.FinancialTransaction.invoice_id == invoice.id)
         .all()
     )
-    return _serialize_invoice(invoice, invoice_payments, _clinic_doctor_names(db, current_user.email))
+    return _serialize_invoice(
+        invoice,
+        invoice_payments,
+        _clinic_doctor_names(db, current_user.email),
+        _fetch_invoice_material_usages(db, [invoice.id]).get(invoice.id, []),
+    )
+
+
+# ====================================================================
+# لائحة أسعار العلاجات  --  2026-09-14
+# ====================================================================
+# الطبيب يعرّف حالاته مرة واحدة (اسم + تسعيرة + وصفة المواد المعتادة)، ثم
+# يختارها عند بدء أي فاتورة علاج بدل إعادة كتابة العنوان والسعر في كل مرة.
+#
+# الحراسة: require_active_doctor_user وحدها. بعد توحيد الباقات (2026-09-14)
+# كل اشتراك مدفوع هو Premium، فحارس إضافي هنا لا يمنع أحداً ويضيف نقطة فشل.
+# لائحة الأسعار ليست ميزة عيادات متعددة -- طبيب واحد يستفيد منها بالقدر نفسه.
+@app.get("/api/treatment-catalog/profit-report")
+def get_treatment_catalog_profit_report(
+    year: Optional[int] = Query(None),
+    month: Optional[int] = Query(None),
+    day: Optional[int] = Query(None),
+    all_time: bool = Query(False),
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_active_doctor_user),
+):
+    """ربحية العلاجات ضمن فترة: المفوتر ناقص تكلفة المواد المجمّدة.
+
+    يستخدم _resolve_finance_period نفسها التي تستخدمها صفحة المالية وصفحة
+    الأطباء حرفياً، فلا يمكن أن تنحرف حدود الشهر بين تقرير وآخر.
+
+    **الفترة تُقاس بتاريخ إنشاء الفاتورة لا بتاريخ تحصيلها** -- هذا تقرير
+    ربحية عمل لا تقرير تدفّق نقدي، والتدفق النقدي مكانه /api/finance/summary.
+    """
+    period_start, period_end, resolved_year, resolved_month, resolved_day = _resolve_finance_period(
+        year, month, day, all_time
+    )
+
+    invoices_query = db.query(models.TreatmentInvoice).filter(
+        models.TreatmentInvoice.doctor_email == current_user.email
+    )
+    if period_start is not None and period_end is not None:
+        invoices_query = invoices_query.filter(
+            models.TreatmentInvoice.created_at >= period_start,
+            models.TreatmentInvoice.created_at < period_end,
+        )
+    invoices = invoices_query.all()
+    invoice_ids = [invoice.id for invoice in invoices]
+    usages_by_invoice_id = _fetch_invoice_material_usages(db, invoice_ids)
+
+    catalog_names = {
+        row[0]: row[1]
+        for row in db.query(models.TreatmentCatalogItem.id, models.TreatmentCatalogItem.name)
+        .filter(models.TreatmentCatalogItem.doctor_email == current_user.email)
+        .all()
+    }
+
+    # المفتاح: معرّف الحالة، أو None لكل فاتورة كُتبت يدوياً بلا حالة جاهزة
+    # (وهي حال كل فاتورة سابقة لهذه الميزة) -- تُجمَّع تحت سطر واحد صريح بدل
+    # أن تختفي من التقرير.
+    buckets: dict = {}
+    total_billed = Decimal("0")
+    total_materials = Decimal("0")
+    for invoice in invoices:
+        key = getattr(invoice, "catalog_item_id", None)
+        bucket = buckets.setdefault(
+            key,
+            {
+                "catalog_item_id": key,
+                "name": catalog_names.get(key) or "علاجات بلا حالة من اللائحة",
+                "invoices_count": 0,
+                "billed": Decimal("0"),
+                "materials_cost": Decimal("0"),
+            },
+        )
+        billed = max(Decimal(str(invoice.total_cost or 0)), Decimal("0"))
+        materials_cost = sum(
+            (Decimal(str(u.total_cost or 0)) for u in usages_by_invoice_id.get(invoice.id, [])),
+            Decimal("0"),
+        )
+        bucket["invoices_count"] += 1
+        bucket["billed"] += billed
+        bucket["materials_cost"] += materials_cost
+        total_billed += billed
+        total_materials += materials_cost
+
+    rows = sorted(buckets.values(), key=lambda row: row["billed"], reverse=True)
+    return {
+        "period": {
+            "year": resolved_year,
+            "month": resolved_month,
+            "day": resolved_day,
+            "all_time": all_time,
+        },
+        "totals": {
+            "invoices_count": len(invoices),
+            "billed": float(total_billed),
+            "materials_cost": float(total_materials),
+            "net_profit": float(total_billed - total_materials),
+        },
+        "items": [
+            {
+                "catalog_item_id": row["catalog_item_id"],
+                "name": row["name"],
+                "invoices_count": row["invoices_count"],
+                "billed": float(row["billed"]),
+                "materials_cost": float(row["materials_cost"]),
+                "net_profit": float(row["billed"] - row["materials_cost"]),
+            }
+            for row in rows
+        ],
+    }
+
+
+@app.get("/api/treatment-catalog", response_model=List[TreatmentCatalogItemResponse])
+def list_treatment_catalog(
+    include_inactive: bool = Query(True),
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_active_doctor_user),
+):
+    query = db.query(models.TreatmentCatalogItem).filter(
+        models.TreatmentCatalogItem.doctor_email == current_user.email
+    )
+    if not include_inactive:
+        query = query.filter(models.TreatmentCatalogItem.is_active.is_(True))
+
+    items = query.order_by(models.TreatmentCatalogItem.name.asc()).all()
+    inventory_by_id = _owned_inventory_items_by_id(db, current_user.email)
+    return [_serialize_catalog_item(item, inventory_by_id) for item in items]
+
+
+@app.post("/api/treatment-catalog", response_model=TreatmentCatalogItemResponse, status_code=201)
+def create_treatment_catalog_item(
+    payload: TreatmentCatalogItemCreate,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_active_doctor_user),
+):
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="اسم الحالة مطلوب")
+    if payload.price is None or payload.price < 0:
+        raise HTTPException(status_code=400, detail="تسعيرة الحالة يجب أن تكون صفراً أو أكثر")
+
+    # اسم مكرر يجعل قائمة الاختيار في الفاتورة غامضة، ولذلك يُمنع مبكراً --
+    # نفس حارس تكرار اسم المريض في index.html.
+    duplicate = (
+        db.query(models.TreatmentCatalogItem)
+        .filter(
+            models.TreatmentCatalogItem.doctor_email == current_user.email,
+            func.lower(models.TreatmentCatalogItem.name) == name.lower(),
+        )
+        .first()
+    )
+    if duplicate:
+        raise HTTPException(status_code=400, detail="لديك حالة بهذا الاسم في اللائحة بالفعل")
+
+    try:
+        item = models.TreatmentCatalogItem(
+            doctor_email=current_user.email,
+            name=name,
+            price=Decimal(str(payload.price)),
+            notes=(payload.notes or "").strip() or None,
+            is_active=bool(payload.is_active),
+        )
+        db.add(item)
+        db.flush()
+        _replace_catalog_materials(db, item, payload.materials or [], current_user.email)
+        db.commit()
+        db.refresh(item)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر حفظ الحالة في اللائحة الآن. حاول مرة أخرى.")
+
+    return _serialize_catalog_item(item, _owned_inventory_items_by_id(db, current_user.email))
+
+
+@app.patch("/api/treatment-catalog/{item_id}", response_model=TreatmentCatalogItemResponse)
+def update_treatment_catalog_item(
+    item_id: int,
+    payload: TreatmentCatalogItemUpdate,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_active_doctor_user),
+):
+    item = _get_owned_catalog_item_or_404(db, item_id, current_user.email)
+
+    if payload.name is not None:
+        name = payload.name.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="اسم الحالة مطلوب")
+        duplicate = (
+            db.query(models.TreatmentCatalogItem)
+            .filter(
+                models.TreatmentCatalogItem.doctor_email == current_user.email,
+                models.TreatmentCatalogItem.id != item.id,
+                func.lower(models.TreatmentCatalogItem.name) == name.lower(),
+            )
+            .first()
+        )
+        if duplicate:
+            raise HTTPException(status_code=400, detail="لديك حالة بهذا الاسم في اللائحة بالفعل")
+        item.name = name
+
+    if payload.price is not None:
+        if payload.price < 0:
+            raise HTTPException(status_code=400, detail="تسعيرة الحالة يجب أن تكون صفراً أو أكثر")
+        # تعديل السعر يسري على الفواتير القادمة وحدها: الفاتورة تحمل نسختها
+        # الخاصة من التكلفة منذ لحظة إنشائها.
+        item.price = Decimal(str(payload.price))
+
+    if payload.notes is not None:
+        item.notes = payload.notes.strip() or None
+
+    if payload.is_active is not None:
+        item.is_active = bool(payload.is_active)
+
+    try:
+        # None = لا تمسّ الوصفة. قائمة فارغة = احذفها كلها. انظر المخطط أعلاه.
+        if payload.materials is not None:
+            _replace_catalog_materials(db, item, payload.materials, current_user.email)
+        item.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(item)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر تحديث الحالة الآن. حاول مرة أخرى.")
+
+    return _serialize_catalog_item(item, _owned_inventory_items_by_id(db, current_user.email))
+
+
+@app.delete("/api/treatment-catalog/{item_id}", status_code=200)
+def delete_treatment_catalog_item(
+    item_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_active_doctor_user),
+):
+    """حذف حالة من اللائحة -- مرفوض إن كانت مستخدَمة في فواتير.
+
+    نفس قرار DELETE /api/clinic-doctors/{id}: سجل مالي قائم لا يُبتر، والبديل
+    المعروض للطبيب هو التعطيل (is_active=false) فتختفي من قائمة الاختيار
+    وتبقى تقارير أشهرها السابقة سليمة.
+    """
+    item = _get_owned_catalog_item_or_404(db, item_id, current_user.email)
+
+    linked_invoices = (
+        db.query(func.count(models.TreatmentInvoice.id))
+        .filter(models.TreatmentInvoice.catalog_item_id == item.id)
+        .scalar()
+        or 0
+    )
+    if linked_invoices:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"لا يمكن حذف هذه الحالة لأنها مستخدَمة في {linked_invoices} فاتورة علاج. "
+                "يمكنك تعطيلها بدل حذفها فتختفي من قائمة الاختيار وتبقى تقاريرك السابقة سليمة."
+            ),
+        )
+
+    try:
+        # موادها تُحذف عبر cascade="all, delete-orphan" على
+        # TreatmentCatalogItem.materials -- الوصفة اقتراح لا سجل محاسبي، فلا
+        # شيء يُرجَع إلى المخزن هنا (لم يُخصم منه شيء أصلاً).
+        db.delete(item)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر حذف الحالة الآن. حاول مرة أخرى.")
+
+    return {"message": "تم حذف الحالة من لائحة الأسعار بنجاح"}
+
+
+# --- المواد المستهلكة على فاتورة قائمة (إضافة/حذف بعد إنشائها) ---
+@app.post(
+    "/api/patients/{patient_id}/invoices/{invoice_id}/materials",
+    response_model=TreatmentInvoiceResponse,
+    status_code=201,
+)
+def add_invoice_materials(
+    patient_id: int,
+    invoice_id: int,
+    materials: List[InvoiceMaterialInput],
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_active_doctor_user),
+):
+    """إضافة مواد إلى فاتورة موجودة (علاج احتاج مادة لم تُحسب عند فتحه)."""
+    _get_owned_patient_or_404(db, patient_id, current_user.email)
+
+    invoice = (
+        db.query(models.TreatmentInvoice)
+        .filter(
+            models.TreatmentInvoice.id == invoice_id,
+            models.TreatmentInvoice.patient_id == patient_id,
+            models.TreatmentInvoice.doctor_email == current_user.email,
+        )
+        .first()
+    )
+    if not invoice:
+        raise HTTPException(status_code=404, detail="فاتورة العلاج غير موجودة")
+
+    if not materials:
+        raise HTTPException(status_code=400, detail="لم تُحدَّد أي مادة للإضافة")
+
+    try:
+        _consume_materials_for_invoice(db, invoice, materials, current_user.email)
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر تسجيل المواد المستهلكة الآن. حاول مرة أخرى.")
+
+    invoice_payments = (
+        db.query(models.FinancialTransaction)
+        .filter(models.FinancialTransaction.invoice_id == invoice.id)
+        .all()
+    )
+    return _serialize_invoice(
+        invoice,
+        invoice_payments,
+        _clinic_doctor_names(db, current_user.email),
+        _fetch_invoice_material_usages(db, [invoice.id]).get(invoice.id, []),
+    )
+
+
+@app.delete(
+    "/api/patients/{patient_id}/invoices/{invoice_id}/materials/{usage_id}",
+    response_model=TreatmentInvoiceResponse,
+)
+def delete_invoice_material(
+    patient_id: int,
+    invoice_id: int,
+    usage_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_active_doctor_user),
+):
+    """حذف سطر مادة من فاتورة وإرجاع كميته إلى المخزن (عكس الخصم تماماً)."""
+    _get_owned_patient_or_404(db, patient_id, current_user.email)
+
+    invoice = (
+        db.query(models.TreatmentInvoice)
+        .filter(
+            models.TreatmentInvoice.id == invoice_id,
+            models.TreatmentInvoice.patient_id == patient_id,
+            models.TreatmentInvoice.doctor_email == current_user.email,
+        )
+        .first()
+    )
+    if not invoice:
+        raise HTTPException(status_code=404, detail="فاتورة العلاج غير موجودة")
+
+    usage = (
+        db.query(models.InvoiceMaterialUsage)
+        .filter(
+            models.InvoiceMaterialUsage.id == usage_id,
+            models.InvoiceMaterialUsage.invoice_id == invoice.id,
+            models.InvoiceMaterialUsage.doctor_email == current_user.email,
+        )
+        .first()
+    )
+    if not usage:
+        raise HTTPException(status_code=404, detail="سطر المادة غير موجود على هذه الفاتورة")
+
+    try:
+        _restore_material_usage_to_inventory(db, usage)
+        db.delete(usage)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر حذف المادة الآن. حاول مرة أخرى.")
+
+    invoice_payments = (
+        db.query(models.FinancialTransaction)
+        .filter(models.FinancialTransaction.invoice_id == invoice.id)
+        .all()
+    )
+    return _serialize_invoice(
+        invoice,
+        invoice_payments,
+        _clinic_doctor_names(db, current_user.email),
+        _fetch_invoice_material_usages(db, [invoice.id]).get(invoice.id, []),
+    )
 
 
 @app.put("/api/patients/{patient_id}/chart", response_model=PatientResponse)
@@ -4966,6 +5802,28 @@ def get_clinic_doctor_statement(
     period_clinic_share = sum((Decimal(str(e.clinic_share or 0)) for e in earnings), Decimal("0"))
     period_paid_out = sum((Decimal(str(p.amount or 0)) for p in payouts), Decimal("0"))
 
+    # 2026-09-14: تكلفة المواد التي استهلكها هذا الطبيب ضمن الفترة.
+    # **رقم تحليلي بحت لا يُحسم من نسبته ولا من رصيده.** القاعدة المحاسبية
+    # الأولى للميزة (النسبة على المحصّل) تبقى كما هي حرفياً؛ هذا العمود يجيب
+    # على سؤال مختلف: ماذا كلّفت العيادةَ المواد التي استهلكها هذا الطبيب.
+    # دمجه في أساس النسبة قرار محاسبي آخر لم يُتخذ، ولو اتُّخذ لوجب أن يُجمَّد
+    # على سطر الاستحقاق نفسه لا أن يُحسب لحظة العرض.
+    materials_query = db.query(models.InvoiceMaterialUsage).filter(
+        models.InvoiceMaterialUsage.doctor_email == current_user.email,
+        models.InvoiceMaterialUsage.clinic_doctor_id == clinic_doctor.id,
+    )
+    if period_start is not None and period_end is not None:
+        materials_query = materials_query.filter(
+            models.InvoiceMaterialUsage.created_at >= period_start,
+            models.InvoiceMaterialUsage.created_at < period_end,
+        )
+    material_usages = materials_query.order_by(
+        models.InvoiceMaterialUsage.created_at.desc(), models.InvoiceMaterialUsage.id.desc()
+    ).all()
+    period_materials_cost = sum(
+        (Decimal(str(u.total_cost or 0)) for u in material_usages), Decimal("0")
+    )
+
     lifetime_totals = _doctor_period_totals(db, current_user.email, None, None)
     payout_totals = _doctor_payout_totals(db, current_user.email)
     summary = _serialize_clinic_doctor(clinic_doctor, {}, lifetime_totals, payout_totals)
@@ -4981,7 +5839,21 @@ def get_clinic_doctor_statement(
             "doctor_share": float(period_doctor_share),
             "clinic_share": float(period_clinic_share),
             "paid_out": float(period_paid_out),
+            "materials_cost": float(period_materials_cost),
         },
+        "materials": [
+            {
+                "id": u.id,
+                "invoice_id": u.invoice_id,
+                "patient_id": u.patient_id,
+                "item_name": u.item_name,
+                "quantity": int(u.quantity or 0),
+                "unit_cost": float(Decimal(str(u.unit_cost or 0))),
+                "total_cost": float(Decimal(str(u.total_cost or 0))),
+                "created_at": u.created_at,
+            }
+            for u in material_usages
+        ],
         "earnings": [
             {
                 "id": e.id,
@@ -5680,6 +6552,8 @@ def create_inventory_item(
         raise HTTPException(status_code=400, detail="الكمية يجب أن تكون صفراً أو أكثر")
     if item.min_alert_quantity < 0:
         raise HTTPException(status_code=400, detail="حد التنبيه الأدنى يجب أن يكون صفراً أو أكثر")
+    if item.unit_cost is not None and item.unit_cost < 0:
+        raise HTTPException(status_code=400, detail="تكلفة الوحدة يجب أن تكون صفراً أو أكثر")
 
     try:
         db_item = models.InventoryItem(
@@ -5687,6 +6561,7 @@ def create_inventory_item(
             item_name=item_name,
             quantity=item.quantity,
             min_alert_quantity=item.min_alert_quantity,
+            unit_cost=Decimal(str(item.unit_cost or 0)),
         )
         db.add(db_item)
         db.commit()
@@ -5716,6 +6591,7 @@ class InventoryItemUpdate(BaseModel):
     item_name: Optional[str] = None
     quantity: Optional[int] = None
     min_alert_quantity: Optional[int] = None
+    unit_cost: Optional[float] = None
 
 
 @app.put("/api/inventory/{item_id}", response_model=InventoryItemResponse)
@@ -5751,6 +6627,13 @@ def update_inventory_item(
             raise HTTPException(status_code=400, detail="حد التنبيه الأدنى يجب أن يكون صفراً أو أكثر")
         item.min_alert_quantity = item_update.min_alert_quantity
 
+    if item_update.unit_cost is not None:
+        if item_update.unit_cost < 0:
+            raise HTTPException(status_code=400, detail="تكلفة الوحدة يجب أن تكون صفراً أو أكثر")
+        # تصحيح السعر يسري على الاستهلاك القادم وحده: كل سطر استهلاك سابق
+        # يحمل نسخته المجمّدة من التكلفة (models.InvoiceMaterialUsage).
+        item.unit_cost = Decimal(str(item_update.unit_cost))
+
     try:
         db.commit()
         db.refresh(item)
@@ -5778,6 +6661,20 @@ def delete_inventory_item(
         raise HTTPException(status_code=404, detail="مادة المستودع غير موجودة")
 
     try:
+        # 2026-09-14: جدولان جديدان يحملان FK نحو inventory_items.id. بلا فكّ
+        # الربط هنا يفشل حذف أي مادة استُهلكت مرة واحدة في فاتورة، بنفس خطأ
+        # الـ FK الموثّق في delete_patient.
+        #
+        # **فكّ ربط لا حذف**: سطر الاستهلاك سجل محاسبي مجمّد يحمل اسم المادة
+        # وتكلفتها وقتها، فيبقى مقروءاً وتبقى تكلفة الفاتورة صحيحة إلى الأبد
+        # حتى بعد اختفاء المادة من المخزن. أما وصفة الحالة فتبقى أيضاً باسمها
+        # المحفوظ، لكنها تصبح غير قابلة للخصم وتنبّه الطبيب عند اختيار الحالة.
+        db.query(models.InvoiceMaterialUsage).filter(
+            models.InvoiceMaterialUsage.inventory_item_id == item.id
+        ).update({models.InvoiceMaterialUsage.inventory_item_id: None}, synchronize_session=False)
+        db.query(models.TreatmentCatalogMaterial).filter(
+            models.TreatmentCatalogMaterial.inventory_item_id == item.id
+        ).update({models.TreatmentCatalogMaterial.inventory_item_id: None}, synchronize_session=False)
         db.delete(item)
         db.commit()
     except Exception:
