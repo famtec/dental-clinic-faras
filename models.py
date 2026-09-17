@@ -162,6 +162,13 @@ class Appointment(Base):
     # على المستخدم أول وقت متاح بعد نهاية الموعد السابق. القيمة الافتراضية 30
     # دقيقة تعني أن كل المواعيد القديمة (قبل إضافة الحقل) تُعامَل كنصف ساعة.
     duration_minutes = Column(Integer, nullable=False, default=30, server_default=text("30"))
+    # الطبيب المنفّذ للموعد في العيادة متعددة الأطباء (أُضيف 2026-09-17).
+    # NULL = صاحب الحساب (الطبيب المدير)، تماماً كما في treatment_invoices و
+    # financial_transactions -- فلا يحتاج أي موعد تاريخي أي تعبئة، وتبقى عيادة
+    # الطبيب الواحد صحيحة حرفياً بلا تغيير. عليه يقوم أمران: عمود الطبيب في
+    # جدول الساعات على صفحة المواعيد، و‼️ فحص التعارض لكل طبيب على حدة بدل
+    # العيادة كلها (انظر collect_busy_appointment_intervals في main.py).
+    clinic_doctor_id = Column(Integer, ForeignKey("clinic_doctors.id"), index=True, nullable=True)
 
 
 class Visit(Base):

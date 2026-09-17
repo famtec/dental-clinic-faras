@@ -1175,6 +1175,9 @@ class AppointmentCreate(BaseModel):
     # مدة الموعد بالدقائق (2026-09-10) -- اختيارية: أي عميل قديم لا يرسلها
     # يحصل على القيمة الافتراضية (30 دقيقة) تماماً كما كان السلوك قبل الميزة.
     duration_minutes: Optional[int] = None
+    # الطبيب المنفّذ (2026-09-17) -- اختياري، وNULL/غياب = الطبيب المدير صاحب
+    # الحساب. عميل قديم (تطبيق أندرويد مثلاً) لا يرسله فيُنسب الموعد للمدير.
+    clinic_doctor_id: Optional[int] = None
 
 
 class AppointmentUpdate(BaseModel):
@@ -1188,6 +1191,12 @@ class AppointmentUpdate(BaseModel):
     date: Optional[str] = None
     time: Optional[str] = None
     duration_minutes: Optional[int] = None
+    # ‼️ حالة ثلاثية: هنا None يعني "لا تغيير" لبقية الحقول، لكن للطبيب
+    # المنفّذ None قيمة حقيقية تعني "أعِد الموعد للطبيب المدير". لذلك لا
+    # يُقرأ هذا الحقل بـ is not None بل بـ model_fields_set (Pydantic v2) --
+    # نفس الحلّ المعتمد في TreatmentInvoicePaymentCreate. بدونه يصير
+    # "إرجاع الموعد للمدير" مستحيلاً بصمت.
+    clinic_doctor_id: Optional[int] = None
 
 
 class AppointmentStatusUpdate(BaseModel):
@@ -1208,6 +1217,11 @@ class AppointmentResponse(BaseModel):
     # مدة الموعد بالدقائق (2026-09-10) -- تعتمد عليها صفحة المواعيد اليومية
     # لعرض مدى الموعد (من ... إلى ...) ولفحص التعارض قبل الحفظ.
     duration_minutes: Optional[int] = None
+    # الطبيب المنفّذ (2026-09-17) -- المعرّف للمنطق، والاسم للعرض مباشرة على
+    # بطاقة الموعد بلا أن تحتاج الواجهة استدعاء /api/clinic-doctors (وهو مسار
+    # محروس بباقة العيادات فيعيد 403 لحساب Premium عادي).
+    clinic_doctor_id: Optional[int] = None
+    clinic_doctor_name: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -4480,19 +4494,59 @@ def _naive_local_datetime(value: Optional[datetime]) -> Optional[datetime]:
     return value
 
 
+def resolve_appointment_clinic_doctor(
+    db: Session,
+    clinic_email: str,
+    clinic_doctor_id: Optional[int],
+) -> Optional[int]:
+    """يتحقّق أن الطبيب المنفّذ المُرسَل يخصّ هذه العيادة فعلاً. None = الطبيب المدير.
+
+    العزل هنا إلزامي لا تجميلي: بدونه يستطيع أي حساب نسب موعد إلى معرّف طبيب
+    في عيادة أخرى، فيظهر اسم طبيب غريب على بطاقة الموعد ويُحسب تعارضه معه.
+    """
+    if clinic_doctor_id is None:
+        return None
+    doctor_row = (
+        db.query(models.ClinicDoctor)
+        .filter(
+            models.ClinicDoctor.id == clinic_doctor_id,
+            models.ClinicDoctor.clinic_email == clinic_email,
+        )
+        .first()
+    )
+    if doctor_row is None:
+        raise HTTPException(status_code=404, detail="الطبيب المحدَّد غير موجود في هذه العيادة.")
+    return doctor_row.id
+
+
 def collect_busy_appointment_intervals(
     db: Session,
     doctor_email: str,
     target_day: date,
     exclude_appointment_id: Optional[int] = None,
+    clinic_doctor_id: Optional[int] = None,
 ) -> List[dict]:
-    """كل المواعيد التي تشغل وقتاً في يوم معيّن، مرتّبة زمنياً."""
+    """كل المواعيد التي تشغل وقتاً في يوم معيّن لطبيب واحد بعينه، مرتّبة زمنياً."""
     day_start = datetime.combine(target_day, datetime.min.time())
     query = db.query(models.Appointment).filter(
         models.Appointment.doctor_email == doctor_email,
         models.Appointment.appointment_date >= day_start,
         models.Appointment.appointment_date < day_start + timedelta(days=1),
     )
+    # ‼️ 2026-09-17 -- الفلترة على الطبيب المنفّذ لا على العيادة كلها. قبل
+    # هذا التاريخ كان الفحص يفلتر على doctor_email وحده، فيرفض أي موعدين
+    # متقاطعين في العيادة بأكملها: خلل يشلّ عيادة فيها أكثر من طبيب (كانت
+    # لينا لا تستطيع استقبال مريض لأن فادي مشغول في نفس الساعة).
+    #
+    # لا انحدار على عيادة الطبيب الواحد: كل مواعيدها clinic_doctor_id = NULL،
+    # فالفرع الأول يشملها كلها تماماً كما كان السلوك السابق.
+    #
+    # NULL قيمة حقيقية (= الطبيب المدير) لا "غير محدّد"، فتُقارَن بـ is_(None)
+    # لا بـ == None -- المقارنة بـ = NULL في SQL لا تُطابِق شيئاً أبداً.
+    if clinic_doctor_id is None:
+        query = query.filter(models.Appointment.clinic_doctor_id.is_(None))
+    else:
+        query = query.filter(models.Appointment.clinic_doctor_id == clinic_doctor_id)
     if exclude_appointment_id is not None:
         query = query.filter(models.Appointment.id != exclude_appointment_id)
 
@@ -4546,14 +4600,19 @@ def ensure_appointment_slot_is_free(
     start_at: datetime,
     duration_minutes: int,
     exclude_appointment_id: Optional[int] = None,
+    clinic_doctor_id: Optional[int] = None,
 ) -> None:
-    """يرفع 409 برسالة عربية جاهزة للعرض إن كان الوقت المطلوب متعارضاً مع موعد قائم."""
+    """يرفع 409 برسالة عربية جاهزة للعرض إن تعارض الوقت مع موعد قائم لنفس الطبيب."""
     start_at = _naive_local_datetime(start_at)
     if start_at is None:
         return
 
     intervals = collect_busy_appointment_intervals(
-        db, doctor_email, start_at.date(), exclude_appointment_id=exclude_appointment_id
+        db,
+        doctor_email,
+        start_at.date(),
+        exclude_appointment_id=exclude_appointment_id,
+        clinic_doctor_id=clinic_doctor_id,
     )
     requested_end = start_at + timedelta(minutes=duration_minutes)
     conflict = next(
@@ -4626,12 +4685,19 @@ def create_appointment(
         if appointment.duration_minutes is not None
         else DEFAULT_APPOINTMENT_DURATION_MINUTES
     )
+    clinic_doctor_value = resolve_appointment_clinic_doctor(
+        db, current_user.email, appointment.clinic_doctor_id
+    )
 
     # الموعد الذي لا يشغل وقتاً أصلاً (طلب حجز عام بانتظار قبول الطبيب) لا
     # يُفحَص ضد التعارض -- يُفحص لاحقاً عند قبوله لا عند وصوله.
     if normalized_status not in APPOINTMENT_NON_BLOCKING_STATUSES:
         ensure_appointment_slot_is_free(
-            db, current_user.email, appointment_date_time, duration_value
+            db,
+            current_user.email,
+            appointment_date_time,
+            duration_value,
+            clinic_doctor_id=clinic_doctor_value,
         )
 
     db_appointment = models.Appointment(
@@ -4644,6 +4710,7 @@ def create_appointment(
         notes=description_value,
         status=normalized_status,
         duration_minutes=duration_value,
+        clinic_doctor_id=clinic_doctor_value,
     )
 
     try:
@@ -4664,6 +4731,7 @@ def create_appointment(
         "notes": db_appointment.notes,
         "status": db_appointment.status,
         "duration_minutes": db_appointment.duration_minutes,
+        "clinic_doctor_id": db_appointment.clinic_doctor_id,
     }
 
 
@@ -4682,7 +4750,11 @@ def update_appointment(
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
 
-    has_any_update = any(
+    # "إعادة الموعد للطبيب المدير" تُرسَل كـ clinic_doctor_id: null صريحة، وهي
+    # تعديل حقيقي -- فتُفحَص بـ model_fields_set لا بـ is not None وإلا رُفض
+    # الطلب بـ 400 "لا حقول للتحديث" بينما المستخدم طلب تغييراً فعلياً.
+    doctor_field_sent = "clinic_doctor_id" in appointment_update.model_fields_set
+    has_any_update = doctor_field_sent or any(
         value is not None
         for value in (
             appointment_update.appointment_date,
@@ -4695,6 +4767,16 @@ def update_appointment(
     )
     if not has_any_update:
         raise HTTPException(status_code=400, detail="No appointment fields provided for update")
+
+    # الطبيب المنفّذ بعد التعديل: المُرسَل إن أُرسل الحقل، وإلا الحالي كما هو.
+    # ‼️ فحص التعارض أدناه يجب أن يستخدم هذه القيمة لا القيمة الحالية: نقل
+    # موعد من طبيب مشغول إلى طبيب فارغ في نفس الساعة عملية مشروعة، ولو
+    # فُحص بالطبيب القديم لرُفض بلا سبب.
+    effective_clinic_doctor_id = (
+        resolve_appointment_clinic_doctor(db, current_user.email, appointment_update.clinic_doctor_id)
+        if doctor_field_sent
+        else appointment.clinic_doctor_id
+    )
 
     # --- الوقت والمدة الجديدان بعد التعديل، لفحص التعارض قبل الحفظ ---
     new_time_text = (appointment_update.time or appointment_update.appointment_time or "").strip()[:5]
@@ -4740,6 +4822,7 @@ def update_appointment(
             effective_start,
             new_duration,
             exclude_appointment_id=appointment.id,
+            clinic_doctor_id=effective_clinic_doctor_id,
         )
 
     try:
@@ -4751,6 +4834,8 @@ def update_appointment(
             appointment.appointment_time = new_time_text
         if appointment_update.duration_minutes is not None:
             appointment.duration_minutes = new_duration
+        if doctor_field_sent:
+            appointment.clinic_doctor_id = effective_clinic_doctor_id
         if appointment_update.description is not None:
             # يُحدَّث الحقلان معاً: notes هو النص الذي يعيده الخادم، و
             # procedure_type هو ما يعرضه عمود "الإجراء" في جدول المواعيد --
@@ -4955,11 +5040,46 @@ def get_all_appointments(
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(require_active_doctor_user),
 ):
-    return (
+    appointments = (
         db.query(models.Appointment)
         .filter(models.Appointment.doctor_email == current_user.email)
         .all()
     )
+
+    # اسم الطبيب المنفّذ يُرفَق بكل موعد هنا باستعلام واحد لأطباء العيادة، لا
+    # باستعلام لكل موعد ولا باستدعاء الواجهة لـ /api/clinic-doctors (محروس
+    # بباقة العيادات فيعيد 403 لحساب Premium عادي، فيبقى العمود بلا أسماء).
+    # عيادة الطبيب الواحد لا تدفع أي ثمن: لا صفوف أطباء فلا استعلام ثانٍ.
+    doctor_ids = {a.clinic_doctor_id for a in appointments if a.clinic_doctor_id is not None}
+    names: dict = {}
+    if doctor_ids:
+        for row in (
+            db.query(models.ClinicDoctor)
+            .filter(
+                models.ClinicDoctor.clinic_email == current_user.email,
+                models.ClinicDoctor.id.in_(doctor_ids),
+            )
+            .all()
+        ):
+            names[row.id] = row.full_name
+
+    return [
+        {
+            "id": a.id,
+            "patient_name": a.patient_name,
+            "appointment_date": a.appointment_date,
+            "appointment_time": a.appointment_time,
+            "procedure_type": a.procedure_type,
+            "notes": a.notes,
+            "status": a.status,
+            "patient_id": a.patient_id,
+            "patient_phone": a.patient_phone,
+            "duration_minutes": a.duration_minutes,
+            "clinic_doctor_id": a.clinic_doctor_id,
+            "clinic_doctor_name": names.get(a.clinic_doctor_id),
+        }
+        for a in appointments
+    ]
 
 
 # 8. مسار لتسجيل زيارة علاجية جديدة لمريض مع تفاصيل الأسنان [POST]

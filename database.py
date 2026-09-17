@@ -278,6 +278,20 @@ def init_db():
                     text("ALTER TABLE appointments ADD COLUMN duration_minutes INTEGER NOT NULL DEFAULT 30")
                 )
 
+    # الطبيب المنفّذ للموعد -- 2026-09-17 (انظر models.py عند
+    # Appointment.clinic_doctor_id). عمود nullable بلا قيد FK في الـ ALTER --
+    # نفس نمط financial_transactions.invoice_id: إضافة قيد مفتاح أجنبي على
+    # جدول قائم في Postgres عملية أثقل وأخطر بلا فائدة هنا، والتحقّق يجري في
+    # الخادم (resolve_appointment_clinic_doctor). NULL = الطبيب المدير، فلا
+    # يحتاج أي موعد قديم أي تعبئة. بلا شرط نوع قاعدة بيانات: الإنتاج Postgres.
+    if "appointments" in inspector.get_table_names():
+        appointment_doctor_columns = {column["name"] for column in inspector.get_columns("appointments")}
+        if "clinic_doctor_id" not in appointment_doctor_columns:
+            with engine.begin() as connection:
+                connection.execute(
+                    text("ALTER TABLE appointments ADD COLUMN clinic_doctor_id INTEGER")
+                )
+
     # ====================================================================
     # فواتير العلاج المستقلة (treatment_invoices) -- 2026-08-25
     # ====================================================================
