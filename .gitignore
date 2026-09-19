@@ -35,3 +35,15 @@ replay_pid*.log
 
 # مفاتيح Firebase السرّية (Service Account) -- لا تُرفع أبداً
 *firebase*adminsdk*.json
+
+# ثغرة في الأنماط أعلاه، سُدَّت 2026-09-19: النمطان القديمان يحجبان
+# activation_codes_*.json بالشرطة السفلية وبامتداد json وحده، فمرّ
+# activation-codes_2026-09-19_1146.csv (شرطة وسطى + csv) غيرَ محجوب
+# وظهر في git status جاهزاً لأي git add -A. أكواد التفعيل لا تُرفع أبداً
+# مهما كان فاصلها أو امتدادها.
+activation-codes*
+activation_codes*
+
+# مخرجات Claude: ملفات عمل مؤقتة، وقد تحمل بيانات حسّاسة كما حدث أعلاه.
+Claude outputs/
+analyze.txt
