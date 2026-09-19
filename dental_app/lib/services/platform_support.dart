@@ -1,8 +1,14 @@
 import 'dart:io' show Platform;
 
-// widgets.dart وليس foundation.dart: نحتاج منه kDebugMode/kIsWeb **و** Size
-// (المستخدَم في WindowOptions أدناه)، وهو يعيد تصدير foundation بالكامل.
-import 'package:flutter/widgets.dart' show Size, kDebugMode, kIsWeb;
+// استيرادان لا واحد (صُحِّح 2026-09-18): النسخة الأولى من هذا الملف سحبت
+// kDebugMode/kIsWeb **و** Size من widgets.dart معاً اعتماداً على أنه يعيد
+// تصدير foundation بالكامل. ذلك الافتراض سقط مع ترقية Flutter، فصار
+// `undefined_identifier` في ثلاثة مواضع ومنع البناء كلياً. الموطن الأصلي
+// للثابتَين هو foundation.dart في كل نسخ Flutter، وSize أصلها dart:ui
+// ويعيد widgets.dart تصديرها دائماً -- فالفصل هنا ليس تجميلاً بل تحصين
+// ضد نفس الانكسار مستقبلاً.
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
+import 'package:flutter/widgets.dart' show Size;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:path_provider/path_provider.dart';
 // `show` مقصود: sqflite و sqflite_common_ffi يصدّران كلاهما اسم

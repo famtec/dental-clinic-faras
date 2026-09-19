@@ -4,7 +4,9 @@ import '../services/api_service.dart';
 import '../services/auth_storage.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
+import 'clinic_doctors_screen.dart';
 import 'contact_developer_screen.dart';
+import 'treatment_catalog_screen.dart';
 import 'profile_screen.dart';
 
 /// تبويب "المزيد" -- بوابة التنقل لبقية صفحات الموقع التي لا مكان لها في
@@ -63,6 +65,34 @@ class _MoreMenuScreenState extends State<MoreMenuScreen> {
                     onTap: () => _push(ProfileScreen(
                       apiService: widget.apiService,
                       authStorage: widget.authStorage,
+                      onSessionExpired: widget.onSessionExpired,
+                    )),
+                  ),
+                  const SizedBox(height: 10),
+                  // لائحة أسعار العلاجات -- 2026-09-18. محروسة باشتراك نشط
+                  // فقط لا بباقة مدفوعة، فهي متاحة لكل مشترك.
+                  _MenuTile(
+                    icon: Icons.price_change_outlined,
+                    color: AppColors.cyan500,
+                    title: 'لائحة أسعار العلاجات',
+                    subtitle: 'تسعيرة كل حالة وموادها المعتادة وربحيتها',
+                    onTap: () => _push(TreatmentCatalogScreen(
+                      apiService: widget.apiService,
+                      onSessionExpired: widget.onSessionExpired,
+                    )),
+                  ),
+                  const SizedBox(height: 10),
+                  // الأطباء والنسب -- 2026-09-18. يظهر للجميع ولا يُخفى بفحص
+                  // الباقة محلياً: الباقة المخزّنة في الجهاز قد تكون قديمة،
+                  // وإخفاء المدخل كان سيمنع طبيباً رقّى باقته للتوّ من رؤية
+                  // ما دفع لأجله. الشاشة نفسها تُظهر بطاقة القفل عند 403.
+                  _MenuTile(
+                    icon: Icons.groups_2_outlined,
+                    color: AppColors.violet600,
+                    title: 'الأطباء والنسب',
+                    subtitle: 'نِسَب الأطباء ومستحقاتهم وكشوف حسابهم',
+                    onTap: () => _push(ClinicDoctorsScreen(
+                      apiService: widget.apiService,
                       onSessionExpired: widget.onSessionExpired,
                     )),
                   ),

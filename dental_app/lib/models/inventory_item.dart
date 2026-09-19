@@ -7,6 +7,18 @@ class InventoryItem {
   final String itemName;
   final int quantity;
   final int minAlertQuantity;
+
+  /// تكلفة **الوحدة** لا العبوة (أُضيف للتطبيق 2026-09-18؛ موجود على الخادم
+  /// منذ جولة لائحة الأسعار). عليها يقوم حساب تكلفة المواد المستهلكة في
+  /// الفاتورة، وتصحيحها يسري على الاستهلاك القادم وحده -- كل سطر استهلاك
+  /// سابق يحمل نسخته المجمّدة منها (models.InvoiceMaterialUsage).
+  ///
+  /// «الوحدة» هي أصغر ما يُستهلك في علاج واحد لا أصغر ما يُشترى: عبوة كومبوزت
+  /// تُشترى مرة وتُستهلك على عشرات الحشوات، والكمية في المخزن عدد صحيح فلا
+  /// تُخصم بالكسور -- فالوحدة المسجَّلة هي الجرعة. حاسبة الجرعة في شاشة
+  /// المخزن تحوّل سعر العبوة إلى تكلفة جرعة بلا حساب يدوي.
+  final double unitCost;
+
   final DateTime updatedAt;
 
   /// حالة المزامنة مع السيرفر -- 'synced' دائماً لأي مادة قادمة فعلياً من
@@ -23,10 +35,13 @@ class InventoryItem {
     required this.quantity,
     required this.minAlertQuantity,
     required this.updatedAt,
+    this.unitCost = 0,
     this.syncStatus = 'synced',
   });
 
   bool get isLowStock => quantity <= minAlertQuantity;
+
+  bool get hasUnitCost => unitCost > 0;
 
   bool get isPendingSync => syncStatus != 'synced';
 
@@ -35,6 +50,7 @@ class InventoryItem {
     String? itemName,
     int? quantity,
     int? minAlertQuantity,
+    double? unitCost,
     DateTime? updatedAt,
     String? syncStatus,
   }) {
@@ -44,6 +60,7 @@ class InventoryItem {
       itemName: itemName ?? this.itemName,
       quantity: quantity ?? this.quantity,
       minAlertQuantity: minAlertQuantity ?? this.minAlertQuantity,
+      unitCost: unitCost ?? this.unitCost,
       updatedAt: updatedAt ?? this.updatedAt,
       syncStatus: syncStatus ?? this.syncStatus,
     );
@@ -56,6 +73,8 @@ class InventoryItem {
       itemName: (json['item_name'] as String?)?.trim() ?? '',
       quantity: json['quantity'] as int? ?? 0,
       minAlertQuantity: json['min_alert_quantity'] as int? ?? 5,
+      // خادم قديم لا يرسل الحقل -> صفر، أي "غير مسجَّلة" (نفس ما يعرضه الموقع).
+      unitCost: (json['unit_cost'] as num?)?.toDouble() ?? 0,
       updatedAt: DateTime.tryParse(json['updated_at'] as String? ?? '') ?? DateTime.now(),
     );
   }

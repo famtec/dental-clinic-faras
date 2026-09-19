@@ -7,9 +7,11 @@ import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/appointment.dart';
+import '../models/inventory_item.dart';
 import '../models/patient.dart';
 import '../models/patient_archive_file.dart';
 import '../models/prescription.dart';
+import '../models/treatment_catalog_item.dart';
 import '../models/treatment_invoice.dart';
 import '../services/api_service.dart';
 import '../services/media_picker.dart';
@@ -1152,11 +1154,122 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
     ).whenComplete(customLabelController.dispose);
   }
 
+  /// منتقي الحالة من لائحة الأسعار. الحالات المعطَّلة لا تُعرَض: تعطيلها
+  /// يعني تحديداً "أخرِجها من قوائم الاختيار واحفظ تاريخها".
+  ///
+  /// فشل التحميل يُعرَض ولا يُبطِل النافذة: كتابة الفاتورة يدوياً تبقى
+  /// الطريق الأصلي وتعمل بلا اللائحة إطلاقاً.
+  Future<TreatmentCatalogItem?> _pickCatalogItem() async {
+    List<TreatmentCatalogItem> items;
+    try {
+      items = await widget.apiService.fetchTreatmentCatalog(includeInactive: false);
+    } on ApiException catch (e) {
+      if (e.isSessionExpired) {
+        widget.onSessionExpired();
+        return null;
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
+      }
+      return null;
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('تعذر تحميل لائحة الأسعار. اكتب الفاتورة يدوياً.')));
+      }
+      return null;
+    }
+    if (!mounted) return null;
+    if (items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'لا حالات مفعَّلة في اللائحة. أضِفها من «لائحة أسعار العلاجات».')));
+      return null;
+    }
+    return showModalBottomSheet<TreatmentCatalogItem>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final surf = sheetContext.surface;
+        return Container(
+          decoration: BoxDecoration(
+            color: surf.sheetBg,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: surf.divider,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text('اختر الحالة العلاجية',
+                    textAlign: TextAlign.center,
+                    style: AppType.kufi(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: surf.textPrimary)),
+                const SizedBox(height: 12),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: items.length,
+                    separatorBuilder: (_, _) =>
+                        Divider(color: surf.divider, height: 12),
+                    itemBuilder: (_, index) {
+                      final item = items[index];
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        onTap: () => Navigator.of(sheetContext).pop(item),
+                        title: Text(item.name,
+                            style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: surf.textPrimary)),
+                        subtitle: Text(
+                          item.hasMaterials
+                              ? '${item.materials.length} مادة · تكلفة ${item.materialsCost.toStringAsFixed(0)} ل.س'
+                              : 'بلا مواد مرتبطة',
+                          style: TextStyle(fontSize: 11.5, color: surf.textMuted),
+                        ),
+                        trailing: Text('${item.price.toStringAsFixed(0)} ل.س',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.indigo700)),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _openCreateInvoiceDialog() async {
     final titleController = TextEditingController();
     final costController = TextEditingController();
     final formKey = GlobalKey<FormState>();
     bool isSaving = false;
+    // 2026-09-18: الحالة المختارة من لائحة الأسعار. مرجع للقراءة فقط --
+    // العنوان والتكلفة يُرسَلان كأي فاتورة ويُجمَّدان عليها، فتعديل سعر
+    // الحالة في اللائحة لاحقاً لا يمسّ هذه الفاتورة.
+    int? catalogItemId;
+    var materials = <InvoiceMaterialInput>[];
+    String? materialsLabel;
 
     await showDialog<void>(
       context: context,
@@ -1171,6 +1284,41 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: isSaving
+                            ? null
+                            : () async {
+                                final picked = await _pickCatalogItem();
+                                if (picked == null) return;
+                                setDialogState(() {
+                                  catalogItemId = picked.id;
+                                  titleController.text = picked.name;
+                                  costController.text =
+                                      picked.price.toStringAsFixed(0);
+                                  // وصفة الحالة تُنسَخ كمُدخَل قابل للتعديل،
+                                  // لا كمرجع حيّ إليها: ما يُخصَم هو ما يراه
+                                  // الطبيب في هذه النافذة الآن.
+                                  materials = [
+                                    for (final material in picked.materials)
+                                      InvoiceMaterialInput(
+                                        inventoryItemId: material.inventoryItemId,
+                                        itemName: material.itemName,
+                                        quantity: material.quantity,
+                                      ),
+                                  ];
+                                  materialsLabel = picked.materials.isEmpty
+                                      ? null
+                                      : picked.materials
+                                          .map((m) => '${m.itemName} × ${m.quantity}')
+                                          .join(' · ');
+                                });
+                              },
+                        icon: const Icon(Icons.price_change_outlined, size: 18),
+                        label: const Text('اختر من لائحة الأسعار'),
+                      ),
+                    ),
                     TextFormField(
                       controller: titleController,
                       textAlign: TextAlign.right,
@@ -1190,6 +1338,47 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                         return null;
                       },
                     ),
+                    if (materialsLabel != null) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 11, vertical: 9),
+                        decoration: BoxDecoration(
+                          color: context.surface.warnBg,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: context.surface.warnBorder),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text('ستُخصَم من المخزن مع إنشاء الفاتورة:',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    color: context.surface.warnFg)),
+                            const SizedBox(height: 3),
+                            Text(materialsLabel!,
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    color: context.surface.warnFg,
+                                    height: 1.6)),
+                            const SizedBox(height: 6),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: isSaving
+                                    ? null
+                                    : () => setDialogState(() {
+                                          materials = <InvoiceMaterialInput>[];
+                                          materialsLabel = null;
+                                        }),
+                                child: const Text('افتح الفاتورة بلا خصم مواد'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1209,6 +1398,8 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                               _patient.id,
                               title: titleController.text.trim(),
                               totalCost: double.parse(costController.text.trim()),
+                              catalogItemId: catalogItemId,
+                              materials: materials.isEmpty ? null : materials,
                             );
                             if (!mounted) return;
                             setState(() {
@@ -3114,6 +3305,87 @@ class _InvoiceDetailSheetState extends State<_InvoiceDetailSheet> {
     descriptionController.dispose();
   }
 
+  /// ملخّص المواد المستهلكة على الفاتورة وربحها.
+  ///
+  /// "ربح الفاتورة" = التكلفة الإجمالية ناقص تكلفة المواد المجمَّدة: ربح
+  /// **مفوتَر** لا محصَّل، مستقل تماماً عن كم دُفع منها (ذاك المدفوع أعلاه).
+  /// لذلك لا يُسمّى "الربح المحقَّق" ولا يُوضَع بين أرقام الدفعات.
+  Widget _buildMaterialsSummary() {
+    final surf = context.surface;
+    final hasMaterials = _invoice.materials.isNotEmpty;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+      decoration: BoxDecoration(
+        color: surf.iconBoxBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: surf.iconBoxBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.inventory_2_outlined, size: 16, color: surf.textSecondary),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  hasMaterials
+                      ? '${_invoice.materials.length} مادة مستهلكة'
+                      : 'بلا مواد مستهلكة',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: surf.textPrimary),
+                ),
+              ),
+              TextButton(
+                onPressed: _openMaterialsSheet,
+                style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: const Size(0, 32)),
+                child: const Text('إدارة المواد'),
+              ),
+            ],
+          ),
+          if (hasMaterials)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                'تكلفة المواد ${_invoice.materialsCost.toStringAsFixed(0)} ل.س · '
+                'ربح الفاتورة ${_invoice.netProfit.toStringAsFixed(0)} ل.س',
+                style: TextStyle(
+                    fontSize: 11,
+                    color: _invoice.netProfit < 0
+                        ? AppColors.rose700text
+                        : surf.textSecondary),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openMaterialsSheet() async {
+    // نداء مباشر عند كل تغيير، لا نتيجة راجعة من pop: الورقة السفلية تُغلَق
+    // أيضاً بالسحب لأسفل وبزر الرجوع، وكلاهما يُرجع null -- فكانت أرقام
+    // الفاتورة تبقى قديمة بعد إضافة مادة إن أغلق الطبيب الورقة بالسحب.
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _InvoiceMaterialsSheet(
+        invoice: _invoice,
+        apiService: widget.apiService,
+        onSessionExpired: widget.onSessionExpired,
+        onInvoiceChanged: (updated) {
+          if (!mounted) return;
+          setState(() => _invoice = updated);
+          widget.onInvoiceUpdated(updated);
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final surf = context.surface;
@@ -3148,7 +3420,13 @@ class _InvoiceDetailSheetState extends State<_InvoiceDetailSheet> {
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12, color: surf.textSecondary),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
+            // المواد المستهلكة -- 2026-09-18. تُعرَض ملخَّصاً وتُدار في ورقة
+            // مستقلّة عن قصد: قائمة الدفعات هنا داخل Expanded، فإدراج قائمة
+            // مواد قابلة للنموّ فوقها كان سيخنق سجل الدفعات على فاتورة
+            // بعشر مواد.
+            _buildMaterialsSummary(),
+            const SizedBox(height: 12),
             const Align(
               alignment: Alignment.centerRight,
               child: Text('سجل الدفعات', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5)),
@@ -3265,6 +3543,378 @@ class _InvoiceDetailSheetState extends State<_InvoiceDetailSheet> {
 /// ملفوف بـ FittedBox حتى يتقلّص تلقائياً بدل أن يفيض من البطاقة على
 /// الشاشات الأضيق من سطح المكتب (كانت هذه فعلياً نقطة الطفح "BOTTOM
 /// OVERFLOWED" في نسخة النافذة السابقة).
+/// ورقة إدارة المواد المستهلكة على فاتورة واحدة -- 2026-09-18.
+///
+/// كل عملية هنا **حركة مخزن حقيقية فورية**: الإضافة تخصم من المخزن، والحذف
+/// يُرجِع الكمية إليه. ليست تحريراً محلياً يُحفَظ في النهاية، ولذلك لا يوجد
+/// زر "حفظ": كل سطر يُنفَّذ لحظة الضغط، والفاتورة المحدَّثة تعود من الخادم
+/// بعد كل عملية فتُعرَض أرقامها الحقيقية لا أرقاماً محسوبة محلياً.
+///
+/// الشاشة متّصلة فقط عن قصد -- انظر شرح createInvoice في
+/// OfflineAwareApiService: تأجيل خصم المخزن يُنشئ سجلاً كاذباً قد تفشل
+/// مزامنته بعد يومين دون أن يعرف الطبيب.
+class _InvoiceMaterialsSheet extends StatefulWidget {
+  final TreatmentInvoice invoice;
+  final ApiService apiService;
+  final VoidCallback onSessionExpired;
+
+  /// يُنادى بعد كل عملية ناجحة (إضافة أو حذف) بالفاتورة كما أعادها الخادم.
+  final ValueChanged<TreatmentInvoice> onInvoiceChanged;
+
+  const _InvoiceMaterialsSheet({
+    required this.invoice,
+    required this.apiService,
+    required this.onSessionExpired,
+    required this.onInvoiceChanged,
+  });
+
+  @override
+  State<_InvoiceMaterialsSheet> createState() => _InvoiceMaterialsSheetState();
+}
+
+class _InvoiceMaterialsSheetState extends State<_InvoiceMaterialsSheet> {
+  late TreatmentInvoice _invoice;
+  List<InventoryItem>? _inventory;
+  InventoryItem? _selectedItem;
+  final _nameController = TextEditingController();
+  final _quantityController = TextEditingController(text: '1');
+  bool _isBusy = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _invoice = widget.invoice;
+    _loadInventory();
+  }
+
+  /// المخزن محروس بباقة Premium فيعيد 403 لحساب أدنى. ذلك ليس خطأ يُعرَض:
+  /// تبقى الإضافة بالاسم متاحة (الخادم يطابق الاسم بالمخزن بنفسه)، وتختفي
+  /// قائمة الاختيار وحدها.
+  Future<void> _loadInventory() async {
+    try {
+      final items = await widget.apiService.fetchInventory();
+      if (!mounted) return;
+      setState(() => _inventory = items);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _inventory = const []);
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _quantityController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _addMaterial() async {
+    final quantity = int.tryParse(_quantityController.text.trim()) ?? 0;
+    if (quantity <= 0) {
+      setState(() => _error = 'الكمية يجب أن تكون 1 على الأقل');
+      return;
+    }
+    final selected = _selectedItem;
+    if (selected == null && _nameController.text.trim().isEmpty) {
+      setState(() => _error = 'اختر مادة من المخزن أو اكتب اسمها');
+      return;
+    }
+    setState(() {
+      _isBusy = true;
+      _error = null;
+    });
+    try {
+      final updated = await widget.apiService.addInvoiceMaterials(
+        _invoice.patientId,
+        _invoice.id,
+        [
+          InvoiceMaterialInput(
+            inventoryItemId: selected?.id,
+            itemName: selected?.itemName ?? _nameController.text.trim(),
+            quantity: quantity,
+          ),
+        ],
+      );
+      if (!mounted) return;
+      setState(() {
+        _invoice = updated;
+        _isBusy = false;
+        _selectedItem = null;
+        _nameController.clear();
+        _quantityController.text = '1';
+      });
+      widget.onInvoiceChanged(updated);
+    } on ApiException catch (e) {
+      if (e.isSessionExpired) {
+        widget.onSessionExpired();
+        return;
+      }
+      if (!mounted) return;
+      // نقص المخزن يرجع 400 برسالة الخادم نفسها -- تُعرَض كما هي لأنها
+      // تسمّي المادة والكمية المتوفّرة.
+      setState(() {
+        _error = e.message;
+        _isBusy = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'تعذر تسجيل المادة. حاول مرة أخرى.';
+        _isBusy = false;
+      });
+    }
+  }
+
+  Future<void> _deleteMaterial(InvoiceMaterial material) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: context.surface.sheetBg,
+        title: const Text('حذف سطر المادة؟'),
+        content: Text(
+          'ستُرجَع ${material.quantity} من «${material.itemName}» إلى المخزن، '
+          'وتنخفض تكلفة الفاتورة بمقدار ${material.totalCost.toStringAsFixed(0)} ل.س.',
+          style: TextStyle(color: context.surface.textSecondary, height: 1.7),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text('حذف وإرجاع للمخزن',
+                style: TextStyle(color: AppColors.rose700text)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() {
+      _isBusy = true;
+      _error = null;
+    });
+    try {
+      final updated = await widget.apiService.deleteInvoiceMaterial(
+          _invoice.patientId, _invoice.id, material.id);
+      if (!mounted) return;
+      setState(() {
+        _invoice = updated;
+        _isBusy = false;
+      });
+      widget.onInvoiceChanged(updated);
+    } on ApiException catch (e) {
+      if (e.isSessionExpired) {
+        widget.onSessionExpired();
+        return;
+      }
+      if (!mounted) return;
+      setState(() {
+        _error = e.message;
+        _isBusy = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'تعذر حذف السطر. حاول مرة أخرى.';
+        _isBusy = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final surf = context.surface;
+    final inventory = _inventory ?? const <InventoryItem>[];
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: BoxDecoration(
+          color: surf.sheetBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: surf.divider,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text('المواد المستهلكة',
+                    textAlign: TextAlign.center,
+                    style: AppType.kufi(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: surf.textPrimary)),
+                const SizedBox(height: 4),
+                Text(
+                  'الإضافة تخصم من المخزن فوراً، والحذف يُرجِع الكمية إليه.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 11.5, color: surf.textMuted, height: 1.7),
+                ),
+                const SizedBox(height: 14),
+                if (_invoice.materials.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Text('لا مواد مسجَّلة على هذه الفاتورة.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: surf.textMuted, fontSize: 12.5)),
+                  )
+                else
+                  for (final material in _invoice.materials)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(11, 7, 4, 7),
+                        decoration: BoxDecoration(
+                          color: surf.iconBoxBg,
+                          borderRadius: BorderRadius.circular(13),
+                          border: Border.all(color: surf.iconBoxBorder),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(material.itemName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: surf.textPrimary)),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${material.quantity} × ${material.unitCost.toStringAsFixed(0)} = '
+                                    '${material.totalCost.toStringAsFixed(0)} ل.س',
+                                    style: TextStyle(
+                                        fontSize: 10.5, color: surf.textMuted),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: Icon(Icons.delete_outline,
+                                  size: 19, color: AppColors.rose700text),
+                              tooltip: 'حذف وإرجاع للمخزن',
+                              onPressed:
+                                  _isBusy ? null : () => _deleteMaterial(material),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                Divider(color: surf.divider, height: 22),
+                Text('إضافة مادة',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: surf.heroCaption)),
+                const SizedBox(height: 8),
+                if (inventory.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: surf.fieldBg,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: surf.fieldBorder),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<InventoryItem?>(
+                        value: _selectedItem,
+                        isExpanded: true,
+                        hint: Text('اختر مادة من المخزن',
+                            style: TextStyle(color: surf.fieldHint)),
+                        dropdownColor: surf.sheetBg,
+                        borderRadius: BorderRadius.circular(14),
+                        icon: Icon(Icons.keyboard_arrow_down,
+                            color: surf.textSecondary),
+                        items: [
+                          const DropdownMenuItem<InventoryItem?>(
+                            value: null,
+                            child: Text('-- بكتابة الاسم --',
+                                textAlign: TextAlign.right),
+                          ),
+                          for (final item in inventory)
+                            DropdownMenuItem<InventoryItem?>(
+                              value: item,
+                              child: Text(
+                                '${item.itemName} (متوفّر ${item.quantity})',
+                                textAlign: TextAlign.right,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                        onChanged: _isBusy
+                            ? null
+                            : (value) => setState(() {
+                                  _selectedItem = value;
+                                  _error = null;
+                                }),
+                      ),
+                    ),
+                  ),
+                if (_selectedItem == null) ...[
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _nameController,
+                    textAlign: TextAlign.right,
+                    decoration: const InputDecoration(
+                      labelText: 'اسم المادة كما هو في المخزن',
+                      helperText: 'يجب أن تكون المادة مسجَّلة في مخزنك مسبقاً',
+                      helperMaxLines: 2,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _quantityController,
+                  textAlign: TextAlign.right,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'الكمية'),
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 10),
+                  Text(_error!,
+                      style: TextStyle(
+                          color: AppColors.rose700text,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600)),
+                ],
+                const SizedBox(height: 14),
+                GradientButton(
+                  label: 'خصم المادة من المخزن',
+                  icon: Icons.add,
+                  isLoading: _isBusy,
+                  onPressed: _isBusy ? null : _addMaterial,
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: _isBusy ? null : () => Navigator.of(context).pop(),
+                  child: const Text('تم'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ToothStatusCard extends StatelessWidget {
   final ToothStatusOption option;
   final VoidCallback onTap;

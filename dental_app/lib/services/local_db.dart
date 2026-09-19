@@ -46,7 +46,7 @@ class LocalDb {
     final path = p.join(dir, 'dental_offline.db');
     final opened = await openDatabase(
       path,
-      version: 2,
+      version: 4,
       onCreate: (db, version) async {
         await _createV1Tables(db);
         await _createV2Tables(db);
@@ -57,6 +57,19 @@ class LocalDb {
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await _createV2Tables(db);
+        }
+        // 2026-09-17: مدة الموعد والطبيب المنفّذ. عمودان مضافان على جدول
+        // appointments القائم، فلا يمسّان أي صف ولا أي عملية معلّقة في
+        // outbox -- والمواعيد المخزَّنة محلياً قبل الترقية تأخذ نصف ساعة
+        // والطبيب المدير، وهي القيم نفسها التي يعطيها الخادم لها.
+        if (oldVersion < 3) {
+          await _upgradeAppointmentsToV3(db);
+        }
+        // 2026-09-18: تكلفة الوحدة على مواد المخزن (موجودة على الخادم منذ
+        // جولة لائحة الأسعار). عمود واحد مضاف، لا يمسّ أي صف ولا أي عملية
+        // معلّقة، والمواد المخزَّنة قبل الترقية تأخذ صفراً = "غير مسجَّلة".
+        if (oldVersion < 4) {
+          await _upgradeInventoryToV4(db);
         }
       },
     );
@@ -76,6 +89,9 @@ class LocalDb {
         status TEXT,
         patient_phone TEXT,
         patient_id INTEGER,
+        duration_minutes INTEGER NOT NULL DEFAULT 30,
+        clinic_doctor_id INTEGER,
+        clinic_doctor_name TEXT,
         sync_status TEXT NOT NULL DEFAULT 'synced'
       )
     ''');
@@ -91,6 +107,44 @@ class LocalDb {
         last_error TEXT
       )
     ''');
+  }
+
+  /// ترقية جدول appointments للنسخة 3 -- تُضيف الأعمدة الناقصة فقط.
+  ///
+  /// تُقرأ الأعمدة الموجودة فعلاً بـ PRAGMA بدل تنفيذ ALTER أعمى: تثبيت
+  /// جديد يُنشئ الجدول بالأعمدة الثلاثة أصلاً (انظر _createV1Tables)، فتنفيذ
+  /// ALTER عليه يرفع "duplicate column name" ويُفشل فتح قاعدة البيانات كلها
+  /// -- أي يفقد الطبيب كل عملياته المعلّقة. نفس مبدأ inspector.get_columns
+  /// المعتمد في database.py على الخادم.
+  static Future<void> _upgradeAppointmentsToV3(Database db) async {
+    final info = await db.rawQuery('PRAGMA table_info(appointments)');
+    final existing =
+        info.map((row) => (row['name'] as String?) ?? '').toSet();
+    if (!existing.contains('duration_minutes')) {
+      await db.execute(
+          'ALTER TABLE appointments ADD COLUMN duration_minutes INTEGER NOT NULL DEFAULT 30');
+    }
+    if (!existing.contains('clinic_doctor_id')) {
+      await db.execute(
+          'ALTER TABLE appointments ADD COLUMN clinic_doctor_id INTEGER');
+    }
+    if (!existing.contains('clinic_doctor_name')) {
+      await db.execute(
+          'ALTER TABLE appointments ADD COLUMN clinic_doctor_name TEXT');
+    }
+  }
+
+  /// ترقية جدول inventory_items للنسخة 4 -- نفس مبدأ الترقية أعلاه: تُقرأ
+  /// الأعمدة الموجودة فعلاً بـ PRAGMA، فتثبيت جديد أنشأ العمود أصلاً لا يفشل
+  /// بـ "duplicate column name" (وهو فشل يمنع فتح قاعدة البيانات كلها).
+  static Future<void> _upgradeInventoryToV4(Database db) async {
+    final info = await db.rawQuery('PRAGMA table_info(inventory_items)');
+    final existing =
+        info.map((row) => (row['name'] as String?) ?? '').toSet();
+    if (!existing.contains('unit_cost')) {
+      await db.execute(
+          'ALTER TABLE inventory_items ADD COLUMN unit_cost REAL NOT NULL DEFAULT 0');
+    }
   }
 
   static Future<void> _createV2Tables(Database db) async {
@@ -115,6 +169,7 @@ class LocalDb {
         item_name TEXT,
         quantity INTEGER,
         min_alert_quantity INTEGER,
+        unit_cost REAL NOT NULL DEFAULT 0,
         updated_at TEXT,
         sync_status TEXT NOT NULL DEFAULT 'synced'
       )
@@ -151,6 +206,9 @@ class LocalDb {
         'status': a.status,
         'patient_phone': a.patientPhone,
         'patient_id': a.patientId,
+        'duration_minutes': a.durationMinutes,
+        'clinic_doctor_id': a.clinicDoctorId,
+        'clinic_doctor_name': a.clinicDoctorName,
         'sync_status': a.syncStatus,
       };
 
@@ -166,6 +224,10 @@ class LocalDb {
         status: (row['status'] as String?) ?? 'pending',
         patientPhone: row['patient_phone'] as String?,
         patientId: row['patient_id'] as int?,
+        durationMinutes:
+            normalizeAppointmentDuration(row['duration_minutes']),
+        clinicDoctorId: row['clinic_doctor_id'] as int?,
+        clinicDoctorName: row['clinic_doctor_name'] as String?,
         syncStatus: (row['sync_status'] as String?) ?? 'synced',
       );
 
@@ -339,6 +401,7 @@ class LocalDb {
         'item_name': item.itemName,
         'quantity': item.quantity,
         'min_alert_quantity': item.minAlertQuantity,
+        'unit_cost': item.unitCost,
         'updated_at': item.updatedAt.toIso8601String(),
         'sync_status': item.syncStatus,
       };
@@ -349,6 +412,7 @@ class LocalDb {
         itemName: (row['item_name'] as String?) ?? '',
         quantity: (row['quantity'] as int?) ?? 0,
         minAlertQuantity: (row['min_alert_quantity'] as int?) ?? 5,
+        unitCost: (row['unit_cost'] as num?)?.toDouble() ?? 0,
         updatedAt: row['updated_at'] != null
             ? (DateTime.tryParse(row['updated_at'] as String) ?? DateTime.now())
             : DateTime.now(),

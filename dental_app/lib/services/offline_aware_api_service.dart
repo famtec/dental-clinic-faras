@@ -108,6 +108,11 @@ class OfflineAwareApiService extends ApiService {
     required String description,
     String? patientNameHint,
     String? patientPhoneHint,
+    int? durationMinutes,
+    int? clinicDoctorId,
+    // اسم الطبيب المنفّذ -- للعرض وحده على الموعد المؤقّت أثناء انتظار
+    // المزامنة: الخادم هو من يرسل الاسم عادةً، ولا يوجد خادم الآن.
+    String? clinicDoctorNameHint,
   }) async {
     try {
       final created = await super.createAppointment(
@@ -115,6 +120,8 @@ class OfflineAwareApiService extends ApiService {
         date: date,
         time: time,
         description: description,
+        durationMinutes: durationMinutes,
+        clinicDoctorId: clinicDoctorId,
       );
       await _db.upsertAppointment(created.copyWith(syncStatus: 'synced'));
       return created;
@@ -130,6 +137,10 @@ class OfflineAwareApiService extends ApiService {
         status: 'pending',
         patientPhone: patientPhoneHint,
         patientId: patientId,
+        durationMinutes:
+            normalizeAppointmentDuration(durationMinutes),
+        clinicDoctorId: clinicDoctorId,
+        clinicDoctorName: clinicDoctorNameHint,
         syncStatus: 'pending_create',
       );
       await _db.upsertAppointment(placeholder);
@@ -142,6 +153,8 @@ class OfflineAwareApiService extends ApiService {
           'date': date,
           'time': time,
           'description': description,
+          'duration_minutes': normalizeAppointmentDuration(durationMinutes),
+          'clinic_doctor_id': clinicDoctorId,
         },
       );
       await _refreshPendingCount();
@@ -155,6 +168,10 @@ class OfflineAwareApiService extends ApiService {
     required DateTime appointmentDateTime,
     required String time,
     required String description,
+    int? durationMinutes,
+    int? clinicDoctorId,
+    bool sendClinicDoctor = true,
+    String? clinicDoctorNameHint,
   }) async {
     try {
       final updated = await super.updateAppointment(
@@ -162,6 +179,9 @@ class OfflineAwareApiService extends ApiService {
         appointmentDateTime: appointmentDateTime,
         time: time,
         description: description,
+        durationMinutes: durationMinutes,
+        clinicDoctorId: clinicDoctorId,
+        sendClinicDoctor: sendClinicDoctor,
       );
       await _db.upsertAppointment(updated.copyWith(syncStatus: 'synced'));
       return updated;
@@ -170,6 +190,9 @@ class OfflineAwareApiService extends ApiService {
       final existing = await _db.getAppointment(appointmentId);
       final keepCreateStatus =
           existing != null && existing.syncStatus == 'pending_create';
+      final effectiveDuration = durationMinutes ??
+          existing?.durationMinutes ??
+          defaultAppointmentDurationMinutes;
       final placeholder = (existing ??
               Appointment(
                 id: appointmentId,
@@ -183,6 +206,15 @@ class OfflineAwareApiService extends ApiService {
         appointmentDate: appointmentDateTime,
         appointmentTime: time,
         procedureType: description,
+        durationMinutes: effectiveDuration,
+        // sendClinicDoctor == false تعني "لا تلمس الطبيب"، فلا يُمرَّر المفتاح
+        // للـ copyWith أصلاً ويبقى ما هو عليه. أما تمريره بـ null فيعني
+        // "أعِده للمدير" فعلاً -- انظر Appointment._unchanged.
+        clinicDoctorId:
+            sendClinicDoctor ? clinicDoctorId : Appointment.unchangedMarker,
+        clinicDoctorName: sendClinicDoctor
+            ? clinicDoctorNameHint
+            : Appointment.unchangedMarker,
         syncStatus: keepCreateStatus ? 'pending_create' : 'pending_update',
       );
       await _db.upsertAppointment(placeholder);
@@ -195,6 +227,11 @@ class OfflineAwareApiService extends ApiService {
             'appointment_date': appointmentDateTime.toIso8601String(),
             'appointment_time': time,
             'description': description,
+            'duration_minutes': effectiveDuration,
+            // مفتاح منفصل يميّز "أُرسِل الطبيب صراحةً" من "لم يُرسَل"، فتبقى
+            // الحالة الثلاثية سليمة عبر الـ outbox أيضاً لا في الطلب وحده.
+            'send_clinic_doctor': sendClinicDoctor,
+            'clinic_doctor_id': clinicDoctorId,
           },
         );
       }
@@ -506,12 +543,14 @@ class OfflineAwareApiService extends ApiService {
     required String itemName,
     required int quantity,
     int minAlertQuantity = 5,
+    double? unitCost,
   }) async {
     try {
       final created = await super.createInventoryItem(
         itemName: itemName,
         quantity: quantity,
         minAlertQuantity: minAlertQuantity,
+        unitCost: unitCost,
       );
       await _db.upsertInventoryItem(created.copyWith(syncStatus: 'synced'));
       return created;
@@ -524,6 +563,7 @@ class OfflineAwareApiService extends ApiService {
         itemName: itemName,
         quantity: quantity,
         minAlertQuantity: minAlertQuantity,
+        unitCost: unitCost ?? 0,
         updatedAt: DateTime.now(),
         syncStatus: 'pending_create',
       );
@@ -536,6 +576,7 @@ class OfflineAwareApiService extends ApiService {
           'item_name': itemName,
           'quantity': quantity,
           'min_alert_quantity': minAlertQuantity,
+          'unit_cost': unitCost ?? 0,
         },
       );
       await _refreshPendingCount();
@@ -549,6 +590,7 @@ class OfflineAwareApiService extends ApiService {
     String? itemName,
     int? quantity,
     int? minAlertQuantity,
+    double? unitCost,
   }) async {
     try {
       final updated = await super.updateInventoryItem(
@@ -556,6 +598,7 @@ class OfflineAwareApiService extends ApiService {
         itemName: itemName,
         quantity: quantity,
         minAlertQuantity: minAlertQuantity,
+        unitCost: unitCost,
       );
       await _db.upsertInventoryItem(updated.copyWith(syncStatus: 'synced'));
       return updated;
@@ -577,6 +620,7 @@ class OfflineAwareApiService extends ApiService {
         itemName: itemName,
         quantity: quantity,
         minAlertQuantity: minAlertQuantity,
+        unitCost: unitCost,
         updatedAt: DateTime.now(),
         syncStatus: keepCreateStatus ? 'pending_create' : 'pending_update',
       );
@@ -590,6 +634,7 @@ class OfflineAwareApiService extends ApiService {
             if (itemName != null) 'item_name': itemName,
             if (quantity != null) 'quantity': quantity,
             if (minAlertQuantity != null) 'min_alert_quantity': minAlertQuantity,
+            if (unitCost != null) 'unit_cost': unitCost,
           },
         );
       }
@@ -689,21 +734,50 @@ class OfflineAwareApiService extends ApiService {
     int patientId, {
     required String title,
     required double totalCost,
+    int? catalogItemId,
+    int? clinicDoctorId,
+    List<InvoiceMaterialInput>? materials,
   }) async {
     if (patientId < 0) {
       throw const ApiException(
           'يجب أن تتم مزامنة بيانات هذا المريض أولاً (بعد عودة الاتصال بالإنترنت) قبل إنشاء فاتورة له أوفلاين.');
     }
     try {
-      return await super.createInvoice(patientId, title: title, totalCost: totalCost);
+      return await super.createInvoice(
+        patientId,
+        title: title,
+        totalCost: totalCost,
+        catalogItemId: catalogItemId,
+        clinicDoctorId: clinicDoctorId,
+        materials: materials,
+      );
     } on ApiException catch (e) {
       if (!_isConnectivityFailure(e)) rethrow;
+      // خصم المواد **لا يُؤجَّل** عن قصد: هو حركة مخزن حقيقية يفحص الخادم
+      // كفايتها ويرفض الفاتورة كلها إن نقصت مادة. تأجيله كان سيُنشئ فاتورة
+      // تبدو مكتملة اليوم، ثم تفشل عملية مزامنتها بعد يومين لأن المادة
+      // نفدت في الأثناء -- فيبقى في الجهاز سجل مخزن كاذب لا يعرف الطبيب
+      // أنه لم يُطبَّق. الفاتورة نفسها تُؤجَّل كما كانت، والمواد تُضاف
+      // بضغطة بعد عودة الاتصال (addInvoiceMaterials).
+      if (materials != null && materials.isNotEmpty) {
+        throw const ApiException(
+            'لا يمكن خصم المواد من المخزن دون اتصال. أنشئ الفاتورة الآن بلا '
+            'مواد، ثم أضِف موادها من بطاقتها بعد عودة الاتصال.');
+      }
       final localId = _db.nextLocalId();
       await _db.enqueue(
         entityType: 'invoice',
         operation: 'create',
         targetId: localId,
-        payload: {'patient_id': patientId, 'title': title, 'total_cost': totalCost},
+        payload: {
+          'patient_id': patientId,
+          'title': title,
+          'total_cost': totalCost,
+          // مرجع الحالة من اللائحة يُؤجَّل بلا خطر: لا يُغيِّر شيئاً في
+          // المخزن ولا في الأرقام، وقيمته الوحيدة تجميع تقرير الربحية.
+          if (catalogItemId != null) 'catalog_item_id': catalogItemId,
+          if (clinicDoctorId != null) 'clinic_doctor_id': clinicDoctorId,
+        },
       );
       await _refreshPendingCount();
       return TreatmentInvoice(
@@ -717,6 +791,11 @@ class OfflineAwareApiService extends ApiService {
         createdAt: DateTime.now(),
         payments: const [],
         syncStatus: 'pending_create',
+        catalogItemId: catalogItemId,
+        clinicDoctorId: clinicDoctorId,
+        // بلا مواد، فالربح = كامل التكلفة. رقم صادق في هذه اللحظة: لم
+        // تُخصَم مادة بعد.
+        netProfit: totalCost,
       );
     }
   }
@@ -766,6 +845,15 @@ class OfflineAwareApiService extends ApiService {
       String title;
       double basePaid;
       List<InvoicePayment> basePayments;
+      // ما لا تمسّه دفعةٌ أبداً: المواد المستهلكة وتكلفتها المجمَّدة والطبيب
+      // المنفّذ والحالة من اللائحة (أُضيفت 2026-09-18). إهمالها هنا كان
+      // سيُفرِّغ مواد الفاتورة من العرض بمجرّد تسجيل دفعة أوفلاين عليها،
+      // فيقرأ الطبيب فاتورة بلا مواد وبربح = كامل قيمتها -- رقم كاذب.
+      List<InvoiceMaterial> baseMaterials = const [];
+      double baseMaterialsCost = 0;
+      int? baseClinicDoctorId;
+      String? baseClinicDoctorName;
+      int? baseCatalogItemId;
       if (invoiceId < 0) {
         final createOps = await _db.getPendingOpsByEntity('invoice');
         Map<String, dynamic>? invoicePayload;
@@ -785,6 +873,11 @@ class OfflineAwareApiService extends ApiService {
         title = cached?.title ?? '';
         basePaid = cached?.paidAmount ?? 0;
         basePayments = cached?.payments ?? const [];
+        baseMaterials = cached?.materials ?? const [];
+        baseMaterialsCost = cached?.materialsCost ?? 0;
+        baseClinicDoctorId = cached?.clinicDoctorId;
+        baseClinicDoctorName = cached?.clinicDoctorName;
+        baseCatalogItemId = cached?.catalogItemId;
       }
       final pending = await _pendingPaymentsFor(invoiceId);
       final newPaidAmount = basePaid + pending.total;
@@ -800,6 +893,14 @@ class OfflineAwareApiService extends ApiService {
         createdAt: DateTime.now(),
         payments: [...basePayments, ...pending.payments],
         syncStatus: invoiceId < 0 ? 'pending_create' : 'pending_update',
+        clinicDoctorId: baseClinicDoctorId,
+        clinicDoctorName: baseClinicDoctorName,
+        catalogItemId: baseCatalogItemId,
+        materials: baseMaterials,
+        materialsCost: baseMaterialsCost,
+        // ربح الفاتورة مفوتَر لا محصَّل، فلا تغيّره دفعة: يُعاد حسابه من
+        // التكلفة الإجمالية وتكلفة المواد كما يفعل الخادم بالضبط.
+        netProfit: totalCost - baseMaterialsCost,
       );
     }
   }
@@ -1044,17 +1145,29 @@ class OfflineAwareApiService extends ApiService {
         // شرحهما)، فهذا الصف يحمل أحدث نسخة فعلية يجب أن تصل للسيرفر، وليس
         // القيم الأصلية وقت الإنشاء المحفوظة بـ payload.
         final localBeforeSync = await _db.getAppointment(targetId);
+        // 2026-09-17: المدة والطبيب من الحمولة إن وُجدا. عملية قديمة عالقة في
+        // outbox من نسخة سابقة للتطبيق لا تحملهما، فتأخذ الافتراضي (نصف ساعة
+        // والطبيب المدير) -- نفس سلوك التطبيق قبل هذا التحديث بالضبط، فلا
+        // تُرفَض أي عملية معلّقة لدى طبيب حدّث تطبيقه وهو أوفلاين.
         var created = await super.createAppointment(
           patientId: payload['patient_id'] as int,
           date: payload['date'] as String,
           time: payload['time'] as String,
           description: payload['description'] as String,
+          durationMinutes:
+              normalizeAppointmentDuration(payload['duration_minutes']),
+          clinicDoctorId: payload['clinic_doctor_id'] as int?,
         );
         if (localBeforeSync != null) {
+          final payloadDuration =
+              normalizeAppointmentDuration(payload['duration_minutes']);
+          final payloadDoctorId = payload['clinic_doctor_id'] as int?;
           final editedAfterCreate =
               localBeforeSync.appointmentTime != (payload['time'] as String) ||
                   localBeforeSync.procedureType !=
                       (payload['description'] as String) ||
+                  localBeforeSync.durationMinutes != payloadDuration ||
+                  localBeforeSync.clinicDoctorId != payloadDoctorId ||
                   localBeforeSync.appointmentDate?.toIso8601String().split('T').first !=
                       (payload['date'] as String);
           if (editedAfterCreate) {
@@ -1065,6 +1178,8 @@ class OfflineAwareApiService extends ApiService {
                   DateTime.now(),
               time: localBeforeSync.appointmentTime,
               description: localBeforeSync.procedureType,
+              durationMinutes: localBeforeSync.durationMinutes,
+              clinicDoctorId: localBeforeSync.clinicDoctorId,
             );
           }
           final localStatus = localBeforeSync.status.toLowerCase();
@@ -1080,12 +1195,21 @@ class OfflineAwareApiService extends ApiService {
         break;
 
       case 'update':
+        // send_clinic_doctor يميّز "أُرسِل الطبيب صراحةً (ولو null)" من "لم
+        // يُرسَل". عملية معلّقة قديمة بلا المفتاح تُعامَل كأنها لم ترسله، فلا
+        // تُعيد موعداً لطبيب مساعد إلى المدير بالخطأ عند المزامنة.
+        final sendDoctor = payload['send_clinic_doctor'] == true;
         final updated = await super.updateAppointment(
           targetId,
           appointmentDateTime:
               DateTime.parse(payload['appointment_date'] as String),
           time: payload['appointment_time'] as String,
           description: payload['description'] as String,
+          durationMinutes: payload.containsKey('duration_minutes')
+              ? normalizeAppointmentDuration(payload['duration_minutes'])
+              : null,
+          clinicDoctorId: payload['clinic_doctor_id'] as int?,
+          sendClinicDoctor: sendDoctor,
         );
         await _db.upsertAppointment(updated.copyWith(syncStatus: 'synced'));
         break;
@@ -1173,17 +1297,22 @@ class OfflineAwareApiService extends ApiService {
           itemName: payload['item_name'] as String,
           quantity: payload['quantity'] as int,
           minAlertQuantity: (payload['min_alert_quantity'] as int?) ?? 5,
+          // عملية معلّقة من نسخة تطبيق سابقة لا تحمل المفتاح -> null فلا
+          // يُرسَل، والخادم يضع صفراً: نفس السلوك قبل هذا التحديث.
+          unitCost: (payload['unit_cost'] as num?)?.toDouble(),
         );
         if (localBeforeSync != null) {
           final editedAfterCreate = localBeforeSync.itemName != created.itemName ||
               localBeforeSync.quantity != created.quantity ||
-              localBeforeSync.minAlertQuantity != created.minAlertQuantity;
+              localBeforeSync.minAlertQuantity != created.minAlertQuantity ||
+              localBeforeSync.unitCost != created.unitCost;
           if (editedAfterCreate) {
             created = await super.updateInventoryItem(
               created.id,
               itemName: localBeforeSync.itemName,
               quantity: localBeforeSync.quantity,
               minAlertQuantity: localBeforeSync.minAlertQuantity,
+              unitCost: localBeforeSync.unitCost,
             );
           }
         }
@@ -1197,6 +1326,7 @@ class OfflineAwareApiService extends ApiService {
           itemName: payload['item_name'] as String?,
           quantity: payload['quantity'] as int?,
           minAlertQuantity: payload['min_alert_quantity'] as int?,
+          unitCost: (payload['unit_cost'] as num?)?.toDouble(),
         );
         await _db.upsertInventoryItem(updated.copyWith(syncStatus: 'synced'));
         break;
@@ -1213,6 +1343,10 @@ class OfflineAwareApiService extends ApiService {
       payload['patient_id'] as int,
       title: payload['title'] as String,
       totalCost: (payload['total_cost'] as num).toDouble(),
+      // العمليات المؤجَّلة قبل 2026-09-18 لا تحمل هذين المفتاحين، فيبقيان
+      // null ولا تنكسر مزامنة فاتورة كانت في الطابور قبل التحديث.
+      catalogItemId: (payload['catalog_item_id'] as num?)?.toInt(),
+      clinicDoctorId: (payload['clinic_doctor_id'] as num?)?.toInt(),
     );
     // إعادة توجيه أي دفعات أُضيفت أوفلاين على هذه الفاتورة قبل مزامنتها --
     // تُعالَج بنفسها بعد قليل بنفس دورة المزامنة (مرتَّبة دائماً بعد عملية

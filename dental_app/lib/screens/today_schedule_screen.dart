@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/appointment.dart';
+import '../models/clinic_doctor.dart';
 import '../models/patient.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/appointment_status.dart';
+import '../utils/clinic_doctor_colors.dart';
 import '../widgets/app_widgets.dart';
 
 const _scheduleArabicMonthNames = [
@@ -181,6 +183,186 @@ class _WeekDayChip extends StatelessWidget {
   }
 }
 
+// =============================================================================
+// المدة والطبيب المنفّذ -- 2026-09-17
+// =============================================================================
+// نقل ما بُني للموقع في نفس اليوم: كل موعد صارت له مدته، وله طبيب منفّذ في
+// العيادة متعددة الأطباء. التطبيق قبل هذا التحديث لم يكن يرسل المدة إطلاقاً
+// فتصير كل مواعيده نصف ساعة ضمناً.
+//
+// ملاحظة تصميمية مقصودة: لا يوجد مبدّل «جدول الساعات / قائمة» كما في الموقع،
+// لأن الموقع نفسه لا يعرض شبكة الساعات النسبية تحت 768px -- عرض الجوال لا
+// يحمل أعمدة أطباء، وبطاقة نصف ساعة بارتفاع نسبي تصير أصغر من منطقة لمس
+// مقبولة. فجدول الساعات على الجوال **هو** هذه القائمة المرتكِزة على الوقت:
+// مدى الموعد وشارة مدته وخطّ «الآن» بين البطاقات. مبدّل بين عرضٍ واحد ونفسه
+// ضجيج لا ميزة.
+
+/// ألوان الأطباء -- نفس لوحة --viz-1..7 في doctors.html بالموقع حرفياً، وبنفس
+/// القاعدة: اللون يتبع معرّف الطبيب تصاعدياً لا ترتيبه في القائمة، فلا يتبدّل
+/// لون طبيب بتغيّر الفلترة أو تعطيل زميل له.
+// ألوان الأطباء انتقلت إلى utils/clinic_doctor_colors.dart في 2026-09-18
+// لتشاركها شاشة الأطباء والنسب -- kClinicDoctorColorSlots و
+// kOwnerDoctorColor و clinicDoctorColor تأتي من هناك الآن.
+
+/// خيار واحد في ورقة اختيار عامة (مدة/طبيب) -- الورقة السفلية هي نمط الاختيار
+/// المعتمد في هذا التطبيق (انظر _openStatusPicker)، لا القائمة المنسدلة.
+class _PickerOption<T> {
+  final T value;
+  final String label;
+  final String? subtitle;
+  final Color? dotColor;
+
+  const _PickerOption({
+    required this.value,
+    required this.label,
+    this.subtitle,
+    this.dotColor,
+  });
+}
+
+/// ورقة اختيار عامة تعيد `_PickerResult` -- ولا تعيد القيمة مباشرة عن قصد:
+/// `null` قيمة مشروعة للطبيب المنفّذ (تعني «الطبيب المدير»)، فلا يمكن تمييزها
+/// عن «أُغلقت الورقة بلا اختيار» لو أعادت القيمة وحدها.
+class _PickerResult<T> {
+  final T value;
+  const _PickerResult(this.value);
+}
+
+Future<_PickerResult<T>?> _showOptionPickerSheet<T>({
+  required BuildContext context,
+  required String title,
+  required List<_PickerOption<T>> options,
+  required T? current,
+}) {
+  final surf = context.surface;
+  return showModalBottomSheet<_PickerResult<T>>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (sheetContext) => Container(
+      constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(sheetContext).size.height * 0.7),
+      decoration: BoxDecoration(
+        color: surf.sheetBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 42,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 14),
+              decoration: BoxDecoration(
+                color: surf.divider,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: AppType.kufi(
+                fontWeight: FontWeight.w600,
+                fontSize: 15.5,
+                color: surf.textPrimary),
+          ),
+          const SizedBox(height: 10),
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: options.length,
+              itemBuilder: (listContext, index) {
+                final option = options[index];
+                final selected = option.value == current;
+                return ListTile(
+                  dense: true,
+                  leading: option.dotColor == null
+                      ? null
+                      : Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: option.dotColor,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                  title: Text(option.label,
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                          color: surf.textPrimary,
+                          fontWeight:
+                              selected ? FontWeight.w700 : FontWeight.w500)),
+                  subtitle: option.subtitle == null
+                      ? null
+                      : Text(option.subtitle!,
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                              color: surf.textSecondary, fontSize: 11.5)),
+                  trailing: selected
+                      ? Icon(Icons.check_circle, color: surf.accentSolid)
+                      : null,
+                  onTap: () => Navigator.of(sheetContext)
+                      .pop(_PickerResult<T>(option.value)),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+List<_PickerOption<int>> _durationPickerOptions() => [
+      for (final minutes in appointmentDurationChoices)
+        _PickerOption<int>(
+          value: minutes,
+          label: appointmentDurationLabel(minutes),
+          subtitle: '$minutes دقيقة',
+        ),
+    ];
+
+List<_PickerOption<int?>> _doctorPickerOptions(
+  List<ClinicDoctor> doctors,
+  String ownerLabel,
+) =>
+    [
+      _PickerOption<int?>(
+        value: null,
+        label: ownerLabel,
+        subtitle: 'صاحب الحساب',
+        dotColor: kOwnerDoctorColor,
+      ),
+      for (final doctor in [...doctors]..sort((a, b) => a.id.compareTo(b.id)))
+        _PickerOption<int?>(
+          value: doctor.id,
+          label: doctor.fullName,
+          subtitle: doctor.specialty,
+          dotColor: clinicDoctorColor(doctor.id, doctors),
+        ),
+    ];
+
+/// بطاقة موعد موضوعة في شبكة الساعات: مسارها عند التعارض وهل تتعارض فعلاً.
+/// قابلة للتغيير (لا const) لأن lanes/clash تُحسَبان بعد بناء العنقود كله.
+class _GridBlock {
+  final Appointment appointment;
+  final int start;
+  final int end;
+  int lane = 0;
+  int lanes = 1;
+  bool clash = false;
+
+  _GridBlock({
+    required this.appointment,
+    required this.start,
+    required this.end,
+  });
+}
+
 class TodayScheduleScreen extends StatefulWidget {
   final ApiService apiService;
   final VoidCallback onSessionExpired;
@@ -212,6 +394,12 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
   // كـ bookingRequests في appointments.html بالموقع)، لها لوحتها الخاصة
   // بالأعلى (انظر _buildBookingRequestsSection). أُضيف 2026-08-31.
   List<Appointment> _bookingRequests = [];
+  /// أطباء العيادة -- فارغة تعني عيادة بطبيب واحد (أو باقة بلا ميزة الأطباء)،
+  /// فتختفي كل واجهة اختيار الطبيب وشارته من الشاشة بدل أن تظهر فارغة.
+  List<ClinicDoctor> _clinicDoctors = const [];
+  /// اسم صاحب الحساب كما خُزِّن عند تسجيل الدخول -- لتسمية خياره في اختيار
+  /// الطبيب المنفّذ ولشارته على البطاقة.
+  String _ownerName = '';
   String? _errorMessage;
   bool _isSubscriptionBlocked = false;
   bool _isLoading = true;
@@ -225,7 +413,31 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
     _selectedDayKey =
         '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
     refresh();
+    _loadClinicDoctors();
   }
+
+  /// أطباء العيادة -- مرة واحدة عند فتح الشاشة لا مع كل تحديث: القائمة تتغيّر
+  /// نادراً جداً، وfetchClinicDoctors لا ترفع استثناءً أبداً (تعيد قائمة فارغة
+  /// عند 403 أو انقطاع الشبكة)، فلا حاجة لأي معالجة خطأ هنا ولا لتعطيل الشاشة.
+  Future<void> _loadClinicDoctors() async {
+    final doctors = await widget.apiService.fetchClinicDoctors();
+    String ownerName = '';
+    try {
+      ownerName =
+          (await widget.apiService.authStorage.getDoctorName())?.trim() ?? '';
+    } catch (_) {
+      ownerName = '';
+    }
+    if (!mounted) return;
+    setState(() {
+      _clinicDoctors = doctors.where((doctor) => doctor.isActive).toList();
+      _ownerName = ownerName;
+    });
+  }
+
+  /// تسمية خيار/شارة صاحب الحساب. اسم الطبيب المخزَّن محلياً عند تسجيل الدخول
+  /// هو الاسم الوحيد المتاح بلا طلب إضافي، و«مواعيدي» بديل أمين إن غاب.
+  String get _ownerLabel => _ownerName.isEmpty ? 'مواعيدي' : _ownerName;
 
   /// عام حتى تقدر HomeScreen تستدعيه عند فتح التطبيق من إشعار حجز جديد.
   Future<void> refresh() async {
@@ -348,7 +560,11 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (sheetContext) => _AddAppointmentSheet(apiService: widget.apiService),
+      builder: (sheetContext) => _AddAppointmentSheet(
+        apiService: widget.apiService,
+        clinicDoctors: _clinicDoctors,
+        ownerLabel: _ownerLabel,
+      ),
     );
     if (created != null && mounted) refresh();
   }
@@ -428,6 +644,8 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
         (notes != null && notes.isNotEmpty) ? notes : appointment.procedureType;
     final descriptionController = TextEditingController(text: initialDescription);
     DateTime selectedDate = appointment.appointmentDate ?? DateTime.now();
+    int selectedDuration = appointment.durationMinutes;
+    int? selectedDoctorId = appointment.clinicDoctorId;
     TimeOfDay selectedTime = TimeOfDay.now();
     if (appointment.appointmentTime.length >= 5) {
       selectedTime = TimeOfDay(
@@ -466,6 +684,47 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
               if (picked != null) setSheetState(() => selectedTime = picked);
             }
 
+            Future<void> pickDuration() async {
+              final picked = await _showOptionPickerSheet<int>(
+                context: sheetContext,
+                title: 'مدة الموعد',
+                options: _durationPickerOptions(),
+                current: selectedDuration,
+              );
+              if (picked != null) {
+                setSheetState(() => selectedDuration = picked.value);
+              }
+            }
+
+            Future<void> pickDoctor() async {
+              final picked = await _showOptionPickerSheet<int?>(
+                context: sheetContext,
+                title: 'الطبيب المنفّذ',
+                options:
+                    _doctorPickerOptions(_clinicDoctors, _ownerLabel),
+                current: selectedDoctorId,
+              );
+              // picked == null يعني إغلاق الورقة، وpicked.value == null يعني
+              // اختيار الطبيب المدير فعلاً -- ولهذا تُعيد الورقة _PickerResult.
+              if (picked != null) {
+                setSheetState(() => selectedDoctorId = picked.value);
+              }
+            }
+
+            String endTimeHint() {
+              final end = (selectedTime.hour * 60) +
+                  selectedTime.minute +
+                  selectedDuration;
+              return 'ينتهي الساعة ${Appointment.formatMinutes(end)}';
+            }
+
+            String doctorLabel() {
+              if (selectedDoctorId == null) return _ownerLabel;
+              final match = _clinicDoctors
+                  .where((doctor) => doctor.id == selectedDoctorId);
+              return match.isEmpty ? _ownerLabel : match.first.fullName;
+            }
+
             Future<void> submit() async {
               final description = descriptionController.text.trim();
               if (description.isEmpty) {
@@ -489,6 +748,8 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
                   appointmentDateTime: combinedDateTime,
                   time: formattedTime(),
                   description: description,
+                  durationMinutes: selectedDuration,
+                  clinicDoctorId: selectedDoctorId,
                 );
                 if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                 if (mounted) {
@@ -562,6 +823,42 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
                           ),
                         ],
                       ),
+                      const SizedBox(height: 10),
+                      OutlinedButton.icon(
+                        onPressed: pickDuration,
+                        icon: const Icon(Icons.timelapse, size: 18),
+                        label: Text(
+                            'المدة: ${appointmentDurationLabel(selectedDuration)}'),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        endTimeHint(),
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: context.surface.textSecondary),
+                      ),
+                      // اختيار الطبيب يظهر فقط في عيادة فيها أطباء مساعدون --
+                      // نفس قاعدة الحقل المماثل في الموقع، فعيادة الطبيب
+                      // الواحد لا ترى حقلاً لا معنى له.
+                      if (_clinicDoctors.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        OutlinedButton.icon(
+                          onPressed: pickDoctor,
+                          icon: const Icon(Icons.person_outline, size: 18),
+                          label: Text('الطبيب: ${doctorLabel()}'),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'فحص التعارض يجري لهذا الطبيب وحده لا للعيادة كلها.',
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: context.surface.textMuted),
+                        ),
+                      ],
                       const SizedBox(height: 12),
                       TextField(
                         controller: descriptionController,
@@ -985,15 +1282,635 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
                 ),
               ),
             )
+          else if (_useColumnsGrid(context))
+            // 2026-09-18: العروض الواسعة (لوح أفقي، ونسخة ويندوز من التطبيق)
+            // تحمل أعمدة أطباء حقيقية، فتُعرَض الشبكة النسبية كما في الموقع.
+            // الجوال يبقى على القائمة المرتكِزة على الوقت -- انظر شرح
+            // _buildAppointmentsTimeline.
+            _buildHourColumnsGrid(appointments)
           else
-            Column(
-              children: [
-                for (final appointment in appointments) ...[
-                  _buildAppointmentCard(appointment),
-                  if (appointment != appointments.last) const SizedBox(height: 10),
+            _buildAppointmentsTimeline(appointments),
+        ],
+      ),
+    );
+  }
+
+  /// عتبة شبكة الأعمدة -- 2026-09-18.
+  ///
+  /// 900px هو أضيق عرض تتّسع فيه ترويسة طبيب + محور ساعات (72) + عمودان
+  /// بالحدّ الأدنى 168px مع حواشي الصفحة. تحته تُعصَر الأعمدة فتصير البطاقة
+  /// غير مقروءة، وهو الدرس الذي كلّف جولةَ إصلاحٍ على الموقع (انظر
+  /// [[dental_project_appointments_hour_grid_design]]).
+  static const double kColumnsGridMinWidth = 900;
+  static const double kGridHourHeight = 72;
+  static const double kGridRailWidth = 72;
+  static const double kGridColumnMinWidth = 168;
+  static const double kGridMinBlockHeight = 30;
+  static const double kGridMaxBodyHeight = 520;
+  static const double kGridBodyPadding = 22;
+
+  /// شبكة الأعمدة محورها ساعات **يوم واحد**، فلا تصلح لفلتر "الكل" الذي
+  /// يُرجع مواعيد أيام متعددة (انظر [_filterAppointmentsForSelectedDay]): لو عُرضت هناك لتراكم
+  /// موعد الثلاثاء فوق موعد الأربعاء في الخانة نفسها. عند "الكل" تبقى
+  /// القائمة الزمنية المجمَّعة بالأيام هي العرض الصحيح حتى على الشاشة العريضة.
+  bool _useColumnsGrid(BuildContext context) =>
+      _selectedDayKey.isNotEmpty &&
+      MediaQuery.of(context).size.width >= kColumnsGridMinWidth;
+
+  /// شبكة الساعات بأعمدة الأطباء -- المقابل الحقيقي لجدول الموقع.
+  ///
+  /// الارتفاع = المدة: موعد الساعتين ضِعف موعد الساعة بالضبط، فالفراغ في
+  /// اليوم يظهر فراغاً والضغط يظهر ضغطاً. الحالة على خلفية البطاقة والطبيب
+  /// على شريط حافتها: بُعدان لا يتنافسان على نفس المساحة.
+  Widget _buildHourColumnsGrid(List<Appointment> appointments) {
+    final surf = context.surface;
+
+    // ترويسة الأعمدة: صاحب الحساب دائماً (اختفاؤه يوحي بأنه ليس طبيباً في
+    // عيادته)، ثم أطباء العيادة كلهم وإن كان يومهم فارغاً.
+    final columns = <({int? id, String name, String spec, bool owner})>[
+      (id: null, name: _ownerLabel, spec: 'صاحب الحساب', owner: true),
+      for (final doctor in [..._clinicDoctors]..sort((a, b) => a.id.compareTo(b.id)))
+        (
+          id: doctor.id,
+          name: doctor.fullName,
+          spec: doctor.specialty ?? 'طبيب في العيادة',
+          owner: false
+        ),
+    ];
+
+    // المدى: ساعات العمل 09:00-19:00، ويتوسّع ليشمل أي موعد خارجها بدل أن
+    // يُخفيه (موعد الساعة السابعة صباحاً يجب أن يُرى).
+    var startHour = 9;
+    var endHour = 19;
+    for (final appointment in appointments) {
+      final start = appointment.startMinutes;
+      if (start == null) continue;
+      final end = start + appointment.durationMinutes;
+      startHour = startHour < (start ~/ 60) ? startHour : (start ~/ 60);
+      final endCeil = (end + 59) ~/ 60;
+      endHour = endHour > endCeil ? endHour : endCeil;
+    }
+    startHour = startHour.clamp(0, 23);
+    endHour = endHour.clamp(startHour + 1, 24);
+
+    final dayStart = startHour * 60;
+    final bodyHeight = (endHour - startHour) * kGridHourHeight;
+
+    final nowMinutes = _selectedDayKey.isNotEmpty &&
+            _selectedDayKey == _dayKey(DateTime.now())
+        ? (DateTime.now().hour * 60) + DateTime.now().minute
+        : null;
+    final showNow =
+        nowMinutes != null && nowMinutes >= dayStart && nowMinutes <= endHour * 60;
+
+    // الأعمدة تتقاسم العرض المتاح كاملاً ولا تلتزم الحد الأدنى إلا عند
+    // الضيق: عيادة بطبيبين على نافذة ويندوز عريضة كانت ستترك ثلاثة أرباع
+    // الإطار فارغاً على اليسار. هذا نفس علاج is-solo في الموقع.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final available = constraints.maxWidth - kGridRailWidth;
+        final share = columns.isEmpty ? 0.0 : available / columns.length;
+        final columnWidth =
+            share > kGridColumnMinWidth ? share : kGridColumnMinWidth;
+        final totalWidth = kGridRailWidth + (columns.length * columnWidth);
+        final viewportHeight = bodyHeight + kGridBodyPadding;
+
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: surf.cardBorder),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: totalWidth,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // الترويسة خارج المُمرِّر العمودي فتبقى ظاهرة عند التمرير،
+                  // وداخل المُمرِّر الأفقي فلا تنفصل أسماء الأطباء عن أعمدتهم
+                  // عند السحب.
+                  _buildGridHeader(columns, appointments, columnWidth,
+                      (endHour - startHour) * 60),
+                  // هامش رأسي للجسم: تسمية الساعة الأولى ترتفع 8px فوق
+                  // علامتها والأخيرة تنزل مثلها، وبلا هذا الهامش يقصّهما إطار
+                  // البطاقة (Clip.antiAlias) فتبدأ الشبكة وتنتهي بسطر ساعة
+                  // مقطوع. نفس علاج padding-block في hg-body بالموقع: الهامش
+                  // يُضاف للجسم ولا يُخصم من ارتفاع الساعة، فتبقى العلامات
+                  // على أماكنها.
+                  SizedBox(
+                    height: viewportHeight < kGridMaxBodyHeight
+                        ? viewportHeight
+                        : kGridMaxBodyHeight,
+                    child: SingleChildScrollView(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 10, bottom: 12),
+                        child: SizedBox(
+                          height: bodyHeight,
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _buildGridRail(startHour, endHour),
+                              for (final column in columns)
+                                _buildGridColumn(
+                                  column.id,
+                                  appointments,
+                                  dayStart,
+                                  columnWidth,
+                                  bodyHeight,
+                                  showNow ? nowMinutes : null,
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildGridHeader(
+    List<({int? id, String name, String spec, bool owner})> columns,
+    List<Appointment> appointments,
+    double columnWidth,
+    int rangeMinutes,
+  ) {
+    final surf = context.surface;
+    return Container(
+      decoration: BoxDecoration(
+        color: surf.iconBoxBg,
+        border: Border(bottom: BorderSide(color: surf.cardBorder)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: kGridRailWidth,
+            child: Center(
+              child: Text('الساعة',
+                  style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                      color: surf.textMuted)),
+            ),
+          ),
+          for (final column in columns)
+            _buildGridColumnHeader(column, appointments, columnWidth, rangeMinutes),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGridColumnHeader(
+    ({int? id, String name, String spec, bool owner}) column,
+    List<Appointment> appointments,
+    double columnWidth,
+    int rangeMinutes,
+  ) {
+    final surf = context.surface;
+    final color = clinicDoctorColor(column.id, _clinicDoctors);
+    final own = appointments
+        .where((a) => hgAppointmentDoctorId(a) == column.id)
+        .toList();
+    final booked =
+        own.fold<int>(0, (total, a) => total + a.durationMinutes);
+    final load = rangeMinutes <= 0
+        ? 0.0
+        : (booked / rangeMinutes).clamp(0.0, 1.0).toDouble();
+
+    return Container(
+      width: columnWidth,
+      padding: const EdgeInsets.fromLTRB(11, 10, 11, 9),
+      decoration: BoxDecoration(
+        border: Border(right: BorderSide(color: surf.cardBorder)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Text(
+                  column.owner
+                      ? 'أنا'
+                      : ClinicDoctor(id: column.id ?? 0, fullName: column.name)
+                          .initials,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(column.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                            color: surf.textPrimary)),
+                    Text(column.spec,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 10, color: surf.textMuted)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          Row(
+            children: [
+              Text(own.length == 1 ? 'موعد واحد' : '${own.length} مواعيد',
+                  style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                      color: surf.textSecondary)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LinearProgressIndicator(
+                    value: load,
+                    minHeight: 5,
+                    backgroundColor: surf.divider,
+                    valueColor: AlwaysStoppedAnimation<Color>(color),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGridRail(int startHour, int endHour) {
+    final surf = context.surface;
+    return Container(
+      width: kGridRailWidth,
+      decoration: BoxDecoration(
+        border: Border(right: BorderSide(color: surf.cardBorder)),
+      ),
+      child: Stack(
+        children: [
+          for (var hour = startHour; hour <= endHour; hour++)
+            Positioned(
+              top: (hour - startHour) * kGridHourHeight - 8,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Text(
+                  Appointment.formatMinutes(hour * 60),
+                  style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                      color: surf.textMuted),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// قراءة معرّف الطبيب من الموعد -- null = الطبيب المدير.
+  static int? hgAppointmentDoctorId(Appointment appointment) =>
+      appointment.clinicDoctorId;
+
+  /// توزيع المسارات عند التعارض: المواعيد المتقاطعة وحدها تتقاسم عرض العمود
+  /// ("عنقود")، وما لا يتقاطع مع شيء يبقى بعرض العمود كاملاً. منقول عن
+  /// hgLayoutColumn في appointments.html بالموقع، وهو نفس منطق
+  /// collect_busy_appointment_intervals على الخادم من حيث تعريف التقاطع:
+  /// التلاصق (نهاية = بداية) **ليس** تعارضاً.
+  static List<_GridBlock> _layoutColumnBlocks(List<Appointment> appointments) {
+    final items = <_GridBlock>[];
+    for (final appointment in appointments) {
+      final start = appointment.startMinutes;
+      if (start == null) continue;
+      items.add(_GridBlock(
+        appointment: appointment,
+        start: start,
+        end: start + appointment.durationMinutes,
+      ));
+    }
+    items.sort((a, b) => a.start.compareTo(b.start));
+
+    var cluster = <_GridBlock>[];
+    var clusterEnd = -1;
+    void closeCluster() {
+      if (cluster.isEmpty) return;
+      var lanes = 1;
+      for (final item in cluster) {
+        if (item.lane + 1 > lanes) lanes = item.lane + 1;
+      }
+      for (final item in cluster) {
+        item.lanes = lanes;
+        item.clash = lanes > 1 &&
+            cluster.any((other) =>
+                other != item && other.start < item.end && item.start < other.end);
+      }
+      cluster = <_GridBlock>[];
+      clusterEnd = -1;
+    }
+
+    for (final item in items) {
+      if (item.start >= clusterEnd) closeCluster();
+      var lane = 0;
+      while (cluster.any((other) =>
+          other.lane == lane && other.start < item.end && item.start < other.end)) {
+        lane++;
+      }
+      item.lane = lane;
+      cluster.add(item);
+      if (item.end > clusterEnd) clusterEnd = item.end;
+    }
+    closeCluster();
+    return items;
+  }
+
+  Widget _buildGridColumn(
+    int? doctorId,
+    List<Appointment> appointments,
+    int dayStart,
+    double columnWidth,
+    double bodyHeight,
+    int? nowMinutes,
+  ) {
+    final surf = context.surface;
+    final color = clinicDoctorColor(doctorId, _clinicDoctors);
+    final own = appointments
+        .where((a) => hgAppointmentDoctorId(a) == doctorId)
+        .toList();
+    final blocks = _layoutColumnBlocks(own);
+    final hourCount = (bodyHeight / kGridHourHeight).round();
+
+    return Container(
+      width: columnWidth,
+      decoration: BoxDecoration(
+        border: Border(right: BorderSide(color: surf.divider)),
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // خطوط الساعات -- خطّ واحد أعلى كل ساعة.
+          Positioned.fill(
+            child: Column(
+              children: [
+                for (var hour = 0; hour < hourCount; hour++)
+                  Container(
+                    height: kGridHourHeight,
+                    decoration: BoxDecoration(
+                      border: Border(top: BorderSide(color: surf.divider)),
+                    ),
+                  ),
               ],
             ),
+          ),
+          for (final block in blocks)
+            _buildGridBlock(block, dayStart, columnWidth, color),
+          if (nowMinutes != null)
+            Positioned(
+              top: ((nowMinutes - dayStart) / 60) * kGridHourHeight,
+              left: 0,
+              right: 0,
+              child: Container(height: 2, color: AppColors.rose700text),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGridBlock(
+    _GridBlock block,
+    int dayStart,
+    double columnWidth,
+    Color doctorColor,
+  ) {
+    final surf = context.surface;
+    final appointment = block.appointment;
+    final style = appointmentStatusStyle(appointment.status, isDark: surf.isDark);
+    final top = ((block.start - dayStart) / 60) * kGridHourHeight;
+    final rawHeight =
+        (appointment.durationMinutes / 60) * kGridHourHeight - 4;
+    final height = rawHeight < kGridMinBlockHeight ? kGridMinBlockHeight : rawHeight;
+    final laneWidth = (columnWidth - 8) / block.lanes;
+
+    // نفس درجات الموقع الأربع: أقصر من 44px سطر واحد (وقت + اسم)، وأقصر من
+    // 62px وقت واسم مكدّسان، وأقصر من 80px يُضاف الإجراء، وإلا اسم الطبيب
+    // أيضاً. بلا هذه الدرجات يُقصَّ اسم المريض في كل موعد نصف ساعة.
+    final isLine = height < 44;
+    final showProcedure = height >= 62;
+    final showDoctor = height >= 80 && _clinicDoctors.isNotEmpty;
+
+    final timeText = isLine
+        ? Appointment.formatMinutes(block.start)
+        : '${Appointment.formatMinutes(block.start)} — ${Appointment.formatMinutes(block.end)}';
+
+    final timeRow = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(timeText,
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                color: style.foreground)),
+        if (block.clash) ...[
+          const SizedBox(width: 4),
+          const Icon(Icons.warning_amber_rounded,
+              size: 12, color: AppColors.rose700text),
+        ],
+      ],
+    );
+
+    final nameText = Text(
+      appointment.patientName.isEmpty ? '—' : appointment.patientName,
+      maxLines: isLine ? 1 : 2,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+          fontSize: isLine ? 11.5 : 12.5,
+          fontWeight: FontWeight.w800,
+          color: surf.textPrimary),
+    );
+
+    // Positioned.left مطلق لا يتبع الاتجاه: مع العربية كان الموعد الأسبق
+    // يجلس على يسار العمود والأحدث على يمينه، أي معكوس ترتيب القراءة وعكس
+    // ما يفعله الموقع (flex في RTL). directional يجعل المسار 0 في جهة
+    // البداية = اليمين.
+    return Positioned.directional(
+      textDirection: Directionality.of(context),
+      top: top,
+      start: 4 + (block.lane * laneWidth),
+      width: laneWidth - 4,
+      height: height,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _openEditAppointmentSheet(appointment),
+          child: Container(
+            padding: const EdgeInsetsDirectional.fromSTEB(10, 4, 6, 4),
+            decoration: BoxDecoration(
+              color: style.background,
+              borderRadius: BorderRadius.circular(12),
+              border: Border(
+                right: BorderSide(color: doctorColor, width: 4),
+              ),
+            ),
+            // الارتفاع مفروض من المدة، فلو زاد المحتوى سطراً واحداً لرسم
+            // Flutter شرائط الفيض الصفراء بدل أن يقصّ. OverflowBox يمنح
+            // المحتوى ارتفاعاً غير محدود وClipRect يقصّه: تدرّج ناعم بلا
+            // خطأ تصميم في الإصدار النهائي.
+            child: ClipRect(
+              child: OverflowBox(
+                alignment: Alignment.topCenter,
+                minHeight: 0,
+                maxHeight: double.infinity,
+                child: isLine
+                  ? Row(
+                      children: [
+                        timeRow,
+                        const SizedBox(width: 6),
+                        Expanded(child: nameText),
+                      ],
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        timeRow,
+                        nameText,
+                        if (showProcedure && appointment.procedureType.isNotEmpty)
+                          Text(appointment.procedureType,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w500,
+                                  color: surf.textSecondary)),
+                        if (showDoctor)
+                          Text(
+                              appointment.clinicDoctorName ?? _ownerLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: doctorColor)),
+                      ],
+                    ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// قائمة المواعيد مرتّبة زمنياً مع خطّ «الآن» في موضعه بينها -- 2026-09-17.
+  ///
+  /// هذا هو "جدول الساعات" على الجوال: الموقع نفسه لا يعرض شبكة الساعات
+  /// النسبية تحت 768px لأن العرض لا يحمل أعمدة أطباء، وبطاقة نصف ساعة
+  /// بارتفاع نسبي تصير 24px أي أصغر من منطقة لمس مقبولة. فالوقت هنا مرتكَز
+  /// على البطاقة (شارة البداية/النهاية) لا على محور مرسوم، وارتفاع البطاقة
+  /// يتبع محتواها لا مدتها.
+  ///
+  /// خطّ «الآن» لا يُرسَم إلا في اليوم الحالي -- رسمه في يوم مضى أو قادم
+  /// معلومة كاذبة.
+  Widget _buildAppointmentsTimeline(List<Appointment> appointments) {
+    // ‼️ الترتيب بالتاريخ ثم بالساعة لا بالساعة وحدها: عرض "الكل" يضمّ أياماً
+    // كثيرة، فترتيبه بساعة اليوم وحدها يشبك مواعيد الأربعاء بمواعيد الخميس.
+    final ordered = [...appointments]..sort((a, b) {
+      final dayA = _dayKey(a.appointmentDate);
+      final dayB = _dayKey(b.appointmentDate);
+      if (dayA != dayB) {
+        // موعد بلا تاريخ صالح يُدفَع إلى الآخر بدل أن يتصدّر القائمة.
+        if (dayA.isEmpty) return 1;
+        if (dayB.isEmpty) return -1;
+        return dayA.compareTo(dayB);
+      }
+      final first = a.startMinutes;
+      final second = b.startMinutes;
+      if (first == null && second == null) return 0;
+      if (first == null) return 1;
+      if (second == null) return -1;
+      return first.compareTo(second);
+    });
+
+    final now = DateTime.now();
+    final todayKey = _dayKey(now);
+    final showNowLine =
+        _selectedDayKey.isEmpty ? false : _selectedDayKey == todayKey;
+    final nowMinutes = (now.hour * 60) + now.minute;
+    var nowLineDrawn = !showNowLine;
+
+    final children = <Widget>[];
+    for (final appointment in ordered) {
+      final start = appointment.startMinutes;
+      if (!nowLineDrawn && start != null && start > nowMinutes) {
+        children.add(_buildNowDivider(nowMinutes));
+        nowLineDrawn = true;
+      }
+      children.add(_buildAppointmentCard(appointment));
+      children.add(const SizedBox(height: 10));
+    }
+    if (!nowLineDrawn) {
+      children.add(_buildNowDivider(nowMinutes));
+    } else if (children.isNotEmpty) {
+      // إزالة آخر فاصل زائد أسفل البطاقة الأخيرة.
+      children.removeLast();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: children,
+    );
+  }
+
+  Widget _buildNowDivider(int nowMinutes) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+            decoration: BoxDecoration(
+              color: AppColors.rose700text,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              '${Appointment.formatMinutes(nowMinutes)} الآن',
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 10.5),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Container(height: 2, color: AppColors.rose700text),
+          ),
         ],
       ),
     );
@@ -1080,6 +1997,58 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
                           ),
                         ),
                       ),
+                    const SizedBox(height: 5),
+                    // صفّ الشارات: مدة الموعد دائماً، واسم الطبيب المنفّذ فقط
+                    // في عيادة فيها أطباء مساعدون -- في عيادة الطبيب الواحد
+                    // اسمه على كل بطاقة تكرار محض بلا معلومة.
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: surf.chipBg,
+                            border: Border.all(color: surf.chipBorder),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            appointment.durationLabel,
+                            style: TextStyle(
+                                color: surf.textSecondary,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 10.5),
+                          ),
+                        ),
+                        if (_clinicDoctors.isNotEmpty)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 7,
+                                height: 7,
+                                decoration: BoxDecoration(
+                                  color: clinicDoctorColor(
+                                      appointment.clinicDoctorId,
+                                      _clinicDoctors),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                appointment.clinicDoctorName ?? _ownerLabel,
+                                style: TextStyle(
+                                    color: clinicDoctorColor(
+                                        appointment.clinicDoctorId,
+                                        _clinicDoctors),
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 10.5),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
                     const SizedBox(height: 7),
                     // شارة الحالة -- بمظهر كبسولة الموقع، وتفتح نفس ورقة
                     // تغيير الحالة عند الضغط (الموقع يستخدم قائمة منسدلة،
@@ -1115,17 +2084,39 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
                     ),
                   ],
                 ),
-                child: Text(
-                  appointment.appointmentTime.isEmpty
-                      ? '--:--'
-                      : appointment.appointmentTime,
-                  textAlign: TextAlign.center,
-                  style: AppType.kufi(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                    letterSpacing: -0.4,
-                  ),
+                // 2026-09-17: البداية سطراً بارزاً والنهاية تحتها أصغر -- نفس
+                // ما تفعله بطاقة الموقع على الجوال بالضبط (قواعد .ap-time-*)،
+                // لأن المدة صارت مختلفة من موعد لآخر فلم يعد وقت البداية
+                // وحده كافياً لمعرفة متى ينتهي الموعد ومتى يبدأ التالي.
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      appointment.appointmentTime.isEmpty
+                          ? '--:--'
+                          : appointment.appointmentTime,
+                      textAlign: TextAlign.center,
+                      style: AppType.kufi(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        letterSpacing: -0.4,
+                      ),
+                    ),
+                    if (appointment.endMinutes != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 1),
+                        child: Text(
+                          Appointment.formatMinutes(appointment.endMinutes!),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: .85),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ],
@@ -1312,8 +2303,14 @@ class _BookingRequestCard extends StatelessWidget {
 /// عند الـ backend -- انظر AppointmentCreate في main.py).
 class _AddAppointmentSheet extends StatefulWidget {
   final ApiService apiService;
+  final List<ClinicDoctor> clinicDoctors;
+  final String ownerLabel;
 
-  const _AddAppointmentSheet({required this.apiService});
+  const _AddAppointmentSheet({
+    required this.apiService,
+    this.clinicDoctors = const [],
+    this.ownerLabel = 'مواعيدي',
+  });
 
   @override
   State<_AddAppointmentSheet> createState() => _AddAppointmentSheetState();
@@ -1327,6 +2324,8 @@ class _AddAppointmentSheetState extends State<_AddAppointmentSheet> {
   Patient? _selectedPatient;
   DateTime _selectedDate = DateTime.now();
   TimeOfDay _selectedTime = TimeOfDay.now();
+  int _selectedDuration = defaultAppointmentDurationMinutes;
+  int? _selectedDoctorId;
   bool _isSaving = false;
   String? _errorMessage;
 
@@ -1373,6 +2372,40 @@ class _AddAppointmentSheetState extends State<_AddAppointmentSheet> {
     if (picked != null) setState(() => _selectedTime = picked);
   }
 
+  Future<void> _pickDuration() async {
+    final picked = await _showOptionPickerSheet<int>(
+      context: context,
+      title: 'مدة الموعد',
+      options: _durationPickerOptions(),
+      current: _selectedDuration,
+    );
+    if (picked != null) setState(() => _selectedDuration = picked.value);
+  }
+
+  Future<void> _pickDoctor() async {
+    final picked = await _showOptionPickerSheet<int?>(
+      context: context,
+      title: 'الطبيب المنفّذ',
+      options:
+          _doctorPickerOptions(widget.clinicDoctors, widget.ownerLabel),
+      current: _selectedDoctorId,
+    );
+    if (picked != null) setState(() => _selectedDoctorId = picked.value);
+  }
+
+  String get _doctorLabel {
+    final id = _selectedDoctorId;
+    if (id == null) return widget.ownerLabel;
+    final match = widget.clinicDoctors.where((doctor) => doctor.id == id);
+    return match.isEmpty ? widget.ownerLabel : match.first.fullName;
+  }
+
+  String get _endTimeHint {
+    final end =
+        (_selectedTime.hour * 60) + _selectedTime.minute + _selectedDuration;
+    return 'ينتهي الساعة ${Appointment.formatMinutes(end)}';
+  }
+
   String get _formattedDate =>
       '${_selectedDate.year.toString().padLeft(4, '0')}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}';
 
@@ -1405,6 +2438,10 @@ class _AddAppointmentSheetState extends State<_AddAppointmentSheet> {
         // على المسار المتصل بالإنترنت العادي.
         patientNameHint: patient.fullName,
         patientPhoneHint: patient.phone,
+        durationMinutes: _selectedDuration,
+        clinicDoctorId: _selectedDoctorId,
+        // اسم الطبيب للعرض وحده على الموعد المؤقّت إن كان الحجز أوفلاين.
+        clinicDoctorNameHint: _selectedDoctorId == null ? null : _doctorLabel,
       );
       if (!mounted) return;
       Navigator.of(context).pop(appointment);
@@ -1529,6 +2566,29 @@ class _AddAppointmentSheetState extends State<_AddAppointmentSheet> {
                 ),
               ],
             ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _pickDuration,
+              icon: const Icon(Icons.timelapse, size: 18),
+              label: Text('المدة: ${appointmentDurationLabel(_selectedDuration)}'),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _endTimeHint,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: context.surface.textSecondary),
+            ),
+            if (widget.clinicDoctors.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: _pickDoctor,
+                icon: const Icon(Icons.person_outline, size: 18),
+                label: Text('الطبيب: $_doctorLabel'),
+              ),
+            ],
             const SizedBox(height: 12),
             TextField(
               controller: _descriptionController,

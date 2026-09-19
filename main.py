@@ -5867,6 +5867,13 @@ def delete_clinic_doctor(
         db.query(models.FinancialTransaction).filter(
             models.FinancialTransaction.clinic_doctor_id == clinic_doctor.id
         ).update({models.FinancialTransaction.clinic_doctor_id: None}, synchronize_session=False)
+        # وكذلك مواعيده (العمود أُضيف 2026-09-17 بعد كتابة هذا المسار): موعد
+        # يحمل معرّف طبيب محذوف يسقط من فلتر "الطبيب المدير" ومن فلتر أي
+        # طبيب قائم، فيصير موعداً لا يظهر في أي عمود من جدول الساعات ولا
+        # يُفحَص تعارضه مع أحد. None تعني "صاحب الحساب" وهي الوجهة الصحيحة.
+        db.query(models.Appointment).filter(
+            models.Appointment.clinic_doctor_id == clinic_doctor.id
+        ).update({models.Appointment.clinic_doctor_id: None}, synchronize_session=False)
         db.delete(clinic_doctor)
         db.commit()
     except Exception:

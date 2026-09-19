@@ -4,7 +4,9 @@ import 'package:http/http.dart' as http;
 import '../config.dart';
 import '../models/appointment.dart';
 import '../models/booking_settings.dart';
+import '../models/clinic_doctor.dart';
 import '../models/doctor_profile.dart';
+import '../models/doctor_statement.dart';
 import '../models/finance_summary.dart';
 import '../models/finance_transaction.dart';
 import '../models/inventory_item.dart';
@@ -12,6 +14,7 @@ import '../models/patient.dart';
 import '../models/patient_archive_file.dart';
 import '../models/patient_stats.dart';
 import '../models/prescription.dart';
+import '../models/treatment_catalog_item.dart';
 import '../models/treatment_invoice.dart';
 import 'auth_storage.dart';
 
@@ -260,6 +263,18 @@ class ApiService {
     // 2026-08-31.
     String? patientNameHint,
     String? patientPhoneHint,
+    // 2026-09-17: المدة والطبيب المنفّذ. كان التطبيق لا يرسل المدة إطلاقاً
+    // فتصير كل مواعيده نصف ساعة ضمناً. null للمدة = اترك الافتراضي للخادم،
+    // وnull للطبيب = الطبيب المدير صاحب الحساب (وهي قيمة صحيحة لا ناقصة،
+    // ولا فرق هنا بين إرسالها وحذف الحقل خلافاً للتعديل).
+    int? durationMinutes,
+    int? clinicDoctorId,
+    // اسم الطبيب المنفّذ -- غير مستخدَم هنا (الخادم يعرف الاسم من المعرّف)،
+    // موجود فقط ليطابق التوقيع نسخة OfflineAwareApiService التي تحتاجه لعرض
+    // اسم الطبيب على الموعد المؤقّت أثناء انتظار المزامنة. نفس سبب وجود
+    // patientNameHint/patientPhoneHint أعلاه: الشاشة تنادي عبر مرجع من نوع
+    // ApiService، فلا يُترجم النداء لو غاب المعامل عن الأساس.
+    String? clinicDoctorNameHint,
   }) async {
     final headers = await _authHeaders();
     late http.Response response;
@@ -273,6 +288,8 @@ class ApiService {
               'date': date,
               'time': time,
               'description': description,
+              if (durationMinutes != null) 'duration_minutes': durationMinutes,
+              'clinic_doctor_id': clinicDoctorId,
             }),
           )
           .timeout(const Duration(seconds: 25));
@@ -299,6 +316,16 @@ class ApiService {
     required DateTime appointmentDateTime,
     required String time,
     required String description,
+    int? durationMinutes,
+    // ‼️ يُرسَل دائماً وصراحةً (بـ null عند اختيار الطبيب المدير): الخادم
+    // يقرأ هذا الحقل بـ model_fields_set لا بـ is not None، فحذفه من الجسم
+    // يعني "لا تغيير" بينما إرساله null يعني "أعِد الموعد للمدير". لذلك
+    // نرسل المفتاح دائماً ولا نضعه داخل شرط -- وإلا صار إرجاع موعد من طبيب
+    // مساعد إلى المدير مستحيلاً من التطبيق بصمت.
+    int? clinicDoctorId,
+    bool sendClinicDoctor = true,
+    // كما في createAppointment أعلاه: للعرض المحلي وحده، غير مستخدَم هنا.
+    String? clinicDoctorNameHint,
   }) async {
     final headers = await _authHeaders();
     late http.Response response;
@@ -311,6 +338,8 @@ class ApiService {
               'appointment_date': appointmentDateTime.toIso8601String(),
               'appointment_time': time,
               'description': description,
+              if (durationMinutes != null) 'duration_minutes': durationMinutes,
+              if (sendClinicDoctor) 'clinic_doctor_id': clinicDoctorId,
             }),
           )
           .timeout(const Duration(seconds: 25));
@@ -321,6 +350,276 @@ class ApiService {
       _throwForResponse(response, 'تعذر تحديث الموعد.');
     }
     return Appointment.fromJson(_decodeBody(response) as Map<String, dynamic>);
+  }
+
+  /// أطباء العيادة (للاختيار عند حجز موعد وللأعمدة في جدول الساعات).
+  ///
+  /// **لا ترفع استثناءً عند الفشل عن قصد**: المسار محروس بباقة العيادات
+  /// (Premium Plus) فيعيد 403 لحساب Premium عادي، وذلك هو الحال الطبيعي
+  /// لأغلب العيادات لا خطأ يُعرَض للطبيب. القائمة الفارغة تعني "عيادة بطبيب
+  /// واحد" فتختفي كل واجهة اختيار الطبيب من الشاشة. وانقطاع الشبكة يُعامَل
+  /// بالمثل: الجدول يعمل بعمود واحد بدل ألا يعمل.
+  Future<List<ClinicDoctor>> fetchClinicDoctors() async {
+    final headers = await _authHeaders();
+    late http.Response response;
+    try {
+      response = await http
+          .get(
+            Uri.parse('${AppConfig.apiBaseUrl}/api/clinic-doctors'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 20));
+    } catch (_) {
+      return const <ClinicDoctor>[];
+    }
+    if (response.statusCode != 200) {
+      return const <ClinicDoctor>[];
+    }
+    try {
+      final decoded = _decodeBody(response);
+      final rows = decoded is List
+          ? decoded
+          : (decoded is Map && decoded['doctors'] is List
+              ? decoded['doctors'] as List
+              : const []);
+      return rows
+          .whereType<Map<String, dynamic>>()
+          .map(ClinicDoctor.fromJson)
+          .where((doctor) => doctor.fullName.isNotEmpty)
+          .toList();
+    } catch (_) {
+      return const <ClinicDoctor>[];
+    }
+  }
+
+  /// نفس المسار السابق لكن **يرفع الاستثناء** ويحمل معاملات الفترة --
+  /// لشاشة "الأطباء والنسب" وحدها. أُضيف 2026-09-18.
+  ///
+  /// الفرق عن fetchClinicDoctors ليس تفصيلاً: هناك 403 يعني "عيادة بطبيب
+  /// واحد، أخفِ الاختيار"، وهنا 403 هو **جواب السؤال** الذي فتح الطبيب
+  /// الشاشة لأجله، فيجب أن يصل إليها لتعرض بطاقة "الميزة تحتاج باقة
+  /// العيادات" بدل قائمة فارغة توحي بأن لا أطباء له. ولهذا دالتان لا دالة
+  /// واحدة بمُبدِّل: مُبدِّل صامت/صائح على نفس النداء كان سيُنسى في أحد
+  /// الموضعين.
+  ///
+  /// معاملات الفترة تطابق fetchFinanceSummary حرفياً (وعبر نفس الدالة في
+  /// الخادم) حتى يطابق "محصّل الشهر" هنا ما تعرضه شاشة المالية للشهر نفسه.
+  Future<List<ClinicDoctor>> fetchClinicDoctorsDetailed({
+    int? year,
+    int? month,
+    int? day,
+    bool allTime = false,
+    bool includeInactive = true,
+  }) async {
+    final headers = await _authHeaders();
+    final query = <String, String>{
+      if (allTime) 'all_time': 'true',
+      if (!allTime && year != null) 'year': '$year',
+      if (!allTime && month != null) 'month': '$month',
+      if (!allTime && day != null) 'day': '$day',
+      if (!includeInactive) 'include_inactive': 'false',
+    };
+    final uri = Uri.parse('${AppConfig.apiBaseUrl}/api/clinic-doctors')
+        .replace(queryParameters: query.isEmpty ? null : query);
+    late http.Response response;
+    try {
+      response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 25));
+    } catch (_) {
+      throw const ApiException('تعذر الاتصال بالسيرفر. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.');
+    }
+    if (response.statusCode != 200) {
+      _throwForResponse(response, 'تعذر تحميل أطباء العيادة.');
+    }
+    final decoded = _decodeBody(response);
+    final rows = decoded is List ? decoded : const [];
+    return rows
+        .whereType<Map<String, dynamic>>()
+        .map(ClinicDoctor.fromJson)
+        .toList();
+  }
+
+  Future<ClinicDoctor> createClinicDoctor({
+    required String fullName,
+    String? phone,
+    String? specialty,
+    double commissionPercent = 0,
+    String? notes,
+  }) async {
+    final headers = await _authHeaders();
+    late http.Response response;
+    try {
+      response = await http
+          .post(
+            Uri.parse('${AppConfig.apiBaseUrl}/api/clinic-doctors'),
+            headers: headers,
+            body: json.encode({
+              'full_name': fullName,
+              'phone': phone,
+              'specialty': specialty,
+              'commission_percent': commissionPercent,
+              'notes': notes,
+            }),
+          )
+          .timeout(const Duration(seconds: 25));
+    } catch (_) {
+      throw const ApiException('تعذر الاتصال بالسيرفر. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.');
+    }
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      _throwForResponse(response, 'تعذر إضافة الطبيب.');
+    }
+    return ClinicDoctor.fromJson(_decodeBody(response) as Map<String, dynamic>);
+  }
+
+  /// PATCH جزئي: **كل حقل لا يُمرَّر لا يُرسَل**، والخادم يقرأ null على أنه
+  /// "لا تغيير" (ClinicDoctorUpdate في main.py). هذا ما يسمح بتعديل النسبة
+  /// وحدها من بطاقة الطبيب، أو بتعطيله، بلا إرسال بقية بياناته وطمسها.
+  ///
+  /// تنبيه: لهذا السبب **لا يمكن تفريغ الهاتف أو الاختصاص عبر هذا المسار**
+  /// بإرسال null -- الطريقة هي إرسال نص فارغ ''، والخادم يخزّنه كما هو.
+  Future<ClinicDoctor> updateClinicDoctor(
+    int doctorId, {
+    String? fullName,
+    String? phone,
+    String? specialty,
+    double? commissionPercent,
+    bool? isActive,
+    String? notes,
+  }) async {
+    final headers = await _authHeaders();
+    late http.Response response;
+    try {
+      response = await http
+          .patch(
+            Uri.parse('${AppConfig.apiBaseUrl}/api/clinic-doctors/$doctorId'),
+            headers: headers,
+            body: json.encode({
+              if (fullName != null) 'full_name': fullName,
+              if (phone != null) 'phone': phone,
+              if (specialty != null) 'specialty': specialty,
+              if (commissionPercent != null) 'commission_percent': commissionPercent,
+              if (isActive != null) 'is_active': isActive,
+              if (notes != null) 'notes': notes,
+            }),
+          )
+          .timeout(const Duration(seconds: 25));
+    } catch (_) {
+      throw const ApiException('تعذر الاتصال بالسيرفر. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.');
+    }
+    if (response.statusCode != 200) {
+      _throwForResponse(response, 'تعذر تحديث بيانات الطبيب.');
+    }
+    return ClinicDoctor.fromJson(_decodeBody(response) as Map<String, dynamic>);
+  }
+
+  /// حذف طبيب. الخادم **يرفض بـ400 كل طبيب له سجل مالي** ويطلب تعطيله بدلاً
+  /// من ذلك -- وهو قرار مقصود لا خطأ يُعاد المحاولة عليه: الرسالة القادمة
+  /// منه تُعرَض للطبيب كما هي.
+  Future<void> deleteClinicDoctor(int doctorId) async {
+    final headers = await _authHeaders();
+    late http.Response response;
+    try {
+      response = await http
+          .delete(
+            Uri.parse('${AppConfig.apiBaseUrl}/api/clinic-doctors/$doctorId'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 25));
+    } catch (_) {
+      throw const ApiException('تعذر الاتصال بالسيرفر. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.');
+    }
+    if (response.statusCode != 200) {
+      _throwForResponse(response, 'تعذر حذف الطبيب.');
+    }
+  }
+
+  /// كشف حساب طبيب واحد: حركاته في الفترة + تسوياته + المواد المستهلكة.
+  Future<DoctorStatement> fetchDoctorStatement(
+    int doctorId, {
+    int? year,
+    int? month,
+    int? day,
+    bool allTime = false,
+  }) async {
+    final headers = await _authHeaders();
+    final query = <String, String>{
+      if (allTime) 'all_time': 'true',
+      if (!allTime && year != null) 'year': '$year',
+      if (!allTime && month != null) 'month': '$month',
+      if (!allTime && day != null) 'day': '$day',
+    };
+    final uri =
+        Uri.parse('${AppConfig.apiBaseUrl}/api/clinic-doctors/$doctorId/statement')
+            .replace(queryParameters: query.isEmpty ? null : query);
+    late http.Response response;
+    try {
+      response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 25));
+    } catch (_) {
+      throw const ApiException('تعذر الاتصال بالسيرفر. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.');
+    }
+    if (response.statusCode != 200) {
+      _throwForResponse(response, 'تعذر تحميل كشف حساب الطبيب.');
+    }
+    return DoctorStatement.fromJson(_decodeBody(response) as Map<String, dynamic>);
+  }
+
+  /// تسجيل تسوية مسدَّدة للطبيب. paidAt اختياري، والخادم يستخدم وقت دمشق
+  /// الحالي عند غيابه -- يُرسَل بلا لاحقة منطقة زمنية لأن الخادم يخزّن
+  /// naive datetime بتوقيت دمشق (انظر _damascus_now في main.py)؛ إرسال UTC
+  /// كان سيُزيح تسوية الساعة 1 ظهراً إلى يوم آخر في الكشف.
+  Future<void> createDoctorPayout(
+    int doctorId, {
+    required double amount,
+    String? note,
+    DateTime? paidAt,
+  }) async {
+    final headers = await _authHeaders();
+    late http.Response response;
+    try {
+      response = await http
+          .post(
+            Uri.parse('${AppConfig.apiBaseUrl}/api/clinic-doctors/$doctorId/payouts'),
+            headers: headers,
+            body: json.encode({
+              'amount': amount,
+              if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+              if (paidAt != null) 'paid_at': _naiveIso(paidAt),
+            }),
+          )
+          .timeout(const Duration(seconds: 25));
+    } catch (_) {
+      throw const ApiException('تعذر الاتصال بالسيرفر. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.');
+    }
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      _throwForResponse(response, 'تعذر تسجيل التسوية.');
+    }
+  }
+
+  Future<void> deleteDoctorPayout(int doctorId, int payoutId) async {
+    final headers = await _authHeaders();
+    late http.Response response;
+    try {
+      response = await http
+          .delete(
+            Uri.parse(
+                '${AppConfig.apiBaseUrl}/api/clinic-doctors/$doctorId/payouts/$payoutId'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 25));
+    } catch (_) {
+      throw const ApiException('تعذر الاتصال بالسيرفر. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.');
+    }
+    if (response.statusCode != 200) {
+      _throwForResponse(response, 'تعذر حذف التسوية.');
+    }
+  }
+
+  /// ISO بلا لاحقة منطقة زمنية ولا أجزاء ثانية -- الصيغة التي يقبلها
+  /// Pydantic ويخزّنها الخادم كما هي.
+  static String _naiveIso(DateTime value) {
+    final local = value.isUtc ? value.toLocal() : value;
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${local.year}-${two(local.month)}-${two(local.day)}'
+        'T${two(local.hour)}:${two(local.minute)}:${two(local.second)}';
   }
 
   /// حذف موعد نهائياً -- مطابق لزر "حذف" في قسم "إدارة مواعيد هذا المريض"
@@ -388,6 +687,159 @@ class ApiService {
     }
   }
 
+  /// ================== لائحة أسعار العلاجات -- 2026-09-18 ==================
+  ///
+  /// المسارات محروسة بـ require_active_doctor_user فقط (اشتراك نشط) لا
+  /// بباقة مدفوعة إضافية، فلا حاجة لبطاقة قفل باقة في شاشتها -- بخلاف
+  /// المخزن والأطباء.
+
+  Future<List<TreatmentCatalogItem>> fetchTreatmentCatalog({
+    bool includeInactive = true,
+  }) async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse('${AppConfig.apiBaseUrl}/api/treatment-catalog')
+        .replace(queryParameters:
+            includeInactive ? null : {'include_inactive': 'false'});
+    late http.Response response;
+    try {
+      response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 25));
+    } catch (_) {
+      throw const ApiException('تعذر الاتصال بالسيرفر. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.');
+    }
+    if (response.statusCode != 200) {
+      _throwForResponse(response, 'تعذر تحميل لائحة أسعار العلاجات.');
+    }
+    final decoded = _decodeBody(response);
+    final rows = decoded is List ? decoded : const [];
+    return rows
+        .whereType<Map<String, dynamic>>()
+        .map(TreatmentCatalogItem.fromJson)
+        .toList();
+  }
+
+  Future<TreatmentCatalogItem> createTreatmentCatalogItem({
+    required String name,
+    required double price,
+    String? notes,
+    bool isActive = true,
+    List<CatalogMaterial> materials = const [],
+  }) async {
+    final headers = await _authHeaders();
+    late http.Response response;
+    try {
+      response = await http
+          .post(
+            Uri.parse('${AppConfig.apiBaseUrl}/api/treatment-catalog'),
+            headers: headers,
+            body: json.encode({
+              'name': name,
+              'price': price,
+              'notes': notes,
+              'is_active': isActive,
+              'materials': materials.map((m) => m.toInputJson()).toList(),
+            }),
+          )
+          .timeout(const Duration(seconds: 25));
+    } catch (_) {
+      throw const ApiException('تعذر الاتصال بالسيرفر. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.');
+    }
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      _throwForResponse(response, 'تعذر إضافة الحالة إلى اللائحة.');
+    }
+    return TreatmentCatalogItem.fromJson(
+        _decodeBody(response) as Map<String, dynamic>);
+  }
+
+  /// PATCH جزئي. **materials حالة ثلاثية لا ثنائية** (انظر
+  /// TreatmentCatalogItemUpdate في main.py): عدم تمريرها = لا تمسّ الوصفة،
+  /// وتمرير قائمة فارغة = احذف كل موادها. لهذا لا يمكن التمييز بينهما
+  /// باستخدام `List<...>? = null` وحده من طرف الواجهة، فوُضِع علم صريح
+  /// [replaceMaterials]: بلا هذا التمييز يستحيل إفراغ وصفة من موادها.
+  Future<TreatmentCatalogItem> updateTreatmentCatalogItem(
+    int itemId, {
+    String? name,
+    double? price,
+    String? notes,
+    bool? isActive,
+    bool replaceMaterials = false,
+    List<CatalogMaterial> materials = const [],
+  }) async {
+    final headers = await _authHeaders();
+    late http.Response response;
+    try {
+      response = await http
+          .patch(
+            Uri.parse('${AppConfig.apiBaseUrl}/api/treatment-catalog/$itemId'),
+            headers: headers,
+            body: json.encode({
+              if (name != null) 'name': name,
+              if (price != null) 'price': price,
+              if (notes != null) 'notes': notes,
+              if (isActive != null) 'is_active': isActive,
+              if (replaceMaterials)
+                'materials': materials.map((m) => m.toInputJson()).toList(),
+            }),
+          )
+          .timeout(const Duration(seconds: 25));
+    } catch (_) {
+      throw const ApiException('تعذر الاتصال بالسيرفر. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.');
+    }
+    if (response.statusCode != 200) {
+      _throwForResponse(response, 'تعذر تحديث الحالة.');
+    }
+    return TreatmentCatalogItem.fromJson(
+        _decodeBody(response) as Map<String, dynamic>);
+  }
+
+  Future<void> deleteTreatmentCatalogItem(int itemId) async {
+    final headers = await _authHeaders();
+    late http.Response response;
+    try {
+      response = await http
+          .delete(
+            Uri.parse('${AppConfig.apiBaseUrl}/api/treatment-catalog/$itemId'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 25));
+    } catch (_) {
+      throw const ApiException('تعذر الاتصال بالسيرفر. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.');
+    }
+    if (response.statusCode != 200) {
+      _throwForResponse(response, 'تعذر حذف الحالة.');
+    }
+  }
+
+  /// تقرير ربحية العلاجات لفترة. **الفترة بتاريخ إنشاء الفاتورة لا تحصيلها**
+  /// (قرار الخادم): ربحية عمل لا تدفّق نقدي.
+  Future<CatalogProfitReport> fetchTreatmentCatalogProfitReport({
+    int? year,
+    int? month,
+    int? day,
+    bool allTime = false,
+  }) async {
+    final headers = await _authHeaders();
+    final query = <String, String>{
+      if (allTime) 'all_time': 'true',
+      if (!allTime && year != null) 'year': '$year',
+      if (!allTime && month != null) 'month': '$month',
+      if (!allTime && day != null) 'day': '$day',
+    };
+    final uri =
+        Uri.parse('${AppConfig.apiBaseUrl}/api/treatment-catalog/profit-report')
+            .replace(queryParameters: query.isEmpty ? null : query);
+    late http.Response response;
+    try {
+      response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 25));
+    } catch (_) {
+      throw const ApiException('تعذر الاتصال بالسيرفر. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.');
+    }
+    if (response.statusCode != 200) {
+      _throwForResponse(response, 'تعذر تحميل تقرير ربحية العلاجات.');
+    }
+    return CatalogProfitReport.fromJson(
+        _decodeBody(response) as Map<String, dynamic>);
+  }
+
   /// فواتير علاج مريض معيّن (مرتّبة الأحدث أولاً من طرف السيرفر).
   Future<List<TreatmentInvoice>> fetchPatientInvoices(int patientId) async {
     final headers = await _authHeaders();
@@ -412,10 +864,22 @@ class ApiService {
   }
 
   /// إنشاء فاتورة علاج جديدة لمريض.
+  ///
+  /// [catalogItemId] مرجع للقراءة فقط إلى الحالة المختارة من لائحة الأسعار:
+  /// العنوان والتكلفة يُرسَلان في title/total_cost كأي فاتورة ويُجمَّدان
+  /// عليها، فتعديل سعر الحالة في اللائحة لاحقاً لا يمسّ هذه الفاتورة.
+  ///
+  /// [materials] تُخصَم من المخزن في **نفس عملية إنشاء الفاتورة** (كل شيء أو
+  /// لا شيء من طرف الخادم): نقص مادة واحدة يُفشِل إنشاء الفاتورة كلها بـ400
+  /// بدل أن يُنشئها ناقصة الخصم. قائمة فارغة أو null = بلا مواد، وهو سلوك أي
+  /// إصدار قديم من التطبيق فلا ينكسر شيء.
   Future<TreatmentInvoice> createInvoice(
     int patientId, {
     required String title,
     required double totalCost,
+    int? catalogItemId,
+    int? clinicDoctorId,
+    List<InvoiceMaterialInput>? materials,
   }) async {
     final headers = await _authHeaders();
     late http.Response response;
@@ -424,7 +888,14 @@ class ApiService {
           .post(
             Uri.parse('${AppConfig.apiBaseUrl}/api/patients/$patientId/invoices'),
             headers: headers,
-            body: json.encode({'title': title, 'total_cost': totalCost}),
+            body: json.encode({
+              'title': title,
+              'total_cost': totalCost,
+              if (catalogItemId != null) 'catalog_item_id': catalogItemId,
+              if (clinicDoctorId != null) 'clinic_doctor_id': clinicDoctorId,
+              if (materials != null && materials.isNotEmpty)
+                'materials': materials.map((m) => m.toJson()).toList(),
+            }),
           )
           .timeout(const Duration(seconds: 25));
     } catch (_) {
@@ -432,6 +903,66 @@ class ApiService {
     }
     if (response.statusCode != 201) {
       _throwForResponse(response, 'تعذر إنشاء فاتورة العلاج.');
+    }
+    return TreatmentInvoice.fromJson(
+        _decodeBody(response) as Map<String, dynamic>);
+  }
+
+  /// إضافة مواد إلى فاتورة موجودة (علاج احتاج مادة لم تُحسب عند فتحه).
+  ///
+  /// يخصم من المخزن فوراً ويرجع الفاتورة كاملة محدَّثة (بموادها وتكلفتها
+  /// وربحها) -- فلا حاجة لإعادة تحميل قائمة الفواتير بعده.
+  Future<TreatmentInvoice> addInvoiceMaterials(
+    int patientId,
+    int invoiceId,
+    List<InvoiceMaterialInput> materials,
+  ) async {
+    if (materials.isEmpty) {
+      throw const ApiException('لم تُحدَّد أي مادة للإضافة.');
+    }
+    final headers = await _authHeaders();
+    late http.Response response;
+    try {
+      response = await http
+          .post(
+            Uri.parse(
+                '${AppConfig.apiBaseUrl}/api/patients/$patientId/invoices/$invoiceId/materials'),
+            headers: headers,
+            body: json.encode(materials.map((m) => m.toJson()).toList()),
+          )
+          .timeout(const Duration(seconds: 25));
+    } catch (_) {
+      throw const ApiException('تعذر الاتصال بالسيرفر. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.');
+    }
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      _throwForResponse(response, 'تعذر تسجيل المواد المستهلكة.');
+    }
+    return TreatmentInvoice.fromJson(
+        _decodeBody(response) as Map<String, dynamic>);
+  }
+
+  /// حذف سطر مادة من فاتورة. **يُرجِع كميته إلى المخزن** (عكس الخصم تماماً)
+  /// -- فهو حركة مخزن حقيقية لا تصحيح مرئي، ولذلك يُستأذَن قبله في الواجهة.
+  Future<TreatmentInvoice> deleteInvoiceMaterial(
+    int patientId,
+    int invoiceId,
+    int usageId,
+  ) async {
+    final headers = await _authHeaders();
+    late http.Response response;
+    try {
+      response = await http
+          .delete(
+            Uri.parse(
+                '${AppConfig.apiBaseUrl}/api/patients/$patientId/invoices/$invoiceId/materials/$usageId'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 25));
+    } catch (_) {
+      throw const ApiException('تعذر الاتصال بالسيرفر. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.');
+    }
+    if (response.statusCode != 200) {
+      _throwForResponse(response, 'تعذر حذف سطر المادة.');
     }
     return TreatmentInvoice.fromJson(
         _decodeBody(response) as Map<String, dynamic>);
@@ -828,6 +1359,9 @@ class ApiService {
     required String itemName,
     required int quantity,
     int minAlertQuantity = 5,
+    // تكلفة الوحدة (2026-09-18). null = لا تُرسَل فيأخذ الخادم صفراً، وهو
+    // سلوك التطبيق قبل هذا التحديث بالضبط.
+    double? unitCost,
   }) async {
     final headers = await _authHeaders();
     late http.Response response;
@@ -840,6 +1374,7 @@ class ApiService {
               'item_name': itemName,
               'quantity': quantity,
               'min_alert_quantity': minAlertQuantity,
+              if (unitCost != null) 'unit_cost': unitCost,
             }),
           )
           .timeout(const Duration(seconds: 25));
@@ -857,6 +1392,7 @@ class ApiService {
     String? itemName,
     int? quantity,
     int? minAlertQuantity,
+    double? unitCost,
   }) async {
     final headers = await _authHeaders();
     late http.Response response;
@@ -869,6 +1405,7 @@ class ApiService {
               if (itemName != null) 'item_name': itemName,
               if (quantity != null) 'quantity': quantity,
               if (minAlertQuantity != null) 'min_alert_quantity': minAlertQuantity,
+              if (unitCost != null) 'unit_cost': unitCost,
             }),
           )
           .timeout(const Duration(seconds: 25));
