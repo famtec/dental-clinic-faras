@@ -4642,6 +4642,125 @@ def ensure_appointment_slot_is_free(
     raise HTTPException(status_code=409, detail=message)
 
 
+# ====================================================================
+# صفحة الحجز العامة في عيادة متعددة الأطباء -- 2026-09-22.
+#
+# قرار المستخدم: المريض لا يختار طبيباً؛ يرى الخانة متاحة إن تفرّغ فيها أي
+# طبيب، والعيادة تحدّد الطبيب عند قبول الطلب. قبل هذا التاريخ كانت
+# compute_available_slots_for_date تعدّ موعد أي طبيب وقتاً مشغولاً للعيادة
+# كلها، فتُخفي عن المريض خانات فيها أطباء متفرّغون (خسارة حجوزات صامتة).
+#
+# "المرشّحون" = الطبيب المدير (None) دائماً + الأطباء المساعدون المفعّلون،
+# وهؤلاء فقط لباقة العيادات (Premium Plus) -- نفس حارس ميزة الأطباء. عيادة
+# الطبيب الواحد مرشّحها الوحيد المدير، فيبقى سلوكها كما كان حرفياً.
+# ====================================================================
+def list_booking_candidate_doctors(db: Session, clinic_user: models.User) -> List[Optional[int]]:
+    """الأطباء الذين يمكن أن يستقبلوا طلب حجز عام، بترتيب الأولوية: المدير ثم المعرّف."""
+    candidates: List[Optional[int]] = [None]
+    if user_has_doctors_access(clinic_user.tier):
+        rows = (
+            db.query(models.ClinicDoctor.id)
+            .filter(
+                models.ClinicDoctor.clinic_email == clinic_user.email,
+                models.ClinicDoctor.is_active.is_(True),
+            )
+            .order_by(models.ClinicDoctor.id.asc())
+            .all()
+        )
+        candidates.extend(row.id for row in rows)
+    return candidates
+
+
+def is_clinic_doctor_free(
+    db: Session,
+    clinic_email: str,
+    start_at: datetime,
+    duration_minutes: int,
+    clinic_doctor_id: Optional[int],
+    exclude_appointment_id: Optional[int] = None,
+) -> bool:
+    """نفس قاعدة ensure_appointment_slot_is_free بالضبط، لكن كسؤال نعم/لا بلا استثناء."""
+    start_at = _naive_local_datetime(start_at)
+    if start_at is None:
+        return True
+    intervals = collect_busy_appointment_intervals(
+        db,
+        clinic_email,
+        start_at.date(),
+        exclude_appointment_id=exclude_appointment_id,
+        clinic_doctor_id=clinic_doctor_id,
+    )
+    requested_end = start_at + timedelta(minutes=duration_minutes)
+    return not any(item["start"] < requested_end and start_at < item["end"] for item in intervals)
+
+
+def resolve_booking_acceptance_doctor(
+    db: Session,
+    clinic_user: models.User,
+    appointment: models.Appointment,
+    respond_request: "AppointmentRespondRequest",
+) -> Optional[int]:
+    """يحدّد الطبيب الذي يستلم طلب الحجز عند قبوله، أو يرفع 409 إن لم يتفرّغ أحد.
+
+    قبل 2026-09-22 كان القبول لا يفحص أي تعارض إطلاقاً: لو أضاف الطبيب يدوياً
+    مريضاً في نفس الخانة قبل أن يقبل الطلب، يصير الموعدان متداخلين بصمت -- حتى
+    في عيادة الطبيب الواحد. الآن يمرّ القبول بنفس فحص التعارض الذي يمرّ به أي
+    موعد يُنشأ أو يُعدَّل.
+    """
+    start_at = _naive_local_datetime(appointment.appointment_date)
+    duration = normalize_appointment_duration(appointment.duration_minutes)
+
+    # الطبيب مُرسَل صراحةً (صفحة المواعيد في الموقع). None/0 = الطبيب المدير.
+    # model_fields_set لا "is not None": null الصريحة اختيار حقيقي للمدير.
+    if "clinic_doctor_id" in respond_request.model_fields_set:
+        chosen = resolve_appointment_clinic_doctor(
+            db, clinic_user.email, respond_request.clinic_doctor_id or None
+        )
+        if chosen is not None:
+            chosen_row = db.query(models.ClinicDoctor).filter(models.ClinicDoctor.id == chosen).first()
+            if chosen_row is not None and not chosen_row.is_active:
+                raise HTTPException(
+                    status_code=400,
+                    detail="هذا الطبيب معطّل حالياً، فلا يمكن إسناد مواعيد جديدة له. فعّله من صفحة الأطباء أو اختر طبيباً آخر.",
+                )
+        if start_at is not None:
+            ensure_appointment_slot_is_free(
+                db, clinic_user.email, start_at, duration,
+                exclude_appointment_id=appointment.id,
+                clinic_doctor_id=chosen,
+            )
+        return chosen
+
+    # الطبيب غير مُرسَل (تطبيق أندرويد الحالي، أو عيادة بلا أطباء مساعدين):
+    # يعيّن الخادم أول مرشّح متفرّغ -- المدير أولاً ثم الأطباء بترتيب المعرّف.
+    candidates = list_booking_candidate_doctors(db, clinic_user)
+    if start_at is None:
+        return candidates[0]
+    if len(candidates) == 1:
+        # عيادة الطبيب الواحد: رسالة التعارض المفصّلة نفسها (اسم المريض + أقرب وقت).
+        ensure_appointment_slot_is_free(
+            db, clinic_user.email, start_at, duration,
+            exclude_appointment_id=appointment.id,
+            clinic_doctor_id=None,
+        )
+        return None
+    for candidate in candidates:
+        if is_clinic_doctor_free(
+            db, clinic_user.email, start_at, duration, candidate,
+            exclude_appointment_id=appointment.id,
+        ):
+            return candidate
+
+    end_at = start_at + timedelta(minutes=duration)
+    raise HTTPException(
+        status_code=409,
+        detail=(
+            f"لا يوجد طبيب متفرّغ من {start_at.strftime('%H:%M')} حتى {end_at.strftime('%H:%M')}: "
+            "كل أطباء العيادة لديهم مواعيد متقاطعة مع هذا الوقت. تواصل مع المريض لتغيير الوقت أو ارفض الطلب."
+        ),
+    )
+
+
 @app.post("/api/appointments", response_model=AppointmentResponse, status_code=201)
 def create_appointment(
     appointment: AppointmentCreate,
@@ -4883,6 +5002,10 @@ def update_appointment_status(
 
 class AppointmentRespondRequest(BaseModel):
     decision: Literal["accept", "reject"]
+    # 2026-09-22 -- الطبيب الذي يستلم الطلب عند القبول. اختياري عمداً: غيابه
+    # (تطبيق أندرويد الحالي) يعني "عيّنه الخادم تلقائياً"، أما null الصريحة
+    # فتعني الطبيب المدير. انظر resolve_booking_acceptance_doctor.
+    clinic_doctor_id: Optional[int] = None
 
 
 # مسار قبول/رفض طلب حجز وارد من صفحة الحجز العامة (booking.html) -- 2026-08-23.
@@ -4908,8 +5031,16 @@ def respond_to_booking_request(
 
     new_status = "pending" if respond_request.decision == "accept" else "rejected"
 
+    # يُحسم الطبيب ويُفحص التعارض قبل أي كتابة، فيصل 409 إلى الواجهة والطلب
+    # باقٍ كما هو (pending_confirmation) يمكن الرد عليه لاحقاً. الرفض لا يحتاج فحصاً.
+    assigned_doctor_id = appointment.clinic_doctor_id
+    if new_status == "pending":
+        assigned_doctor_id = resolve_booking_acceptance_doctor(db, current_user, appointment, respond_request)
+
     try:
         appointment.status = new_status
+        if new_status == "pending":
+            appointment.clinic_doctor_id = assigned_doctor_id
         # عند قبول طلب حجز عام لم يكن مرتبطاً بأي سجل مريض بعد (patient_id فارغ) --
         # وهي حال كل طلب وارد عبر booking.html -- نربطه الآن بسجل مريض حقيقي، حتى
         # يظهر في "قائمة المرضى" ويصبح ممكناً فتح ملف طبي شامل له (مخطط أسنان،
@@ -4986,6 +5117,7 @@ def respond_to_booking_request(
         "message": "تم إرسال الرد بنجاح.",
         "appointment_id": appointment.id,
         "status": appointment.status,
+        "clinic_doctor_id": appointment.clinic_doctor_id,
     }
 
 
@@ -7620,7 +7752,16 @@ def compute_available_slots_for_date(db: Session, doctor: models.User, target_da
     # يعد يكفي استبعاد وقت البداية وحده -- موعد مدته ساعة ونصف يبدأ 10:00 يجب
     # أن يُخفي أيضاً خانات 10:30 و11:00. لذلك نبني فترات مشغولة (بداية/نهاية)
     # ونستبعد أي خانة تتقاطع مع أي منها.
-    busy_windows = []
+    #
+    # 2026-09-22 -- الإتاحة صارت لكل طبيب لا للعيادة كلها (انظر
+    # list_booking_candidate_doctors). الخانة متاحة إن كان عدد المرشّحين
+    # المتفرّغين فيها أكبر من عدد طلبات الحجز المعلّقة التي تتقاطع معها: الطلب
+    # المعلّق لم يُسنَد لطبيب بعد، لكنه سيستهلك أحدهم عند قبوله، وبدون عدّه
+    # يستطيع ثلاثة مرضى حجز خانة فيها طبيبان فقط. في عيادة الطبيب الواحد:
+    # متفرّغ واحد مقابل طلب معلّق واحد = الخانة مخفية، كما كان السلوك تماماً.
+    candidates = list_booking_candidate_doctors(db, doctor)
+    busy_by_doctor = {candidate: [] for candidate in candidates}
+    pending_request_windows = []
     for appointment in (
         db.query(models.Appointment)
         .filter(
@@ -7634,9 +7775,19 @@ def compute_available_slots_for_date(db: Session, doctor: models.User, target_da
         busy_start = _naive_local_datetime(appointment.appointment_date)
         if busy_start is None:
             continue
-        busy_windows.append(
-            (busy_start, busy_start + timedelta(minutes=normalize_appointment_duration(appointment.duration_minutes)))
+        window = (
+            busy_start,
+            busy_start + timedelta(minutes=normalize_appointment_duration(appointment.duration_minutes)),
         )
+        if appointment.status == "pending_confirmation":
+            pending_request_windows.append(window)
+        elif appointment.clinic_doctor_id in busy_by_doctor:
+            busy_by_doctor[appointment.clinic_doctor_id].append(window)
+        # مواعيد طبيب معطّل (أو عيادة نزلت عن Premium Plus) لا تمسّ كراسي
+        # المرشّحين: ذلك الطبيب لا يستقبل حجوزات عامة أصلاً.
+
+    def overlaps(windows, slot_start, slot_end):
+        return sum(1 for busy_start, busy_end in windows if busy_start < slot_end and slot_start < busy_end)
 
     available_slots: List[str] = []
     cursor = day_start
@@ -7645,8 +7796,11 @@ def compute_available_slots_for_date(db: Session, doctor: models.User, target_da
             cursor += timedelta(minutes=slot_minutes)
             continue
         slot_end = cursor + timedelta(minutes=slot_minutes)
-        is_taken = any(busy_start < slot_end and cursor < busy_end for busy_start, busy_end in busy_windows)
-        if not is_taken:
+        free_doctors = sum(
+            1 for candidate in candidates if not overlaps(busy_by_doctor[candidate], cursor, slot_end)
+        )
+        pending_demand = overlaps(pending_request_windows, cursor, slot_end)
+        if free_doctors > pending_demand:
             available_slots.append(cursor.strftime("%H:%M"))
         cursor += timedelta(minutes=slot_minutes)
 

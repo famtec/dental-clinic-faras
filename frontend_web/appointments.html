@@ -269,6 +269,37 @@
             box-shadow: 0 14px 28px rgba(99, 102, 241, 0.4);
         }
         .btn-whatsapp-reminder,
+        /* 2026-09-22 -- اختيار الطبيب بجانب زر القبول (طلبات الحجز العام) */
+        .booking-doctor-picker {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #475569;
+        }
+        .booking-doctor-picker select {
+            height: 34px;
+            max-width: 190px;
+            border: 1px solid #8795a8;
+            border-radius: 10px;
+            background: #ffffff;
+            padding: 0 8px;
+            font: inherit;
+            font-weight: 600;
+            color: #0f172a;
+        }
+        .booking-doctor-picker select:focus {
+            outline: none;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, .28);
+        }
+        .booking-doctor-picker select:disabled { opacity: .6; }
+        @media (max-width: 767.98px) {
+            .booking-doctor-picker { width: 100%; }
+            .booking-doctor-picker select { flex: 1; max-width: none; }
+        }
+
         .btn-accept-request {
             background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
             color: #047857;
@@ -1966,6 +1997,7 @@
             }
             renderAppointmentDoctorOptions();
             renderGridDoctorChips();
+            renderBookingRequests(currentBookingRequests);
         }
 
         // ---- حقل الطبيب في نافذة الموعد ----
@@ -2723,9 +2755,8 @@
                     return status !== 'pending_confirmation' && status !== 'rejected';
                 });
 
-                renderBookingRequests(bookingRequests);
-
                 allNormalAppointments = normalAppointments;
+                renderBookingRequests(bookingRequests);
                 // أول تحميل على الجوال يفتح على اليوم الحالي؛ الحاسوب يبقى
                 // على "الكل" كما كانت الصفحة دائماً.
                 if (selectedDayKey === '' && isMobileAppointmentsViewport() && !appointmentsDayInitialised) {
@@ -2778,6 +2809,57 @@
             return parsed.toLocaleDateString('ar-EG-u-nu-latn', { year: 'numeric', month: 'long', day: 'numeric' });
         }
 
+        // ---- اختيار الطبيب عند قبول طلب حجز عام (2026-09-22) ----
+        // المريض لا يختار طبيباً في صفحة الحجز؛ الخانة تظهر له إن تفرّغ فيها أي
+        // طبيب، والعيادة تحدّد الطبيب هنا عند القبول. القائمة تظهر فقط حين يكون
+        // للعيادة طبيب مساعد مفعّل واحد على الأقل -- عيادة الطبيب الواحد لا ترى
+        // أي تغيير. الاقتراح المبدئي = أول طبيب متفرّغ (المدير أولاً ثم الأطباء
+        // بترتيب المعرّف) بنفس ترتيب الخادم؛ والخادم يعيد الفحص عند القبول ويرفض
+        // بـ409 إن سبق موعدٌ آخر -- فوسم "مشغول" هنا تلميح لا ضمان.
+        function escapeBookingText(value) {
+            return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+            }[ch]));
+        }
+
+        function bookingActiveDoctors() {
+            // /api/clinic-doctors يعيد المعطّلين أيضاً (include_inactive افتراضياً)،
+            // والخادم يرفض الإسناد لطبيب معطّل -- فلا يُعرضون هنا أصلاً.
+            return hgSortedDoctors().filter((doctor) => doctor.is_active !== false);
+        }
+
+        function bookingDoctorIsFree(request, doctorId) {
+            const start = getAppointmentStartMinutes(request);
+            if (start === null) return true;
+            const intervals = collectBusyIntervals(appointmentDayKey(request), request?.id, doctorId);
+            return !findBlockingInterval(intervals, start, getAppointmentDuration(request));
+        }
+
+        function renderBookingDoctorPicker(request, previousValue) {
+            const doctors = bookingActiveDoctors();
+            if (!doctors.length) return '';
+            const options = [{ value: '', label: `${hgOwnerLabel()} (أنا)`, id: null }]
+                .concat(doctors.map((doctor) => ({ value: String(doctor.id), label: String(doctor.full_name || ''), id: doctor.id })))
+                .map((option) => ({ ...option, free: bookingDoctorIsFree(request, option.id) }));
+            const suggested = (options.find((option) => option.free) || options[0]).value;
+            const selected = previousValue !== undefined && options.some((option) => option.value === previousValue)
+                ? previousValue
+                : suggested;
+            const requestId = escapeBookingText(request.id ?? '');
+            return `
+ <label class="booking-doctor-picker" for="bookingDoctor-${requestId}">
+ <span>الطبيب</span>
+ <select id="bookingDoctor-${requestId}" data-booking-doctor-for="${requestId}">
+                    ${options.map((option) => `<option value="${escapeBookingText(option.value)}"${option.value === selected ? ' selected' : ''}>${escapeBookingText(option.label)}${option.free ? '' : ' — مشغول'}</option>`).join('')}
+ </select>
+ </label>`;
+        }
+
+        function getBookingDoctorPicker(requestId) {
+            return Array.from(document.querySelectorAll('[data-booking-doctor-for]'))
+                .find((select) => select.getAttribute('data-booking-doctor-for') === String(requestId)) || null;
+        }
+
         function renderBookingRequests(requests) {
             currentBookingRequests = Array.isArray(requests) ? requests : [];
             const countBadge = document.getElementById('bookingRequestsCountBadge');
@@ -2790,6 +2872,13 @@
                 return;
             }
 
+            // التحديث التلقائي كل 30 ثانية يعيد بناء اللوحة؛ بدون هذا يعود اختيار
+            // الطبيب إلى الاقتراح المبدئي بصمت بين لحظة الاختيار ولحظة الضغط.
+            const previousPicks = {};
+            list.querySelectorAll('[data-booking-doctor-for]').forEach((select) => {
+                previousPicks[select.getAttribute('data-booking-doctor-for')] = select.value;
+            });
+
             list.innerHTML = currentBookingRequests.map((request) => `
  <div class="flex flex-col gap-3 rounded-2xl border border-warning-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between" data-booking-request-id="${request.id ?? ''}">
  <div class="min-w-0">
@@ -2800,7 +2889,8 @@
  <p class="mt-1 inline-flex items-center gap-1 text-sm text-ink-600"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg><span>${formatBookingRequestDate(request)}</span><span>—</span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg><span>${request.appointment_time || '—'}</span></p>
                         ${request.notes ? `<p class="mt-1 inline-flex items-center gap-1 text-xs text-ink-500"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg><span>${request.notes}</span></p>` : ''}
  </div>
- <div class="flex shrink-0 items-center gap-2">
+ <div class="flex shrink-0 flex-wrap items-center gap-2">
+                        ${renderBookingDoctorPicker(request, previousPicks[String(request.id ?? '')])}
  <button type="button" data-accept-request-id="${request.id ?? ''}" class="accept-request-btn appointment-action-btn btn-accept-request px-4 py-2 text-xs"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg><span>قبول</span></button>
  <button type="button" data-reject-request-id="${request.id ?? ''}" class="reject-request-btn appointment-action-btn btn-reject-request px-4 py-2 text-xs"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg><span>رفض</span></button>
  </div>
@@ -2828,7 +2918,21 @@
 
             isAppointmentActionInProgress = true;
             try {
-                const confirmMessage = decision === 'accept' ? 'تأكيد قبول طلب الحجز هذا؟' : 'تأكيد رفض طلب الحجز هذا؟';
+                // غياب القائمة (عيادة بلا أطباء مساعدين) = لا يُرسَل الحقل إطلاقاً،
+                // فيعيّن الخادم الطبيب المدير كما كان. وجودها = اختيار صريح، حيث
+                // القيمة الفارغة تعني المدير (null) لا "بلا تحديد".
+                const requestBody = { decision };
+                let chosenDoctorLabel = '';
+                const doctorPicker = decision === 'accept' ? getBookingDoctorPicker(requestId) : null;
+                if (doctorPicker) {
+                    const rawDoctor = String(doctorPicker.value || '').trim();
+                    requestBody.clinic_doctor_id = rawDoctor === '' ? null : Number(rawDoctor);
+                    chosenDoctorLabel = String(doctorPicker.options[doctorPicker.selectedIndex]?.text || '').replace(/\s—\sمشغول$/, '').trim();
+                }
+
+                const confirmMessage = decision === 'accept'
+                    ? (chosenDoctorLabel ? `تأكيد قبول طلب الحجز هذا مع ${chosenDoctorLabel}؟` : 'تأكيد قبول طلب الحجز هذا؟')
+                    : 'تأكيد رفض طلب الحجز هذا؟';
                 const confirmed = await showConfirm(confirmMessage, {
                     title: decision === 'accept' ? 'قبول طلب الحجز' : 'رفض طلب الحجز',
                     tone: decision === 'accept' ? 'success' : 'danger',
@@ -2838,6 +2942,7 @@
                 if (!confirmed) return;
 
                 const wrapper = triggerButton?.closest('[data-booking-request-id]');
+                if (doctorPicker) doctorPicker.disabled = true;
                 if (wrapper) {
                     wrapper.querySelectorAll('button').forEach((btn) => {
                         if (btn === triggerButton && window.ClinicLoader) {
@@ -2854,7 +2959,7 @@
                     const response = await fetch(apiUrl(`/api/appointments/${encodeURIComponent(String(requestId))}/respond`), {
                         method: 'PUT',
                         headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
-                        body: JSON.stringify({ decision }),
+                        body: JSON.stringify(requestBody),
                     });
                     const data = await response.json().catch(() => ({}));
 
@@ -2866,6 +2971,7 @@
                     await loadAppointments();
                 } catch (error) {
                     showToast(error.message || 'تعذر إرسال الرد على الطلب.', 'error');
+                    if (doctorPicker) doctorPicker.disabled = false;
                     if (wrapper) {
                         wrapper.querySelectorAll('button').forEach((btn) => {
                             if (btn === triggerButton && window.ClinicLoader) {
