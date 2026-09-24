@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' show NumberFormat;
 
 import '../models/clinic_doctor.dart';
 import '../models/doctor_statement.dart';
@@ -7,6 +7,9 @@ import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/clinic_doctor_colors.dart';
 import '../widgets/app_widgets.dart';
+import '../widgets/desktop_widgets.dart';
+
+part 'clinic_doctors_desktop.dart';
 
 /// شاشة "الأطباء والنسب" -- نقل صفحة doctors.html إلى التطبيق، 2026-09-18.
 ///
@@ -35,6 +38,15 @@ final NumberFormat _doctorsMoneyFormat = NumberFormat('#,##0', 'en_US');
 String formatDoctorsMoney(double value) {
   if (!value.isFinite) return '0';
   return _doctorsMoneyFormat.format(value.round());
+}
+
+/// النسبة بلا كسور زائدة: 40 لا 40.00، و37.5 كما هي.
+String formatDoctorsPercent(double value) {
+  if (!value.isFinite) return '0';
+  final rounded = (value * 10).round() / 10;
+  return rounded == rounded.roundToDouble()
+      ? rounded.round().toString()
+      : rounded.toStringAsFixed(1);
 }
 
 /// تاريخ قصير للحركات: 2026-09-18 بأرقام لاتينية.
@@ -71,6 +83,20 @@ class _ClinicDoctorsScreenState extends State<ClinicDoctorsScreen> {
   bool _allTime = false;
   bool _isToday = false;
 
+  // ── سطح المكتب (انظر clinic_doctors_desktop.dart) ──
+  int? _selectedDoctorId;
+  DoctorStatement? _statement;
+  /// "معرّف الطبيب|الفترة" للكشف المحمّل أو قيد التحميل. null = يجب إعادة
+  /// الطلب (تُصفَّر مع كل _load لأن أي تغيير في الأرقام يمسّ الكشف أيضاً).
+  String? _statementKey;
+  bool _statementLoading = false;
+  String? _statementError;
+  /// 0 = الكل، 1 = الاستحقاقات، 2 = التسويات.
+  int _statementTab = 0;
+
+  /// setState لامتداد سطح المكتب في ملف الـ part (setState محميّة).
+  void _update(VoidCallback fn) => setState(fn);
+
   @override
   void initState() {
     super.initState();
@@ -82,6 +108,7 @@ class _ClinicDoctorsScreenState extends State<ClinicDoctorsScreen> {
       _isLoading = true;
       _errorMessage = null;
       _isPremiumLocked = false;
+      _statementKey = null;
     });
     final today = DateTime.now();
     try {
@@ -143,6 +170,7 @@ class _ClinicDoctorsScreenState extends State<ClinicDoctorsScreen> {
   Future<void> _openDoctorSheet({ClinicDoctor? doctor}) async {
     final saved = await showModalBottomSheet<bool>(
       context: context,
+      constraints: context.isDesktopShell ? const BoxConstraints(maxWidth: 560) : null,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _DoctorFormSheet(apiService: widget.apiService, doctor: doctor),
@@ -156,6 +184,7 @@ class _ClinicDoctorsScreenState extends State<ClinicDoctorsScreen> {
   Future<void> _openPayoutSheet(ClinicDoctor doctor) async {
     final saved = await showModalBottomSheet<bool>(
       context: context,
+      constraints: context.isDesktopShell ? const BoxConstraints(maxWidth: 560) : null,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _PayoutSheet(apiService: widget.apiService, doctor: doctor),
@@ -254,6 +283,7 @@ class _ClinicDoctorsScreenState extends State<ClinicDoctorsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (context.isDesktopShell) return _buildDesktop(context);
     final doctors = _doctors ?? const <ClinicDoctor>[];
     return Scaffold(
       body: Stack(

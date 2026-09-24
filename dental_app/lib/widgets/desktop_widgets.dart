@@ -626,12 +626,17 @@ class DesktopCard extends StatelessWidget {
   final bool glow;
   final double radius;
 
+  /// بلا إطار ولا ظلّ -- لرأسٍ يعيش داخل لوحة أخرى (رأس كشف الحساب) فيأخذ
+  /// كرات الضوء وحدها ولا يبدو بطاقةً معلّقة فوق اللوحة.
+  final bool flat;
+
   const DesktopCard({
     super.key,
     required this.child,
     this.padding = const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
     this.glow = false,
     this.radius = AppDesktopMetrics.radiusCard,
+    this.flat = false,
   });
 
   @override
@@ -640,11 +645,11 @@ class DesktopCard extends StatelessWidget {
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: d.cardBg,
-        gradient: d.cardGradient,
+        color: flat ? null : d.cardBg,
+        gradient: flat ? null : d.cardGradient,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: d.cardBorder),
-        boxShadow: glow ? d.panelShadow : d.cardShadow,
+        border: flat ? null : Border.all(color: d.cardBorder),
+        boxShadow: flat ? null : (glow ? d.panelShadow : d.cardShadow),
       ),
       child: Stack(
         children: [
@@ -690,11 +695,400 @@ class _GlowBlob extends StatelessWidget {
   }
 }
 
+const List<String> desktopArabicMonths = [
+  'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+  'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر',
+];
+
 /// «22 سبتمبر» -- تاريخ قصير بلا يوم أسبوع ولا سنة، للجداول واللوحات.
-String desktopShortDate(DateTime date) {
-  const months = [
-    'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
-    'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر',
-  ];
-  return '${date.day} ${months[date.month - 1]}';
+String desktopShortDate(DateTime date) =>
+    '${date.day} ${desktopArabicMonths[date.month - 1]}';
+
+/// بطاقة مؤشّر واحد في شريط المؤشرات أعلى الصفحات: عنوان صغير ورقم كبير
+/// ولاحقة اختيارية («ل.س»، «+ 2 معطّلة»).
+class DesktopKpiCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final String? suffix;
+  final Color? valueColor;
+
+  /// يُبرز البطاقة بتوهّج (المؤشّر الأهم في الشريط).
+  final bool highlight;
+
+  const DesktopKpiCard({
+    super.key,
+    required this.label,
+    required this.value,
+    this.suffix,
+    this.valueColor,
+    this.highlight = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.desktop;
+    return DesktopCard(
+      glow: highlight,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppType.sans(fontSize: 11.5, color: d.textSecondary),
+          ),
+          const SizedBox(height: 6),
+          Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: value,
+                  style: AppType.kufi(
+                    fontSize: 21,
+                    fontWeight: FontWeight.w800,
+                    color: valueColor ?? d.bigNumber,
+                  ),
+                ),
+                if (suffix != null)
+                  TextSpan(
+                    text: ' $suffix',
+                    style: AppType.sans(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: d.textSecondary,
+                    ),
+                  ),
+              ],
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// زرّ كبسولة يفتح قائمة خيارات (فترة التقرير). [T] قيمة الخيار.
+class DesktopMenuButton<T> extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final List<({T value, String label})> options;
+  final ValueChanged<T> onSelected;
+  final String? tooltip;
+
+  const DesktopMenuButton({
+    super.key,
+    required this.label,
+    required this.options,
+    required this.onSelected,
+    this.icon = Icons.calendar_month_outlined,
+    this.tooltip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.desktop;
+    return PopupMenuButton<T>(
+      tooltip: tooltip ?? '',
+      color: d.isDark ? const Color(0xFF16152B) : d.cardBg,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: d.cardBorder),
+      ),
+      position: PopupMenuPosition.under,
+      onSelected: onSelected,
+      itemBuilder: (_) => [
+        for (final option in options)
+          PopupMenuItem<T>(
+            value: option.value,
+            height: 40,
+            child: Text(
+              option.label,
+              style: AppType.sans(fontSize: 13, color: d.textPrimary),
+            ),
+          ),
+      ],
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: d.fieldBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: d.iconBtnBorder),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: d.linkFg),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: AppType.sans(fontSize: 13, fontWeight: FontWeight.w700, color: d.textPrimary),
+            ),
+            const SizedBox(width: 6),
+            Icon(Icons.keyboard_arrow_down, size: 18, color: d.textSecondary),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// خلية ترويسة جدول: نصّ ووزن ومحاذاة.
+typedef DesktopColumn = ({String label, int flex, TextAlign align});
+
+/// ترويسة جدول بخلفية الحقول وحدّ سفلي -- نفس ترويسة جدولَي المرضى
+/// والمواعيد.
+class DesktopTableHeader extends StatelessWidget {
+  final List<DesktopColumn> columns;
+  final double height;
+
+  const DesktopTableHeader({super.key, required this.columns, this.height = 44});
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.desktop;
+    return Container(
+      height: height,
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      decoration: BoxDecoration(
+        color: d.fieldBg,
+        border: Border(bottom: BorderSide(color: d.cardBorder)),
+      ),
+      child: Row(
+        children: [
+          for (final c in columns)
+            Expanded(
+              flex: c.flex,
+              child: Text(
+                c.label,
+                textAlign: c.align,
+                style: AppType.sans(
+                    fontSize: 11.5, fontWeight: FontWeight.w700, color: d.textSecondary),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// صفّ جدول قابل للاختيار: خلفية عند المرور، وخلفية نيلية خفيفة مع شريط
+/// على جهة البداية للمختار.
+class DesktopTableRow extends StatefulWidget {
+  final Widget child;
+  final bool selected;
+  final VoidCallback? onTap;
+  final VoidCallback? onDoubleTap;
+  final double? height;
+  final EdgeInsetsGeometry padding;
+
+  const DesktopTableRow({
+    super.key,
+    required this.child,
+    this.selected = false,
+    this.onTap,
+    this.onDoubleTap,
+    this.height,
+    this.padding = const EdgeInsetsDirectional.only(start: 15, end: 18, top: 11, bottom: 11),
+  });
+
+  @override
+  State<DesktopTableRow> createState() => _DesktopTableRowState();
+}
+
+class _DesktopTableRowState extends State<DesktopTableRow> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.desktop;
+    final interactive = widget.onTap != null || widget.onDoubleTap != null;
+    return MouseRegion(
+      cursor: interactive ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        onDoubleTap: widget.onDoubleTap,
+        child: Container(
+          height: widget.height,
+          padding: widget.padding,
+          decoration: BoxDecoration(
+            color: widget.selected
+                ? d.linkFg.withValues(alpha: d.isDark ? .14 : .05)
+                : (_hovered && interactive ? d.rowHover : Colors.transparent),
+            border: BorderDirectional(
+              start: BorderSide(
+                color: widget.selected ? d.linkFg : Colors.transparent,
+                width: 3,
+              ),
+              bottom: BorderSide(color: d.rowDivider),
+            ),
+          ),
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+}
+
+/// لوحة بإطار وظلّ بلا حشوة داخلية ولا عنوان -- حاوية الجداول.
+class DesktopTablePanel extends StatelessWidget {
+  final Widget child;
+
+  const DesktopTablePanel({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.desktop;
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: d.cardBg,
+        gradient: d.cardGradient,
+        borderRadius: BorderRadius.circular(AppDesktopMetrics.radiusPanel),
+        border: Border.all(color: d.cardBorder),
+        boxShadow: d.panelShadow,
+      ),
+      child: child,
+    );
+  }
+}
+
+/// نقطة حيّة + تسمية نيلية صغيرة («صافي الأرباح»، «كشف حساب»).
+class DesktopEyebrow extends StatelessWidget {
+  final String text;
+
+  const DesktopEyebrow(this.text, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.desktop;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(
+            color: d.liveDot,
+            shape: BoxShape.circle,
+            boxShadow: [BoxShadow(color: d.liveDotHalo, spreadRadius: 3)],
+          ),
+        ),
+        const SizedBox(width: 7),
+        Flexible(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppType.sans(fontSize: 11.5, fontWeight: FontWeight.w700, color: d.linkFg),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// رقم كبير بلاحقة عملة -- الرقم الأهم في بطاقة رأس.
+class DesktopBigAmount extends StatelessWidget {
+  final String value;
+  final String unit;
+  final double fontSize;
+
+  const DesktopBigAmount({super.key, required this.value, this.unit = 'ل.س', this.fontSize = 30});
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.desktop;
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(
+            text: value,
+            style: AppType.kufi(fontSize: fontSize, fontWeight: FontWeight.w800, color: d.bigNumber)
+                .copyWith(
+              shadows: d.bigNumberGlow == null
+                  ? null
+                  : [Shadow(color: d.bigNumberGlow!, blurRadius: 32)],
+            ),
+          ),
+          TextSpan(
+            text: ' $unit',
+            style: AppType.sans(fontSize: 13, fontWeight: FontWeight.w600, color: d.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// عنوان صغير + قيمة، لصفوف الأرقام تحت الرقم الكبير.
+class DesktopFigure extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color? color;
+
+  const DesktopFigure({super.key, required this.label, required this.value, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.desktop;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppType.sans(fontSize: 11, color: d.textSecondary)),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppType.sans(fontSize: 15, fontWeight: FontWeight.w700, color: color ?? d.textPrimary),
+        ),
+      ],
+    );
+  }
+}
+
+/// صفّ أرقام [DesktopFigure] بفواصل رأسية بينها، فوقه حدّ علوي.
+class DesktopFiguresRow extends StatelessWidget {
+  final List<Widget> figures;
+
+  const DesktopFiguresRow({super.key, required this.figures});
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.desktop;
+    return Container(
+      padding: const EdgeInsets.only(top: 14),
+      decoration: BoxDecoration(border: Border(top: BorderSide(color: d.cardBorder))),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < figures.length; i++) ...[
+              if (i > 0) ...[
+                Container(width: 1, color: d.cardBorder),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsetsDirectional.only(end: 12),
+                  child: figures[i],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }

@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../models/finance_summary.dart';
 import '../models/finance_transaction.dart';
+import '../models/patient_stats.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
+import '../widgets/desktop_widgets.dart';
+
+part 'finance_desktop.dart';
 
 const _arabicMonthNames = [
   'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
@@ -435,6 +439,17 @@ class _FinanceScreenState extends State<FinanceScreen> {
   String? _errorMessage;
   bool _isLocked = false;
 
+  // ── سطح المكتب (انظر finance_desktop.dart) ──
+  /// ملخّصات الأشهر الستة الأخيرة بمفتاح "سنة-شهر" لمخطط سطح المكتب.
+  Map<String, FinanceSummary> _trend = const {};
+  double? _pendingBalances;
+  bool _desktopExtrasRequested = false;
+  /// 0 = الكل، 1 = إيرادات، 2 = مصاريف.
+  int _desktopMoveFilter = 0;
+
+  /// setState لامتداد سطح المكتب في ملف الـ part (setState محميّة).
+  void _update(VoidCallback fn) => setState(fn);
+
   @override
   void initState() {
     super.initState();
@@ -532,6 +547,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
     final result =
         await showModalBottomSheet<({bool inventorySynced, String? inventoryAction})>(
       context: context,
+      constraints: context.isDesktopShell ? const BoxConstraints(maxWidth: 560) : null,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _AddExpenseSheet(apiService: widget.apiService),
@@ -539,6 +555,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
     if (result != null) {
       _loadMonths();
       _loadSummary();
+      _refreshDesktopExtras();
       if (!mounted) return;
       // نفس رسالة النجاح "الأغنى" التي يعرضها submitExpense() بالموقع عند
       // نجاح الربط بمخزن المواد (finance.html).
@@ -557,6 +574,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
   Future<void> _openEditMoveSheet(FinanceTransaction move) async {
     final saved = await showModalBottomSheet<bool>(
       context: context,
+      constraints: context.isDesktopShell ? const BoxConstraints(maxWidth: 560) : null,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _EditTransactionSheet(
@@ -568,6 +586,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
     if (saved == true) {
       _loadMonths();
       _loadSummary();
+      _refreshDesktopExtras();
       if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('تم حفظ التعديل بنجاح.')));
@@ -578,6 +597,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (context.isDesktopShell) return _buildDesktop(context);
     final summary = _summary;
     return Scaffold(
       body: AtmosphereBackground(
@@ -744,8 +764,11 @@ class _FinanceScreenState extends State<FinanceScreen> {
   /// آخر الحركات للفترة المعروضة حالياً -- بنفس معاملات الملخّص تماماً.
   Future<void> _loadMoves() async {
     final today = DateTime.now();
+    // سطح المكتب يعرض جدولاً بارتفاع الصفحة لا قسماً من ثمانية أسطر.
+    final limit = context.isDesktopShell ? 60 : 8;
     try {
       final moves = await widget.apiService.fetchFinanceTransactions(
+        limit: limit,
         year: _isToday ? today.year : _selectedYear,
         month: _isToday ? today.month : _selectedMonth,
         day: _isToday ? today.day : null,

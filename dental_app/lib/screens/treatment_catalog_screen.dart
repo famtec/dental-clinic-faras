@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' show NumberFormat;
 
 import '../models/inventory_item.dart';
 import '../models/treatment_catalog_item.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
+import '../widgets/desktop_widgets.dart';
+
+part 'treatment_catalog_desktop.dart';
 
 /// شاشة "لائحة أسعار العلاجات" -- نقل صفحة treatment_catalog.html إلى
 /// التطبيق، 2026-09-18.
@@ -59,6 +62,12 @@ class _TreatmentCatalogScreenState extends State<TreatmentCatalogScreen> {
   int? _reportYear;
   int? _reportMonth;
   bool _reportAllTime = false;
+
+  /// الحالة المعروضة في لوحة الوصفة على سطح المكتب (treatment_catalog_desktop.dart).
+  int? _selectedItemId;
+
+  /// setState لامتداد سطح المكتب في ملف الـ part (setState محميّة).
+  void _update(VoidCallback fn) => setState(fn);
 
   @override
   void initState() {
@@ -137,6 +146,7 @@ class _TreatmentCatalogScreenState extends State<TreatmentCatalogScreen> {
   Future<void> _openItemSheet({TreatmentCatalogItem? item}) async {
     final saved = await showModalBottomSheet<bool>(
       context: context,
+      constraints: context.isDesktopShell ? const BoxConstraints(maxWidth: 640) : null,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) =>
@@ -212,6 +222,11 @@ class _TreatmentCatalogScreenState extends State<TreatmentCatalogScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (context.isDesktopShell) {
+      // Scaffold بلا AppBar: عنوان الصفحة في ترويسة الغلاف، ويبقى Scaffold
+      // لأن أوراق الإضافة والتعديل تحتاج ScaffoldMessenger للرسائل.
+      return Scaffold(backgroundColor: Colors.transparent, body: _buildDesktop(context));
+    }
     final surf = context.surface;
     final items = _items ?? const <TreatmentCatalogItem>[];
     return Scaffold(
