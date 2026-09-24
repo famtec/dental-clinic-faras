@@ -292,6 +292,18 @@ def init_db():
                     text("ALTER TABLE appointments ADD COLUMN clinic_doctor_id INTEGER")
                 )
 
+    # الطبيب المعالج للمريض -- 2026-09-24 (انظر models.py عند
+    # Patient.clinic_doctor_id). نفس نمط appointments.clinic_doctor_id أعلاه
+    # حرفياً: nullable بلا قيد FK في الـ ALTER، والتحقّق في الخادم
+    # (resolve_clinic_doctor_id)، وNULL = الطبيب المدير فلا تعبئة.
+    if "patients" in inspector.get_table_names():
+        patient_doctor_columns = {column["name"] for column in inspector.get_columns("patients")}
+        if "clinic_doctor_id" not in patient_doctor_columns:
+            with engine.begin() as connection:
+                connection.execute(
+                    text("ALTER TABLE patients ADD COLUMN clinic_doctor_id INTEGER")
+                )
+
     # ====================================================================
     # فواتير العلاج المستقلة (treatment_invoices) -- 2026-08-25
     # ====================================================================

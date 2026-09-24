@@ -114,6 +114,12 @@ class Patient(Base):
     # الرسالة له في كل دورة فحص لمحرك الاسترجاع التلقائي. انظر main.py:
     # get_due_recall_patients/send_due_recall_messages.
     last_recall_sent_at = Column(DateTime, nullable=True)
+    # الطبيب المعالج للمريض في العيادة متعددة الأطباء (أُضيف 2026-09-24، لعمود
+    # "الطبيب" في جدول المرضى بتطبيق سطح المكتب). NULL = صاحب الحساب (الطبيب
+    # المدير)، بنفس دلالة appointments/treatment_invoices.clinic_doctor_id --
+    # فلا يحتاج أي مريض قديم أي تعبئة. هو ربط **إداري** وحده: لا يقيّد من يفتح
+    # فاتورة للمريض ولا يُستعمل في أي حساب مالي (الفاتورة تحمل طبيبها).
+    clinic_doctor_id = Column(Integer, ForeignKey("clinic_doctors.id"), index=True, nullable=True)
 
     visits = relationship("Visit", back_populates="patient", cascade="all, delete-orphan")
     treatments = relationship("Treatment", back_populates="patient", cascade="all, delete-orphan")

@@ -1092,6 +1092,9 @@ class PatientCreate(BaseModel):
     gender: Optional[str] = None
     medical_history: Optional[str] = None
     total_treatment_cost: float = 0.0
+    # الطبيب المعالج (2026-09-24) -- اختياري، وNULL/غياب = الطبيب المدير.
+    # عميل قديم لا يرسله فيُنسب المريض للمدير، كما في المواعيد والفواتير.
+    clinic_doctor_id: Optional[int] = None
 
 
 class PatientUpdate(BaseModel):
@@ -1109,6 +1112,10 @@ class PatientUpdate(BaseModel):
     # وpatient_record.html يحسب birth_date تقريبياً من العمر المُدخَل (1 يناير
     # من سنة الميلاد الموافقة) قبل الإرسال بدل إرسال حقل "age" غير موجود أصلاً.
     birth_date: Optional[date] = None
+    # الطبيب المعالج (2026-09-24). **الغياب لا يساوي null هنا**: المسار يقرأ
+    # model_fields_set، فعميل قديم لا يرسل الحقل لا يمسّ الطبيب المعيَّن،
+    # بينما إرسال null (أو 0) صراحةً يعيد المريض إلى الطبيب المدير.
+    clinic_doctor_id: Optional[int] = None
     # total_treatment_cost أُزيل من هنا عمداً (2026-08-25) -- التكلفة لم تعد
     # حقلاً واحداً قابلاً للاستبدال، بل فواتير علاج مستقلة (انظر
     # TreatmentInvoiceCreate + /api/patients/{id}/invoices بالأسفل). العمود
@@ -1162,6 +1169,10 @@ class PatientResponse(PatientCreate):
     id: int
     chart_state: Optional[str] = None
     paid_amount: float = 0.0
+    # اسم الطبيب المعالج جاهزاً، حتى لا يحتاج العميل GET /api/clinic-doctors
+    # (المحروس بباقة العيادات) لعرض عمود الطبيب. null مع clinic_doctor_id null
+    # = الطبيب المدير، والعميل يعرض اسم صاحب الحساب.
+    clinic_doctor_name: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -2732,6 +2743,10 @@ def create_patient(
     if not resolved_doctor_name:
         resolved_doctor_name = (current_user.doctor_name or current_user.email or "").strip()
 
+    assigned_clinic_doctor_id = resolve_clinic_doctor_id(
+        db, patient.clinic_doctor_id, current_user.email
+    )
+
     db_patient = models.Patient(
         doctor_name=resolved_doctor_name or None,
         doctor_email=current_user.email,
@@ -2741,11 +2756,12 @@ def create_patient(
         gender=patient.gender if patient.gender else "Male",
         medical_history=patient.medical_history,
         total_treatment_cost=float(patient.total_treatment_cost or 0.0),
+        clinic_doctor_id=assigned_clinic_doctor_id,
     )
     db.add(db_patient)
     db.commit()
     db.refresh(db_patient)
-    return db_patient
+    return _patient_orm_response(db, db_patient, current_user.email)
 
 
 # يربط (أو ينشئ عند الحاجة) سجل مريض حقيقي عند قبول طلب حجز وارد من صفحة
@@ -2845,6 +2861,7 @@ def get_all_patients(
             if patient_id is not None
         }
 
+    doctor_names = _clinic_doctor_names(db, user.email)
     response_payload: list[dict] = []
     for patient in patients:
         paid_amount = paid_amount_by_patient_id.get(patient.id, Decimal("0"))
@@ -2868,6 +2885,8 @@ def get_all_patients(
                 "total_treatment_cost": float(total_treatment_cost),
                 "chart_state": getattr(patient, "chart_state", None),
                 "paid_amount": float(paid_amount),
+                "clinic_doctor_id": patient.clinic_doctor_id,
+                "clinic_doctor_name": doctor_names.get(patient.clinic_doctor_id),
             }
         )
 
@@ -3062,6 +3081,8 @@ def get_patient(
         "total_treatment_cost": float(max(Decimal(str(invoice_total_cost or 0)), Decimal("0"))),
         "chart_state": getattr(patient, "chart_state", None),
         "paid_amount": float(max(Decimal(str(paid_total or 0)), Decimal("0"))),
+        "clinic_doctor_id": patient.clinic_doctor_id,
+        "clinic_doctor_name": _clinic_doctor_names(db, current_user.email).get(patient.clinic_doctor_id),
     }
 
 
@@ -3186,6 +3207,10 @@ def update_patient(
             patient.medical_history = patient_update.medical_history
         if patient_update.birth_date is not None:
             patient.birth_date = patient_update.birth_date
+        if "clinic_doctor_id" in patient_update.model_fields_set:
+            patient.clinic_doctor_id = resolve_clinic_doctor_id(
+                db, patient_update.clinic_doctor_id, current_user.email
+            )
         # لم يعد هذا المسار يقبل تعديل التكلفة الإجمالية مباشرة (2026-08-25) --
         # التكلفة تُدار الآن حصراً عبر فواتير علاج مستقلة، انظر
         # POST /api/patients/{patient_id}/invoices بالأسفل.
@@ -3196,7 +3221,20 @@ def update_patient(
         db.rollback()
         raise
 
-    return patient
+    return _patient_orm_response(db, patient, current_user.email)
+
+
+def _patient_orm_response(db: Session, patient: "models.Patient", clinic_email: str) -> dict:
+    """رد PatientResponse من صف ORM مع اسم الطبيب المعالج (2026-09-24).
+
+    الاسم ليس عموداً على patients، فإرجاع صف ORM مباشرةً (كما كانت هذه
+    المسارات تفعل) يُسقطه، فيفقد العميل اسم الطبيب بعد كل تعديل أو حفظ مخطط.
+    """
+    response = PatientResponse.model_validate(patient).model_dump()
+    response["clinic_doctor_name"] = _clinic_doctor_names(db, clinic_email).get(
+        patient.clinic_doctor_id
+    )
+    return response
 
 
 def _clinic_doctor_names(db: Session, clinic_email: str) -> dict:
@@ -4448,7 +4486,7 @@ def update_patient_chart(
         db.rollback()
         raise HTTPException(status_code=400, detail="تعذر حفظ حالة المخطط السني حالياً. حاول مرة أخرى.")
 
-    return patient
+    return _patient_orm_response(db, patient, current_user.email)
 
 
 # 6. مسار لحجز موعد جديد لمريض [POST]
@@ -6006,6 +6044,11 @@ def delete_clinic_doctor(
         db.query(models.Appointment).filter(
             models.Appointment.clinic_doctor_id == clinic_doctor.id
         ).update({models.Appointment.clinic_doctor_id: None}, synchronize_session=False)
+        # وكذلك مرضاه (2026-09-24): يعودون إلى الطبيب المدير بدل حمل معرّف
+        # ميت يظهر في عمود "الطبيب" فارغاً بلا تفسير.
+        db.query(models.Patient).filter(
+            models.Patient.clinic_doctor_id == clinic_doctor.id
+        ).update({models.Patient.clinic_doctor_id: None}, synchronize_session=False)
         db.delete(clinic_doctor)
         db.commit()
     except Exception:
