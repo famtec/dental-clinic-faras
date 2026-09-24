@@ -6,6 +6,7 @@ import '../models/doctor_statement.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/clinic_doctor_colors.dart';
+import '../widgets/app_sheet.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/desktop_widgets.dart';
 import 'contact_developer_screen.dart';
@@ -169,9 +170,8 @@ class _ClinicDoctorsScreenState extends State<ClinicDoctorsScreen> {
   }
 
   Future<void> _openDoctorSheet({ClinicDoctor? doctor}) async {
-    final saved = await showModalBottomSheet<bool>(
+    final saved = await showAppSheet<bool>(
       context: context,
-      constraints: context.isDesktopShell ? const BoxConstraints(maxWidth: 560) : null,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _DoctorFormSheet(apiService: widget.apiService, doctor: doctor),
@@ -183,9 +183,8 @@ class _ClinicDoctorsScreenState extends State<ClinicDoctorsScreen> {
   }
 
   Future<void> _openPayoutSheet(ClinicDoctor doctor) async {
-    final saved = await showModalBottomSheet<bool>(
+    final saved = await showAppSheet<bool>(
       context: context,
-      constraints: context.isDesktopShell ? const BoxConstraints(maxWidth: 560) : null,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _PayoutSheet(apiService: widget.apiService, doctor: doctor),
@@ -1729,13 +1728,15 @@ class _SheetShell extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: surf.divider,
-                    borderRadius: BorderRadius.circular(999),
+              BottomSheetOnly(
+                child: Center(
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: surf.divider,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
                   ),
                 ),
               ),

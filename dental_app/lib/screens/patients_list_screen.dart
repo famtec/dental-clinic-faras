@@ -5,6 +5,7 @@ import '../models/patient.dart';
 import '../models/patient_stats.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_sheet.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/clinic_doctor_field.dart';
 import '../widgets/desktop_widgets.dart';
@@ -164,29 +165,14 @@ class PatientsListScreenState extends State<PatientsListScreen> {
   /// عند النجاح: تحديث القائمة، ثم الانتقال مباشرة لملف المريض الجديد (نفس
   /// سلوك "التوجيه التلقائي بعد الإضافة" المعتمد في الموقع).
   Future<void> _openAddPatientSheet() async {
-    // على سطح المكتب نافذة حوار في الوسط: ورقة سفلية بعرض نافذة ويندوز
-    // كاملة تمدّ حقلاً واحداً على 1400px. النموذج نفسه في الحالتين.
-    final created = context.isDesktopShell
-        ? await showDialog<Patient>(
-            context: context,
-            builder: (dialogContext) => Dialog(
-              backgroundColor: Colors.transparent,
-              insetPadding: const EdgeInsets.all(24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 480),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(26),
-                  child: _AddPatientSheet(apiService: widget.apiService),
-                ),
-              ),
-            ),
-          )
-        : await showModalBottomSheet<Patient>(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            builder: (sheetContext) => _AddPatientSheet(apiService: widget.apiService),
-          );
+    // على سطح المكتب نافذة حوار في الوسط (showAppSheet). النموذج نفسه.
+    final created = await showAppSheet<Patient>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      desktopWidth: 480,
+      builder: (sheetContext) => _AddPatientSheet(apiService: widget.apiService),
+    );
     if (created == null || !mounted) return;
     await _load();
     if (!mounted) return;
@@ -767,13 +753,15 @@ class _AddPatientSheetState extends State<_AddPatientSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Center(
-                child: Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: surf.divider,
-                    borderRadius: BorderRadius.circular(999),
+              BottomSheetOnly(
+                child: Center(
+                  child: Container(
+                    width: 42,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: surf.divider,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
                   ),
                 ),
               ),

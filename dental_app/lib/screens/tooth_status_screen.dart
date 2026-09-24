@@ -60,8 +60,6 @@ class _ToothStatusScreenState extends State<ToothStatusScreen> {
     super.dispose();
   }
 
-  bool get _isUpper => _fdi ~/ 10 == 1 || _fdi ~/ 10 == 2;
-
   String? get _rawStatus {
     final palmer = fdiToPalmer[_fdi];
     if (palmer == null) return null;
@@ -285,9 +283,6 @@ class _ToothStatusScreenState extends State<ToothStatusScreen> {
   /// [panel]: سطح المكتب -- اللوحة تملأ عمودها الجانبي كاملاً، فلا ظلّ
   /// يتسرّب تحتها ومحتواها في المنتصف رأسياً.
   Widget _buildHero(ResolvedToothStatus? resolved, {bool panel = false}) {
-    final fill = resolved?.color.withValues(alpha: 0.28) ?? toothDefaultFill;
-    final stroke = resolved?.color ?? toothDefaultStroke;
-
     return Container(
       padding: EdgeInsets.fromLTRB(
           16, MediaQuery.of(context).padding.top + 14, 16, 34),
@@ -349,9 +344,9 @@ class _ToothStatusScreenState extends State<ToothStatusScreen> {
                     height: 172,
                     child: CustomPaint(
                       painter: ToothShapePainter(
-                        fill: fill,
-                        stroke: stroke,
-                        isUpper: _isUpper,
+                        fdi: _fdi,
+                        statusColor: resolved?.color,
+                        statusKey: resolveToothStatusKey(_rawStatus),
                       ),
                     ),
                   ),

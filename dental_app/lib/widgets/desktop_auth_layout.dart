@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import 'clinic_logo.dart';
 
 /// إطار شاشتَي الدخول والتفعيل على سطح المكتب (2026-09-24)
 /// ═══════════════════════════════════════════════════════════════════════════
@@ -126,17 +127,8 @@ class DesktopAuthLayout extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Container(
-                      width: 52,
-                      height: 52,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: .12),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white.withValues(alpha: .22)),
-                      ),
-                      child: const Icon(Icons.medical_services_rounded, size: 26, color: Colors.white),
-                    ),
+                    // النسخة الفاتحة دائماً: بطاقة بيضاء واضحة فوق التدرّج البنفسجي.
+                    const ClinicLogo(size: 58, dark: false),
                     const SizedBox(width: 14),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

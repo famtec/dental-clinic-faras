@@ -5,6 +5,7 @@ import '../models/inventory_item.dart';
 import '../models/treatment_catalog_item.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_sheet.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/desktop_widgets.dart';
 
@@ -144,9 +145,9 @@ class _TreatmentCatalogScreenState extends State<TreatmentCatalogScreen> {
   }
 
   Future<void> _openItemSheet({TreatmentCatalogItem? item}) async {
-    final saved = await showModalBottomSheet<bool>(
+    final saved = await showAppSheet<bool>(
       context: context,
-      constraints: context.isDesktopShell ? const BoxConstraints(maxWidth: 640) : null,
+      desktopWidth: 640,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) =>
@@ -794,7 +795,7 @@ class _CatalogItemSheetState extends State<_CatalogItemSheet> {
           sum + (material.unitCost * material.quantity));
 
   Future<void> _addMaterial() async {
-    final added = await showModalBottomSheet<CatalogMaterial>(
+    final added = await showAppSheet<CatalogMaterial>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -1219,13 +1220,15 @@ class _SheetShell extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: surf.divider,
-                    borderRadius: BorderRadius.circular(999),
+              BottomSheetOnly(
+                child: Center(
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: surf.divider,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
                   ),
                 ),
               ),

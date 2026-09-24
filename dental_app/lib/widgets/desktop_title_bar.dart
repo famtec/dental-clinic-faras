@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../theme/app_theme.dart';
+import 'clinic_logo.dart';
 
 /// شريط عنوان النافذة على ويندوز (2026-09-24)
 /// ═══════════════════════════════════════════════════════════════════════════
@@ -79,16 +80,7 @@ class _DesktopTitleBarState extends State<DesktopTitleBar> with WindowListener {
                 child: Row(
                   children: [
                     const SizedBox(width: 12),
-                    Container(
-                      width: 18,
-                      height: 18,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        gradient: d.logoGradient,
-                        borderRadius: BorderRadius.circular(5),
-                      ),
-                      child: Icon(Icons.medical_services_rounded, size: 11, color: d.onLogo),
-                    ),
+                    const ClinicLogo(size: 20),
                     const SizedBox(width: 8),
                     Text(
                       widget.title,

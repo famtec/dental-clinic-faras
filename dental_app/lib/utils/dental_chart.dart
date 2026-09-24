@@ -173,6 +173,16 @@ ResolvedToothStatus? resolveToothStatus(String? rawValue) {
   return null;
 }
 
+/// مفتاح الحالة الثابتة (decay/filling/...) لقيمة من chart_state بعد فكّ
+/// مرادفات الألوان القديمة، أو null لحالة مخصّصة أو فارغة. رسم السن يحتاجه
+/// ليرسم «مقلوع» و«لبية» و«زراعة» بشكلها لا بلونها وحده (2026-09-24).
+String? resolveToothStatusKey(String? rawValue) {
+  if (rawValue == null || rawValue.trim().isEmpty) return null;
+  final normalized = rawValue.trim().toLowerCase();
+  if (toothStatusByKey(normalized) != null) return normalized;
+  return _legacyToothColorSynonyms[normalized];
+}
+
 /// لون السن الافتراضي (بلا أي حالة مسجّلة) -- نفس اللون الكريمي/العاجي
 /// المستخدم في مخطط أسنان الموقع.
 const Color toothDefaultFill = Color(0xFFFFFBEB);

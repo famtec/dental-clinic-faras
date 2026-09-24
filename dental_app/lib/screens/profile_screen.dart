@@ -10,6 +10,7 @@ import '../services/auth_storage.dart';
 import '../services/media_picker.dart';
 import '../services/platform_support.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_sheet.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/booking_qr_card.dart';
 import '../widgets/desktop_widgets.dart';
@@ -218,7 +219,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     final surf = context.surface;
-    final source = await showModalBottomSheet<ImageSource>(
+    final source = await showAppSheet<ImageSource>(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) => Container(
@@ -231,14 +232,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Center(
-              child: Container(
-                width: 42,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: surf.cardBorder,
-                  borderRadius: BorderRadius.circular(999),
+            BottomSheetOnly(
+              child: Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: surf.cardBorder,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
                 ),
               ),
             ),

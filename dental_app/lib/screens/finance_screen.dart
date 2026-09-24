@@ -5,6 +5,7 @@ import '../models/finance_transaction.dart';
 import '../models/patient_stats.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_sheet.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/desktop_widgets.dart';
 
@@ -545,9 +546,8 @@ class _FinanceScreenState extends State<FinanceScreen> {
 
   Future<void> _openAddExpenseSheet() async {
     final result =
-        await showModalBottomSheet<({bool inventorySynced, String? inventoryAction})>(
+        await showAppSheet<({bool inventorySynced, String? inventoryAction})>(
       context: context,
-      constraints: context.isDesktopShell ? const BoxConstraints(maxWidth: 560) : null,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _AddExpenseSheet(apiService: widget.apiService),
@@ -572,9 +572,8 @@ class _FinanceScreenState extends State<FinanceScreen> {
   /// عام لكل صفوف FinancialTransaction (انظر شرح updateFinanceTransaction في
   /// api_service.dart). 2026-09-07.
   Future<void> _openEditMoveSheet(FinanceTransaction move) async {
-    final saved = await showModalBottomSheet<bool>(
+    final saved = await showAppSheet<bool>(
       context: context,
-      constraints: context.isDesktopShell ? const BoxConstraints(maxWidth: 560) : null,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _EditTransactionSheet(
@@ -1009,14 +1008,16 @@ class _AddExpenseSheetState extends State<_AddExpenseSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Center(
-                child: Container(
-                  width: 42,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: surf.divider,
-                    borderRadius: BorderRadius.circular(999),
+              BottomSheetOnly(
+                child: Center(
+                  child: Container(
+                    width: 42,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: surf.divider,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
                   ),
                 ),
               ),
@@ -1250,14 +1251,16 @@ class _EditTransactionSheetState extends State<_EditTransactionSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Center(
-                child: Container(
-                  width: 42,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: surf.divider,
-                    borderRadius: BorderRadius.circular(999),
+              BottomSheetOnly(
+                child: Center(
+                  child: Container(
+                    width: 42,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: surf.divider,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
                   ),
                 ),
               ),

@@ -4,6 +4,7 @@ import '../config.dart';
 import '../models/doctor_profile.dart';
 import '../theme/app_theme.dart';
 import '../utils/tier_access.dart';
+import 'clinic_logo.dart';
 
 /// غلاف سطح المكتب: شريط جانبي ثابت + ترويسة علوية + مساحة محتوى (2026-09-22)
 /// ═══════════════════════════════════════════════════════════════════════════
@@ -278,19 +279,9 @@ class _Sidebar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 22),
       child: Row(
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              gradient: d.logoGradient,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: d.navActiveShadow,
-            ),
-            // نفس علامة التطبيق في شاشة الإقلاع (splash_screen.dart) بالضبط،
-            // لا أيقونة جديدة -- الكانفاس يرسم ضِرساً في SVG، والتطبيق ليس
-            // فيه أصل صورة للشعار، فالعلامة الموحّدة أقلّ الشرّين.
-            child: Icon(Icons.medical_services_rounded, size: 22, color: d.onLogo),
-          ),
+          // شعار الموقع نفسه (2026-09-24) بدل أيقونة الحقيبة الطبية: السنّ
+          // البنفسجي بمربّعاته، بنسخته الفاتحة نهاراً والداكنة ليلاً.
+          const ClinicLogo(size: 46),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

@@ -18,6 +18,7 @@ import '../services/media_picker.dart';
 import '../theme/app_theme.dart';
 import '../utils/appointment_status.dart';
 import '../utils/dental_chart.dart';
+import '../widgets/app_sheet.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/clinic_doctor_field.dart';
 import '../widgets/desktop_widgets.dart';
@@ -235,7 +236,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
   /// الجوال)، ويمكن تكرار الضغط لرفع أكثر من ملف بنفس الوصف المكتوب حالياً.
   Future<void> _pickAndUploadArchiveFile() async {
     final surf = context.surface;
-    final choice = await showModalBottomSheet<String>(
+    final choice = await showAppSheet<String>(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) => Container(
@@ -248,14 +249,16 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Center(
-              child: Container(
-                width: 42,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: surf.cardBorder,
-                  borderRadius: BorderRadius.circular(999),
+            BottomSheetOnly(
+              child: Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: surf.cardBorder,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
                 ),
               ),
             ),
@@ -719,7 +722,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
         TextEditingController(text: _patient.medicalHistory ?? '');
     final formKey = GlobalKey<FormState>();
 
-    await showModalBottomSheet<void>(
+    await showAppSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -794,14 +797,16 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Center(
-                        child: Container(
-                          width: 42,
-                          height: 4,
-                          margin: const EdgeInsets.only(bottom: 16),
-                          decoration: BoxDecoration(
-                            color: surf.cardBorder,
-                            borderRadius: BorderRadius.circular(999),
+                      BottomSheetOnly(
+                        child: Center(
+                          child: Container(
+                            width: 42,
+                            height: 4,
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: surf.cardBorder,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
                           ),
                         ),
                       ),
@@ -992,7 +997,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
     var isSavingCustom = false;
     var hintText = 'اختر الحالة السنية المناسبة وسيتم حفظها فورًا على الملف السحابي.';
 
-    showModalBottomSheet<void>(
+    showAppSheet<void>(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
@@ -1240,7 +1245,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
               'لا حالات مفعَّلة في اللائحة. أضِفها من «لائحة أسعار العلاجات».')));
       return null;
     }
-    return showModalBottomSheet<TreatmentCatalogItem>(
+    return showAppSheet<TreatmentCatalogItem>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -1257,13 +1262,15 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Center(
-                  child: Container(
-                    width: 44,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: surf.divider,
-                      borderRadius: BorderRadius.circular(999),
+                BottomSheetOnly(
+                  child: Center(
+                    child: Container(
+                      width: 44,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: surf.divider,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
                     ),
                   ),
                 ),
@@ -1494,17 +1501,19 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
   }
 
   void _openInvoiceDetail(TreatmentInvoice invoice) {
-    showModalBottomSheet(
+    showAppSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (sheetContext) {
+        // في حوار سطح المكتب لا سحب بالفأرة: الورقة بارتفاع الحوار كاملاً.
+        final desktop = AppSheetScope.isDialog(sheetContext);
         return DraggableScrollableSheet(
-          initialChildSize: 0.7,
-          minChildSize: 0.4,
-          maxChildSize: 0.92,
+          initialChildSize: desktop ? 1 : 0.7,
+          minChildSize: desktop ? 1 : 0.4,
+          maxChildSize: desktop ? 1 : 0.92,
           expand: false,
           builder: (sheetContext, scrollController) {
             return _InvoiceDetailSheet(
@@ -2650,7 +2659,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
       );
     }
 
-    await showModalBottomSheet<void>(
+    await showAppSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -2758,14 +2767,16 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Center(
-                        child: Container(
-                          width: 42,
-                          height: 4,
-                          margin: const EdgeInsets.only(bottom: 16),
-                          decoration: BoxDecoration(
-                            color: surf.cardBorder,
-                            borderRadius: BorderRadius.circular(999),
+                      BottomSheetOnly(
+                        child: Center(
+                          child: Container(
+                            width: 42,
+                            height: 4,
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: surf.cardBorder,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
                           ),
                         ),
                       ),
@@ -3423,7 +3434,7 @@ class _InvoiceDetailSheetState extends State<_InvoiceDetailSheet> {
     // نداء مباشر عند كل تغيير، لا نتيجة راجعة من pop: الورقة السفلية تُغلَق
     // أيضاً بالسحب لأسفل وبزر الرجوع، وكلاهما يُرجع null -- فكانت أرقام
     // الفاتورة تبقى قديمة بعد إضافة مادة إن أغلق الطبيب الورقة بالسحب.
-    await showModalBottomSheet<void>(
+    await showAppSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -3454,13 +3465,15 @@ class _InvoiceDetailSheetState extends State<_InvoiceDetailSheet> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: surf.fieldBorder,
-                  borderRadius: BorderRadius.circular(4),
+            BottomSheetOnly(
+              child: Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: surf.fieldBorder,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
                 ),
               ),
             ),
@@ -3795,13 +3808,15 @@ class _InvoiceMaterialsSheetState extends State<_InvoiceMaterialsSheet> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Center(
-                  child: Container(
-                    width: 44,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: surf.divider,
-                      borderRadius: BorderRadius.circular(999),
+                BottomSheetOnly(
+                  child: Center(
+                    child: Container(
+                      width: 44,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: surf.divider,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
                     ),
                   ),
                 ),

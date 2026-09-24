@@ -4,6 +4,7 @@ import 'package:intl/intl.dart' show NumberFormat;
 import '../models/inventory_item.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_sheet.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/desktop_widgets.dart';
 import 'contact_developer_screen.dart';
@@ -134,9 +135,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   Future<void> _openAddItemSheet() async {
-    final added = await showModalBottomSheet<bool>(
+    final added = await showAppSheet<bool>(
       context: context,
-      constraints: context.isDesktopShell ? const BoxConstraints(maxWidth: 560) : null,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _InventoryItemSheet(apiService: widget.apiService),
@@ -145,9 +145,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   Future<void> _openEditItemSheet(InventoryItem item) async {
-    final result = await showModalBottomSheet<bool>(
+    final result = await showAppSheet<bool>(
       context: context,
-      constraints: context.isDesktopShell ? const BoxConstraints(maxWidth: 560) : null,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _InventoryItemSheet(apiService: widget.apiService, item: item),
@@ -530,14 +529,16 @@ class _InventoryItemSheetState extends State<_InventoryItemSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Center(
-                child: Container(
-                  width: 42,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: surf.divider,
-                    borderRadius: BorderRadius.circular(999),
+              BottomSheetOnly(
+                child: Center(
+                  child: Container(
+                    width: 42,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: surf.divider,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
                   ),
                 ),
               ),

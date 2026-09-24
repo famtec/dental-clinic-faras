@@ -8,6 +8,7 @@ import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/appointment_status.dart';
 import '../utils/clinic_doctor_colors.dart';
+import '../widgets/app_sheet.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/desktop_shell.dart';
 import '../widgets/desktop_widgets.dart';
@@ -232,12 +233,6 @@ class _PickerResult<T> {
   const _PickerResult(this.value);
 }
 
-/// عرض الأوراق السفلية على سطح المكتب. ورقة بعرض نافذة ويندوز كاملة تمدّ
-/// حقل الوصف على 1400px، فتُحصر في 560px في الوسط. null على الجوال = بلا
-/// تغيير إطلاقاً.
-BoxConstraints? _sheetConstraints(BuildContext context) =>
-    context.isDesktopShell ? const BoxConstraints(maxWidth: 560) : null;
-
 Future<_PickerResult<T>?> _showOptionPickerSheet<T>({
   required BuildContext context,
   required String title,
@@ -245,9 +240,8 @@ Future<_PickerResult<T>?> _showOptionPickerSheet<T>({
   required T? current,
 }) {
   final surf = context.surface;
-  return showModalBottomSheet<_PickerResult<T>>(
+  return showAppSheet<_PickerResult<T>>(
     context: context,
-    constraints: _sheetConstraints(context),
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
     builder: (sheetContext) => Container(
@@ -262,14 +256,16 @@ Future<_PickerResult<T>?> _showOptionPickerSheet<T>({
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Center(
-            child: Container(
-              width: 42,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 14),
-              decoration: BoxDecoration(
-                color: surf.divider,
-                borderRadius: BorderRadius.circular(999),
+          BottomSheetOnly(
+            child: Center(
+              child: Container(
+                width: 42,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 14),
+                decoration: BoxDecoration(
+                  color: surf.divider,
+                  borderRadius: BorderRadius.circular(999),
+                ),
               ),
             ),
           ),
@@ -585,9 +581,8 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
   /// عند النجاح يُحدَّث جدول اليوم فوراً فيظهر الموعد الجديد إن كان لليوم
   /// الحالي.
   Future<void> _openAddAppointmentSheet() async {
-    final created = await showModalBottomSheet<Appointment>(
+    final created = await showAppSheet<Appointment>(
       context: context,
-      constraints: _sheetConstraints(context),
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) => _AddAppointmentSheet(
@@ -612,9 +607,8 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
     ];
     final currentStatus = appointment.status.toLowerCase();
     final surf = context.surface;
-    final selected = await showModalBottomSheet<String>(
+    final selected = await showAppSheet<String>(
       context: context,
-      constraints: _sheetConstraints(context),
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         return Container(
@@ -627,14 +621,16 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Center(
-                child: Container(
-                  width: 42,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: surf.divider,
-                    borderRadius: BorderRadius.circular(999),
+              BottomSheetOnly(
+                child: Center(
+                  child: Container(
+                    width: 42,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: surf.divider,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
                   ),
                 ),
               ),
@@ -686,9 +682,8 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
       );
     }
 
-    await showModalBottomSheet<void>(
+    await showAppSheet<void>(
       context: context,
-      constraints: _sheetConstraints(context),
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
@@ -821,14 +816,16 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Center(
-                        child: Container(
-                          width: 42,
-                          height: 4,
-                          margin: const EdgeInsets.only(bottom: 16),
-                          decoration: BoxDecoration(
-                            color: context.surface.divider,
-                            borderRadius: BorderRadius.circular(999),
+                      BottomSheetOnly(
+                        child: Center(
+                          child: Container(
+                            width: 42,
+                            height: 4,
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: context.surface.divider,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
                           ),
                         ),
                       ),
@@ -2567,13 +2564,15 @@ class _AddAppointmentSheetState extends State<_AddAppointmentSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Center(
-              child: Container(
-                width: 42,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: context.surface.divider,
-                  borderRadius: BorderRadius.circular(999),
+            BottomSheetOnly(
+              child: Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: context.surface.divider,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
                 ),
               ),
             ),

@@ -126,6 +126,8 @@ extension _ProfileDesktop on _ProfileScreenState {
             ],
           ),
         ),
+        const SizedBox(height: 14),
+        const _DesktopThemeCard(),
       ],
     );
   }
@@ -496,6 +498,158 @@ extension _ProfileDesktop on _ProfileScreenState {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// «مظهر التطبيق» على سطح المكتب (2026-09-24) -- نفس [ThemeController] الذي
+/// يستعمله مبدّل «المزيد» على الجوال، بشكل شريط مقطّع بثلاث خانات بدل
+/// الكبسولات الثلاث الكبيرة. لا «مزيد» في غلاف سطح المكتب، فبلا هذه البطاقة
+/// لم يكن هناك طريق للوضع الليلي إطلاقاً.
+class _DesktopThemeCard extends StatelessWidget {
+  const _DesktopThemeCard();
+
+  static const _options = <({ThemeMode mode, String label, IconData icon})>[
+    (mode: ThemeMode.light, label: 'نهاري', icon: Icons.light_mode_outlined),
+    (mode: ThemeMode.dark, label: 'ليلي', icon: Icons.dark_mode_outlined),
+    (mode: ThemeMode.system, label: 'تلقائي', icon: Icons.brightness_auto_outlined),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.desktop;
+    return DesktopCard(
+      padding: const EdgeInsets.all(16),
+      child: ValueListenableBuilder<ThemeMode>(
+        valueListenable: ThemeController.instance.mode,
+        builder: (context, current, _) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: d.iconBoxBg,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: d.iconBoxBorder),
+                  ),
+                  child: Icon(Icons.palette_outlined, size: 19, color: d.iconBoxFg),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('مظهر التطبيق',
+                          style: AppType.sans(
+                              fontSize: 13.5, fontWeight: FontWeight.w700, color: d.textPrimary)),
+                      Text(
+                        current == ThemeMode.system
+                            ? 'يتبع إعداد ويندوز تلقائياً'
+                            : 'يُحفظ على هذا الجهاز',
+                        style: AppType.sans(fontSize: 11, color: d.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: d.fieldBg,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: d.fieldBorder),
+              ),
+              child: Row(
+                children: [
+                  for (var i = 0; i < _options.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 4),
+                    Expanded(
+                      child: _DesktopThemeSegment(
+                        label: _options[i].label,
+                        icon: _options[i].icon,
+                        selected: current == _options[i].mode,
+                        onTap: () => ThemeController.instance.set(_options[i].mode),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DesktopThemeSegment extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _DesktopThemeSegment({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  State<_DesktopThemeSegment> createState() => _DesktopThemeSegmentState();
+}
+
+class _DesktopThemeSegmentState extends State<_DesktopThemeSegment> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.desktop;
+    final on = widget.selected;
+    final fg = on ? d.onNavActive : (_hovered ? d.textPrimary : d.navInactiveFg);
+    // طبقتان كروابط الشريط الجانبي: التدرّج ثابت في الخارجية، ولون المرور
+    // وحده متحرّك في الداخلية -- التحريك بين تدرّج ولون مسطّح يومض.
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Container(
+          decoration: on
+              ? BoxDecoration(
+                  gradient: d.navActiveGradient,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: d.navActiveShadow,
+                )
+              : null,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            height: 38,
+            decoration: BoxDecoration(
+              color: !on && _hovered ? d.sidebarHover : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(widget.icon, size: 16, color: fg),
+                const SizedBox(width: 6),
+                Text(
+                  widget.label,
+                  style: AppType.sans(fontSize: 12.5, fontWeight: FontWeight.w700, color: fg),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
