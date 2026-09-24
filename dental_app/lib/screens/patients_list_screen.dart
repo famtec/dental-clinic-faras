@@ -7,6 +7,8 @@ import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/clinic_doctor_field.dart';
+import '../widgets/desktop_widgets.dart';
+import 'desktop_patients_view.dart';
 import 'patient_detail_screen.dart';
 
 class PatientsListScreen extends StatefulWidget {
@@ -44,6 +46,10 @@ class PatientsListScreenState extends State<PatientsListScreen> {
   /// المحمَّلة أصلاً -- لا نداء إضافي للسيرفر، والأعداد على الشرائح محسوبة
   /// من نفس القائمة لا مخمَّنة.
   int _filterIndex = 0;
+
+  /// يزداد مع كل تحميل ناجح للمرضى، فتعيد صفحة سطح المكتب قراءة المواعيد
+  /// والفواتير التي تبني منها «آخر زيارة» ولوحة المعاينة.
+  int _reloadToken = 0;
 
   @override
   void initState() {
@@ -103,6 +109,7 @@ class PatientsListScreenState extends State<PatientsListScreen> {
       setState(() {
         _patients = patients;
         _isLoading = false;
+        _reloadToken++;
       });
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -157,12 +164,29 @@ class PatientsListScreenState extends State<PatientsListScreen> {
   /// عند النجاح: تحديث القائمة، ثم الانتقال مباشرة لملف المريض الجديد (نفس
   /// سلوك "التوجيه التلقائي بعد الإضافة" المعتمد في الموقع).
   Future<void> _openAddPatientSheet() async {
-    final created = await showModalBottomSheet<Patient>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => _AddPatientSheet(apiService: widget.apiService),
-    );
+    // على سطح المكتب نافذة حوار في الوسط: ورقة سفلية بعرض نافذة ويندوز
+    // كاملة تمدّ حقلاً واحداً على 1400px. النموذج نفسه في الحالتين.
+    final created = context.isDesktopShell
+        ? await showDialog<Patient>(
+            context: context,
+            builder: (dialogContext) => Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 480),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(26),
+                  child: _AddPatientSheet(apiService: widget.apiService),
+                ),
+              ),
+            ),
+          )
+        : await showModalBottomSheet<Patient>(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (sheetContext) => _AddPatientSheet(apiService: widget.apiService),
+          );
     if (created == null || !mounted) return;
     await _load();
     if (!mounted) return;
@@ -187,8 +211,32 @@ class PatientsListScreenState extends State<PatientsListScreen> {
     return '$greeting · لديك $active موعداً نشطاً';
   }
 
+  /// تخطيط سطح المكتب: جدول بلوحة معاينة (انظر desktop_patients_view.dart).
+  /// نفس القائمة ونفس حقل البحث ونفس نموذج الإضافة -- الفرق في العرض وحده.
+  Widget _buildDesktop(BuildContext context) {
+    final d = context.desktop;
+    if (_isLoading && _patients == null) {
+      return Center(child: CircularProgressIndicator(color: d.linkFg));
+    }
+    if (_errorMessage != null && _patients == null) {
+      return DesktopErrorState(message: _errorMessage!, onRetry: _load);
+    }
+    return DesktopPatientsView(
+      apiService: widget.apiService,
+      patients: _patients ?? const [],
+      searchController: _searchController,
+      searchQuery: _searchQuery,
+      onSearchChanged: (value) => setState(() => _searchQuery = value),
+      onAddPatient: _openAddPatientSheet,
+      onOpenPatient: _openPatientDetail,
+      onSessionExpired: widget.onSessionExpired,
+      reloadToken: _reloadToken,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (context.isDesktopShell) return _buildDesktop(context);
     // AtmosphereBackground صارت تغلّف الشاشة كاملةً (لا منطقة القائمة وحدها)
     // حتى تمرّ كرات الضوء خلف الترويسة أيضاً كما في التصميم -- الترويسة لم
     // تعد كتلة داكنة مصمتة تحجبها.

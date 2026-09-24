@@ -9,6 +9,10 @@ import '../theme/app_theme.dart';
 import '../utils/appointment_status.dart';
 import '../utils/clinic_doctor_colors.dart';
 import '../widgets/app_widgets.dart';
+import '../widgets/desktop_shell.dart';
+import '../widgets/desktop_widgets.dart';
+
+part 'today_schedule_desktop.dart';
 
 const _scheduleArabicMonthNames = [
   'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
@@ -228,6 +232,12 @@ class _PickerResult<T> {
   const _PickerResult(this.value);
 }
 
+/// عرض الأوراق السفلية على سطح المكتب. ورقة بعرض نافذة ويندوز كاملة تمدّ
+/// حقل الوصف على 1400px، فتُحصر في 560px في الوسط. null على الجوال = بلا
+/// تغيير إطلاقاً.
+BoxConstraints? _sheetConstraints(BuildContext context) =>
+    context.isDesktopShell ? const BoxConstraints(maxWidth: 560) : null;
+
 Future<_PickerResult<T>?> _showOptionPickerSheet<T>({
   required BuildContext context,
   required String title,
@@ -237,6 +247,7 @@ Future<_PickerResult<T>?> _showOptionPickerSheet<T>({
   final surf = context.surface;
   return showModalBottomSheet<_PickerResult<T>>(
     context: context,
+    constraints: _sheetConstraints(context),
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
     builder: (sheetContext) => Container(
@@ -406,6 +417,17 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
   final Set<int> _updatingIds = {};
   final Set<int> _deletingIds = {};
 
+  /// الموعد المعروض في لوحة التفاصيل على سطح المكتب. null = أوّل موعد في
+  /// اليوم المعروض (انظر _desktopSelected في today_schedule_desktop.dart).
+  int? _selectedAppointmentId;
+
+  /// سطح المكتب: عرض القائمة بدل شبكة الساعات.
+  bool _desktopListView = false;
+
+  /// setState لامتداد سطح المكتب في ملف الـ part -- setState محميّة فلا
+  /// تُنادى من امتداد مباشرةً.
+  void _update(VoidCallback fn) => setState(fn);
+
   @override
   void initState() {
     super.initState();
@@ -565,6 +587,7 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
   Future<void> _openAddAppointmentSheet() async {
     final created = await showModalBottomSheet<Appointment>(
       context: context,
+      constraints: _sheetConstraints(context),
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) => _AddAppointmentSheet(
@@ -591,6 +614,7 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
     final surf = context.surface;
     final selected = await showModalBottomSheet<String>(
       context: context,
+      constraints: _sheetConstraints(context),
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         return Container(
@@ -664,6 +688,7 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
 
     await showModalBottomSheet<void>(
       context: context,
+      constraints: _sheetConstraints(context),
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
@@ -1060,6 +1085,7 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (context.isDesktopShell) return _buildDesktop(context);
     // 2026-09-05: الخلفية الجوّية تغلّف الشاشة كاملةً بدل منطقة القائمة
     // وحدها. حين كانت داخل Expanded كانت كرات الضوء تُقصّ عند حافتها العليا
     // فيظهر **خطّ أفقي حادّ تحت الترويسة مباشرة** -- وهو "الحدود" التي رآها
@@ -1342,7 +1368,11 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
   /// الارتفاع = المدة: موعد الساعتين ضِعف موعد الساعة بالضبط، فالفراغ في
   /// اليوم يظهر فراغاً والضغط يظهر ضغطاً. الحالة على خلفية البطاقة والطبيب
   /// على شريط حافتها: بُعدان لا يتنافسان على نفس المساحة.
-  Widget _buildHourColumnsGrid(List<Appointment> appointments) {
+  Widget _buildHourColumnsGrid(
+    List<Appointment> appointments, {
+    bool fillHeight = false,
+    bool framed = true,
+  }) {
     final surf = context.surface;
 
     // ترويسة الأعمدة: صاحب الحساب دائماً (اختفاؤه يوحي بأنه ليس طبيباً في
@@ -1396,12 +1426,16 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
         final viewportHeight = bodyHeight + kGridBodyPadding;
         final maxBodyHeight = _gridMaxBodyHeight(context);
 
+        // framed == false داخل لوحة سطح المكتب: اللوحة نفسها تحمل الإطار
+        // والزوايا، فإطار ثانٍ داخلها يرسم خطّين متوازيين.
         return Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: surf.cardBorder),
-          ),
-          clipBehavior: Clip.antiAlias,
+          decoration: framed
+              ? BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: surf.cardBorder),
+                )
+              : null,
+          clipBehavior: framed ? Clip.antiAlias : Clip.none,
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: SizedBox(
@@ -1412,15 +1446,23 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
                   // الترويسة خارج المُمرِّر العمودي فتبقى ظاهرة عند التمرير،
                   // وداخل المُمرِّر الأفقي فلا تنفصل أسماء الأطباء عن أعمدتهم
                   // عند السحب.
-                  _buildGridHeader(columns, appointments, columnWidth,
-                      (endHour - startHour) * 60),
+                  // IntrinsicHeight: صفّ الترويسة يمدّ خلاياه بارتفاعه
+                  // (stretch)، وابن Column لا يأخذ ارتفاعاً محدوداً، فبلا هذا
+                  // يطلب الصفّ ارتفاعاً لانهائياً ويسقط التخطيط كله.
+                  IntrinsicHeight(
+                    child: _buildGridHeader(columns, appointments, columnWidth,
+                        (endHour - startHour) * 60),
+                  ),
                   // هامش رأسي للجسم: تسمية الساعة الأولى ترتفع 8px فوق
                   // علامتها والأخيرة تنزل مثلها، وبلا هذا الهامش يقصّهما إطار
                   // البطاقة (Clip.antiAlias) فتبدأ الشبكة وتنتهي بسطر ساعة
                   // مقطوع. نفس علاج padding-block في hg-body بالموقع: الهامش
                   // يُضاف للجسم ولا يُخصم من ارتفاع الساعة، فتبقى العلامات
                   // على أماكنها.
-                  SizedBox(
+                  // fillHeight: لوحة سطح المكتب تعطي الشبكة ارتفاعاً محدّداً،
+                  // فيأخذ الجسم كل ما تحت الترويسة بدل سقف محسوب من النافذة.
+                  _gridBodyBox(
+                    fill: fillHeight,
                     height: viewportHeight < maxBodyHeight
                         ? viewportHeight
                         : maxBodyHeight,
@@ -1456,6 +1498,13 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
       },
     );
   }
+
+  Widget _gridBodyBox({
+    required bool fill,
+    required double height,
+    required Widget child,
+  }) =>
+      fill ? Expanded(child: child) : SizedBox(height: height, child: child);
 
   Widget _buildGridHeader(
     List<({int? id, String name, String spec, bool owner})> columns,
@@ -1789,7 +1838,14 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: () => _openEditAppointmentSheet(appointment),
+          // على سطح المكتب النقر يختار الموعد فتعرضه لوحة التفاصيل بجانب
+          // الشبكة (التعديل زرّ فيها)، والنقر المزدوج يفتح التعديل مباشرةً.
+          onTap: context.isDesktopShell
+              ? () => _update(() => _selectedAppointmentId = appointment.id)
+              : () => _openEditAppointmentSheet(appointment),
+          onDoubleTap: context.isDesktopShell
+              ? () => _openEditAppointmentSheet(appointment)
+              : null,
           child: Container(
             padding: const EdgeInsetsDirectional.fromSTEB(10, 4, 6, 4),
             decoration: BoxDecoration(
@@ -1799,6 +1855,15 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
                 right: BorderSide(color: doctorColor, width: 4),
               ),
             ),
+            // إطار الموعد المختار على سطح المكتب يُرسم **فوق** البطاقة لا ظلّاً
+            // تحتها: خلفيات الحالة شفّافة ليلاً، فالظلّ كان يملأ البطاقة كلها.
+            foregroundDecoration: context.isDesktopShell &&
+                    _desktopSelected()?.id == appointment.id
+                ? BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: doctorColor, width: 2),
+                  )
+                : null,
             // الارتفاع مفروض من المدة، فلو زاد المحتوى سطراً واحداً لرسم
             // Flutter شرائط الفيض الصفراء بدل أن يقصّ. OverflowBox يمنح
             // المحتوى ارتفاعاً غير محدود وClipRect يقصّه: تدرّج ناعم بلا

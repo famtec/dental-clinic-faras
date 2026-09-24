@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../models/appointment.dart';
 import '../models/clinic_doctor.dart';
@@ -10,6 +9,7 @@ import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/clinic_doctor_colors.dart';
 import '../widgets/desktop_shell.dart';
+import '../widgets/desktop_widgets.dart';
 
 /// لوحة التحكم — صفحة «الرئيسية» في غلاف سطح المكتب (2026-09-22)
 /// ═══════════════════════════════════════════════════════════════════════════
@@ -49,34 +49,6 @@ class DesktopHomeScreen extends StatefulWidget {
 
   @override
   State<DesktopHomeScreen> createState() => DesktopHomeScreenState();
-}
-
-final NumberFormat _money = NumberFormat('#,##0', 'en_US');
-
-/// «09:00 ص» / «01:30 م» — نفس صياغة الكانفاس، بأرقام غربية كبقية الموقع
-/// والتطبيق (انظر [[dental_project_locale_digits_fix]]).
-String _clockLabel(int? minutes) {
-  if (minutes == null) return '—';
-  final normalized = minutes % (24 * 60);
-  final hour24 = normalized ~/ 60;
-  final minute = normalized % 60;
-  final isPm = hour24 >= 12;
-  var hour12 = hour24 % 12;
-  if (hour12 == 0) hour12 = 12;
-  final hh = hour12.toString().padLeft(2, '0');
-  final mm = minute.toString().padLeft(2, '0');
-  return '$hh:$mm ${isPm ? 'م' : 'ص'}';
-}
-
-/// الأحرف الأولى لاسم المريض/الطبيب داخل المربّع الملوّن.
-String _initials(String name) {
-  final words = name
-      .split(RegExp(r'\s+'))
-      .where((w) => w.isNotEmpty && w != 'د.' && w != 'د')
-      .toList();
-  if (words.isEmpty) return '؟';
-  if (words.length == 1) return words.first.substring(0, 1);
-  return '${words[0].substring(0, 1)}.${words[1].substring(0, 1)}';
 }
 
 class DesktopHomeScreenState extends State<DesktopHomeScreen> {
@@ -211,7 +183,7 @@ class DesktopHomeScreenState extends State<DesktopHomeScreen> {
       return Center(child: CircularProgressIndicator(color: d.linkFg));
     }
     if (_errorMessage != null) {
-      return _ErrorState(message: _errorMessage!, onRetry: _load);
+      return DesktopErrorState(message: _errorMessage!, onRetry: _load);
     }
 
     return SingleChildScrollView(
@@ -287,7 +259,7 @@ class DesktopHomeScreenState extends State<DesktopHomeScreen> {
             ],
           ),
         ),
-        _CtaButton(
+        DesktopCtaButton(
           icon: Icons.add,
           label: 'حجز موعد جديد',
           onTap: () => widget.onOpenAppointments(openSheet: true),
@@ -318,7 +290,7 @@ class DesktopHomeScreenState extends State<DesktopHomeScreen> {
       final diff = todayIncome - yesterdayIncome;
       incomeDelta = diff == 0
           ? 'كأمس'
-          : '${diff > 0 ? '▲' : '▼'} ${_money.format(diff.abs())}';
+          : '${diff > 0 ? '▲' : '▼'} ${desktopMoney.format(diff.abs())}';
     }
 
     return Row(
@@ -336,7 +308,7 @@ class DesktopHomeScreenState extends State<DesktopHomeScreen> {
         Expanded(
           child: _StatCard(
             icon: Icons.people_outline,
-            value: stats == null ? '—' : _money.format(stats.totalPatients),
+            value: stats == null ? '—' : desktopMoney.format(stats.totalPatients),
             // الكانفاس يقول «مرضى جدد هذا الأسبوع»، والخادم لا يُرجع تاريخ
             // تسجيل المريض فلا سبيل لحسابه بصدق. الرقم هنا هو ما تعنيه
             // بطاقة «إجمالي المرضى» في index.html بالموقع حرفياً.
@@ -347,7 +319,7 @@ class DesktopHomeScreenState extends State<DesktopHomeScreen> {
         Expanded(
           child: _StatCard(
             icon: Icons.payments_outlined,
-            value: todayIncome == null ? '—' : _money.format(todayIncome),
+            value: todayIncome == null ? '—' : desktopMoney.format(todayIncome),
             label: 'إيرادات اليوم (ل.س)',
             delta: incomeDelta,
             deltaPositive:
@@ -358,7 +330,7 @@ class DesktopHomeScreenState extends State<DesktopHomeScreen> {
         Expanded(
           child: _StatCard(
             icon: Icons.account_balance_wallet_outlined,
-            value: stats == null ? '—' : _money.format(stats.pendingBalances),
+            value: stats == null ? '—' : desktopMoney.format(stats.pendingBalances),
             label: 'مستحقات معلّقة (ل.س)',
             warn: true,
           ),
@@ -373,12 +345,12 @@ class DesktopHomeScreenState extends State<DesktopHomeScreen> {
     final rows = _todayAppointments;
     final multiDoctor = _clinicDoctors.isNotEmpty;
 
-    return _Panel(
+    return DesktopPanel(
       title: 'مواعيد اليوم',
       actionLabel: 'عرض الكل ←',
       onAction: () => widget.onOpenAppointments(),
       child: rows.isEmpty
-          ? _EmptyHint(
+          ? DesktopEmptyHint(
               icon: Icons.event_available_outlined,
               text: 'لا توجد مواعيد اليوم',
             )
@@ -452,7 +424,7 @@ class DesktopHomeScreenState extends State<DesktopHomeScreen> {
         (id: doctor.id, name: doctor.fullName),
     ];
 
-    return _Panel(
+    return DesktopPanel(
       title: 'الأطباء اليوم',
       shrink: true,
       child: Column(
@@ -494,12 +466,12 @@ class DesktopHomeScreenState extends State<DesktopHomeScreen> {
   // ── آخر الحركات المالية ─────────────────────────────────────────────────
 
   Widget _latestMoves(BuildContext context) {
-    return _Panel(
+    return DesktopPanel(
       title: 'آخر الحركات المالية',
       actionLabel: 'التفاصيل ←',
       onAction: widget.onOpenFinance,
       child: _moves.isEmpty
-          ? _EmptyHint(
+          ? DesktopEmptyHint(
               icon: Icons.receipt_long_outlined,
               text: 'لا توجد حركات في هذا الشهر',
             )
@@ -618,103 +590,6 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-/// لوحة بيضاء/زجاجية بعنوان ورابط إجراء اختياري. [shrink] لِلوحة تأخذ
-/// ارتفاع محتواها (الأطباء اليوم) بدل أن تتمدّد.
-class _Panel extends StatelessWidget {
-  final String title;
-  final String? actionLabel;
-  final VoidCallback? onAction;
-  final Widget child;
-  final bool shrink;
-
-  const _Panel({
-    required this.title,
-    required this.child,
-    this.actionLabel,
-    this.onAction,
-    this.shrink = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final d = context.desktop;
-    final content = Column(
-      mainAxisSize: shrink ? MainAxisSize.min : MainAxisSize.max,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                title,
-                style: AppType.kufi(
-                  fontSize: 14.5,
-                  fontWeight: FontWeight.w700,
-                  color: d.textPrimary,
-                ),
-              ),
-            ),
-            if (actionLabel != null)
-              _TextLink(label: actionLabel!, onTap: onAction),
-          ],
-        ),
-        const SizedBox(height: 12),
-        if (shrink) child else Expanded(child: child),
-      ],
-    );
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-      decoration: BoxDecoration(
-        color: d.cardBg,
-        gradient: d.cardGradient,
-        borderRadius: BorderRadius.circular(AppDesktopMetrics.radiusPanel),
-        border: Border.all(color: d.cardBorder),
-        boxShadow: d.panelShadow,
-      ),
-      child: content,
-    );
-  }
-}
-
-class _TextLink extends StatefulWidget {
-  final String label;
-  final VoidCallback? onTap;
-
-  const _TextLink({required this.label, required this.onTap});
-
-  @override
-  State<_TextLink> createState() => _TextLinkState();
-}
-
-class _TextLinkState extends State<_TextLink> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final d = context.desktop;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Text(
-          widget.label,
-          style: AppType.sans(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: d.linkFg,
-          ).copyWith(
-            decoration: _hovered ? TextDecoration.underline : null,
-            decorationColor: d.linkFg,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// صفّ موعد في جدول اليوم.
 class _AppointmentRow extends StatefulWidget {
   final Appointment appointment;
@@ -742,7 +617,7 @@ class _AppointmentRowState extends State<_AppointmentRow> {
   Widget build(BuildContext context) {
     final d = context.desktop;
     final a = widget.appointment;
-    final statusPill = _statusPill(context, a.status);
+    final statusPill = desktopStatusPill(context, a.status);
 
     Widget cell(int flex, Widget child) => Expanded(flex: flex, child: child);
     Widget text(String value, {bool strong = false, Color? color}) => Text(
@@ -772,7 +647,7 @@ class _AppointmentRowState extends State<_AppointmentRow> {
           ),
           child: Row(
             children: [
-              cell(16, text(_clockLabel(a.startMinutes), strong: true)),
+              cell(16, text(desktopClockLabel(a.startMinutes), strong: true)),
               cell(26, text(a.patientName)),
               if (widget.showDoctor)
                 cell(
@@ -813,45 +688,6 @@ class _AppointmentRowState extends State<_AppointmentRow> {
   }
 }
 
-/// شارة الحالة بألوان سطح المكتب. الحالات الثلاث التي تظهر في جدول اليوم
-/// فعلاً: تمّ/دخل العيادة (أخضر)، قيد الانتظار (كهرماني)، وما عداهما نيلي.
-Widget _statusPill(BuildContext context, String status) {
-  final d = context.desktop;
-  late final Color fg;
-  late final Color bg;
-  late final Color border;
-  switch (status.toLowerCase()) {
-    case 'checked_in':
-    case 'confirmed':
-    case 'completed':
-      fg = d.pillDoneFg;
-      bg = d.pillDoneBg;
-      border = d.pillDoneBorder;
-      break;
-    case 'pending':
-      fg = d.pillWaitingFg;
-      bg = d.pillWaitingBg;
-      border = d.pillWaitingBorder;
-      break;
-    default:
-      fg = d.pillUpcomingFg;
-      bg = d.pillUpcomingBg;
-      border = d.pillUpcomingBorder;
-  }
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4),
-    decoration: BoxDecoration(
-      color: bg,
-      borderRadius: BorderRadius.circular(999),
-      border: Border.all(color: border),
-    ),
-    child: Text(
-      appointmentStatusLabelsAr[status.toLowerCase()] ?? status,
-      style: AppType.sans(fontSize: 11.5, fontWeight: FontWeight.w700, color: fg),
-    ),
-  );
-}
-
 /// صفّ طبيب في لوحة «الأطباء اليوم».
 class _DoctorRow extends StatelessWidget {
   final String name;
@@ -885,7 +721,7 @@ class _DoctorRow extends StatelessWidget {
                   borderRadius: BorderRadius.circular(AppDesktopMetrics.radiusIconBox),
                 ),
                 child: Text(
-                  _initials(name),
+                  desktopInitials(name),
                   style: AppType.kufi(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -980,7 +816,7 @@ class _MoveRow extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Text(
-            '${income ? '+' : '−'}${_money.format(move.amount.abs())}',
+            '${income ? '+' : '−'}${desktopMoney.format(move.amount.abs())}',
             style: AppType.kufi(
               fontSize: 12.5,
               fontWeight: FontWeight.w700,
@@ -998,7 +834,7 @@ String _moveDateLabel(DateTime? date) {
   if (date == null) return '—';
   final now = DateTime.now();
   final local = date.toLocal();
-  final time = _clockLabel(local.hour * 60 + local.minute);
+  final time = desktopClockLabel(local.hour * 60 + local.minute);
   bool sameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
   if (sameDay(local, now)) return 'اليوم، $time';
@@ -1006,112 +842,3 @@ String _moveDateLabel(DateTime? date) {
   return '${desktopArabicDateLine(local).split('، ').last}، $time';
 }
 
-class _EmptyHint extends StatelessWidget {
-  final IconData icon;
-  final String text;
-
-  const _EmptyHint({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    final d = context.desktop;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 34, color: d.textMuted),
-          const SizedBox(height: 10),
-          Text(text, style: AppType.sans(fontSize: 13, color: d.textSecondary)),
-        ],
-      ),
-    );
-  }
-}
-
-class _ErrorState extends StatelessWidget {
-  final String message;
-  final VoidCallback onRetry;
-
-  const _ErrorState({required this.message, required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    final d = context.desktop;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.cloud_off_outlined, size: 40, color: d.textMuted),
-          const SizedBox(height: 12),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: AppType.sans(fontSize: 13.5, color: d.textSecondary),
-          ),
-          const SizedBox(height: 16),
-          _CtaButton(icon: Icons.refresh, label: 'إعادة المحاولة', onTap: onRetry),
-        ],
-      ),
-    );
-  }
-}
-
-/// زرّ الإجراء الرئيسي بسلّم التمييز.
-class _CtaButton extends StatefulWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _CtaButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  State<_CtaButton> createState() => _CtaButtonState();
-}
-
-class _CtaButtonState extends State<_CtaButton> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final d = context.desktop;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedScale(
-          scale: _hovered ? 1.02 : 1,
-          duration: const Duration(milliseconds: 150),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            decoration: BoxDecoration(
-              gradient: d.ctaGradient,
-              borderRadius: BorderRadius.circular(AppDesktopMetrics.radiusCta),
-              boxShadow: d.ctaShadow,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(widget.icon, size: 16, color: d.onCta),
-                const SizedBox(width: 8),
-                Text(
-                  widget.label,
-                  style: AppType.sans(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    color: d.onCta,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}

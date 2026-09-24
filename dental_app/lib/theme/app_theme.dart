@@ -991,13 +991,18 @@ class AppDesktop extends ThemeExtension<AppDesktop> {
     iconBtnHover: const Color(0xFFFFFFFF).withValues(alpha: .06),
     badgeDot: const Color(0xFFF43F5E),
     badgeDotRing: const Color(0xFF07061A),
-    cardBg: const Color(0xFFFFFFFF).withValues(alpha: .05),
-    cardGradient: LinearGradient(
+    // ‼️ أسطح البطاقات **معتمة** بألوان مسبقة المزج (الأبيض .05/.075/.025
+    // فوق ‎#07061A) لا أبيض شفّاف كما في الكانفاس. في CSS لا يُرسم
+    // box-shadow إلا خارج حدود العنصر، أما BoxShadow في Flutter فيُرسم تحت
+    // الصندوق كله، فكان التوهّج البنفسجي (panelShadow) يغمر كل لوحة زجاجية
+    // من داخلها. النتيجة البصرية نفسها على خلفية الصفحة، بلا التسرّب.
+    cardBg: const Color(0xFF131225),
+    cardGradient: const LinearGradient(
       begin: Alignment.topRight,
       end: Alignment.bottomLeft,
       colors: [
-        const Color(0xFFFFFFFF).withValues(alpha: .075),
-        const Color(0xFFFFFFFF).withValues(alpha: .025),
+        Color(0xFF1A192B),
+        Color(0xFF0D0C20),
       ],
     ),
     cardBorder: const Color(0xFFFFFFFF).withValues(alpha: .10),
