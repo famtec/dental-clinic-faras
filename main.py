@@ -1980,6 +1980,58 @@ def resolve_activation_key_tier(activation_key: "models.ActivationKey", activati
     return TIER_PREMIUM
 
 
+def apply_activation_key(
+    db: Session,
+    user: "models.User",
+    activation_key: "models.ActivationKey",
+    target_tier: str,
+) -> list:
+    """يطبّق كود تفعيل على حساب قائم: **الرمز الجديد يحلّ محلّ القديم**
+    (2026-09-25، بطلب فارس).
+
+    قبله كانت أيام الرمز الجديد تُضاف فوق ما تبقّى من القديم، وتبقى الباقة
+    الأعلى بينهما. الآن:
+      * الاشتراك = اليوم + مدة الرمز الجديد، والأيام المتبقية من القديم تسقط.
+      * الباقة = باقة الرمز الجديد دائماً، حتى لو كانت أقل من الحالية.
+      * إن كان الاشتراك ما زال سارياً، يُعلَّم كل رمز سابق للحساب لم ينتهِ
+        بعد «ملغى» (revoked_at + replaced_by_code) ليظهر كذلك في الجرد
+        الإداري. رمز انتهت مدته طبيعياً (يُعرف من used_at) لا يُعلَّم.
+
+    يعيد قائمة الرموز التي أُلغيت (فارغة إن لم يكن هناك رمز سارٍ). لا يستدعي
+    commit -- المستدعي يملك المعاملة.
+    """
+    now = datetime.utcnow()
+    revoked = []
+    subscription_running = (
+        user.subscription_expires_at is not None and user.subscription_expires_at > now
+    )
+    if subscription_running:
+        previous_keys = (
+            db.query(models.ActivationKey)
+            .filter(func.lower(models.ActivationKey.used_by_email) == (user.email or "").strip().lower())
+            .filter(models.ActivationKey.is_used.is_(True))
+            .filter(models.ActivationKey.revoked_at.is_(None))
+            .filter(models.ActivationKey.id != activation_key.id)
+            .all()
+        )
+        for previous in previous_keys:
+            used_at = getattr(previous, "used_at", None)
+            if used_at is not None and used_at + timedelta(days=previous.duration_days or 0) <= now:
+                continue
+            previous.revoked_at = now
+            previous.replaced_by_code = activation_key.key_code
+            revoked.append(previous.key_code)
+
+    user.tier = target_tier
+    user.subscription_expires_at = now + timedelta(days=activation_key.duration_days)
+    user.is_active = True
+
+    activation_key.is_used = True
+    activation_key.used_by_email = user.email
+    activation_key.used_at = now
+    return revoked
+
+
 @app.post("/api/auth/register")
 def register_user(register_request: RegisterRequest, db: Session = Depends(database.get_db)):
     try:
@@ -2030,6 +2082,7 @@ def register_user(register_request: RegisterRequest, db: Session = Depends(datab
 
         activation_key.is_used = True
         activation_key.used_by_email = normalized_email
+        activation_key.used_at = datetime.utcnow()
 
         db.add(new_user)
         db.commit()
@@ -2230,27 +2283,21 @@ def upgrade_user_tier(upgrade_request: UpgradeTierRequest, db: Session = Depends
     if user is None:
         raise HTTPException(status_code=404, detail="تعذر تحديد الحساب المطلوب ترقيته.")
 
-    now = datetime.utcnow()
-    base_date = user.subscription_expires_at if user.subscription_expires_at and user.subscription_expires_at > now else now
-
     try:
-        # لا نُنزل باقة أعلى: من يملك Premium Plus ويستخدم كود Premium شهري
-        # للتجديد يجب أن يبقى على Premium Plus، لا أن يهبط بصمت.
-        user.tier = upgrade_target_tier if tier_level(upgrade_target_tier) >= tier_level(user) else normalize_tier(user)
-        user.subscription_expires_at = base_date + timedelta(days=activation_key.duration_days)
-        user.is_active = True
-
-        activation_key.is_used = True
-        activation_key.used_by_email = user.email
-
+        # الرمز الجديد يحلّ محلّ القديم -- انظر apply_activation_key.
+        revoked_codes = apply_activation_key(db, user, activation_key, upgrade_target_tier)
         db.commit()
         db.refresh(user)
     except Exception:
         db.rollback()
         raise HTTPException(status_code=400, detail="تعذر تنفيذ الترقية حالياً. حاول مرة أخرى.")
 
+    message = f"تمت ترقية الحساب إلى {tier_display_name(user.tier)} بنجاح."
+    if revoked_codes:
+        message += " أُلغي رمز التفعيل السابق، والمدة الجديدة تبدأ من اليوم."
     return {
-        "message": f"تمت ترقية الحساب إلى {tier_display_name(user.tier)} بنجاح.",
+        "message": message,
+        "previous_code_cancelled": bool(revoked_codes),
         "doctor_name": user.doctor_name,
         "email": user.email,
         "tier": user.tier,
@@ -7367,18 +7414,8 @@ def activate_account(request: ActivationRequest, db: Session = Depends(database.
     try:
         # 3. ترقية الحساب فعلياً مع ضبط تاريخ انتهاء الاشتراك وتفعيل الحساب،
         # وتعليم الكود كمُستخدَم حتى لا يُعاد استخدامه من قِبل شخص آخر
-        now = datetime.utcnow()
-        base_date = user.subscription_expires_at if user.subscription_expires_at and user.subscription_expires_at > now else now
-
-        # لا تنزيل لباقة أعلى عند التجديد بكود أدنى -- انظر نفس الحارس في
-        # upgrade_user_tier. الاستثناء الوحيد حساب منتهي الاشتراك: باقته
-        # المخزَّنة حينها "expired_subscription" ومستواها صفر أصلاً.
-        user.tier = target_tier if tier_level(target_tier) >= tier_level(user) else normalize_tier(user)
-        user.subscription_expires_at = base_date + timedelta(days=activation_key.duration_days)
-        user.is_active = True
-
-        activation_key.is_used = True
-        activation_key.used_by_email = normalized_email
+        # الرمز الجديد يحلّ محلّ القديم -- انظر apply_activation_key.
+        revoked_codes = apply_activation_key(db, user, activation_key, target_tier)
 
         db.commit()
         db.refresh(user)
@@ -7397,11 +7434,14 @@ def activate_account(request: ActivationRequest, db: Session = Depends(database.
             )
         else:
             success_message = f"تم تفعيل عيادتك الرقمية بنجاح وترقيتها إلى {granted_name}!"
+        if revoked_codes:
+            success_message += " أُلغي رمز التفعيل السابق، والمدة الجديدة تبدأ من اليوم."
 
         return {
             "status": "success",
             "message": success_message,
             "is_renewal": is_renewal,
+            "previous_code_cancelled": bool(revoked_codes),
             "user_tier": user.tier,
             "subscription_expires_at": user.subscription_expires_at.isoformat() if user.subscription_expires_at else None,
         }
@@ -7561,6 +7601,10 @@ class ActivationKeyListItem(BaseModel):
     is_used: bool
     used_by_email: Optional[str] = None
     created_at: Optional[datetime] = None
+    used_at: Optional[datetime] = None
+    # ملغى لأن رمزاً جديداً أُدخل فوقه والاشتراك سارٍ (2026-09-25).
+    revoked_at: Optional[datetime] = None
+    replaced_by_code: Optional[str] = None
     # حالة الحساب الذي استهلك الكود (فارغة للأكواد المتاحة)
     holder_tier: Optional[str] = None
     holder_expires_at: Optional[datetime] = None
@@ -7606,6 +7650,7 @@ def list_activation_keys(
         "total": len(resolved),
         "used": sum(1 for k, _ in resolved if k.is_used),
         "available": sum(1 for k, _ in resolved if not k.is_used),
+        "revoked": sum(1 for k, _ in resolved if getattr(k, "revoked_at", None) is not None),
         "by_grants_tier": {},
         "by_prefix": {},
     }
@@ -7644,6 +7689,9 @@ def list_activation_keys(
                 is_used=bool(k.is_used),
                 used_by_email=k.used_by_email,
                 created_at=getattr(k, "created_at", None),
+                used_at=getattr(k, "used_at", None),
+                revoked_at=getattr(k, "revoked_at", None),
+                replaced_by_code=getattr(k, "replaced_by_code", None),
                 holder_tier=(normalize_tier(holder) if holder is not None else None),
                 holder_expires_at=(holder.subscription_expires_at if holder is not None else None),
                 holder_days_left=days_left,

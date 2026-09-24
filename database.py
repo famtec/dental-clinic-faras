@@ -521,6 +521,18 @@ def init_db():
                 # ويرفضها Postgres (الدرس الموثّق عند patients.last_recall_sent_at).
                 connection.execute(text("ALTER TABLE activation_keys ADD COLUMN created_at TIMESTAMP"))
 
+    # استبدال الرمز بدل تكديسه (2026-09-25): يوم الاستهلاك، ويوم الإلغاء
+    # والرمز الذي حلّ محلّه. nullable كلها -- القديم يبقى NULL بصدق.
+    if "activation_keys" in inspector.get_table_names():
+        key_columns = {column["name"] for column in inspector.get_columns("activation_keys")}
+        with engine.begin() as connection:
+            if "used_at" not in key_columns:
+                connection.execute(text("ALTER TABLE activation_keys ADD COLUMN used_at TIMESTAMP"))
+            if "revoked_at" not in key_columns:
+                connection.execute(text("ALTER TABLE activation_keys ADD COLUMN revoked_at TIMESTAMP"))
+            if "replaced_by_code" not in key_columns:
+                connection.execute(text("ALTER TABLE activation_keys ADD COLUMN replaced_by_code VARCHAR"))
+
     # فهارس البحث الأكثر تكراراً في هذه الميزة: كشف حساب طبيب واحد ضمن شهر
     # محدد، ورصيد كل أطباء عيادة واحدة. CREATE INDEX IF NOT EXISTS مدعومة في
     # SQLite وPostgres معاً، والعملية آمنة للتكرار في كلتيهما.

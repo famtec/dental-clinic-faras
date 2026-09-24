@@ -90,6 +90,13 @@ class ActivationKey(Base):
     # الترحيل كان سيكذب على كل دفعة سابقة. يُملأ صراحةً في
     # generate_renewal_keys وحده، فكل دفعة جديدة تحمل تاريخها الحقيقي.
     created_at = Column(DateTime, nullable=True)
+    # (2026-09-25) الرمز الجديد يحلّ محلّ القديم ولا يُضاف فوقه: عند إدخال
+    # رمز على اشتراك ما زال سارياً يُلغى الرمز السابق (revoked_at + الرمز
+    # الذي حلّ محلّه) وتبدأ مدة الجديد من يوم إدخاله. used_at يوم الاستهلاك
+    # -- NULL للأكواد المستهلَكة قبل هذا التاريخ.
+    used_at = Column(DateTime, nullable=True)
+    revoked_at = Column(DateTime, nullable=True)
+    replaced_by_code = Column(String, nullable=True)
 
 
 class Patient(Base):
