@@ -46,7 +46,7 @@ class LocalDb {
     final path = p.join(dir, 'dental_offline.db');
     final opened = await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: (db, version) async {
         await _createV1Tables(db);
         await _createV2Tables(db);
@@ -70,6 +70,12 @@ class LocalDb {
         // معلّقة، والمواد المخزَّنة قبل الترقية تأخذ صفراً = "غير مسجَّلة".
         if (oldVersion < 4) {
           await _upgradeInventoryToV4(db);
+        }
+        // 2026-09-24: الطبيب المعالج على المريض. عمودان مضافان على جدول
+        // patients القائم، والمرضى المخزَّنون قبل الترقية يأخذون null = الطبيب
+        // المدير، وهي القيمة نفسها التي يعطيها الخادم لهم.
+        if (oldVersion < 5) {
+          await _upgradePatientsToV5(db);
         }
       },
     );
@@ -147,6 +153,20 @@ class LocalDb {
     }
   }
 
+  /// ترقية جدول patients للنسخة 5 -- نفس مبدأ الترقيتين أعلاه (PRAGMA لا
+  /// ALTER أعمى).
+  static Future<void> _upgradePatientsToV5(Database db) async {
+    final info = await db.rawQuery('PRAGMA table_info(patients)');
+    final existing =
+        info.map((row) => (row['name'] as String?) ?? '').toSet();
+    if (!existing.contains('clinic_doctor_id')) {
+      await db.execute('ALTER TABLE patients ADD COLUMN clinic_doctor_id INTEGER');
+    }
+    if (!existing.contains('clinic_doctor_name')) {
+      await db.execute('ALTER TABLE patients ADD COLUMN clinic_doctor_name TEXT');
+    }
+  }
+
   static Future<void> _createV2Tables(Database db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS patients (
@@ -159,6 +179,8 @@ class LocalDb {
         total_treatment_cost REAL,
         paid_amount REAL,
         chart_state TEXT,
+        clinic_doctor_id INTEGER,
+        clinic_doctor_name TEXT,
         sync_status TEXT NOT NULL DEFAULT 'synced'
       )
     ''');
@@ -320,6 +342,8 @@ class LocalDb {
         'total_treatment_cost': p.totalTreatmentCost,
         'paid_amount': p.paidAmount,
         'chart_state': p.chartStateRaw,
+        'clinic_doctor_id': p.clinicDoctorId,
+        'clinic_doctor_name': p.clinicDoctorName,
         'sync_status': p.syncStatus,
       };
 
@@ -335,6 +359,8 @@ class LocalDb {
         totalTreatmentCost: (row['total_treatment_cost'] as num?)?.toDouble() ?? 0.0,
         paidAmount: (row['paid_amount'] as num?)?.toDouble() ?? 0.0,
         chartStateRaw: row['chart_state'] as String?,
+        clinicDoctorId: row['clinic_doctor_id'] as int?,
+        clinicDoctorName: row['clinic_doctor_name'] as String?,
         syncStatus: (row['sync_status'] as String?) ?? 'synced',
       );
 

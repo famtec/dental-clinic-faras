@@ -632,6 +632,491 @@ extension AppSurfaceContext on BuildContext {
       Theme.of(this).extension<AppSurface>() ?? AppSurface.light;
 }
 
+/// ───────────────────────────────────────────────────────────────────────────
+/// طبقة سطح المكتب -- توكنات الشريط الجانبي واللوحات الواسعة (2026-09-22)
+/// ───────────────────────────────────────────────────────────────────────────
+///
+/// لماذا امتداد منفصل ولا توسيع لـ [AppSurface]؟ لأن الجوال **يبقى كما هو
+/// حرفياً**. كل شاشة من شاشات الجوال تقرأ اليوم من `context.surface`، ولو
+/// غيّرنا فيه قيمة واحدة (مثل [AppSurface.dark.textSecondary]) لتتبع تصميم
+/// سطح المكتب، لانقلب لون النص في كل شاشة جوال في التطبيق بلا أن يطلب ذلك
+/// أحد. [AppDesktop] يعيش جنباً إلى جنب مع [AppSurface] في نفس الـ Theme:
+/// من يقرأ `context.surface` يحصل على تصميم الجوال بلا تغيير، ومن يبني
+/// غلاف سطح المكتب يقرأ `context.desktop`.
+///
+/// **الفارق المقصود مع الوضع الليلي للجوال**: في الجوال سلّم التمييز الليلي
+/// سماوي فاتح بنصّ داكن (`AppSurface.dark.accentGradient` + `onAccent`
+/// ‎#061019). على سطح المكتب التمييز في **الوضعين** هو نفس السلّم المُغمَّق
+/// ‎#06B6D4 → #4F46E5 ويحمل **نصّاً أبيض** -- هذا قرار التصميم على الكانفاس،
+/// والسبب أن عنصر التنقّل النشط في الشريط الجانبي كبسولة ممتلئة بعرض الشريط،
+/// فالكبسولة الفاتحة عليها نص داكن تصير أكبر بقعة ضوء في الشاشة الليلية
+/// وتسحب العين بعيداً عن المحتوى. ولذلك أيضاً كل نصوص الوضع الليلي هنا أفتح
+/// من نظيرتها في الجوال (‎#aab0d8 / #8e93c9 بدل #8B8FC7 / #7E83B8): على
+/// شاشة 1440px المسافات أوسع والنص أصغر نسبياً، والرمادي المائل للنيلي
+/// الغامق يذوب في السطح الزجاجي.
+///
+/// لا تُضِف قيمة تعتمد على الوضع إلى [AppColors]، ولا قيمة خاصة بسطح المكتب
+/// إلى [AppSurface] -- مكانها هنا.
+@immutable
+class AppDesktop extends ThemeExtension<AppDesktop> {
+  /// للتفريع النادر الذي لا يُعبَّر عنه بتوكن (اختيار Brightness لمكوّن
+  /// يفرضه إطار العمل). لا تستعمله لاختيار لون -- أضِف توكناً.
+  final bool isDark;
+
+  // ── الغلاف العام ──────────────────────────────────────────────────────
+  final Color shellBg;
+  final Color sidebarBg;
+  final Color sidebarBorder;
+  final Color sidebarHover;
+  final Color topBarBorder;
+
+  // ── التنقّل في الشريط الجانبي ─────────────────────────────────────────
+  /// كبسولة العنصر النشط. **نفس السلّم في الوضعين** (انظر شرح الصنف).
+  final LinearGradient navActiveGradient;
+
+  /// لون نص/أيقونة العنصر النشط -- أبيض في الوضعين.
+  final Color onNavActive;
+  final List<BoxShadow> navActiveShadow;
+  final Color navInactiveFg;
+
+  // ── الهوية والصور الرمزية ─────────────────────────────────────────────
+  final LinearGradient logoGradient;
+  final LinearGradient avatarGradient;
+  final Color onLogo;
+  final Color brandSubtitle;
+
+  // ── النصوص ────────────────────────────────────────────────────────────
+  final Color textPrimary;
+  final Color textSecondary;
+  final Color textMuted;
+  final Color linkFg;
+  final Color bigNumber;
+
+  /// توهّج خلف الرقم الكبير -- ليلاً فقط؛ نهاراً null.
+  final Color? bigNumberGlow;
+
+  // ── حقل البحث وأزرار الترويسة ────────────────────────────────────────
+  final Color fieldBg;
+  final Color fieldBorder;
+  final Color fieldFg;
+  final Color fieldHint;
+  final Color iconBtnBg;
+  final Color iconBtnBorder;
+  final Color iconBtnFg;
+  final Color iconBtnHover;
+
+  /// نقطة الإشعارات الحمراء وحلقتها (الحلقة بلون السطح تحتها لا بلون ثابت).
+  final Color badgeDot;
+  final Color badgeDotRing;
+
+  // ── البطاقات واللوحات ─────────────────────────────────────────────────
+  final Color cardBg;
+
+  /// تدرّج زجاجي فوق [cardBg] -- ليلاً فقط؛ نهاراً null (السطح مصمت أبيض).
+  final Gradient? cardGradient;
+  final Color cardBorder;
+  final List<BoxShadow> cardShadow;
+
+  /// اللوحات الكبيرة (جدول المواعيد، عمود البطاقات) -- نفس السطح بظلّ أعمق.
+  final List<BoxShadow> panelShadow;
+
+  // ── الجداول ───────────────────────────────────────────────────────────
+  final Color tableHeaderFg;
+  final Color rowDivider;
+  final Color rowHover;
+
+  // ── صناديق الأيقونات داخل البطاقات ───────────────────────────────────
+  final Color iconBoxBg;
+  final Color iconBoxBorder;
+  final Color iconBoxFg;
+  final Color warnBoxBg;
+  final Color warnBoxBorder;
+  final Color warnBoxFg;
+
+  // ── زر الإجراء الرئيسي ───────────────────────────────────────────────
+  final LinearGradient ctaGradient;
+  final Color onCta;
+  final List<BoxShadow> ctaShadow;
+
+  // ── المؤشّرات الحيّة وحالات الأطباء ──────────────────────────────────
+  final Color liveDot;
+  final Color liveDotHalo;
+  final Color statusOnline;
+  final Color statusBusy;
+
+  // ── المبالغ في قائمة الحركات ─────────────────────────────────────────
+  final Color amountIn;
+  final Color amountOut;
+
+  // ── الشارات ───────────────────────────────────────────────────────────
+  final Color tierFg;
+  final Color tierBg;
+  final Color pillDoneFg;
+  final Color pillDoneBg;
+  final Color pillDoneBorder;
+  final Color pillUpcomingFg;
+  final Color pillUpcomingBg;
+  final Color pillUpcomingBorder;
+  final Color pillWaitingFg;
+  final Color pillWaitingBg;
+  final Color pillWaitingBorder;
+
+  const AppDesktop({
+    required this.isDark,
+    required this.shellBg,
+    required this.sidebarBg,
+    required this.sidebarBorder,
+    required this.sidebarHover,
+    required this.topBarBorder,
+    required this.navActiveGradient,
+    required this.onNavActive,
+    required this.navActiveShadow,
+    required this.navInactiveFg,
+    required this.logoGradient,
+    required this.avatarGradient,
+    required this.onLogo,
+    required this.brandSubtitle,
+    required this.textPrimary,
+    required this.textSecondary,
+    required this.textMuted,
+    required this.linkFg,
+    required this.bigNumber,
+    required this.bigNumberGlow,
+    required this.fieldBg,
+    required this.fieldBorder,
+    required this.fieldFg,
+    required this.fieldHint,
+    required this.iconBtnBg,
+    required this.iconBtnBorder,
+    required this.iconBtnFg,
+    required this.iconBtnHover,
+    required this.badgeDot,
+    required this.badgeDotRing,
+    required this.cardBg,
+    required this.cardGradient,
+    required this.cardBorder,
+    required this.cardShadow,
+    required this.panelShadow,
+    required this.tableHeaderFg,
+    required this.rowDivider,
+    required this.rowHover,
+    required this.iconBoxBg,
+    required this.iconBoxBorder,
+    required this.iconBoxFg,
+    required this.warnBoxBg,
+    required this.warnBoxBorder,
+    required this.warnBoxFg,
+    required this.ctaGradient,
+    required this.onCta,
+    required this.ctaShadow,
+    required this.liveDot,
+    required this.liveDotHalo,
+    required this.statusOnline,
+    required this.statusBusy,
+    required this.amountIn,
+    required this.amountOut,
+    required this.tierFg,
+    required this.tierBg,
+    required this.pillDoneFg,
+    required this.pillDoneBg,
+    required this.pillDoneBorder,
+    required this.pillUpcomingFg,
+    required this.pillUpcomingBg,
+    required this.pillUpcomingBorder,
+    required this.pillWaitingFg,
+    required this.pillWaitingBg,
+    required this.pillWaitingBorder,
+  });
+
+  /// سلّم التمييز المُغمَّق -- مشترك بين الوضعين عمداً (انظر شرح الصنف).
+  /// الاتجاه topRight → bottomLeft هو ما يقابل `160deg` في CSS داخل تخطيط
+  /// RTL، وهو نفس ما تستعمله [AppSurface.light.accentGradient] بالضبط.
+  static const _accent = LinearGradient(
+    begin: Alignment.topRight,
+    end: Alignment.bottomLeft,
+    colors: [Color(0xFF06B6D4), Color(0xFF4F46E5)],
+  );
+
+  static const _avatar = LinearGradient(
+    begin: Alignment.topRight,
+    end: Alignment.bottomLeft,
+    colors: [Color(0xFF6366F1), Color(0xFF7C3AED)],
+  );
+
+  /// الوضع النهاري -- سطح أبيض، بطاقات مصمتة بظلّ نيلي ناعم، حدود
+  /// ‎#E2E8F0 بشفافية 90٪ كما في الكانفاس.
+  static final AppDesktop light = AppDesktop(
+    isDark: false,
+    shellBg: const Color(0xFFFFFFFF),
+    sidebarBg: const Color(0xFFFFFFFF),
+    sidebarBorder: const Color(0xFFE2E8F0).withValues(alpha: .90),
+    sidebarHover: const Color(0xFFF8FAFC),
+    topBarBorder: const Color(0xFFE2E8F0).withValues(alpha: .90),
+    navActiveGradient: _accent,
+    onNavActive: const Color(0xFFFFFFFF),
+    navActiveShadow: [
+      BoxShadow(
+        color: const Color(0xFF4F46E5).withValues(alpha: .55),
+        blurRadius: 22,
+        spreadRadius: -12,
+        offset: const Offset(0, 10),
+      ),
+    ],
+    navInactiveFg: const Color(0xFF475569),
+    logoGradient: _accent,
+    avatarGradient: _avatar,
+    onLogo: const Color(0xFFFFFFFF),
+    brandSubtitle: const Color(0xFF94A3B8),
+    textPrimary: const Color(0xFF0F172A),
+    textSecondary: const Color(0xFF64748B),
+    textMuted: const Color(0xFF94A3B8),
+    linkFg: const Color(0xFF4F46E5),
+    bigNumber: const Color(0xFF141034),
+    bigNumberGlow: null,
+    fieldBg: const Color(0xFFF8FAFC),
+    fieldBorder: const Color(0xFFE2E8F0),
+    fieldFg: const Color(0xFF0F172A),
+    fieldHint: const Color(0xFF94A3B8),
+    iconBtnBg: const Color(0xFFFFFFFF),
+    iconBtnBorder: const Color(0xFFE2E8F0),
+    iconBtnFg: const Color(0xFF475569),
+    iconBtnHover: const Color(0xFFF1F5F9),
+    badgeDot: const Color(0xFFF43F5E),
+    badgeDotRing: const Color(0xFFFFFFFF),
+    cardBg: const Color(0xFFFFFFFF),
+    cardGradient: null,
+    cardBorder: const Color(0xFFE2E8F0).withValues(alpha: .90),
+    cardShadow: [
+      BoxShadow(
+        color: const Color(0xFF0F172A).withValues(alpha: .04),
+        blurRadius: 2,
+        offset: const Offset(0, 1),
+      ),
+      BoxShadow(
+        color: const Color(0xFF4F46E5).withValues(alpha: .35),
+        blurRadius: 32,
+        spreadRadius: -22,
+        offset: const Offset(0, 16),
+      ),
+    ],
+    panelShadow: [
+      BoxShadow(
+        color: const Color(0xFF0F172A).withValues(alpha: .04),
+        blurRadius: 2,
+        offset: const Offset(0, 1),
+      ),
+      BoxShadow(
+        color: const Color(0xFF4F46E5).withValues(alpha: .50),
+        blurRadius: 46,
+        spreadRadius: -30,
+        offset: const Offset(0, 24),
+      ),
+    ],
+    tableHeaderFg: const Color(0xFF94A3B8),
+    rowDivider: const Color(0xFFF1F5F9),
+    rowHover: const Color(0xFFFAFBFF),
+    iconBoxBg: const Color(0xFFEEF2FF),
+    iconBoxBorder: const Color(0xFFE0E7FF),
+    iconBoxFg: const Color(0xFF4F46E5),
+    warnBoxBg: const Color(0xFFFFFBEB),
+    warnBoxBorder: const Color(0xFFFDE68A),
+    warnBoxFg: const Color(0xFFB45309),
+    ctaGradient: _accent,
+    onCta: const Color(0xFFFFFFFF),
+    ctaShadow: [
+      BoxShadow(
+        color: const Color(0xFF4F46E5).withValues(alpha: .55),
+        blurRadius: 26,
+        spreadRadius: -14,
+        offset: const Offset(0, 14),
+      ),
+    ],
+    liveDot: const Color(0xFF06B6D4),
+    liveDotHalo: const Color(0xFF06B6D4).withValues(alpha: .16),
+    statusOnline: const Color(0xFF06B6D4),
+    statusBusy: const Color(0xFFFBBF24),
+    amountIn: const Color(0xFF047857),
+    amountOut: const Color(0xFFB45309),
+    tierFg: const Color(0xFFB45309),
+    tierBg: const Color(0xFFFBBF24).withValues(alpha: .14),
+    pillDoneFg: const Color(0xFF047857),
+    pillDoneBg: const Color(0xFFECFDF5),
+    pillDoneBorder: const Color(0xFFA7F3D0),
+    pillUpcomingFg: const Color(0xFF4F46E5),
+    pillUpcomingBg: const Color(0xFFEEF2FF),
+    pillUpcomingBorder: const Color(0xFFE0E7FF),
+    pillWaitingFg: const Color(0xFFB45309),
+    pillWaitingBg: const Color(0xFFFFFBEB),
+    pillWaitingBorder: const Color(0xFFFDE68A),
+  );
+
+  /// الوضع الليلي -- سطح ‎#07061A، أسطح زجاجية من الأبيض الشفّاف، وكل النصوص
+  /// فاتحة. الشريط الجانبي أفتح قليلاً من الصفحة (‎.025) لا أغمق، فالعمق
+  /// يأتي من الضوء لا من الظلّ على سطح شبه أسود.
+  static final AppDesktop dark = AppDesktop(
+    isDark: true,
+    shellBg: const Color(0xFF07061A),
+    sidebarBg: const Color(0xFFFFFFFF).withValues(alpha: .025),
+    sidebarBorder: const Color(0xFFFFFFFF).withValues(alpha: .10),
+    sidebarHover: const Color(0xFFFFFFFF).withValues(alpha: .035),
+    topBarBorder: const Color(0xFFFFFFFF).withValues(alpha: .10),
+    navActiveGradient: _accent,
+    onNavActive: const Color(0xFFFFFFFF),
+    navActiveShadow: [
+      BoxShadow(
+        color: const Color(0xFF4F46E5).withValues(alpha: .55),
+        blurRadius: 22,
+        spreadRadius: -12,
+        offset: const Offset(0, 10),
+      ),
+    ],
+    navInactiveFg: const Color(0xFFC9CDEC),
+    logoGradient: _accent,
+    avatarGradient: _avatar,
+    onLogo: const Color(0xFFFFFFFF),
+    brandSubtitle: const Color(0xFF8E93C9),
+    textPrimary: const Color(0xFFF1F5F9),
+    textSecondary: const Color(0xFFAAB0D8),
+    textMuted: const Color(0xFF8E93C9),
+    linkFg: const Color(0xFFA5B4FC),
+    bigNumber: const Color(0xFFFFFFFF),
+    bigNumberGlow: const Color(0xFFA78BFA).withValues(alpha: .55),
+    fieldBg: const Color(0xFFFFFFFF).withValues(alpha: .035),
+    fieldBorder: const Color(0xFFFFFFFF).withValues(alpha: .12),
+    fieldFg: const Color(0xFFF1F5F9),
+    fieldHint: const Color(0xFF8E93C9),
+    iconBtnBg: const Color(0xFFFFFFFF).withValues(alpha: .05),
+    iconBtnBorder: const Color(0xFFFFFFFF).withValues(alpha: .12),
+    iconBtnFg: const Color(0xFFC9CDEC),
+    iconBtnHover: const Color(0xFFFFFFFF).withValues(alpha: .06),
+    badgeDot: const Color(0xFFF43F5E),
+    badgeDotRing: const Color(0xFF07061A),
+    cardBg: const Color(0xFFFFFFFF).withValues(alpha: .05),
+    cardGradient: LinearGradient(
+      begin: Alignment.topRight,
+      end: Alignment.bottomLeft,
+      colors: [
+        const Color(0xFFFFFFFF).withValues(alpha: .075),
+        const Color(0xFFFFFFFF).withValues(alpha: .025),
+      ],
+    ),
+    cardBorder: const Color(0xFFFFFFFF).withValues(alpha: .10),
+    cardShadow: [
+      BoxShadow(
+        color: const Color(0xFF7C3AED).withValues(alpha: .60),
+        blurRadius: 32,
+        spreadRadius: -22,
+        offset: const Offset(0, 16),
+      ),
+    ],
+    panelShadow: [
+      BoxShadow(
+        color: const Color(0xFF7C3AED).withValues(alpha: .75),
+        blurRadius: 50,
+        spreadRadius: -30,
+        offset: const Offset(0, 24),
+      ),
+    ],
+    tableHeaderFg: const Color(0xFF8E93C9),
+    rowDivider: const Color(0xFFFFFFFF).withValues(alpha: .06),
+    rowHover: const Color(0xFFFFFFFF).withValues(alpha: .05),
+    iconBoxBg: const Color(0xFF818CF8).withValues(alpha: .14),
+    iconBoxBorder: const Color(0xFF818CF8).withValues(alpha: .28),
+    iconBoxFg: const Color(0xFFA5B4FC),
+    warnBoxBg: const Color(0xFFFBBF24).withValues(alpha: .11),
+    warnBoxBorder: const Color(0xFFFBBF24).withValues(alpha: .30),
+    warnBoxFg: const Color(0xFFFBBF24),
+    ctaGradient: _accent,
+    onCta: const Color(0xFFFFFFFF),
+    ctaShadow: [
+      BoxShadow(
+        color: const Color(0xFF4F46E5).withValues(alpha: .55),
+        blurRadius: 26,
+        spreadRadius: -14,
+        offset: const Offset(0, 14),
+      ),
+    ],
+    liveDot: const Color(0xFF22D3EE),
+    liveDotHalo: const Color(0xFF22D3EE).withValues(alpha: .80),
+    statusOnline: const Color(0xFF22D3EE),
+    statusBusy: const Color(0xFFFBBF24),
+    amountIn: const Color(0xFF34D399),
+    amountOut: const Color(0xFFFBBF24),
+    tierFg: const Color(0xFFFBBF24),
+    tierBg: const Color(0xFFFCD34D).withValues(alpha: .10),
+    pillDoneFg: const Color(0xFF34D399),
+    pillDoneBg: const Color(0xFF34D399).withValues(alpha: .11),
+    pillDoneBorder: const Color(0xFF34D399).withValues(alpha: .28),
+    pillUpcomingFg: const Color(0xFFA5B4FC),
+    pillUpcomingBg: const Color(0xFF818CF8).withValues(alpha: .14),
+    pillUpcomingBorder: const Color(0xFF818CF8).withValues(alpha: .28),
+    pillWaitingFg: const Color(0xFFFBBF24),
+    pillWaitingBg: const Color(0xFFFBBF24).withValues(alpha: .11),
+    pillWaitingBorder: const Color(0xFFFBBF24).withValues(alpha: .30),
+  );
+
+  // نفس منطق [AppSurface]: النسختان ثابتتان، والمزج بين لوحتين متعاكستين
+  // ينتج ألواناً موحلة، فالتبديل قطعيّ عند منتصف الانتقال.
+  @override
+  AppDesktop copyWith() => this;
+
+  @override
+  AppDesktop lerp(covariant AppDesktop? other, double t) {
+    if (other == null) return this;
+    return t < 0.5 ? this : other;
+  }
+}
+
+/// مقاسات غلاف سطح المكتب -- ثابتة في الوضعين (اللون وحده يتبدّل)، فمكانها
+/// صنف ثوابت لا ThemeExtension.
+class AppDesktopMetrics {
+  AppDesktopMetrics._();
+
+  /// عتبة تحوّل التخطيط: فوقها الشريط الجانبي، وتحتها تخطيط الجوال كما هو
+  /// بلا أي تغيير. قرار المستخدم 2026-09-22.
+  static const double breakpoint = 1000;
+
+  static const double sidebarWidth = 272;
+  static const double topBarHeight = 78;
+
+  static const EdgeInsets sidebarPadding =
+      EdgeInsets.symmetric(horizontal: 18, vertical: 24);
+  static const EdgeInsets topBarPadding = EdgeInsets.symmetric(horizontal: 32);
+  static const EdgeInsets contentPadding =
+      EdgeInsets.symmetric(horizontal: 32, vertical: 26);
+
+  /// المسافات: [gapStat] بين بطاقات الإحصاء، [gapPanel] بين اللوحات،
+  /// [gapSection] بين أقسام الصفحة رأسياً.
+  static const double gapStat = 16;
+  static const double gapPanel = 18;
+  static const double gapSection = 22;
+
+  static const double radiusCard = 20;
+  static const double radiusPanel = 22;
+  static const double radiusNavItem = 14;
+  static const double radiusField = 12;
+  static const double radiusIconBox = 11;
+  static const double radiusCta = 13;
+  static const double radiusDoctorCard = 16;
+
+  /// ارتفاع حقل البحث وأزرار الأيقونات في الترويسة.
+  static const double controlHeight = 40;
+  static const double searchWidth = 260;
+}
+
+/// الوصول المختصر لتوكنات سطح المكتب. يرجع النسخة النهارية عند غياب
+/// الامتداد (شاشة داخل Theme خاص بها، أو اختبار widget) بدل الانهيار -- نفس
+/// سلوك [AppSurfaceContext].
+extension AppDesktopContext on BuildContext {
+  AppDesktop get desktop =>
+      Theme.of(this).extension<AppDesktop>() ?? AppDesktop.light;
+
+  /// هل التخطيط الحالي تخطيط سطح مكتب (عرض النافذة فوق العتبة)؟ يقرأ
+  /// MediaQuery فيعيد البناء تلقائياً عند تغيير حجم النافذة على ويندوز.
+  bool get isDesktopShell =>
+      MediaQuery.sizeOf(this).width >= AppDesktopMetrics.breakpoint;
+}
+
 /// خطّا الموقع بعد تحديث التوكنات في 2026-09-04: Noto Kufi Arabic للعناوين
 /// والأرقام، و Noto Sans Arabic للمتن. كان التطبيق ما زال على Tajawal
 /// (مطابقة 2026-09-02، أي قبل التحديث بيومين)، وهذا أحد أكبر أسباب شعور
@@ -746,7 +1231,13 @@ class AppTheme {
       fontFamily: GoogleFonts.notoSansArabic().fontFamily,
     );
     return base.copyWith(
-      extensions: <ThemeExtension<dynamic>>[surf],
+      // امتدادان جنباً إلى جنب: [AppSurface] لشاشات الجوال كما هي،
+      // و [AppDesktop] لغلاف سطح المكتب. اختيار نسخة سطح المكتب يتبع
+      // نفس وضع الإضاءة، فلا يمكن أن يتباعد الاثنان.
+      extensions: <ThemeExtension<dynamic>>[
+        surf,
+        surf.isDark ? AppDesktop.dark : AppDesktop.light,
+      ],
       textTheme: GoogleFonts.notoSansArabicTextTheme(base.textTheme)
           .apply(bodyColor: surf.textPrimary, displayColor: surf.textPrimary),
       appBarTheme: AppBarTheme(

@@ -19,6 +19,7 @@ import '../theme/app_theme.dart';
 import '../utils/appointment_status.dart';
 import '../utils/dental_chart.dart';
 import '../widgets/app_widgets.dart';
+import '../widgets/clinic_doctor_field.dart';
 import '../widgets/tooth_widget.dart';
 import 'tooth_status_screen.dart';
 
@@ -96,6 +97,10 @@ class PatientDetailScreen extends StatefulWidget {
 
 class _PatientDetailScreenState extends State<PatientDetailScreen> {
   late Patient _patient;
+
+  /// أطباء العيادة لحقل «الطبيب المعالج» في ورقة التعديل -- تُحمَّل عند أول
+  /// فتح للورقة وتُحفَظ لبقية عمر الشاشة.
+  ClinicDoctorChoices? _doctorChoices;
   List<TreatmentInvoice>? _invoices;
   String? _invoicesError;
   bool _isLoadingInvoices = true;
@@ -696,7 +701,13 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
   /// ملاحظات التاريخ الطبي. طلب المستخدم استبدال زر الاتصال القديم بهذا الزر
   /// 2026-08-29 (لم يكن له مقابل تعديل على الإطلاق في التطبيق من قبل).
   Future<void> _openEditPatientSheet() async {
+    // أطباء العيادة لحقل «الطبيب المعالج» -- يُطلَبون عند أول فتح للورقة لا
+    // مع فتح ملف المريض، فتصفّح الملفات لا يطلق طلباً لا يُستعمل.
+    final doctorChoices =
+        _doctorChoices ??= await ClinicDoctorChoices.load(widget.apiService);
+    if (!mounted) return;
     final surf = context.surface;
+    int? selectedDoctorId = _patient.clinicDoctorId;
     final nameController = TextEditingController(text: _patient.fullName);
     final phoneController = TextEditingController(text: _patient.phone);
     final ageController =
@@ -735,6 +746,11 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                   phone: phoneController.text.trim(),
                   medicalHistory: historyController.text.trim(),
                   birthDate: birthDate,
+                  // يُرسَل الطبيب فقط حين يظهر حقله -- عيادة بطبيب واحد لا
+                  // تمسّ ما على الخادم (انظر ApiService.updatePatient).
+                  clinicDoctorId: selectedDoctorId,
+                  sendClinicDoctor: !doctorChoices.isEmpty,
+                  clinicDoctorNameHint: doctorChoices.nameFor(selectedDoctorId),
                 );
                 if (!mounted) return;
                 setState(() => _patient = updated);
@@ -832,6 +848,16 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                         decoration:
                             const InputDecoration(labelText: 'ملاحظات التاريخ الطبي'),
                       ),
+                      if (!doctorChoices.isEmpty) ...[
+                        const SizedBox(height: 12),
+                        ClinicDoctorDropdown(
+                          choices: doctorChoices,
+                          value: selectedDoctorId,
+                          currentDoctorName: _patient.clinicDoctorName,
+                          onChanged: (id) =>
+                              setSheetState(() => selectedDoctorId = id),
+                        ),
+                      ],
                       if (error != null) ...[
                         const SizedBox(height: 10),
                         Text(error!,

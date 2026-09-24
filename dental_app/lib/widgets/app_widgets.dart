@@ -146,6 +146,11 @@ class StatusBadge extends StatelessWidget {
 /// فيفوز الحساب الصريح. الصيغة صحيحة في الحالتين ولا تضاعف في أيّهما.
 double floatingNavInset(BuildContext context) {
   final mq = MediaQuery.of(context);
+  // 2026-09-24: تخطيط سطح المكتب ليس فيه شريط سفلي عائم أصلاً -- التنقّل في
+  // شريط جانبي (انظر widgets/desktop_shell.dart). فحجز 82px أسفل كل قائمة
+  // هناك يترك شريط فراغ ميت في كل صفحة من صفحات نافذة ويندوز. تُضبَط هنا في
+  // موضع واحد فتصحّ الاثنتا عشرة نقطة استدعاء معاً بدل تعديل كل شاشة.
+  if (mq.size.width >= AppDesktopMetrics.breakpoint) return 16;
   final computed = 16 + 66 + mq.viewPadding.bottom;
   return mq.padding.bottom > computed ? mq.padding.bottom : computed;
 }
@@ -2228,10 +2233,16 @@ class SoftSearchField extends StatelessWidget {
   final String hintText;
   final ValueChanged<String> onChanged;
 
+  /// اختياري. يلزم فقط حين يُضبَط نصّ البحث من خارج الحقل (حقل بحث ترويسة
+  /// سطح المكتب يدفع كلمته إلى شاشة المرضى) -- بلا وحدة تحكّم يتغيّر الفلتر
+  /// ويبقى الحقل فارغاً أمام الطبيب، فلا يفهم لماذا اختفى نصف مرضاه.
+  final TextEditingController? controller;
+
   const SoftSearchField({
     super.key,
     required this.hintText,
     required this.onChanged,
+    this.controller,
   });
 
   @override
@@ -2243,6 +2254,7 @@ class SoftSearchField extends StatelessWidget {
         boxShadow: surf.cardShadow,
       ),
       child: TextField(
+        controller: controller,
         textAlign: TextAlign.right,
         onChanged: onChanged,
         style: TextStyle(

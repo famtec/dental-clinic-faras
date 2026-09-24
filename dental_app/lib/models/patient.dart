@@ -11,6 +11,15 @@ class Patient {
   final double paidAmount;
   final String? chartStateRaw;
 
+  /// الطبيب المعالج في العيادة متعددة الأطباء (أُضيف 2026-09-24).
+  /// **null = صاحب الحساب (الطبيب المدير)** لا "غير محدّد" -- نفس دلالة
+  /// [Appointment.clinicDoctorId] وpatients.clinic_doctor_id على الخادم.
+  final int? clinicDoctorId;
+
+  /// اسم الطبيب المعالج كما يرسله الخادم مع المريض، فلا يحتاج عرضه
+  /// GET /api/clinic-doctors (المحروس بباقة العيادات). null لمريض المدير.
+  final String? clinicDoctorName;
+
   /// حالة المزامنة مع السيرفر -- 'synced' دائماً لأي مريض قادم فعلياً من
   /// الـ backend (fromJson). القيم الأخرى ('pending_create' / 'pending_update')
   /// لا تظهر إلا لمريض أُنشئ/عُدِّلت بياناته الأساسية أو مخطط أسنانه أوفلاين
@@ -29,8 +38,15 @@ class Patient {
     required this.totalTreatmentCost,
     required this.paidAmount,
     this.chartStateRaw,
+    this.clinicDoctorId,
+    this.clinicDoctorName,
     this.syncStatus = 'synced',
   });
+
+  /// علامة "لم يتغيّر" لحقلَي الطبيب في [copyWith] -- لأن null هناك قيمة
+  /// ذات معنى (أعِده للطبيب المدير)، فلا تصلح علامةً للغياب. نفس
+  /// [Appointment.unchangedMarker].
+  static const Object unchangedMarker = Object();
 
   bool get isPendingSync => syncStatus != 'synced';
 
@@ -80,6 +96,8 @@ class Patient {
     double? totalTreatmentCost,
     double? paidAmount,
     String? chartStateRaw,
+    Object? clinicDoctorId = unchangedMarker,
+    Object? clinicDoctorName = unchangedMarker,
     String? syncStatus,
   }) {
     return Patient(
@@ -92,6 +110,12 @@ class Patient {
       totalTreatmentCost: totalTreatmentCost ?? this.totalTreatmentCost,
       paidAmount: paidAmount ?? this.paidAmount,
       chartStateRaw: chartStateRaw ?? this.chartStateRaw,
+      clinicDoctorId: identical(clinicDoctorId, unchangedMarker)
+          ? this.clinicDoctorId
+          : clinicDoctorId as int?,
+      clinicDoctorName: identical(clinicDoctorName, unchangedMarker)
+          ? this.clinicDoctorName
+          : clinicDoctorName as String?,
       syncStatus: syncStatus ?? this.syncStatus,
     );
   }
@@ -102,6 +126,8 @@ class Patient {
     if (rawBirthDate is String && rawBirthDate.isNotEmpty) {
       birthDate = DateTime.tryParse(rawBirthDate);
     }
+    final rawDoctorId = json['clinic_doctor_id'];
+    final rawDoctorName = json['clinic_doctor_name'];
     return Patient(
       id: json['id'] as int,
       fullName: (json['full_name'] as String?)?.trim() ?? 'بدون اسم',
@@ -113,6 +139,11 @@ class Patient {
           (json['total_treatment_cost'] as num?)?.toDouble() ?? 0.0,
       paidAmount: (json['paid_amount'] as num?)?.toDouble() ?? 0.0,
       chartStateRaw: json['chart_state'] as String?,
+      // خادم قديم لا يرسل الحقلين -> null = الطبيب المدير، وهي قيمته فعلاً.
+      clinicDoctorId: rawDoctorId is num ? rawDoctorId.toInt() : null,
+      clinicDoctorName: rawDoctorName is String && rawDoctorName.trim().isNotEmpty
+          ? rawDoctorName.trim()
+          : null,
     );
   }
 }

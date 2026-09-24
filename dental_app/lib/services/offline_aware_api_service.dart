@@ -349,6 +349,8 @@ class OfflineAwareApiService extends ApiService {
     DateTime? birthDate,
     String? gender,
     String? medicalHistory,
+    int? clinicDoctorId,
+    String? clinicDoctorNameHint,
   }) async {
     try {
       final created = await super.createPatient(
@@ -357,6 +359,7 @@ class OfflineAwareApiService extends ApiService {
         birthDate: birthDate,
         gender: gender,
         medicalHistory: medicalHistory,
+        clinicDoctorId: clinicDoctorId,
       );
       await _db.upsertPatient(created.copyWith(syncStatus: 'synced'));
       return created;
@@ -372,6 +375,8 @@ class OfflineAwareApiService extends ApiService {
         medicalHistory: medicalHistory,
         totalTreatmentCost: 0,
         paidAmount: 0,
+        clinicDoctorId: clinicDoctorId,
+        clinicDoctorName: clinicDoctorId == null ? null : clinicDoctorNameHint,
         syncStatus: 'pending_create',
       );
       await _db.upsertPatient(placeholder);
@@ -385,6 +390,7 @@ class OfflineAwareApiService extends ApiService {
           if (birthDate != null) 'birth_date': _formatDate(birthDate),
           'gender': gender,
           'medical_history': medicalHistory,
+          'clinic_doctor_id': clinicDoctorId,
         },
       );
       await _refreshPendingCount();
@@ -399,6 +405,9 @@ class OfflineAwareApiService extends ApiService {
     required String phone,
     required String medicalHistory,
     DateTime? birthDate,
+    int? clinicDoctorId,
+    bool sendClinicDoctor = false,
+    String? clinicDoctorNameHint,
   }) async {
     try {
       final updated = await super.updatePatient(
@@ -407,6 +416,8 @@ class OfflineAwareApiService extends ApiService {
         phone: phone,
         medicalHistory: medicalHistory,
         birthDate: birthDate,
+        clinicDoctorId: clinicDoctorId,
+        sendClinicDoctor: sendClinicDoctor,
       );
       await _db.upsertPatient(updated.copyWith(syncStatus: 'synced'));
       return updated;
@@ -428,6 +439,11 @@ class OfflineAwareApiService extends ApiService {
         phone: phone,
         medicalHistory: medicalHistory,
         birthDate: birthDate,
+        clinicDoctorId:
+            sendClinicDoctor ? clinicDoctorId : Patient.unchangedMarker,
+        clinicDoctorName: sendClinicDoctor
+            ? (clinicDoctorId == null ? null : clinicDoctorNameHint)
+            : Patient.unchangedMarker,
         syncStatus: keepCreateStatus ? 'pending_create' : 'pending_update',
       );
       await _db.upsertPatient(placeholder);
@@ -441,6 +457,7 @@ class OfflineAwareApiService extends ApiService {
             'phone': phone,
             'medical_history': medicalHistory,
             if (birthDate != null) 'birth_date': _formatDate(birthDate),
+            if (sendClinicDoctor) 'clinic_doctor_id': clinicDoctorId,
           },
         );
       }
@@ -1244,11 +1261,15 @@ class OfflineAwareApiService extends ApiService {
               : null,
           gender: payload['gender'] as String?,
           medicalHistory: payload['medical_history'] as String?,
+          clinicDoctorId: payload['clinic_doctor_id'] as int?,
         );
         if (localBeforeSync != null) {
+          final doctorChangedAfterCreate =
+              localBeforeSync.clinicDoctorId != created.clinicDoctorId;
           final editedAfterCreate = localBeforeSync.fullName != created.fullName ||
               localBeforeSync.phone != created.phone ||
-              (localBeforeSync.medicalHistory ?? '') != (created.medicalHistory ?? '');
+              (localBeforeSync.medicalHistory ?? '') != (created.medicalHistory ?? '') ||
+              doctorChangedAfterCreate;
           if (editedAfterCreate) {
             created = await super.updatePatient(
               created.id,
@@ -1256,6 +1277,8 @@ class OfflineAwareApiService extends ApiService {
               phone: localBeforeSync.phone,
               medicalHistory: localBeforeSync.medicalHistory ?? '',
               birthDate: localBeforeSync.birthDate,
+              clinicDoctorId: localBeforeSync.clinicDoctorId,
+              sendClinicDoctor: doctorChangedAfterCreate,
             );
           }
           if ((localBeforeSync.chartStateRaw ?? '').trim().isNotEmpty) {
@@ -1275,6 +1298,10 @@ class OfflineAwareApiService extends ApiService {
           birthDate: payload['birth_date'] != null
               ? DateTime.tryParse(payload['birth_date'] as String)
               : null,
+          // وجود المفتاح في الحمولة هو "اختار الطبيب فعلاً" -- عملية في
+          // الطابور من قبل هذا الحقل لا تحمله فلا تلمس الطبيب.
+          clinicDoctorId: payload['clinic_doctor_id'] as int?,
+          sendClinicDoctor: payload.containsKey('clinic_doctor_id'),
         );
         await _db.upsertPatient(updated.copyWith(syncStatus: 'synced'));
         break;

@@ -552,6 +552,13 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
     }
   }
 
+  /// نقطة الدخول العامة لنموذج "موعد جديد" -- يستدعيها زرّ لوحة التحكم على
+  /// سطح المكتب بعد انتقاله إلى هذه الصفحة (HomeScreenState
+  /// ._openAppointmentsPage). غلاف رقيق عمداً: النموذج يبقى نسخة واحدة هنا،
+  /// ونسخة ثانية في لوحة التحكم كانت ستعني نموذجَي حجز يجب إصلاح أي خلل
+  /// فيهما معاً.
+  Future<void> openAddAppointmentSheet() => _openAddAppointmentSheet();
+
   /// يفتح نموذج "إضافة موعد جديد" -- نفس زر appointments.html بالموقع.
   /// عند النجاح يُحدَّث جدول اليوم فوراً فيظهر الموعد الجديد إن كان لليوم
   /// الحالي.
@@ -1306,8 +1313,21 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
   static const double kGridRailWidth = 72;
   static const double kGridColumnMinWidth = 168;
   static const double kGridMinBlockHeight = 30;
+  /// سقف ارتفاع جسم الشبكة على الجوال واللوح. على سطح المكتب يُحسب من
+  /// ارتفاع النافذة -- انظر [_gridMaxBodyHeight].
   static const double kGridMaxBodyHeight = 520;
   static const double kGridBodyPadding = 22;
+
+  /// سقف ارتفاع جسم الشبكة الفعلي. 520 ثابتة كانت قيمة جوال معقولة، لكنها
+  /// على نافذة ويندوز بارتفاع 900px تترك الشبكة في ثلث الشاشة بينما بقيّة
+  /// الصفحة فارغة، فيُمرّر الطبيب داخل الشبكة وخارجها معاً. هنا تأخذ ما
+  /// تبقّى بعد الترويسة ولوحة الطلبات وشريط الأيام (≈360px)، بحدّ أدنى قيمة
+  /// الجوال وأقصى 900 (بعدها يصير مسح العمود بالعين أطول من تمريره).
+  double _gridMaxBodyHeight(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    if (size.width < AppDesktopMetrics.breakpoint) return kGridMaxBodyHeight;
+    return (size.height - 360).clamp(kGridMaxBodyHeight, 900).toDouble();
+  }
 
   /// شبكة الأعمدة محورها ساعات **يوم واحد**، فلا تصلح لفلتر "الكل" الذي
   /// يُرجع مواعيد أيام متعددة (انظر [_filterAppointmentsForSelectedDay]): لو عُرضت هناك لتراكم
@@ -1374,6 +1394,7 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
             share > kGridColumnMinWidth ? share : kGridColumnMinWidth;
         final totalWidth = kGridRailWidth + (columns.length * columnWidth);
         final viewportHeight = bodyHeight + kGridBodyPadding;
+        final maxBodyHeight = _gridMaxBodyHeight(context);
 
         return Container(
           decoration: BoxDecoration(
@@ -1400,9 +1421,9 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
                   // يُضاف للجسم ولا يُخصم من ارتفاع الساعة، فتبقى العلامات
                   // على أماكنها.
                   SizedBox(
-                    height: viewportHeight < kGridMaxBodyHeight
+                    height: viewportHeight < maxBodyHeight
                         ? viewportHeight
-                        : kGridMaxBodyHeight,
+                        : maxBodyHeight,
                     child: SingleChildScrollView(
                       child: Padding(
                         padding: const EdgeInsets.only(top: 10, bottom: 12),

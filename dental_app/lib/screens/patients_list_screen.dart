@@ -6,6 +6,7 @@ import '../models/patient_stats.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
+import '../widgets/clinic_doctor_field.dart';
 import 'patient_detail_screen.dart';
 
 class PatientsListScreen extends StatefulWidget {
@@ -33,6 +34,12 @@ class PatientsListScreenState extends State<PatientsListScreen> {
   bool _isLoading = true;
   String _searchQuery = '';
 
+  /// وحدة تحكّم حقل البحث. كانت الشاشة تكتفي بـ onChanged، لكن حقل بحث
+  /// ترويسة سطح المكتب صار يدفع كلمته إلى هنا عبر [applyExternalSearch]،
+  /// وبلا وحدة تحكّم يتغيّر الفلتر ويبقى الحقل فارغاً فلا يعرف الطبيب لماذا
+  /// اختفى نصف مرضاه ولا كيف يُرجعهم.
+  final TextEditingController _searchController = TextEditingController();
+
   /// 0 = الكل، 1 = عليه رصيد، 2 = مسدّد. تصفية محلية بحتة على القائمة
   /// المحمَّلة أصلاً -- لا نداء إضافي للسيرفر، والأعداد على الشرائح محسوبة
   /// من نفس القائمة لا مخمَّنة.
@@ -43,6 +50,26 @@ class PatientsListScreenState extends State<PatientsListScreen> {
     super.initState();
     _load();
     _loadStats();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  /// يضبط نصّ البحث من خارج الشاشة -- يستدعيها غلاف سطح المكتب من حقل
+  /// البحث في ترويسته (انظر HomeScreenState._applyDesktopSearch). يكتب النصّ
+  /// في الحقل المرئي أيضاً لا في الفلتر وحده، وتُتجاهَل المناداة بنفس النصّ
+  /// فلا تُعيد بناء القائمة مع كل حرف مكرَّر.
+  void applyExternalSearch(String query) {
+    if (!mounted || query == _searchQuery) return;
+    if (_searchController.text != query) {
+      _searchController.text = query;
+      _searchController.selection =
+          TextSelection.collapsed(offset: query.length);
+    }
+    setState(() => _searchQuery = query);
   }
 
   /// يُستدعى من main.dart عبر GlobalKey عند فتح التطبيق من إشعار حجز جديد.
@@ -261,6 +288,7 @@ class PatientsListScreenState extends State<PatientsListScreen> {
                 const SizedBox(height: 15),
                 SoftSearchField(
                   hintText: 'ابحث بالاسم أو رقم الهاتف',
+                  controller: _searchController,
                   onChanged: (value) => setState(() => _searchQuery = value),
                 ),
                 const SizedBox(height: 13),
@@ -612,6 +640,19 @@ class _AddPatientSheetState extends State<_AddPatientSheet> {
   bool _isSaving = false;
   String? _errorMessage;
 
+  /// أطباء العيادة لحقل «الطبيب المعالج» -- null حتى يصل الرد، والحقل لا
+  /// يظهر إلا لعيادة فيها أطباء مساعدون (انظر ClinicDoctorChoices.isEmpty).
+  ClinicDoctorChoices? _doctorChoices;
+  int? _selectedDoctorId;
+
+  @override
+  void initState() {
+    super.initState();
+    ClinicDoctorChoices.load(widget.apiService).then((choices) {
+      if (mounted) setState(() => _doctorChoices = choices);
+    });
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -641,6 +682,8 @@ class _AddPatientSheetState extends State<_AddPatientSheet> {
         phone: _phoneController.text.trim(),
         birthDate: birthDate,
         medicalHistory: _notesController.text.trim(),
+        clinicDoctorId: _selectedDoctorId,
+        clinicDoctorNameHint: _doctorChoices?.nameFor(_selectedDoctorId),
       );
       if (!mounted) return;
       Navigator.of(context).pop(patient);
@@ -717,6 +760,14 @@ class _AddPatientSheetState extends State<_AddPatientSheet> {
                 decoration: const InputDecoration(labelText: 'العمر (اختياري)'),
               ),
               const SizedBox(height: 12),
+              if (_doctorChoices != null && !_doctorChoices!.isEmpty) ...[
+                ClinicDoctorDropdown(
+                  choices: _doctorChoices!,
+                  value: _selectedDoctorId,
+                  onChanged: (id) => setState(() => _selectedDoctorId = id),
+                ),
+                const SizedBox(height: 12),
+              ],
               TextFormField(
                 controller: _notesController,
                 textAlign: TextAlign.right,

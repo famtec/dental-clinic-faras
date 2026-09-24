@@ -198,6 +198,9 @@ class ApiService {
     DateTime? birthDate,
     String? gender,
     String? medicalHistory,
+    int? clinicDoctorId,
+    // للعرض المحلي وحده عند الحفظ أوفلاين (OfflineAwareApiService)، غير مستخدَم هنا.
+    String? clinicDoctorNameHint,
   }) async {
     final headers = await _authHeaders();
     late http.Response response;
@@ -215,6 +218,8 @@ class ApiService {
               if (gender != null && gender.isNotEmpty) 'gender': gender,
               if (medicalHistory != null && medicalHistory.isNotEmpty)
                 'medical_history': medicalHistory,
+              // null = الطبيب المدير، وهو نفس معنى غياب الحقل على الخادم.
+              'clinic_doctor_id': ?clinicDoctorId,
             }),
           )
           .timeout(const Duration(seconds: 25));
@@ -892,7 +897,7 @@ class ApiService {
               'title': title,
               'total_cost': totalCost,
               if (catalogItemId != null) 'catalog_item_id': catalogItemId,
-              if (clinicDoctorId != null) 'clinic_doctor_id': clinicDoctorId,
+              'clinic_doctor_id': ?clinicDoctorId,
               if (materials != null && materials.isNotEmpty)
                 'materials': materials.map((m) => m.toJson()).toList(),
             }),
@@ -1083,12 +1088,20 @@ class ApiService {
     required String phone,
     required String medicalHistory,
     DateTime? birthDate,
+    int? clinicDoctorId,
+    bool sendClinicDoctor = false,
+    // كما في createPatient أعلاه: للعرض المحلي وحده، غير مستخدَم هنا.
+    String? clinicDoctorNameHint,
   }) async {
     final headers = await _authHeaders();
     final payload = <String, dynamic>{
       'full_name': fullName,
       'phone': phone,
       'medical_history': medicalHistory,
+      // الخادم يفرّق بين غياب المفتاح (لا تلمس الطبيب) وnull (أعِده للمدير)،
+      // فالمفتاح لا يُرسَل إلا حين تعرض الشاشة اختيار الطبيب فعلاً -- وإلا
+      // أعاد كل حفظ من عيادة بطبيب واحد المريضَ للمدير صامتاً.
+      if (sendClinicDoctor) 'clinic_doctor_id': clinicDoctorId,
     };
     if (birthDate != null) {
       payload['birth_date'] =
