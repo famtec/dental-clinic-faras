@@ -84,6 +84,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // services/media_picker.dart ليعمل على ويندوز أيضاً (حوار ملفات النظام).
   bool _isUploadingAvatar = false;
 
+  /// setState لامتداد سطح المكتب في ملف الـ part (setState محميّة).
+  void _update(VoidCallback fn) => setState(fn);
+
   @override
   void initState() {
     super.initState();
