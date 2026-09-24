@@ -26,6 +26,12 @@ class AuthStorage {
     }
   }
 
+  /// تحديث الباقة وحدها بعد ترقية الحساب بكود تفعيل، بلا لمس التوكن.
+  Future<void> saveTier(String tier) async {
+    if (tier.isEmpty) return;
+    await (await SharedPreferences.getInstance()).setString(_kTier, tier);
+  }
+
   Future<String?> getToken() async =>
       (await SharedPreferences.getInstance()).getString(_kToken);
 

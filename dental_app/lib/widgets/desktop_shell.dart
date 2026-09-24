@@ -484,16 +484,25 @@ class _SideLinkState extends State<_SideLink> {
         onExit: (_) => setState(() => _hovered = false),
         child: GestureDetector(
           onTap: widget.onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
+          // طبقتان لا طبقة واحدة متحرّكة: كانت AnimatedContainer تمزج
+          // BoxDecoration بين «لون مرور» و«تدرّج + ظلّ» عند كل مرور ونقرة،
+          // ومزج التدرّج بلا تدرّج يرسم إطاراً وسيطاً شاذّاً (وميض/قفزة).
+          // الآن التدرّج والظلّ ثابتان على الطبقة الخارجية، ولا يتحرّك إلا
+          // لون المرور الشفّاف على الداخلية.
+          child: Container(
+            decoration: active
+                ? BoxDecoration(
+                    gradient: d.navActiveGradient,
+                    borderRadius: BorderRadius.circular(AppDesktopMetrics.radiusNavItem),
+                    boxShadow: d.navActiveShadow,
+                  )
+                : null,
+            child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-              gradient: active ? d.navActiveGradient : null,
-              color: active
-                  ? null
-                  : (_hovered ? d.sidebarHover : Colors.transparent),
+              color: !active && _hovered ? d.sidebarHover : d.sidebarHover.withValues(alpha: 0),
               borderRadius: BorderRadius.circular(AppDesktopMetrics.radiusNavItem),
-              boxShadow: active ? d.navActiveShadow : null,
             ),
             child: Row(
               children: [
@@ -535,6 +544,7 @@ class _SideLinkState extends State<_SideLink> {
                   ),
               ],
             ),
+          ),
           ),
         ),
       ),

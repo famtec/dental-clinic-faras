@@ -5,6 +5,7 @@ import '../services/api_service.dart';
 import '../services/auth_storage.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
+import '../widgets/desktop_auth_layout.dart';
 
 /// شاشة تفعيل حساب جديد -- لم تكن موجودة في تطبيق الجوال إطلاقاً قبل
 /// 2026-08-31 (كان يمكن للطبيب تسجيل الدخول فقط، ولا وسيلة لتفعيل حساب من
@@ -129,6 +130,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (context.isDesktopShell) {
+      return Scaffold(
+        body: DesktopAuthLayout(
+          title: 'تفعيل حساب جديد',
+          subtitle: 'أنشئ حساب عيادتك بكود التفعيل وابدأ استخدام المنصة.',
+          onBack: () => Navigator.of(context).maybePop(),
+          form: _buildBody(),
+        ),
+      );
+    }
     final surf = context.surface;
     return Scaffold(
       body: Stack(

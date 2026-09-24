@@ -6,6 +6,7 @@ import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/desktop_widgets.dart';
+import 'contact_developer_screen.dart';
 
 part 'inventory_desktop.dart';
 

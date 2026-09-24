@@ -222,7 +222,9 @@ extension _FinanceDesktop on _FinanceScreenState {
                 DesktopBadge(
                   // كلمة لا رمز: «▲/▼» ليسا في خطّي Noto العربيين (مربّع فارغ)،
                   // و«+8٪» تنقلب إلى «8٪+» داخل سطر عربي.
-                  label: '${change >= 0 ? 'ارتفاع' : 'انخفاض'} ${change.abs()}٪ عن الشهر السابق',
+                  label: change == 0
+                      ? 'كالشهر السابق'
+                      : '${change > 0 ? 'ارتفاع' : 'انخفاض'} ${change.abs()}٪ عن الشهر السابق',
                   colors: change >= 0
                       ? DesktopBadgeColors.done(d)
                       : DesktopBadgeColors(
@@ -400,8 +402,7 @@ extension _FinanceDesktop on _FinanceScreenState {
             (label: 'النوع', flex: 12, align: TextAlign.start),
             (label: 'التاريخ', flex: 16, align: TextAlign.start),
             (label: 'المبلغ (ل.س)', flex: 16, align: TextAlign.end),
-            (label: '', flex: 6, align: TextAlign.start),
-          ]),
+          ], trailingWidth: _MoveTableRow.actionsWidth),
           Expanded(
             child: moves.isEmpty
                 ? const DesktopEmptyHint(
@@ -627,6 +628,9 @@ class _MoveTableRow extends StatelessWidget {
 
   const _MoveTableRow({required this.move, required this.onEdit});
 
+  /// زرّ التعديل بعرض 32 وهامش -- انظر [DesktopTableHeader.trailingWidth].
+  static const double actionsWidth = 46;
+
   @override
   Widget build(BuildContext context) {
     final d = context.desktop;
@@ -709,8 +713,8 @@ class _MoveTableRow extends StatelessWidget {
               ),
             ),
           ),
-          Expanded(
-            flex: 6,
+          SizedBox(
+            width: actionsWidth,
             child: Align(
               alignment: AlignmentDirectional.centerEnd,
               child: DesktopSquareButton(

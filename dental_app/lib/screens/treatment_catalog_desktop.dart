@@ -150,8 +150,12 @@ extension _CatalogDesktop on _TreatmentCatalogScreenState {
         : (priced.fold<double>(0, (t, i) => t + i.estimatedProfit / i.price) / priced.length * 100).round();
     final shortCount = active.where((i) => i.materials.any((m) => m.isShort)).length;
     CatalogProfitRow? top;
+    // صفّ الفواتير المفتوحة بلا حالة من اللائحة (catalogItemId == null) ليس
+    // علاجاً، بل سلّة لكل ما عداها -- ولو دخل المنافسة لفاز بها غالباً
+    // وقالت البطاقة «الأعلى ربحاً: علاجات بلا حالة من اللائحة».
     for (final r in _report?.items ?? const <CatalogProfitRow>[]) {
-      if (r.invoicesCount > 0 && (top == null || r.netProfit > top.netProfit)) top = r;
+      if (r.catalogItemId == null || r.invoicesCount <= 0) continue;
+      if (top == null || r.netProfit > top.netProfit) top = r;
     }
 
     return Row(

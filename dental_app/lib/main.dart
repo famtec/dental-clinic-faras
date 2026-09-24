@@ -11,6 +11,7 @@ import 'services/offline_aware_api_service.dart';
 import 'services/platform_support.dart';
 import 'services/push_notification_service.dart';
 import 'theme/app_theme.dart';
+import 'widgets/desktop_title_bar.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -138,8 +139,33 @@ class _DentalDoctorAppState extends State<DentalDoctorApp> {
       // كل واجهات التطبيق بالعربي، والتخطيط من اليمين لليسار بالكامل -- بلا
       // حاجة لحزمة flutter_localizations الإضافية لأن كل النصوص هنا مكتوبة
       // يدوياً بالعربي أصلاً وليست نصوص إطار عمل مترجَمة تلقائياً.
-      builder: (context, child) =>
-          Directionality(textDirection: TextDirection.rtl, child: child!),
+      builder: (context, child) {
+        Widget rtl = Directionality(textDirection: TextDirection.rtl, child: child!);
+        // ويندوز: شريط العنوان من رسم التطبيق فوق كل الشاشات (الدخول
+        // والغلاف والصفحات المدفوعة فوقه) -- انظر DesktopTitleBar.
+        if (isDesktopPlatform) {
+          rtl = Column(
+            children: [
+              const DesktopTitleBar(title: 'عيادتي الرقمية'),
+              Expanded(child: rtl),
+            ],
+          );
+        }
+        // سطح المكتب (2026-09-24): كل ورقة سفلية في التطبيق -- إضافة فاتورة،
+        // دفعة، وصفة، موعد، مادة -- كانت تمتدّ بعرض نافذة ويندوز كاملاً
+        // فيصير حقل الوصف بطول 1500px. قيد واحد هنا بدل تمريره لكل نداء
+        // showModalBottomSheet على حدة، والجوال بلا أي تغيير.
+        if (!context.isDesktopShell) return rtl;
+        final theme = Theme.of(context);
+        return Theme(
+          data: theme.copyWith(
+            bottomSheetTheme: theme.bottomSheetTheme.copyWith(
+              constraints: const BoxConstraints(maxWidth: 640),
+            ),
+          ),
+          child: rtl,
+        );
+      },
       // 2026-08-31: شاشة تحميل افتتاحية بهوية العيادة (شعار + رسالة ترحيب +
       // حلقة تحميل بنفس أسلوب الموقع) بدل مؤشر تحميل رمادي افتراضي بلا هوية.
       home: _checkingSession

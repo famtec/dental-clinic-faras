@@ -182,6 +182,25 @@ class SectionCard extends StatelessWidget {
     // 2026-09-05: صارت تقرأ AppSurface بدل الأبيض/slate200 الثابتين، فتصبح
     // زجاجية شفّافة في الوضع الليلي ومصمتة بظلّ نيلي ناعم في النهاري -- بلا
     // أي تغيير في توقيعها، فكل مستدعياتها القائمة تعمل كما هي.
+    // سطح المكتب (2026-09-24): الشاشات التي تُفتح فوق الغلاف ولا تملك
+    // تخطيطاً خاصاً بها (ملف المريض بأقسامه) تأخذ بطاقة سطح المكتب نفسها --
+    // سطح معتم وحدّ وظلّ من AppDesktop -- فتتّسق مع بقية الصفحات بلا لمس
+    // كل مستدعٍ على حدة. الجوال بلا أي تغيير.
+    if (context.isDesktopShell) {
+      final d = context.desktop;
+      return Container(
+        width: double.infinity,
+        padding: padding,
+        decoration: BoxDecoration(
+          color: d.cardBg,
+          gradient: d.cardGradient,
+          borderRadius: BorderRadius.circular(radius),
+          border: Border.all(color: d.cardBorder),
+          boxShadow: d.cardShadow,
+        ),
+        child: child,
+      );
+    }
     final surf = context.surface;
     return Container(
       width: double.infinity,

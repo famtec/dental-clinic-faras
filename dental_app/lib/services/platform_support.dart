@@ -82,7 +82,11 @@ Future<void> initPlatformServices() async {
     minimumSize: Size(1024, 700),
     center: true,
     title: 'عيادتي الرقمية',
-    titleBarStyle: TitleBarStyle.normal,
+    // شريط ويندوز الأصلي يأخذ لون «التمييز» من إعدادات النظام لا لون
+    // التطبيق ولا وضعه الليلي؛ يُخفى ويرسم التطبيق شريطه (DesktopTitleBar).
+    // الإخفاء يُبقي حدود تغيير الحجم وظلّ النافذة وسلوك Aero Snap.
+    titleBarStyle: TitleBarStyle.hidden,
+    windowButtonVisibility: false,
   );
   await windowManager.waitUntilReadyToShow(windowOptions, () async {
     await windowManager.show();

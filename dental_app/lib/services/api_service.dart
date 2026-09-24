@@ -148,6 +148,53 @@ class ApiService {
     return decoded as Map<String, dynamic>;
   }
 
+  /// ترقية الحساب الحالي بكود تفعيل -- POST /api/auth/upgrade-tier، نفس
+  /// المسار الذي يستعمله الموقع للترقية والتجديد. يرسل بريد الحساب المسجّل
+  /// دخوله (الخادم يحدّد الحساب به)، ويحفظ الباقة الجديدة محلياً عند النجاح.
+  /// يرجع رسالة الخادم («تمت ترقية الحساب إلى ... بنجاح.») لعرضها كما هي.
+  Future<({String message, String tier})> upgradeTier(String activationCode) async {
+    final email = await authStorage.getEmail();
+    late http.Response response;
+    try {
+      response = await http
+          .post(
+            Uri.parse('${AppConfig.apiBaseUrl}/api/auth/upgrade-tier'),
+            headers: const {'Content-Type': 'application/json'},
+            body: json.encode({
+              'activation_code': activationCode.trim(),
+              'email': ?email,
+            }),
+          )
+          .timeout(const Duration(seconds: 25));
+    } catch (_) {
+      throw const ApiException('تعذر الاتصال بالخادم الآن. يرجى المحاولة لاحقًا.');
+    }
+    final decoded = _decodeBody(response);
+    if (response.statusCode != 200) {
+      _throwForResponse(response, 'تعذر تفعيل الكود. تحقق منه وحاول مرة أخرى.');
+    }
+    final map = decoded is Map ? decoded : const {};
+    final tier = '${map['tier'] ?? ''}';
+    await authStorage.saveTier(tier);
+    return (
+      message: '${map['message'] ?? 'تمت ترقية الحساب بنجاح.'}',
+      tier: tier,
+    );
+  }
+
+  /// [upgradeTier] بنتيجة لا باستثناء -- لبطاقات «الميزة مقفلة» التي تعرض
+  /// رسالة النجاح أو الرفض تحت حقل الكود مباشرةً.
+  Future<({bool ok, String message})> tryUpgradeTier(String activationCode) async {
+    try {
+      final result = await upgradeTier(activationCode);
+      return (ok: true, message: result.message);
+    } on ApiException catch (e) {
+      return (ok: false, message: e.message);
+    } catch (_) {
+      return (ok: false, message: 'تعذر تفعيل الكود. حاول مرة أخرى.');
+    }
+  }
+
   Future<List<Patient>> fetchPatients() async {
     final headers = await _authHeaders();
     late http.Response response;

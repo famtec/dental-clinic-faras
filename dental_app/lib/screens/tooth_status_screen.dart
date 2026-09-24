@@ -124,6 +124,10 @@ class _ToothStatusScreenState extends State<ToothStatusScreen> {
     final activeKey = toothStatusByKey(raw?.trim().toLowerCase())?.key;
     final nextIndex = (_walkOrder.indexOf(_fdi) + 1) % _walkOrder.length;
 
+    if (context.isDesktopShell) {
+      return _buildDesktop(context, resolved, activeKey, nextIndex, raw);
+    }
+
     return Scaffold(
       backgroundColor: surf.pageBg,
       body: SingleChildScrollView(
@@ -147,12 +151,12 @@ class _ToothStatusScreenState extends State<ToothStatusScreen> {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text(
+                        Text(
                           'الحالة العلاجية',
                           style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w800,
-                              color: Color(0xFF334155)),
+                              color: surf.textPrimary),
                         ),
                         const Spacer(),
                         Flexible(
@@ -207,7 +211,80 @@ class _ToothStatusScreenState extends State<ToothStatusScreen> {
     );
   }
 
-  Widget _buildHero(ResolvedToothStatus? resolved) {
+  /// سطح المكتب (2026-09-24): الشاشة تُفتح نافذة حوار (انظر
+  /// PatientDetailScreen._openToothScreen) بقسمين متجاورين -- لوحة السن
+  /// المتدرّجة بأسهم التنقّل على جهة البداية، وخيارات الحالة بجانبها -- بدل
+  /// صفحة كاملة بعرض النافذة تمدّ كل خيار على 900px.
+  Widget _buildDesktop(BuildContext context, ResolvedToothStatus? resolved,
+      String? activeKey, int nextIndex, String? raw) {
+    final d = context.desktop;
+    return Material(
+      color: d.isDark ? const Color(0xFF13122A) : d.cardBg,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(width: 330, child: _buildHero(resolved, panel: true)),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 22, 24, 22),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        'الحالة العلاجية',
+                        style: AppType.kufi(fontSize: 15, fontWeight: FontWeight.w700, color: d.textPrimary),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _hint,
+                          textAlign: TextAlign.end,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppType.sans(fontSize: 11.5, color: d.textMuted),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  _buildOptionsGrid(activeKey),
+                  const SizedBox(height: 10),
+                  _buildCustomSection(),
+                  const SizedBox(height: 10),
+                  _GhostButton(
+                    label: 'مسح حالة هذا السن',
+                    onPressed: _isSaving || raw == null
+                        ? null
+                        : () => _save(null, successHint: 'تم مسح الحالة'),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Text(
+                        'التالي: السن ${_walkOrder[nextIndex]}',
+                        style: AppType.sans(fontSize: 12, fontWeight: FontWeight.w700, color: d.textMuted),
+                      ),
+                      const Spacer(),
+                      _PrimaryButton(
+                        label: 'السن التالي',
+                        onPressed: () => _goToAdjacent(1),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// [panel]: سطح المكتب -- اللوحة تملأ عمودها الجانبي كاملاً، فلا ظلّ
+  /// يتسرّب تحتها ومحتواها في المنتصف رأسياً.
+  Widget _buildHero(ResolvedToothStatus? resolved, {bool panel = false}) {
     final fill = resolved?.color.withValues(alpha: 0.28) ?? toothDefaultFill;
     final stroke = resolved?.color ?? toothDefaultStroke;
 
@@ -216,15 +293,18 @@ class _ToothStatusScreenState extends State<ToothStatusScreen> {
           16, MediaQuery.of(context).padding.top + 14, 16, 34),
       decoration: BoxDecoration(
         gradient: AppColors.smartStatGradient,
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.indigoAccent.withValues(alpha: .24),
-            blurRadius: 60,
-            offset: const Offset(0, 18),
-          ),
-        ],
+        boxShadow: panel
+            ? null
+            : [
+                BoxShadow(
+                  color: AppColors.indigoAccent.withValues(alpha: .24),
+                  blurRadius: 60,
+                  offset: const Offset(0, 18),
+                ),
+              ],
       ),
       child: Column(
+        mainAxisAlignment: panel ? MainAxisAlignment.center : MainAxisAlignment.start,
         children: [
           Row(
             children: [
@@ -500,10 +580,10 @@ class _StatusOptionTile extends StatelessWidget {
                   textAlign: TextAlign.right,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF334155)),
+                      color: context.surface.textPrimary),
                 ),
               ),
               if (isActive) ...[
@@ -546,10 +626,16 @@ class _GhostButton extends StatelessWidget {
             height: 48,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: dashedIndigo ? const Color(0xFFF8FAFF) : surf.chipBg,
+              // من الثيم لا ‎#F8FAFF ثابتاً: الثابت كان بلاطة بيضاء ساطعة
+              // وسط الوضع الليلي.
+              color: dashedIndigo
+                  ? AppColors.indigoAccent.withValues(alpha: surf.isDark ? .10 : .04)
+                  : surf.chipBg,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: dashedIndigo ? const Color(0xFFC7D2FE) : surf.cardBorder,
+                color: dashedIndigo
+                    ? AppColors.indigoAccent.withValues(alpha: surf.isDark ? .45 : .30)
+                    : surf.cardBorder,
                 width: 1.5,
               ),
             ),

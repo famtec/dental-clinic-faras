@@ -34,11 +34,18 @@ extension _InventoryDesktop on _InventoryScreenState {
       return Center(child: CircularProgressIndicator(color: d.linkFg));
     }
     if (_isPremiumLocked) {
-      return Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: _buildPremiumLockCard(),
+      return DesktopLockedFeature(
+        tierLabel: 'PREMIUM',
+        title: 'مخزن المواد متاح في الباقة الفخمة',
+        // النصّ ثابت لا رسالة الخادم: رسالة الخادم تحمل «(Premium)» داخل
+        // الجملة فتنقلب عند التفاف السطر، والشارة فوقها تحمل الاسم أصلاً.
+        message: 'إدارة المخزن والمستودع الطبي متاحة حصرياً لمشتركي الباقة الفخمة: '
+            'كميات المواد وحدود التنبيه وتكلفتها، وربطها بالمصاريف ووصفات العلاج.',
+        onContact: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const ContactDeveloperScreen()),
         ),
+        onActivate: widget.apiService.tryUpgradeTier,
+        onActivated: _load,
       );
     }
     if (_errorMessage != null && _items == null) {
@@ -54,6 +61,21 @@ extension _InventoryDesktop on _InventoryScreenState {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'الكميات تنقص تلقائياً مع مواد الفواتير وتزيد مع مصاريف الشراء',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppType.sans(fontSize: 12.5, color: d.textSecondary),
+                ),
+              ),
+              const SizedBox(width: 12),
+              DesktopCtaButton(icon: Icons.add, label: 'مادة جديدة', onTap: _openAddItemSheet),
+            ],
+          ),
+          const SizedBox(height: 16),
           _kpiStrip(context, items, low.length),
           const SizedBox(height: 18),
           Expanded(
@@ -124,8 +146,12 @@ extension _InventoryDesktop on _InventoryScreenState {
             padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
             child: Row(
               children: [
-                SizedBox(
-                  width: 260,
+                // البحث ينكمش قبل الشرائح والزر: على نافذة 1280px لا يتّسع
+                // الثلاثة بعرضها الكامل في سطر واحد.
+                Flexible(
+                  child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 320),
+                  child: SizedBox(
                   height: 40,
                   child: TextField(
                     onChanged: (v) => _update(() => _desktopQuery = v),
@@ -149,6 +175,8 @@ extension _InventoryDesktop on _InventoryScreenState {
                       ),
                     ),
                   ),
+                  ),
+                  ),
                 ),
                 const SizedBox(width: 12),
                 for (var i = 0; i < labels.length; i++) ...[
@@ -160,8 +188,6 @@ extension _InventoryDesktop on _InventoryScreenState {
                     onTap: () => _update(() => _desktopFilter = i),
                   ),
                 ],
-                const Spacer(),
-                DesktopCtaButton(icon: Icons.add, label: 'مادة جديدة', onTap: _openAddItemSheet),
               ],
             ),
           ),
@@ -171,8 +197,7 @@ extension _InventoryDesktop on _InventoryScreenState {
             (label: 'حدّ التنبيه', flex: 11, align: TextAlign.start),
             (label: 'تكلفة الوحدة', flex: 13, align: TextAlign.start),
             (label: 'القيمة', flex: 13, align: TextAlign.start),
-            (label: '', flex: 9, align: TextAlign.start),
-          ]),
+          ], trailingWidth: _InventoryRow.actionsWidth),
           Expanded(
             child: rows.isEmpty
                 ? DesktopEmptyHint(
@@ -273,6 +298,9 @@ class _InventoryRow extends StatelessWidget {
 
   const _InventoryRow({required this.item, required this.onEdit, required this.onDelete});
 
+  /// زرّان بعرض 30 وفاصل 6 وهامش 10 -- انظر [DesktopTableHeader.trailingWidth].
+  static const double actionsWidth = 76;
+
   @override
   Widget build(BuildContext context) {
     final d = context.desktop;
@@ -368,8 +396,8 @@ class _InventoryRow extends StatelessWidget {
                   color: item.hasUnitCost ? d.textPrimary : d.textMuted),
             ),
           ),
-          Expanded(
-            flex: 9,
+          SizedBox(
+            width: actionsWidth,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [

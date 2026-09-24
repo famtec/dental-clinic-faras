@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:flutter/services.dart';
+import 'package:intl/intl.dart' show NumberFormat;
 
 import '../models/appointment.dart';
 import '../theme/app_theme.dart';
@@ -846,7 +847,17 @@ class DesktopTableHeader extends StatelessWidget {
   final List<DesktopColumn> columns;
   final double height;
 
-  const DesktopTableHeader({super.key, required this.columns, this.height = 44});
+  /// عرض ثابت لعمود أزرار الإجراء في نهاية الصفّ (تعديل/حذف). ثابت لا
+  /// نسبي: الأزرار لا تنكمش، فعمود بوزن نسبي كان يضيق عنها على نافذة
+  /// 1280px ويتجاوزها بخطوط التحذير الصفراء. الصفوف تستعمل الرقم نفسه.
+  final double trailingWidth;
+
+  const DesktopTableHeader({
+    super.key,
+    required this.columns,
+    this.height = 44,
+    this.trailingWidth = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -866,11 +877,217 @@ class DesktopTableHeader extends StatelessWidget {
               child: Text(
                 c.label,
                 textAlign: c.align,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: AppType.sans(
                     fontSize: 11.5, fontWeight: FontWeight.w700, color: d.textSecondary),
               ),
             ),
+          if (trailingWidth > 0) SizedBox(width: trailingWidth),
         ],
+      ),
+    );
+  }
+}
+
+/// بطاقة «الميزة تحتاج باقة أعلى» بلغة سطح المكتب: بطاقة بحجم محتواها في
+/// وسط الصفحة، لا لوحة الجوال المتدرّجة الممدودة بطول النافذة.
+class DesktopLockedFeature extends StatefulWidget {
+  final String tierLabel;
+  final String title;
+  final String message;
+  final VoidCallback onContact;
+
+  /// يفعّل كود الترقية ويرجع (نجح؟، رسالة الخادم). الرفض (كود مستخدم أو
+  /// غير صالح) يرجع ok=false برسالته فتُعرض تحت الحقل -- سجلّ لا استثناء،
+  /// حتى لا يستورد هذا الملف طبقة الخدمات.
+  final Future<({bool ok, String message})> Function(String code) onActivate;
+
+  /// بعد نجاح التفعيل: الصفحة تعيد التحميل فتختفي البطاقة إن فتح الكود
+  /// الباقة المطلوبة، وتبقى برسالة النجاح إن فتح باقة أدنى منها.
+  final VoidCallback onActivated;
+
+  const DesktopLockedFeature({
+    super.key,
+    required this.tierLabel,
+    required this.title,
+    required this.message,
+    required this.onContact,
+    required this.onActivate,
+    required this.onActivated,
+  });
+
+  @override
+  State<DesktopLockedFeature> createState() => _DesktopLockedFeatureState();
+}
+
+class _DesktopLockedFeatureState extends State<DesktopLockedFeature> {
+  final TextEditingController _code = TextEditingController();
+  bool _busy = false;
+  String? _error;
+  String? _success;
+
+  @override
+  void dispose() {
+    _code.dispose();
+    super.dispose();
+  }
+
+  Future<void> _activate() async {
+    final code = _code.text.trim();
+    if (code.isEmpty) {
+      setState(() => _error = 'أدخل كود التفعيل أولاً.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+      _success = null;
+    });
+    final result = await widget.onActivate(code);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      if (result.ok) {
+        _success = result.message;
+        _code.clear();
+      } else {
+        _error = result.message;
+      }
+    });
+    if (result.ok) widget.onActivated();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.desktop;
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(32),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: DesktopCard(
+            glow: true,
+            radius: 26,
+            padding: const EdgeInsets.fromLTRB(32, 30, 32, 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 60,
+                    height: 60,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      gradient: d.ctaGradient,
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: d.ctaShadow,
+                    ),
+                    child: Icon(Icons.lock_outline_rounded, size: 28, color: d.onCta),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Center(
+                  child: DesktopBadge(
+                      label: widget.tierLabel, colors: DesktopBadgeColors.upcoming(d), fontSize: 11),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  widget.title,
+                  textAlign: TextAlign.center,
+                  style: AppType.kufi(fontSize: 18, fontWeight: FontWeight.w700, color: d.textPrimary),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  widget.message,
+                  textAlign: TextAlign.center,
+                  style: AppType.sans(fontSize: 13, height: 1.8, color: d.textSecondary),
+                ),
+                const SizedBox(height: 22),
+                Container(height: 1, color: d.cardBorder),
+                const SizedBox(height: 18),
+                Text(
+                  'لديك كود ترقية؟',
+                  style: AppType.sans(fontSize: 13, fontWeight: FontWeight.w700, color: d.textPrimary),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 44,
+                        child: TextField(
+                          controller: _code,
+                          enabled: !_busy,
+                          textDirection: TextDirection.ltr,
+                          textAlign: TextAlign.left,
+                          inputFormatters: [FilteringTextInputFormatter.deny(RegExp(r'\s'))],
+                          onSubmitted: (_) => _activate(),
+                          style: AppType.sans(
+                              fontSize: 13.5, fontWeight: FontWeight.w700, color: d.fieldFg)
+                              .copyWith(letterSpacing: 1.2),
+                          cursorColor: d.linkFg,
+                          decoration: InputDecoration(
+                            isDense: true,
+                            hintText: 'FARAS-30DAYS-XYZ',
+                            hintStyle: AppType.sans(fontSize: 13, color: d.fieldHint),
+                            prefixIcon: Icon(Icons.vpn_key_outlined, size: 18, color: d.fieldHint),
+                            filled: true,
+                            fillColor: d.fieldBg,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: d.fieldBorder),
+                            ),
+                            disabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: d.fieldBorder),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: d.linkFg, width: 1.6),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    _busy
+                        ? SizedBox(
+                            width: 110,
+                            height: 44,
+                            child: Center(
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: d.linkFg),
+                              ),
+                            ),
+                          )
+                        : DesktopCtaButton(icon: Icons.check_rounded, label: 'تفعيل', onTap: _activate),
+                  ],
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 10),
+                  Text(_error!, style: AppType.sans(fontSize: 12.5, color: d.badgeDot)),
+                ],
+                if (_success != null) ...[
+                  const SizedBox(height: 10),
+                  Text(_success!,
+                      style: AppType.sans(fontSize: 12.5, fontWeight: FontWeight.w700, color: d.amountIn)),
+                ],
+                const SizedBox(height: 18),
+                Center(
+                  child: DesktopTextLink(
+                    label: 'لا تملك كوداً؟ تواصل مع المطور للترقية',
+                    onTap: widget.onContact,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

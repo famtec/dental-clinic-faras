@@ -141,6 +141,9 @@ flutter:
   # المتغيّر الواحد، فحينها ستُرسم كل الأوزان بوزن واحد.
   assets:
     - google_fonts/
+    # شعار المطور لصفحة «تواصل مع المطور» (2026-09-24): نسختان مقصوصتان على
+    # حدود الرسم -- للخلفية الفاتحة والداكنة -- وأيقونة مربّعة لكل وضع.
+    - assets/brand/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

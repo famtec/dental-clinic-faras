@@ -125,11 +125,18 @@ extension _ClinicDoctorsDesktop on _ClinicDoctorsScreenState {
       return Center(child: CircularProgressIndicator(color: d.linkFg));
     }
     if (_isPremiumLocked) {
-      return Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: _buildPremiumLockCard(),
+      return DesktopLockedFeature(
+        tierLabel: 'PREMIUM PLUS',
+        title: 'الأطباء والنسب متاحة في باقة العيادات',
+        // بلا «(Premium Plus)» داخل الجملة: الاسم اللاتيني في سطر عربي
+        // ينقسم عند التفاف السطر بترتيب مقلوب، والشارة فوقه تحمله أصلاً.
+        message: 'إدارة العيادة متعددة الأطباء وحساب النسب متاحة حصرياً لباقة '
+            'العيادات: أضف أطباءك، وحدّد نسبة كل منهم، وتابع كشف حسابه وتسوياته.',
+        onContact: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const ContactDeveloperScreen()),
         ),
+        onActivate: widget.apiService.tryUpgradeTier,
+        onActivated: _load,
       );
     }
     if (_errorMessage != null && _doctors == null) {
@@ -561,8 +568,7 @@ extension _ClinicDoctorsDesktop on _ClinicDoctorsScreenState {
             (label: 'المحصّل', flex: 14, align: TextAlign.start),
             (label: 'النسبة المطبّقة', flex: 13, align: TextAlign.start),
             (label: 'له / عليه', flex: 16, align: TextAlign.end),
-            (label: '', flex: 5, align: TextAlign.start),
-          ]),
+          ], trailingWidth: _PayoutRow.actionsWidth),
           Expanded(child: _statementRows(context, doctor, fresh ? statement : null)),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
@@ -796,7 +802,7 @@ class _EarningRow extends StatelessWidget {
               style: AppType.sans(fontSize: 13, fontWeight: FontWeight.w700, color: d.amountIn),
             ),
           ),
-          const Expanded(flex: 5, child: SizedBox()),
+          const SizedBox(width: _PayoutRow.actionsWidth),
         ],
       ),
     );
@@ -808,6 +814,9 @@ class _PayoutRow extends StatelessWidget {
   final VoidCallback onDelete;
 
   const _PayoutRow({required this.payout, required this.onDelete});
+
+  /// زرّ الحذف بعرض 30 وهامش -- انظر [DesktopTableHeader.trailingWidth].
+  static const double actionsWidth = 44;
 
   @override
   Widget build(BuildContext context) {
@@ -856,8 +865,8 @@ class _PayoutRow extends StatelessWidget {
               style: AppType.sans(fontSize: 13, fontWeight: FontWeight.w700, color: d.amountOut),
             ),
           ),
-          Expanded(
-            flex: 5,
+          SizedBox(
+            width: actionsWidth,
             child: Align(
               alignment: AlignmentDirectional.centerEnd,
               child: DesktopSquareButton(

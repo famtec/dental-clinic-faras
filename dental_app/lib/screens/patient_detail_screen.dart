@@ -20,8 +20,11 @@ import '../utils/appointment_status.dart';
 import '../utils/dental_chart.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/clinic_doctor_field.dart';
+import '../widgets/desktop_widgets.dart';
 import '../widgets/tooth_widget.dart';
 import 'tooth_status_screen.dart';
+
+part 'patient_detail_desktop.dart';
 
 const _prescriptionArabicMonthNames = [
   'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
@@ -941,6 +944,30 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
   /// تبقى مفتوحة بعد كل حفظ ليتمكّن الطبيب من تسجيل عدة أسنان متتالية،
   /// وتقرأ حالة المخطط حيّةً من هذه الشاشة بعد كل حفظ ناجح.
   Future<void> _openToothScreen(int fdiNumber) async {
+    // سطح المكتب: نافذة حوار في الوسط لا صفحة بملء النافذة -- الشاشة نفسها
+    // تبني تخطيطها المزدوج فوق العتبة (ToothStatusScreen._buildDesktop).
+    if (context.isDesktopShell) {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(32),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 940, maxHeight: 640),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: ToothStatusScreen(
+                initialFdi: fdiNumber,
+                chartStateReader: () => _patient.chartState,
+                onSave: _updateTooth,
+              ),
+            ),
+          ),
+        ),
+      );
+      if (mounted) setState(() {});
+      return;
+    }
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ToothStatusScreen(
@@ -1501,6 +1528,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (context.isDesktopShell) return _buildDesktop(context);
     final surf = context.surface;
     return Scaffold(
       backgroundColor: surf.pageBg,

@@ -4,6 +4,7 @@ import '../services/api_service.dart';
 import '../services/auth_storage.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
+import '../widgets/desktop_auth_layout.dart';
 import 'register_screen.dart';
 
 /// شاشة تسجيل الدخول -- 2026-08-31: أُعيدت تصميمها بالكامل لتطابق
@@ -99,6 +100,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // نافذة ويندوز عريضة: لوحة تعريف بجانب النموذج بدل بطاقة الجوال العائمة
+    // وسط الشاشة. نفس النموذج ونفس المنطق -- انظر DesktopAuthLayout.
+    if (context.isDesktopShell) {
+      return Scaffold(
+        body: DesktopAuthLayout(
+          title: 'تسجيل الدخول',
+          subtitle: 'أدخل بريد العيادة وكلمة المرور للمتابعة إلى لوحة التحكم.',
+          form: _buildBody(desktop: true),
+        ),
+      );
+    }
     final surf = context.surface;
     return Scaffold(
       body: Stack(
@@ -177,19 +189,23 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildBody() {
+  /// [desktop]: بلا صندوق «حالة الجاهزية» ولا سطر حقوق التطوير -- الأول
+  /// زخرفة بطاقة جوال، والثاني تنقله لوحة التعريف بجانب النموذج.
+  Widget _buildBody({bool desktop = false}) {
     final surf = context.surface;
     return Form(
       key: _formKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const AuthStatusBanner(
-            title: 'حالة الجاهزية',
-            badgeText: 'بانتظار البيانات',
-            hint: 'ابدأ بكتابة البريد الإلكتروني وكلمة المرور لتفعيل زر الدخول بشكل تفاعلي.',
-          ),
-          const SizedBox(height: 18),
+          if (!desktop) ...[
+            const AuthStatusBanner(
+              title: 'حالة الجاهزية',
+              badgeText: 'بانتظار البيانات',
+              hint: 'ابدأ بكتابة البريد الإلكتروني وكلمة المرور لتفعيل زر الدخول بشكل تفاعلي.',
+            ),
+            const SizedBox(height: 18),
+          ],
           AuthFieldWrapper(
             label: 'البريد الإلكتروني',
             child: TextFormField(
@@ -281,13 +297,15 @@ class _LoginScreenState extends State<LoginScreen> {
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 12, color: surf.textSecondary, height: 1.6),
           ),
-          const SizedBox(height: 20),
-          Text(
-            'تطوير وإدارة: المهندس فارس حلاوي © 2026',
-            textAlign: TextAlign.center,
-            // مطابق لِـ text-indigo-500/90 في الموقع بالحرف (وليس indigo-600).
-            style: TextStyle(fontSize: 10.5, letterSpacing: 0.4, color: surf.accentSolid.withValues(alpha: 0.9)),
-          ),
+          if (!desktop) ...[
+            const SizedBox(height: 20),
+            Text(
+              'تطوير وإدارة: المهندس فارس حلاوي © 2026',
+              textAlign: TextAlign.center,
+              // مطابق لِـ text-indigo-500/90 في الموقع بالحرف (وليس indigo-600).
+              style: TextStyle(fontSize: 10.5, letterSpacing: 0.4, color: surf.accentSolid.withValues(alpha: 0.9)),
+            ),
+          ],
         ],
       ),
     );

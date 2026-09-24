@@ -8,6 +8,7 @@ import '../theme/app_theme.dart';
 import '../utils/clinic_doctor_colors.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/desktop_widgets.dart';
+import 'contact_developer_screen.dart';
 
 part 'clinic_doctors_desktop.dart';
 
