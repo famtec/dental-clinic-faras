@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' show NumberFormat;
 
 import '../models/inventory_item.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
+import '../widgets/desktop_widgets.dart';
+
+part 'inventory_desktop.dart';
 
 /// "مخزن المواد" -- تطابق inventory.html بالموقع: ميزة Premium حصراً (حارس
 /// require_premium_user_by_email في main.py يرجع 403 بدل 402 المعتاد -- انظر
@@ -82,6 +85,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
   String? _errorMessage;
   bool _isPremiumLocked = false;
 
+  // ── سطح المكتب (انظر inventory_desktop.dart) ──
+  String _desktopQuery = '';
+  /// 0 = الكل، 1 = ناقصة، 2 = متوفرة.
+  int _desktopFilter = 0;
+
+  /// setState لامتداد سطح المكتب في ملف الـ part (setState محميّة).
+  void _update(VoidCallback fn) => setState(fn);
+
   @override
   void initState() {
     super.initState();
@@ -124,6 +135,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   Future<void> _openAddItemSheet() async {
     final added = await showModalBottomSheet<bool>(
       context: context,
+      constraints: context.isDesktopShell ? const BoxConstraints(maxWidth: 560) : null,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _InventoryItemSheet(apiService: widget.apiService),
@@ -134,6 +146,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   Future<void> _openEditItemSheet(InventoryItem item) async {
     final result = await showModalBottomSheet<bool>(
       context: context,
+      constraints: context.isDesktopShell ? const BoxConstraints(maxWidth: 560) : null,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _InventoryItemSheet(apiService: widget.apiService, item: item),
@@ -179,6 +192,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (context.isDesktopShell) return _buildDesktop(context);
     final items = _items ?? [];
     return Scaffold(
       body: Stack(

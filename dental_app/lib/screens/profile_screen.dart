@@ -12,6 +12,9 @@ import '../services/platform_support.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/booking_qr_card.dart';
+import '../widgets/desktop_widgets.dart';
+
+part 'profile_desktop.dart';
 
 const _weekdayLabels = [
   (value: 0, label: 'الإثنين'),
@@ -603,8 +606,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         textAlign: TextAlign.left,
                         textDirection: TextDirection.ltr,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            color: AppColors.indigo700, fontSize: 11.5, fontWeight: FontWeight.w700),
+                        // من توكن الثيم لا indigo700 ثابتاً: الثابت كان نيلياً
+                        // داكناً على سطح داكن ليلاً فلا يكاد يُقرأ.
+                        style: TextStyle(
+                            color: surf.iconBoxFg, fontSize: 11.5, fontWeight: FontWeight.w700),
                       ),
                     ),
                   ],
@@ -740,6 +745,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (context.isDesktopShell) return _buildDesktop(context);
     final profile = _profile;
     return Scaffold(
       body: AtmosphereBackground(
