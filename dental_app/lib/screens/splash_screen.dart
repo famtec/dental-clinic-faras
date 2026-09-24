@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import '../widgets/clinic_logo.dart';
 
 /// شاشة تحميل افتتاحية -- 2026-08-31: تُعرض في main.dart ريثما يتحقق
 /// التطبيق من وجود جلسة محفوظة قبل الانتقال لصفحة الرئيسية أو تسجيل
@@ -205,12 +206,8 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
         return Transform.scale(
           scale: 1 + 0.045 * t,
           child: Container(
-            width: 104,
-            height: 104,
-            alignment: Alignment.center,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(30),
-              gradient: AppColors.authCardHeaderGradient,
+              borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
                   color: AppColors.violet600.withValues(alpha: 0.28 + 0.12 * t),
@@ -223,7 +220,8 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
           ),
         );
       },
-      child: const Icon(Icons.medical_services_rounded, size: 50, color: Colors.white),
+      // شعار الموقع (2026-09-25) -- نفس شارة الشريط العلوي وأيقونة التطبيق.
+      child: const ClinicLogo(size: 104),
     );
   }
 
@@ -314,12 +312,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                   ),
                 ],
               ),
-              child: ShaderMask(
-                shaderCallback: (rect) => const LinearGradient(
-                  colors: [AppColors.indigo600, AppColors.violet600],
-                ).createShader(rect),
-                child: const Icon(Icons.medical_services_rounded, size: 22, color: Colors.white),
-              ),
+              child: const ClinicLogo(size: 30, markOnly: true),
             ),
           ),
         ],

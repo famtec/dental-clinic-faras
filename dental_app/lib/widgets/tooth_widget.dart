@@ -536,7 +536,8 @@ class _ToothGeometry {
 /// عند مرور مؤشّر الفأرة (سطح المكتب، 2026-09-24): يتوهّج السن بلون حالته
 /// (أو بالنيلي إن لم تكن له حالة) توهّجاً نابضاً ما دام المؤشّر فوقه، ويكبر
 /// قليلاً ويتلوّن رقمه -- فيعرف الطبيب أيّ سن سيفتح قبل أن ينقر. على الجوال
-/// لا مؤشّر فلا يتغيّر شيء.
+/// (2026-09-25) نفس الوميض ما دام الإصبع على السن: ردّ فعل فوري للّمس بدل
+/// تموّج InkWell الذي تخفيه خلفية البطاقة.
 class ToothCell extends StatefulWidget {
   final int fdiNumber;
   final String? statusKey;
@@ -549,6 +550,9 @@ class ToothCell extends StatefulWidget {
   final double shapeHeight;
   final double numberFontSize;
 
+  /// محدَّد في وضع «تحديد عدة أسنان» -- إطار نيلي ثابت وعلامة صح.
+  final bool selected;
+
   const ToothCell({
     super.key,
     required this.fdiNumber,
@@ -558,6 +562,7 @@ class ToothCell extends StatefulWidget {
     this.shapeWidth = 22,
     this.shapeHeight = 30,
     this.numberFontSize = 9.5,
+    this.selected = false,
   });
 
   @override
@@ -574,6 +579,10 @@ class _ToothCellState extends State<ToothCell> with SingleTickerProviderStateMix
     duration: const Duration(milliseconds: 850),
   );
   bool _hovered = false;
+  bool _pressed = false;
+
+  /// المرور بالفأرة أو اللمس -- الحالتان بنفس المظهر.
+  bool get _active => _hovered || _pressed;
 
   @override
   void dispose() {
@@ -581,10 +590,16 @@ class _ToothCellState extends State<ToothCell> with SingleTickerProviderStateMix
     super.dispose();
   }
 
-  void _setHovered(bool value) {
-    if (_hovered == value) return;
-    setState(() => _hovered = value);
-    if (value) {
+  void _update({bool? hovered, bool? pressed}) {
+    final wasActive = _active;
+    setState(() {
+      _hovered = hovered ?? _hovered;
+      _pressed = pressed ?? _pressed;
+    });
+    if (_active == wasActive) return;
+    if (_active) {
+      // يبدأ من ذروة الوميض: اللمسة قصيرة، والنبض من الصفر لا يُرى قبل الرفع.
+      _pulse.value = 1;
       _pulse.repeat(reverse: true);
     } else {
       _pulse.stop();
@@ -605,44 +620,76 @@ class _ToothCellState extends State<ToothCell> with SingleTickerProviderStateMix
       duration: const Duration(milliseconds: 150),
       style: TextStyle(
         fontSize: widget.numberFontSize,
-        fontWeight: _hovered ? FontWeight.w800 : FontWeight.w700,
-        color: _hovered
+        fontWeight: _active ? FontWeight.w800 : FontWeight.w700,
+        color: _active
             ? accent
             : (resolved?.color ?? const Color(0xFF94A3B8)),
       ),
       child: Text('${widget.fdiNumber}'),
     );
 
+    final selected = widget.selected;
     final shape = AnimatedScale(
-      scale: _hovered ? 1.12 : 1,
+      scale: _active ? 1.12 : (selected ? 1.06 : 1),
       duration: const Duration(milliseconds: 160),
       curve: Curves.easeOutBack,
       child: SizedBox(
         width: widget.shapeWidth,
         height: widget.shapeHeight,
-        child: AnimatedBuilder(
-          animation: _pulse,
-          builder: (context, _) => CustomPaint(
-            painter: ToothShapePainter(
-              fdi: widget.fdiNumber,
-              statusColor: resolved?.color,
-              statusKey: resolveToothStatusKey(widget.statusKey),
-              outline: _hovered ? accent : null,
-              // بين 0.45 و1: لا يخبو كلياً بين النبضتين فيبدو وميضاً لا إطفاءً.
-              glow: _hovered ? 0.45 + 0.55 * Curves.easeInOut.transform(_pulse.value) : 0,
-              glowColor: accent,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(
+              child: AnimatedBuilder(
+                animation: _pulse,
+                builder: (context, _) => CustomPaint(
+                  painter: ToothShapePainter(
+                    fdi: widget.fdiNumber,
+                    statusColor: resolved?.color,
+                    statusKey: resolveToothStatusKey(widget.statusKey),
+                    outline: _active ? accent : (selected ? _neutralGlow : null),
+                    // بين 0.45 و1: لا يخبو كلياً بين النبضتين فيبدو وميضاً لا إطفاءً.
+                    glow: _active
+                        ? 0.45 + 0.55 * Curves.easeInOut.transform(_pulse.value)
+                        : (selected ? 0.5 : 0),
+                    glowColor: _active ? accent : _neutralGlow,
+                  ),
+                ),
+              ),
             ),
-          ),
+            if (selected)
+              Positioned(
+                top: -4,
+                right: -4,
+                child: Container(
+                  width: 15,
+                  height: 15,
+                  decoration: BoxDecoration(
+                    color: _neutralGlow,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
+                  child: const Icon(Icons.check_rounded, size: 10, color: Colors.white),
+                ),
+              ),
+          ],
         ),
       ),
     );
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      onEnter: (_) => _setHovered(true),
-      onExit: (_) => _setHovered(false),
+      onEnter: (_) => _update(hovered: true),
+      onExit: (_) => _update(hovered: false),
       child: InkWell(
-        onTap: widget.onTap,
+        onTap: () {
+          _update(pressed: false);
+          widget.onTap();
+        },
+        onTapDown: (_) => _update(pressed: true),
+        onTapCancel: () => _update(pressed: false),
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
         borderRadius: BorderRadius.circular(8),
         hoverColor: Colors.transparent,
         child: Padding(

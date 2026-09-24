@@ -5,6 +5,7 @@ import '../services/offline_sync_status.dart';
 
 import '../theme/app_theme.dart';
 import '../utils/tier_access.dart';
+import 'clinic_logo.dart';
 
 /// زر بيضاوي بتدرج لوني -- نفس شكل الأزرار الرئيسية في الموقع (تسجيل
 /// الدخول، حفظ التعديلات...). يُستخدم في كل الشاشات بدل FilledButton
@@ -1145,14 +1146,10 @@ class _ClinicTopBarState extends State<ClinicTopBar> {
       ),
       child: Row(
         children: [
+          // شعار الموقع (2026-09-25) بدل أيقونة الحقيبة الطبية.
           Container(
-            width: 42,
-            height: 42,
-            alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: surf.iconBoxBg,
-              border: Border.all(color: surf.iconBoxBorder),
-              borderRadius: BorderRadius.circular(15),
+              borderRadius: BorderRadius.circular(10),
               boxShadow: [
                 BoxShadow(
                   color: AppColors.violet600.withValues(alpha: .22),
@@ -1161,8 +1158,7 @@ class _ClinicTopBarState extends State<ClinicTopBar> {
                 ),
               ],
             ),
-            child: Icon(Icons.medical_services_outlined,
-                size: 20, color: surf.iconBoxFg),
+            child: const ClinicLogo(size: 42),
           ),
           const SizedBox(width: 11),
           Expanded(

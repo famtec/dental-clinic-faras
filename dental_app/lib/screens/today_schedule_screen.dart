@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/appointment.dart';
@@ -285,35 +286,38 @@ Future<_PickerResult<T>?> _showOptionPickerSheet<T>({
               itemBuilder: (listContext, index) {
                 final option = options[index];
                 final selected = option.value == current;
-                return ListTile(
-                  dense: true,
-                  leading: option.dotColor == null
-                      ? null
-                      : Container(
-                          width: 12,
-                          height: 12,
-                          decoration: BoxDecoration(
-                            color: option.dotColor,
-                            borderRadius: BorderRadius.circular(999),
+                return Material(
+                  type: MaterialType.transparency,
+                  child: ListTile(
+                    dense: true,
+                    leading: option.dotColor == null
+                        ? null
+                        : Container(
+                            width: 12,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              color: option.dotColor,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
                           ),
-                        ),
-                  title: Text(option.label,
-                      textAlign: TextAlign.right,
-                      style: TextStyle(
-                          color: surf.textPrimary,
-                          fontWeight:
-                              selected ? FontWeight.w700 : FontWeight.w500)),
-                  subtitle: option.subtitle == null
-                      ? null
-                      : Text(option.subtitle!,
-                          textAlign: TextAlign.right,
-                          style: TextStyle(
-                              color: surf.textSecondary, fontSize: 11.5)),
-                  trailing: selected
-                      ? Icon(Icons.check_circle, color: surf.accentSolid)
-                      : null,
-                  onTap: () => Navigator.of(sheetContext)
-                      .pop(_PickerResult<T>(option.value)),
+                    title: Text(option.label,
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                            color: surf.textPrimary,
+                            fontWeight:
+                                selected ? FontWeight.w700 : FontWeight.w500)),
+                    subtitle: option.subtitle == null
+                        ? null
+                        : Text(option.subtitle!,
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                                color: surf.textSecondary, fontSize: 11.5)),
+                    trailing: selected
+                        ? Icon(Icons.check_circle, color: surf.accentSolid)
+                        : null,
+                    onTap: () => Navigator.of(sheetContext)
+                        .pop(_PickerResult<T>(option.value)),
+                  ),
                 );
               },
             ),
@@ -524,6 +528,7 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
     setState(() => _updatingIds.add(appointment.id));
     try {
       await widget.apiService.updateAppointmentStatus(appointment.id, status);
+      HapticFeedback.lightImpact();
       await refresh();
     } on ApiException catch (e) {
       if (e.isSessionExpired) {
@@ -550,6 +555,8 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
     setState(() => _updatingIds.add(appointment.id));
     try {
       await widget.apiService.respondToBooking(appointment.id, decision);
+      // اهتزاز خفيف يؤكّد الردّ (2026-09-25) -- قرار يصل للمريض مباشرة.
+      HapticFeedback.mediumImpact();
       await refresh();
     } on ApiException catch (e) {
       if (e.isSessionExpired) {
@@ -2615,19 +2622,22 @@ class _AddAppointmentSheetState extends State<_AddAppointmentSheet> {
                     itemBuilder: (context, index) {
                       final patient = filteredPatients[index];
                       final selected = _selectedPatient?.id == patient.id;
-                      return ListTile(
-                        dense: true,
-                        title: Text(patient.fullName, textAlign: TextAlign.right),
-                        subtitle: patient.phone.isEmpty
-                            ? null
-                            : Text(patient.phone, textAlign: TextAlign.right),
-                        trailing: selected
-                            ? const Icon(Icons.check_circle, color: AppColors.indigo600)
-                            : null,
-                        onTap: () => setState(() {
-                          _selectedPatient = patient;
-                          _patientSearchController.text = patient.fullName;
-                        }),
+                      return Material(
+                        type: MaterialType.transparency,
+                        child: ListTile(
+                          dense: true,
+                          title: Text(patient.fullName, textAlign: TextAlign.right),
+                          subtitle: patient.phone.isEmpty
+                              ? null
+                              : Text(patient.phone, textAlign: TextAlign.right),
+                          trailing: selected
+                              ? const Icon(Icons.check_circle, color: AppColors.indigo600)
+                              : null,
+                          onTap: () => setState(() {
+                            _selectedPatient = patient;
+                            _patientSearchController.text = patient.fullName;
+                          }),
+                        ),
                       );
                     },
                   ),

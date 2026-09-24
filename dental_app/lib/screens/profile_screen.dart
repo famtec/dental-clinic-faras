@@ -251,15 +251,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 16),
-            ListTile(
-              onTap: () => Navigator.of(sheetContext).pop(ImageSource.camera),
-              leading: const Icon(Icons.photo_camera_outlined, color: AppColors.indigo700),
-              title: const Text('تصوير بالكاميرا', textAlign: TextAlign.right),
+            Material(
+              type: MaterialType.transparency,
+              child: ListTile(
+                onTap: () => Navigator.of(sheetContext).pop(ImageSource.camera),
+                leading: const Icon(Icons.photo_camera_outlined, color: AppColors.indigo700),
+                title: const Text('تصوير بالكاميرا', textAlign: TextAlign.right),
+              ),
             ),
-            ListTile(
-              onTap: () => Navigator.of(sheetContext).pop(ImageSource.gallery),
-              leading: const Icon(Icons.photo_library_outlined, color: AppColors.indigo700),
-              title: const Text('اختيار من المعرض', textAlign: TextAlign.right),
+            Material(
+              type: MaterialType.transparency,
+              child: ListTile(
+                onTap: () => Navigator.of(sheetContext).pop(ImageSource.gallery),
+                leading: const Icon(Icons.photo_library_outlined, color: AppColors.indigo700),
+                title: const Text('اختيار من المعرض', textAlign: TextAlign.right),
+              ),
             ),
           ],
         ),

@@ -4,6 +4,7 @@ import '../services/api_service.dart';
 import '../services/auth_storage.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
+import '../widgets/clinic_logo.dart';
 import '../widgets/desktop_auth_layout.dart';
 import 'register_screen.dart';
 
@@ -161,17 +162,7 @@ class _LoginScreenState extends State<LoginScreen> {
       decoration: const BoxDecoration(gradient: AppColors.authCardHeaderGradient),
       child: Column(
         children: [
-          Container(
-            width: 64,
-            height: 64,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              color: Colors.white.withValues(alpha: 0.1),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-            ),
-            child: const Icon(Icons.medical_services_rounded, size: 30, color: Colors.white),
-          ),
+          const ClinicLogo(size: 68, dark: false),
           const SizedBox(height: 16),
           const Text(
             'عيادتي الرقمية - تسجيل الدخول',

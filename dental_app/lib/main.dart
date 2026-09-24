@@ -6,6 +6,7 @@ import 'screens/login_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/today_schedule_screen.dart';
 import 'services/api_service.dart';
+import 'services/appointment_reminder_service.dart';
 import 'services/auth_storage.dart';
 import 'services/offline_aware_api_service.dart';
 import 'services/platform_support.dart';
@@ -110,6 +111,7 @@ class _DentalDoctorAppState extends State<DentalDoctorApp> {
   }
 
   Future<void> _handleLogout() async {
+    await AppointmentReminderService.instance.cancelAll();
     await _authStorage.clear();
     if (!mounted) return;
     setState(() => _isLoggedIn = false);

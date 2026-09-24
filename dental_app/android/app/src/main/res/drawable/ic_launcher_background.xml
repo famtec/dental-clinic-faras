@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- نفس تدرّج badge-dark.svg في الموقع (#2E2470 إلى #120E2C قطرياً). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <gradient
+        android:angle="315"
+        android:startColor="#2E2470"
+        android:endColor="#120E2C"
+        android:type="linear" />
+</shape>

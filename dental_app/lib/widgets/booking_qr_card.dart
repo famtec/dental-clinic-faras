@@ -10,6 +10,7 @@ import 'package:printing/printing.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../theme/app_theme.dart';
+import 'clinic_logo.dart';
 
 /// بطاقة رمز QR لصفحة الحجز العامة -- طبق الأصل عن #bookingQrPrintCard في
 /// profile.html بالموقع (نفس الشعار/اسم الطبيب/الجملة التعريفية/الرمز/
@@ -161,17 +162,7 @@ class _BookingQrCardState extends State<BookingQrCard> {
                   // شارة الشعار -- نفس الشارة المستخدَمة برأس شاشات تسجيل
                   // الدخول/التفعيل/شاشة البدء (AppColors.authCardHeaderGradient)
                   // حتى يبقى "شعار العيادة" موحّداً بكل أنحاء التطبيق.
-                  Container(
-                    width: 44,
-                    height: 44,
-                    alignment: Alignment.center,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: AppColors.authCardHeaderGradient,
-                    ),
-                    child: const Icon(Icons.medical_services_rounded,
-                        size: 22, color: Colors.white),
-                  ),
+                  const ClinicLogo(size: 48, dark: false),
                   const SizedBox(height: 10),
                   Text(
                     _doctorLabel,

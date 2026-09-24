@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
+import '../services/appointment_reminder_service.dart';
 import '../services/auth_storage.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
@@ -106,6 +107,10 @@ class _MoreMenuScreenState extends State<MoreMenuScreen> {
                   ),
                   const SizedBox(height: 18),
                   const _ThemeModeCard(),
+                  if (AppointmentReminderService.instance.isSupported) ...[
+                    const SizedBox(height: 12),
+                    const _ReminderSettingsCard(),
+                  ],
                   const SizedBox(height: 24),
                   Builder(
                     builder: (context) {
@@ -391,6 +396,141 @@ class _ThemeModeOption extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// «تذكير المواعيد» (2026-09-25) -- تشغيل/إيقاف التذكير المحلي قبل كل موعد،
+/// والمدة قبله. التغيير يعيد الجدولة فوراً (AppointmentReminderService).
+class _ReminderSettingsCard extends StatelessWidget {
+  const _ReminderSettingsCard();
+
+  static String _leadLabel(int minutes) =>
+      minutes == 60 ? 'قبل ساعة' : (minutes == 30 ? 'قبل نصف ساعة' : 'قبل ربع ساعة');
+
+  @override
+  Widget build(BuildContext context) {
+    final surf = context.surface;
+    final service = AppointmentReminderService.instance;
+    return ValueListenableBuilder<bool>(
+      valueListenable: service.enabled,
+      builder: (context, enabled, _) => ValueListenableBuilder<int>(
+        valueListenable: service.leadMinutes,
+        builder: (context, lead, _) => Container(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+          decoration: BoxDecoration(
+            color: surf.cardBg,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: surf.cardBorder),
+            boxShadow: surf.cardShadow,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: surf.iconBoxBg,
+                      border: Border.all(color: surf.iconBoxBorder),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(Icons.notifications_active_outlined,
+                        size: 17, color: surf.iconBoxFg),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'تذكير المواعيد',
+                          style: AppType.kufi(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: surf.textPrimary,
+                          ),
+                        ),
+                        Text(
+                          enabled
+                              ? 'إشعار ${_leadLabel(lead)} من كل موعد — يعمل بلا إنترنت'
+                              : 'متوقّف',
+                          style: TextStyle(fontSize: 11.5, color: surf.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: enabled,
+                    activeTrackColor: AppColors.indigoAccent,
+                    onChanged: service.setEnabled,
+                  ),
+                ],
+              ),
+              if (enabled) ...[
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    for (var i = 0; i < AppointmentReminderService.leadOptions.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 8),
+                      Expanded(
+                        child: _LeadChip(
+                          label: _leadLabel(AppointmentReminderService.leadOptions[i]),
+                          selected: lead == AppointmentReminderService.leadOptions[i],
+                          onTap: () => service
+                              .setLeadMinutes(AppointmentReminderService.leadOptions[i]),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LeadChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _LeadChip({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final surf = context.surface;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? null : surf.chipBg,
+            gradient: selected ? surf.accentGradient : null,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: selected ? Colors.transparent : surf.chipBorder),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              color: selected ? surf.onAccent : surf.chipFg,
+            ),
           ),
         ),
       ),

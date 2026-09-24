@@ -9,6 +9,7 @@ import '../models/patient.dart';
 import '../models/patient_stats.dart';
 import '../models/treatment_invoice.dart';
 import 'api_service.dart';
+import 'appointment_reminder_service.dart';
 import 'connectivity_service.dart';
 import 'local_db.dart';
 import 'offline_sync_status.dart';
@@ -85,6 +86,13 @@ class OfflineAwareApiService extends ApiService {
   // _applyAppointmentOp أدناه لمكان انتقال منطق المزامنة نفسه بلا تغيير).
   // ===========================================================================
 
+  /// تذكيرات المواعيد تُعاد جدولتها من كل قائمة مواعيد تُجلب (2026-09-25) --
+  /// نقطة واحدة تمرّ بها كل الشاشات، أونلاين أو من النسخة المحلية.
+  List<Appointment> _withReminders(List<Appointment> appointments) {
+    unawaited(AppointmentReminderService.instance.sync(appointments));
+    return appointments;
+  }
+
   @override
   Future<List<Appointment>> fetchAppointments() async {
     try {
@@ -92,11 +100,11 @@ class OfflineAwareApiService extends ApiService {
       await _db.replaceServerAppointments(fresh);
       OfflineSyncStatus.instance.isOnline.value = true;
       unawaited(_trySync());
-      return await _db.getAllAppointmentsMerged();
+      return _withReminders(await _db.getAllAppointmentsMerged());
     } on ApiException catch (e) {
       if (!_isConnectivityFailure(e)) rethrow;
       OfflineSyncStatus.instance.isOnline.value = false;
-      return await _db.getAllAppointmentsMerged();
+      return _withReminders(await _db.getAllAppointmentsMerged());
     }
   }
 

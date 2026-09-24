@@ -9,6 +9,8 @@
          نسخة release (نفس قصة إذن INTERNET أعلاه: Flutter لا يضيفه تلقائياً
          هنا)، جزء من دعم العمل بدون إنترنت للمواعيد. أُضيف 2026-08-31. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <!-- تذكير المواعيد (2026-09-25): إعادة جدولة التذكيرات بعد إعادة تشغيل الهاتف. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <application
         android:label="My Digital Clinic"
         android:name="${applicationName}"
@@ -48,7 +50,26 @@
             android:value="new_booking_channel" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
-            android:resource="@mipmap/ic_launcher" />
+            android:resource="@drawable/ic_stat_notify" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_accent" />
+        <!-- مستقبِلا flutter_local_notifications للإشعارات المجدولة (تذكير
+             المواعيد، 2026-09-25): الأول يعرض التذكير في وقته، والثاني يعيد
+             جدولتها بعد إعادة التشغيل أو تحديث التطبيق. -->
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

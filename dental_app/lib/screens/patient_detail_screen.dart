@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart' show HapticFeedback, rootBundle;
 import 'package:image_picker/image_picker.dart' show ImageSource;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -113,6 +113,13 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
   /// صفّين) كان يفرض خلايا صغيرة جداً على شاشة الهاتف؛ عرض الأرباع يكبّر
   /// ثمانية أسنان فقط في كل مرة -- نفس ما فُعل في patient_record.html.
   int _activeQuadrant = 1;
+
+  /// «تحديد عدة أسنان» (2026-09-25): الضغط على السن يحدّده بدل فتح لوحته،
+  /// ثم تُطبَّق حالة واحدة على كل المحدَّد بطلب حفظ واحد (chart_state كاملاً).
+  /// التحديد يبقى عند التنقّل بين الأرباع -- الجسر قد يعبر خط المنتصف.
+  bool _multiSelect = false;
+  final Set<int> _selectedTeeth = <int>{};
+  bool _bulkSaving = false;
 
   // 2026-08-30: أرشيف ملفات المريض (صور/أشعة أو مستندات PDF) -- بطلب
   // المستخدم "اضف امكانية أرشيف ملفات المريض مثل التي في الموقع تماما"،
@@ -272,25 +279,34 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
             // ImageSource.camera، وعرض خيار يفشل عند الضغط عليه أسوأ من
             // إخفائه.
             if (supportsCameraCapture)
-              ListTile(
-                onTap: () => Navigator.of(sheetContext).pop('camera'),
-                leading: const Icon(Icons.photo_camera_outlined, color: AppColors.indigo700),
-                title: const Text('تصوير بالكاميرا', textAlign: TextAlign.right),
+              Material(
+                type: MaterialType.transparency,
+                child: ListTile(
+                  onTap: () => Navigator.of(sheetContext).pop('camera'),
+                  leading: const Icon(Icons.photo_camera_outlined, color: AppColors.indigo700),
+                  title: const Text('تصوير بالكاميرا', textAlign: TextAlign.right),
+                ),
               ),
-            ListTile(
-              onTap: () => Navigator.of(sheetContext).pop('gallery'),
-              leading: const Icon(Icons.photo_library_outlined, color: AppColors.indigo700),
-              title: Text(
-                supportsCameraCapture
-                    ? 'اختيار صورة من المعرض'
-                    : 'اختيار صورة من الجهاز',
-                textAlign: TextAlign.right,
+            Material(
+              type: MaterialType.transparency,
+              child: ListTile(
+                onTap: () => Navigator.of(sheetContext).pop('gallery'),
+                leading: const Icon(Icons.photo_library_outlined, color: AppColors.indigo700),
+                title: Text(
+                  supportsCameraCapture
+                      ? 'اختيار صورة من المعرض'
+                      : 'اختيار صورة من الجهاز',
+                  textAlign: TextAlign.right,
+                ),
               ),
             ),
-            ListTile(
-              onTap: () => Navigator.of(sheetContext).pop('pdf'),
-              leading: const Icon(Icons.picture_as_pdf_outlined, color: AppColors.indigo700),
-              title: const Text('اختيار مستند PDF', textAlign: TextAlign.right),
+            Material(
+              type: MaterialType.transparency,
+              child: ListTile(
+                onTap: () => Navigator.of(sheetContext).pop('pdf'),
+                leading: const Icon(Icons.picture_as_pdf_outlined, color: AppColors.indigo700),
+                title: const Text('اختيار مستند PDF', textAlign: TextAlign.right),
+              ),
             ),
           ],
         ),
@@ -1290,23 +1306,26 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                         Divider(color: surf.divider, height: 12),
                     itemBuilder: (_, index) {
                       final item = items[index];
-                      return ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        onTap: () => Navigator.of(sheetContext).pop(item),
-                        title: Text(item.name,
-                            style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: surf.textPrimary)),
-                        subtitle: Text(
-                          item.hasMaterials
-                              ? '${item.materials.length} مادة · تكلفة ${item.materialsCost.toStringAsFixed(0)} ل.س'
-                              : 'بلا مواد مرتبطة',
-                          style: TextStyle(fontSize: 11.5, color: surf.textMuted),
+                      return Material(
+                        type: MaterialType.transparency,
+                        child: ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          onTap: () => Navigator.of(sheetContext).pop(item),
+                          title: Text(item.name,
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: surf.textPrimary)),
+                          subtitle: Text(
+                            item.hasMaterials
+                                ? '${item.materials.length} مادة · تكلفة ${item.materialsCost.toStringAsFixed(0)} ل.س'
+                                : 'بلا مواد مرتبطة',
+                            style: TextStyle(fontSize: 11.5, color: surf.textMuted),
+                          ),
+                          trailing: Text('${item.price.toStringAsFixed(0)} ل.س',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.indigo700)),
                         ),
-                        trailing: Text('${item.price.toStringAsFixed(0)} ل.س',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.indigo700)),
                       );
                     },
                   ),
@@ -1758,40 +1777,50 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
     return (quadrant == 1 || quadrant == 4) ? list.reversed.toList() : list;
   }
 
-  /// خريطة الفم كاملاً بمربّعات صغيرة ملوّنة حسب الحالة، والربع المحدَّد
+  /// خريطة الفم كاملاً بأسنان مصغّرة ملوّنة حسب الحالة، والربع المحدَّد
   /// مؤطَّر -- تعطي الطبيب الصورة الكلية دون أن يفقدها عند تكبير ربع واحد.
+  /// (2026-09-25) أسنان بنفس الرسم التشريحي بدل مستطيلات، تيجان الفكّين
+  /// متقابلة عند خط الإطباق كما في الفم؛ والضغط على أي ربع يفتحه في الأسفل.
   Widget _buildMouthOverview() {
     final surf = context.surface;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     Widget chipsRow(List<int> quadrants) {
       return Row(
         children: [
           for (var i = 0; i < quadrants.length; i++) ...[
             if (i > 0) const SizedBox(width: 7),
             Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: _activeQuadrant == quadrants[i]
-                      ? const Color(0xFFE0E7FF)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: _activeQuadrant == quadrants[i]
-                        ? const Color(0xFFA5B4FC)
-                        : Colors.transparent,
-                    width: 1.5,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    for (final fdi in _quadrantFdiList(quadrants[i]))
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 1),
-                          child: _overviewChip(fdi),
-                        ),
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => setState(() => _activeQuadrant = quadrants[i]),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _activeQuadrant == quadrants[i]
+                          ? (dark
+                              ? AppColors.indigoAccent.withValues(alpha: .16)
+                              : const Color(0xFFE0E7FF))
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _activeQuadrant == quadrants[i]
+                            ? (dark
+                                ? AppColors.indigoAccent.withValues(alpha: .55)
+                                : const Color(0xFFA5B4FC))
+                            : Colors.transparent,
+                        width: 1.5,
                       ),
-                  ],
+                    ),
+                    child: Row(
+                      children: [
+                        for (final fdi in _quadrantFdiList(quadrants[i]))
+                          Expanded(child: _overviewChip(fdi)),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -1823,7 +1852,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
               children: [
                 chipsRow(const [1, 2]),
                 Container(
-                  margin: const EdgeInsets.symmetric(vertical: 7, horizontal: 2),
+                  margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
                   height: 1,
                   color: AppColors.rose200,
                 ),
@@ -1837,15 +1866,22 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
   }
 
   Widget _overviewChip(int fdi) {
-    final resolved = resolveToothStatus(_patient.chartState[fdiToPalmer[fdi]]);
-    return Container(
-      height: 22,
-      decoration: BoxDecoration(
-        color: resolved?.color.withValues(alpha: .85) ?? toothDefaultFill,
-        borderRadius: BorderRadius.circular(6),
-        border: resolved == null
-            ? Border.all(color: const Color(0xFFEDDCC0))
-            : null,
+    final raw = _patient.chartState[fdiToPalmer[fdi]];
+    // الارتفاع من عرض الخانة (نسبة السن 44:78): ~30px في الجوال، وأكبر قليلاً
+    // على سطح المكتب حيث الخانة أعرض -- بسقف حتى لا تطول الخريطة.
+    return LayoutBuilder(
+      builder: (context, constraints) => SizedBox(
+        height: (constraints.maxWidth * 1.75).clamp(26.0, 46.0),
+        child: CustomPaint(
+          painter: ToothShapePainter(
+            fdi: fdi,
+            statusColor: resolveToothStatus(raw)?.color,
+            statusKey: resolveToothStatusKey(raw),
+            outline: _selectedTeeth.contains(fdi) ? AppColors.indigoAccent : null,
+            glow: _selectedTeeth.contains(fdi) ? .5 : 0,
+            glowColor: AppColors.indigoAccent,
+          ),
+        ),
       ),
     );
   }
@@ -1933,10 +1969,15 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                       fdiNumber: fdi,
                       statusKey: _patient.chartState[fdiToPalmer[fdi]],
                       isUpper: isUpper,
-                      shapeWidth: 30,
-                      shapeHeight: 48,
+                      // أكبر من السابق (30×48) ليظهر تشريح السن الجديد؛ على
+                      // سطح المكتب بمقاس لوحة الرسم الكامل.
+                      shapeWidth: context.isDesktopShell ? 44 : 34,
+                      shapeHeight: context.isDesktopShell ? 78 : 60,
                       numberFontSize: 10.5,
-                      onTap: () => _openToothScreen(fdi),
+                      selected: _selectedTeeth.contains(fdi),
+                      onTap: () => _multiSelect
+                          ? _toggleToothSelection(fdi)
+                          : _openToothScreen(fdi),
                     ),
                   ),
               ],
@@ -1944,7 +1985,9 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            'اضغط أي سن لفتح لوحة الحالة',
+            _multiSelect
+                ? 'اضغط الأسنان لتحديدها — ويمكنك التنقّل بين الأرباع'
+                : 'اضغط أي سن لفتح لوحة الحالة',
             style: TextStyle(
                 fontSize: 10.5, fontWeight: FontWeight.w700, color: surf.textMuted),
           ),
@@ -1953,16 +1996,188 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
     );
   }
 
+  void _toggleMultiSelect() {
+    setState(() {
+      _multiSelect = !_multiSelect;
+      _selectedTeeth.clear();
+    });
+  }
+
+  void _toggleToothSelection(int fdi) {
+    HapticFeedback.selectionClick();
+    setState(() {
+      if (!_selectedTeeth.remove(fdi)) _selectedTeeth.add(fdi);
+    });
+  }
+
+  /// الربع المفتوح كاملاً: يحدّد أسنانه الثمانية، أو يلغيها إن كانت كلها محدَّدة.
+  void _toggleQuadrantSelection() {
+    final teeth = _quadrantFdiList(_activeQuadrant);
+    HapticFeedback.selectionClick();
+    setState(() {
+      if (teeth.every(_selectedTeeth.contains)) {
+        _selectedTeeth.removeAll(teeth);
+      } else {
+        _selectedTeeth.addAll(teeth);
+      }
+    });
+  }
+
+  static String _selectedTeethLabel(int n) {
+    if (n == 1) return 'سن واحد محدَّد';
+    if (n == 2) return 'سنّان محدَّدان';
+    if (n <= 10) return '$n أسنان محدَّدة';
+    return '$n سنّاً محدَّداً';
+  }
+
+  static String _updatedTeethLabel(int n) {
+    if (n == 1) return 'تم تحديث حالة سن واحد';
+    if (n == 2) return 'تم تحديث حالة سنّين';
+    if (n <= 10) return 'تم تحديث حالة $n أسنان';
+    return 'تم تحديث حالة $n سنّاً';
+  }
+
+  Widget _buildBulkBar() {
+    final surf = context.surface;
+    final count = _selectedTeeth.length;
+    final quadrantFull = _quadrantFdiList(_activeQuadrant).every(_selectedTeeth.contains);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: AppColors.indigoAccent.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.indigoAccent.withValues(alpha: .28)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  count == 0 ? 'لم تحدِّد أسناناً بعد' : _selectedTeethLabel(count),
+                  style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w800, color: surf.textPrimary),
+                ),
+                const SizedBox(height: 2),
+                GestureDetector(
+                  onTap: _toggleQuadrantSelection,
+                  child: Text(
+                    quadrantFull ? 'إلغاء تحديد هذا الربع' : 'تحديد الربع كاملاً',
+                    style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.indigoAccent),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          if (_bulkSaving)
+            const SizedBox(
+                width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.4))
+          else
+            Opacity(
+              opacity: count == 0 ? .45 : 1,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: count == 0 ? null : _applyBulkStatus,
+                  child: Ink(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                    decoration: BoxDecoration(
+                      gradient: AppColors.primaryButtonGradient,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.format_paint_outlined, size: 16, color: Colors.white),
+                        SizedBox(width: 6),
+                        Text('تطبيق حالة',
+                            style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _applyBulkStatus() async {
+    final count = _selectedTeeth.length;
+    final choice = await showAppSheet<_BulkToothChoice>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      desktopWidth: 520,
+      builder: (_) => _BulkToothStatusSheet(count: count),
+    );
+    if (choice == null || !mounted) return;
+    final updated = Map<String, String>.from(_patient.chartState);
+    for (final fdi in _selectedTeeth) {
+      final key = fdiToPalmer[fdi];
+      if (key == null) continue;
+      if (choice.statusKey == null) {
+        updated.remove(key);
+      } else {
+        updated[key] = choice.statusKey!;
+      }
+    }
+    setState(() => _bulkSaving = true);
+    try {
+      final patient = await widget.apiService.updatePatientChart(_patient.id, updated);
+      if (!mounted) return;
+      setState(() {
+        _patient = patient;
+        _selectedTeeth.clear();
+        _multiSelect = false;
+      });
+      HapticFeedback.mediumImpact();
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(_updatedTeethLabel(count))));
+    } on ApiException catch (e) {
+      if (e.isSessionExpired) {
+        widget.onSessionExpired();
+        return;
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('تعذر حفظ حالة الأسنان. حاول مرة أخرى.')));
+      }
+    } finally {
+      if (mounted) setState(() => _bulkSaving = false);
+    }
+  }
+
   Widget _buildChartCard() {
     final surf = context.surface;
     return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Row(
+          Row(
             children: [
-              Spacer(),
-              Text('مخطط الأسنان', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+              TextButton.icon(
+                onPressed: _bulkSaving ? null : _toggleMultiSelect,
+                icon: Icon(_multiSelect ? Icons.close_rounded : Icons.checklist_rounded, size: 18),
+                label: Text(_multiSelect ? 'إنهاء التحديد' : 'تحديد عدة أسنان'),
+              ),
+              const Spacer(),
+              const Text('مخطط الأسنان', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
             ],
           ),
           const SizedBox(height: 10),
@@ -1971,6 +2186,10 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
           _buildQuadrantTabs(),
           const SizedBox(height: 12),
           _buildQuadrantTeeth(),
+          if (_multiSelect) ...[
+            const SizedBox(height: 10),
+            _buildBulkBar(),
+          ],
           if (_savingToothKey != null) ...[
             const SizedBox(height: 8),
             const LinearProgressIndicator(minHeight: 3),
@@ -3201,6 +3420,7 @@ class _InvoiceDetailSheetState extends State<_InvoiceDetailSheet> {
         isOpeningBalance: _isOpeningBalance,
       );
       if (!mounted) return;
+      HapticFeedback.mediumImpact();
       setState(() {
         _invoice = updated;
         _isSaving = false;
@@ -3508,32 +3728,35 @@ class _InvoiceDetailSheetState extends State<_InvoiceDetailSheet> {
                       itemBuilder: (context, index) {
     final surf = context.surface;
                         final payment = _invoice.payments[index];
-                        return ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: const Icon(Icons.payments_outlined, color: AppColors.emerald600),
-                          title: Text('${payment.amount.toStringAsFixed(0)} ل.س',
-                              style: const TextStyle(fontWeight: FontWeight.w700)),
-                          subtitle: Text(
-                            payment.description.isEmpty
-                                ? (payment.isOpeningBalance ? 'رصيد افتتاحي' : '—')
-                                : payment.description,
-                          ),
-                          // 2026-08-30: بطلب المستخدم -- الضغط على أي دفعة يتيح
-                          // تعديلها في حال أُدخلت بالخطأ، مطابق لزر "تعديل" في
-                          // patient_record.html (نفس financeEditModal المُعاد
-                          // استخدامه هناك لكل من السجل المالي العام ودفعات
-                          // الفواتير معاً).
-                          onTap: () => _openEditPaymentDialog(payment),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.edit_outlined, size: 14, color: AppColors.indigo600),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${payment.createdAt.year}/${payment.createdAt.month}/${payment.createdAt.day}',
-                                style: TextStyle(fontSize: 11, color: surf.textMuted),
-                              ),
-                            ],
+                        return Material(
+                          type: MaterialType.transparency,
+                          child: ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.payments_outlined, color: AppColors.emerald600),
+                            title: Text('${payment.amount.toStringAsFixed(0)} ل.س',
+                                style: const TextStyle(fontWeight: FontWeight.w700)),
+                            subtitle: Text(
+                              payment.description.isEmpty
+                                  ? (payment.isOpeningBalance ? 'رصيد افتتاحي' : '—')
+                                  : payment.description,
+                            ),
+                            // 2026-08-30: بطلب المستخدم -- الضغط على أي دفعة يتيح
+                            // تعديلها في حال أُدخلت بالخطأ، مطابق لزر "تعديل" في
+                            // patient_record.html (نفس financeEditModal المُعاد
+                            // استخدامه هناك لكل من السجل المالي العام ودفعات
+                            // الفواتير معاً).
+                            onTap: () => _openEditPaymentDialog(payment),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.edit_outlined, size: 14, color: AppColors.indigo600),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${payment.createdAt.year}/${payment.createdAt.month}/${payment.createdAt.day}',
+                                  style: TextStyle(fontSize: 11, color: surf.textMuted),
+                                ),
+                              ],
+                            ),
                           ),
                         );
                       },
@@ -4063,6 +4286,142 @@ class _CustomColorSwatch extends StatelessWidget {
               spreadRadius: selected ? 2 : 0,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// اختيار ورقة «حالة الأسنان المحدَّدة». [statusKey] null = مسح الحالة.
+class _BulkToothChoice {
+  final String? statusKey;
+  const _BulkToothChoice(this.statusKey);
+}
+
+class _BulkToothStatusSheet extends StatelessWidget {
+  final int count;
+
+  const _BulkToothStatusSheet({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final surf = context.surface;
+    return Container(
+      decoration: BoxDecoration(
+        color: surf.sheetBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 22),
+      child: SafeArea(
+        top: false,
+        child: Material(
+          type: MaterialType.transparency,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              BottomSheetOnly(
+                child: Center(
+                  child: Container(
+                    width: 42,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: surf.divider,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+              ),
+              Text(
+                'حالة الأسنان المحدَّدة',
+                style: AppType.kufi(
+                    fontSize: 16, fontWeight: FontWeight.w700, color: surf.textPrimary),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'تُطبَّق على الأسنان المحدَّدة كلها ($count) بحفظ واحد.',
+                style: TextStyle(fontSize: 12, color: surf.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final itemWidth = (constraints.maxWidth - 10) / 2;
+                  return Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      for (final option in toothStatusOptions)
+                        SizedBox(
+                          width: itemWidth,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () =>
+                                Navigator.of(context).pop(_BulkToothChoice(option.key)),
+                            child: Ink(
+                              height: 48,
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: option.color.withValues(alpha: .10),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: option.color.withValues(alpha: .45)),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 10,
+                                    height: 10,
+                                    decoration: BoxDecoration(
+                                        color: option.color, shape: BoxShape.circle),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      option.label,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: surf.textPrimary),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => Navigator.of(context).pop(const _BulkToothChoice(null)),
+                child: Ink(
+                  height: 46,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: surf.cardBorder),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.layers_clear_outlined, size: 17, color: surf.textSecondary),
+                      const SizedBox(width: 6),
+                      Text(
+                        'مسح حالة الأسنان المحدَّدة',
+                        style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: surf.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

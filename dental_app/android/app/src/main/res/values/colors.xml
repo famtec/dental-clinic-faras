@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- لون أيقونة الإشعار (بنفسجي شعار الموقع). -->
+    <color name="notification_accent">#5A4BD4</color>
+</resources>

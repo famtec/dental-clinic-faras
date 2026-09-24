@@ -2,9 +2,11 @@ import 'dart:convert';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/material.dart' show Color;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'api_service.dart';
+import 'appointment_reminder_service.dart';
 import 'platform_support.dart';
 
 /// معرّف قناة الإشعارات الافتراضية -- يجب أن يطابق بالضبط القيمة الموضوعة في
@@ -75,17 +77,12 @@ class PushNotificationService {
     if (_initialized) return;
     _initialized = true;
 
-    await Firebase.initializeApp();
-    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-
-    await FirebaseMessaging.instance.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
-
+    // الإشعارات المحلية قبل Firebase (2026-09-25): تذكير المواعيد لا يعتمد
+    // على Firebase، ففشل تهيئته (google-services غير مضبوط مثلاً) لا يعطّله.
+    // أيقونة شريط الحالة سنّ أبيض أحادي -- أيقونة التطبيق المتكيّفة لا تصلح
+    // هنا (أندرويد يرسمها مربعاً، وأندرويد 8.0 ينهار بها).
     const androidInitSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+        AndroidInitializationSettings('@drawable/ic_stat_notify');
     const initSettings = InitializationSettings(android: androidInitSettings);
     await _localNotifications.initialize(
       initSettings,
@@ -107,6 +104,16 @@ class PushNotificationService {
             AndroidFlutterLocalNotificationsPlugin>();
     await androidNotifications?.createNotificationChannel(_bookingChannel);
     await androidNotifications?.createNotificationChannel(_reminderChannel);
+    await AppointmentReminderService.instance.attach(_localNotifications);
+
+    await Firebase.initializeApp();
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
+    await FirebaseMessaging.instance.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
 
     // إشعار وصل والتطبيق مفتوح فعلاً -- نعرضه يدوياً عبر flutter_local_notifications
     // لأن أندرويد لا يعرض إشعارات foreground تلقائياً بنفسه.
@@ -161,6 +168,7 @@ class PushNotificationService {
           channelDescription: channel.description,
           importance: Importance.high,
           priority: Priority.high,
+          color: const Color(0xFF5A4BD4),
         ),
       ),
       payload: json.encode(message.data),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 
 import '../theme/app_theme.dart';
 import '../utils/dental_chart.dart';
@@ -87,6 +88,7 @@ class _ToothStatusScreenState extends State<ToothStatusScreen> {
     });
     final ok = await widget.onSave(_fdi, statusKey);
     if (!mounted) return;
+    if (ok) HapticFeedback.lightImpact();
     setState(() {
       _isSaving = false;
       _hint = ok
