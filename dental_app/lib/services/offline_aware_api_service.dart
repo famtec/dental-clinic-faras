@@ -761,6 +761,7 @@ class OfflineAwareApiService extends ApiService {
     required double totalCost,
     int? catalogItemId,
     int? clinicDoctorId,
+    bool sendClinicDoctor = false,
     List<InvoiceMaterialInput>? materials,
   }) async {
     if (patientId < 0) {
@@ -774,6 +775,7 @@ class OfflineAwareApiService extends ApiService {
         totalCost: totalCost,
         catalogItemId: catalogItemId,
         clinicDoctorId: clinicDoctorId,
+        sendClinicDoctor: sendClinicDoctor,
         materials: materials,
       );
     } on ApiException catch (e) {
@@ -801,7 +803,8 @@ class OfflineAwareApiService extends ApiService {
           // مرجع الحالة من اللائحة يُؤجَّل بلا خطر: لا يُغيِّر شيئاً في
           // المخزن ولا في الأرقام، وقيمته الوحيدة تجميع تقرير الربحية.
           if (catalogItemId != null) 'catalog_item_id': catalogItemId,
-          if (clinicDoctorId != null) 'clinic_doctor_id': clinicDoctorId,
+          // المفتاح حاضراً (ولو null) = اختيار صريح يُرسَل كما هو عند المزامنة.
+          if (sendClinicDoctor || clinicDoctorId != null) 'clinic_doctor_id': clinicDoctorId,
         },
       );
       await _refreshPendingCount();
@@ -1382,6 +1385,7 @@ class OfflineAwareApiService extends ApiService {
       // null ولا تنكسر مزامنة فاتورة كانت في الطابور قبل التحديث.
       catalogItemId: (payload['catalog_item_id'] as num?)?.toInt(),
       clinicDoctorId: (payload['clinic_doctor_id'] as num?)?.toInt(),
+      sendClinicDoctor: payload.containsKey('clinic_doctor_id'),
     );
     // إعادة توجيه أي دفعات أُضيفت أوفلاين على هذه الفاتورة قبل مزامنتها --
     // تُعالَج بنفسها بعد قليل بنفس دورة المزامنة (مرتَّبة دائماً بعد عملية

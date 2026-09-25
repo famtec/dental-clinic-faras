@@ -1152,6 +1152,14 @@
  <span class="mb-1 block text-xs font-semibold text-brand-100">التكلفة الإجمالية الجديدة (ل.س)</span>
  <input id="invoiceCostEditInput" type="text" inputmode="decimal" required class="w-full rounded-2xl border border-brand-200/30 bg-white/10 px-4 py-3 text-sm text-white outline-none transition placeholder:text-brand-200/60 focus:border-brand-300 focus:ring-4 focus:ring-brand-300/25" placeholder="أدخل التكلفة الصحيحة" />
  </label>
+ <label id="invoiceDoctorEditField" class="block hidden">
+ <span class="mb-1 block text-xs font-semibold text-brand-100">الطبيب المنفّذ (تُحسب نسبته من دفعات الفاتورة)</span>
+ <select id="invoiceDoctorEditSelect" style="color-scheme: dark" class="w-full rounded-2xl border border-brand-200/30 bg-white/10 px-4 py-3 text-sm text-white outline-none transition placeholder:text-brand-200/60 focus:border-brand-300 focus:ring-4 focus:ring-brand-300/25"></select>
+ </label>
+ <label id="invoiceDoctorMoveField" class="hidden flex items-start gap-2 text-[11px] leading-6 text-brand-200/80">
+ <input id="invoiceDoctorMoveCheckbox" type="checkbox" checked />
+ <span>نقل الدفعات السابقة ونسبها إلى الطبيب الجديد أيضاً. اتركه محدّداً إن كان الطبيب السابق اختياراً خاطئاً، وأزِله إن كان العلاج انتقل لطبيب آخر من الآن فقط.</span>
+ </label>
  <p class="text-[11px] leading-6 text-brand-200/80">هذا التصحيح يغيّر التكلفة الإجمالية لهذه الفاتورة فقط، ولا يغيّر أي دفعة مسجَّلة عليها -- سيُعاد احتساب "المتبقي" وحالة الفاتورة تلقائياً بعد الحفظ.</p>
  <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
  <button id="cancelInvoiceCostEditBtn" type="button" class="rounded-2xl border border-brand-200/35 bg-white/10 px-5 py-3 text-sm font-semibold text-brand-50 transition hover:bg-white/20">إلغاء</button>
@@ -2721,6 +2729,8 @@
       const titleInput = document.getElementById('newInvoiceTitleInput');
       const costInput = document.getElementById('newInvoiceCostInput');
       if (show) {
+        const doctorSelectOnOpen = document.getElementById('newInvoiceDoctorSelect');
+        if (doctorSelectOnOpen) doctorSelectOnOpen.value = defaultInvoiceDoctorValue();
         if (titleInput) titleInput.focus();
       } else {
         if (titleInput) titleInput.value = '';
@@ -2743,6 +2753,16 @@
     // الدفعات لا تحتاج حقلاً خاصاً بها: كل دفعة ترث طبيب فاتورتها تلقائياً
     // في الخادم (انظر register_invoice_payment في main.py).
     let clinicDoctorsCache = [];
+
+    // 2026-09-25: الطبيب المنفّذ للفاتورة الجديدة يبدأ بطبيب المريض المعالج
+    // (إن كان نشطاً) بدل «أنا» -- سهوة واحدة كانت تُضيّع نسبة المساعد.
+    function defaultInvoiceDoctorValue() {
+      const patientDoctor = currentPatient && currentPatient.clinic_doctor_id;
+      if (patientDoctor && clinicDoctorsCache.some((d) => String(d.id) === String(patientDoctor))) {
+        return String(patientDoctor);
+      }
+      return '';
+    }
 
     async function loadClinicDoctorsForInvoices() {
       const field = document.getElementById('newInvoiceDoctorField');
@@ -2770,6 +2790,7 @@
                 `<option value="${escapeHtml(String(d.id))}">${escapeHtml(d.full_name)} — ${Number(d.commission_percent || 0)}%</option>`
             )
             .join('');
+        select.value = defaultInvoiceDoctorValue();
         field.classList.remove('hidden');
       } catch (error) {
         field.classList.add('hidden');
@@ -3124,7 +3145,11 @@
         });
 
         if (!response.ok) {
-          throw new Error('Failed to register invoice payment');
+          // 2026-09-25: رسالة الخادم نفسها (مثل «المبلغ أكبر من المتبقي على
+          // الفاتورة») بدل رسالة عامة لا تقول للطبيب ما الخطأ.
+          let detail = '';
+          try { detail = (await response.json()).detail || ''; } catch (parseError) { detail = ''; }
+          throw new Error(typeof detail === 'string' && detail ? detail : 'Failed to register invoice payment');
         }
 
         if (inputEl) inputEl.value = '';
@@ -3133,7 +3158,10 @@
         await loadFinanceLedger();
         showFinanceSuccessAlert('تم تسجيل الدفعة على فاتورة العلاج بنجاح');
       } catch (error) {
-        showToast('تعذر تسجيل الدفعة الآن. يرجى المحاولة لاحقاً.', 'error');
+        const message = error && error.message && error.message !== 'Failed to register invoice payment'
+          ? error.message
+          : 'تعذر تسجيل الدفعة الآن. يرجى المحاولة لاحقاً.';
+        showToast(message, 'error');
       }
     }
 
@@ -4592,6 +4620,7 @@
         const rawCost = Number(invoice.total_cost);
         input.value = Number.isFinite(rawCost) ? String(rawCost) : '';
       }
+      populateInvoiceDoctorEdit(invoice);
 
       if (!modal) return;
       if (invoiceCostEditModalCloseTimer) {
@@ -4628,6 +4657,40 @@
       }, 180);
     }
 
+    // 2026-09-25: تصحيح الطبيب المنفّذ من نافذة تعديل الفاتورة نفسها. خيار نقل
+    // الدفعات يظهر فقط حين يتغيّر الطبيب وعلى الفاتورة دفعات.
+    function populateInvoiceDoctorEdit(invoice) {
+      const field = document.getElementById('invoiceDoctorEditField');
+      const select = document.getElementById('invoiceDoctorEditSelect');
+      const moveField = document.getElementById('invoiceDoctorMoveField');
+      const moveCheckbox = document.getElementById('invoiceDoctorMoveCheckbox');
+      if (!field || !select) return;
+      if (!clinicDoctorsCache.length) {
+        field.classList.add('hidden');
+        if (moveField) moveField.classList.add('hidden');
+        return;
+      }
+      const current = invoice.clinic_doctor_id != null ? String(invoice.clinic_doctor_id) : '';
+      let options = '<option value="">أنا (طبيب العيادة)</option>' +
+        clinicDoctorsCache
+          .map((d) => `<option value="${escapeHtml(String(d.id))}">${escapeHtml(d.full_name)} — ${Number(d.commission_percent || 0)}%</option>`)
+          .join('');
+      if (current && !clinicDoctorsCache.some((d) => String(d.id) === current)) {
+        options += `<option value="${escapeHtml(current)}">${escapeHtml(invoice.clinic_doctor_name || 'طبيب غير نشط')}</option>`;
+      }
+      select.innerHTML = options;
+      select.value = current;
+      select.dataset.original = current;
+      if (moveCheckbox) moveCheckbox.checked = true;
+      const paymentsCount = Array.isArray(invoice.payments) ? invoice.payments.length : 0;
+      select.onchange = () => {
+        const changed = select.value !== select.dataset.original;
+        if (moveField) moveField.classList.toggle('hidden', !(changed && paymentsCount > 0));
+      };
+      if (moveField) moveField.classList.add('hidden');
+      field.classList.remove('hidden');
+    }
+
     async function submitInvoiceCostEdit(event) {
       event.preventDefault();
       if (!activeInvoiceForCostEdit) return;
@@ -4653,21 +4716,38 @@
       }
 
       try {
+        const body = { total_cost: newCost };
+        const doctorField = document.getElementById('invoiceDoctorEditField');
+        const doctorSelect = document.getElementById('invoiceDoctorEditSelect');
+        if (doctorField && !doctorField.classList.contains('hidden') && doctorSelect &&
+            doctorSelect.value !== doctorSelect.dataset.original) {
+          body.clinic_doctor_id = doctorSelect.value ? Number(doctorSelect.value) : null;
+          const moveField = document.getElementById('invoiceDoctorMoveField');
+          const moveCheckbox = document.getElementById('invoiceDoctorMoveCheckbox');
+          body.apply_to_existing_payments = Boolean(
+            moveField && !moveField.classList.contains('hidden') && moveCheckbox && moveCheckbox.checked
+          );
+        }
         const response = await fetch(getInvoiceCostUpdateEndpoint(patientId, activeInvoiceForCostEdit.id), {
           method: 'PATCH',
           headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({ total_cost: newCost }),
+          body: JSON.stringify(body),
         });
 
         if (!response.ok) {
-          throw new Error('Failed to update invoice cost');
+          let detail = '';
+          try { detail = (await response.json()).detail || ''; } catch (parseError) { detail = ''; }
+          throw new Error(typeof detail === 'string' && detail ? detail : 'Failed to update invoice cost');
         }
 
         await loadPatientInvoices();
         showFinanceSuccessAlert('تم تحديث التكلفة الإجمالية بنجاح ✨');
         closeInvoiceCostEditModal();
       } catch (error) {
-        showToast('تعذر تحديث التكلفة الإجمالية الآن. يرجى المحاولة لاحقاً.', 'error');
+        const message = error && error.message && error.message !== 'Failed to update invoice cost'
+          ? error.message
+          : 'تعذر تحديث التكلفة الإجمالية الآن. يرجى المحاولة لاحقاً.';
+        showToast(message, 'error');
       } finally {
         if (saveButton) {
           saveButton.disabled = false;
@@ -4679,11 +4759,23 @@
     // 2026-08-29: حذف فاتورة علاج بالكامل (وليس فقط تصحيح تكلفتها) -- مثلاً
     // فاتورة أُنشئت بالخطأ من الأساس. الباك إند يحذف تلقائياً كل الدفعات
     // المرتبطة بها (cascade)، لذا التحذير هنا صريح قبل التنفيذ.
-    async function deleteInvoiceById(patientId, invoiceId) {
-      const response = await fetch(getInvoiceCostUpdateEndpoint(patientId, invoiceId), {
+    async function deleteInvoiceById(patientId, invoiceId, confirmDoctorEarnings = false) {
+      const endpoint = getInvoiceCostUpdateEndpoint(patientId, invoiceId) +
+        (confirmDoctorEarnings ? '?confirm_doctor_earnings=true' : '');
+      const response = await fetch(endpoint, {
         method: 'DELETE',
         headers: getDoctorAuthHeaders(),
       });
+
+      // 2026-09-25: فاتورة عليها نسب أطباء -- 409 برسالة الأثر على أرصدتهم.
+      if (response.status === 409 && !confirmDoctorEarnings) {
+        let detail = '';
+        try { detail = (await response.json()).detail || ''; } catch (parseError) { detail = ''; }
+        if (detail && window.confirm(detail)) {
+          return deleteInvoiceById(patientId, invoiceId, true);
+        }
+        throw new Error('أُلغي حذف الفاتورة.');
+      }
 
       if (!response.ok) {
         throw new Error('تعذر حذف فاتورة العلاج حالياً.');

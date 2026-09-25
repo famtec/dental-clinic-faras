@@ -1339,6 +1339,14 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
   }
 
   Future<void> _openCreateInvoiceDialog() async {
+    // 2026-09-25: الطبيب المنفّذ يُختار هنا ويبدأ بطبيب المريض المعالج --
+    // كانت فواتير التطبيق كلها تُنسب للمدير فيخسر المساعد نسبته بصمت.
+    final doctorChoices =
+        _doctorChoices ??= await ClinicDoctorChoices.load(widget.apiService);
+    if (!mounted) return;
+    int? invoiceDoctorId = doctorChoices.nameFor(_patient.clinicDoctorId) != null
+        ? _patient.clinicDoctorId
+        : null;
     final titleController = TextEditingController();
     final costController = TextEditingController();
     final formKey = GlobalKey<FormState>();
@@ -1417,6 +1425,15 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                         return null;
                       },
                     ),
+                    if (!doctorChoices.isEmpty) ...[
+                      const SizedBox(height: 12),
+                      ClinicDoctorDropdown(
+                        choices: doctorChoices,
+                        value: invoiceDoctorId,
+                        label: 'الطبيب المنفّذ (تُحسب نسبته من دفعاتها)',
+                        onChanged: (value) => setDialogState(() => invoiceDoctorId = value),
+                      ),
+                    ],
                     if (materialsLabel != null) ...[
                       const SizedBox(height: 10),
                       Container(
@@ -1478,6 +1495,8 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                               title: titleController.text.trim(),
                               totalCost: double.parse(costController.text.trim()),
                               catalogItemId: catalogItemId,
+                              clinicDoctorId: invoiceDoctorId,
+                              sendClinicDoctor: !doctorChoices.isEmpty,
                               materials: materials.isEmpty ? null : materials,
                             );
                             if (!mounted) return;
@@ -3388,10 +3407,104 @@ class _InvoiceDetailSheetState extends State<_InvoiceDetailSheet> {
   // نموذج تسجيل الدفعة الجديدة في patient_record.html (submitInvoicePayment).
   bool _isOpeningBalance = false;
 
+  /// أطباء العيادة -- null حتى التحميل، وفارغة لعيادة الطبيب الواحد (لا صفّ).
+  ClinicDoctorChoices? _doctorChoices;
+
   @override
   void initState() {
     super.initState();
     _invoice = widget.invoice;
+    ClinicDoctorChoices.load(widget.apiService).then((choices) {
+      if (mounted) setState(() => _doctorChoices = choices);
+    });
+  }
+
+  /// تصحيح الطبيب المنفّذ (2026-09-25). إن كانت على الفاتورة دفعات يسأل:
+  /// تصحيح خطأ (تنتقل الدفعات السابقة ونسبها) أم تغيير للأقساط القادمة فقط.
+  Future<void> _changeDoctor() async {
+    final choices = _doctorChoices;
+    if (choices == null) return;
+    int? selected = _invoice.clinicDoctorId;
+    var moveExisting = true;
+    final paymentsCount = _invoice.payments.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('تغيير الطبيب المنفّذ'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ClinicDoctorDropdown(
+                choices: choices,
+                value: selected,
+                currentDoctorName: _invoice.clinicDoctorName,
+                label: 'الطبيب المنفّذ',
+                onChanged: (value) => setDialogState(() => selected = value),
+              ),
+              if (paymentsCount > 0) ...[
+                const SizedBox(height: 12),
+                CheckboxListTile(
+                  value: moveExisting,
+                  onChanged: (value) => setDialogState(() => moveExisting = value ?? true),
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: Text('نقل الدفعات السابقة ($paymentsCount) ونسبها إلى الطبيب الجديد',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                  subtitle: const Text(
+                    'اتركه محدّداً إن كان الطبيب السابق اختياراً خاطئاً. أزِله إن كان العلاج انتقل '
+                    'لطبيب آخر من الآن فقط.',
+                    style: TextStyle(fontSize: 11.5, height: 1.5),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('حفظ'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted || selected == _invoice.clinicDoctorId) return;
+    setState(() {
+      _isSaving = true;
+      _error = null;
+    });
+    try {
+      final updated = await widget.apiService.updateInvoiceDoctor(
+        _invoice.patientId,
+        _invoice.id,
+        totalCost: _invoice.totalCost,
+        clinicDoctorId: selected,
+        applyToExistingPayments: paymentsCount > 0 && moveExisting,
+      );
+      if (!mounted) return;
+      setState(() {
+        _invoice = updated;
+        _isSaving = false;
+      });
+      widget.onInvoiceUpdated(updated);
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تم تغيير الطبيب المنفّذ للفاتورة')));
+    } on ApiException catch (e) {
+      if (e.isSessionExpired) {
+        widget.onSessionExpired();
+        return;
+      }
+      setState(() {
+        _isSaving = false;
+        _error = e.message;
+      });
+    }
   }
 
   @override
@@ -3405,6 +3518,14 @@ class _InvoiceDetailSheetState extends State<_InvoiceDetailSheet> {
     final amount = double.tryParse(_amountController.text.trim());
     if (amount == null || amount <= 0) {
       setState(() => _error = 'أدخل مبلغاً صحيحاً');
+      return;
+    }
+    // 2026-09-25: الخادم يرفض الدفعة الزائدة (كانت تُحسب نسبة الطبيب على
+    // الزيادة) -- الفحص هنا يعطي الرسالة فوراً، وأوفلاين قبل أن تُؤجَّل.
+    if (amount > _invoice.remainingAmount + 0.001) {
+      setState(() => _error =
+          'المبلغ أكبر من المتبقي على الفاتورة (${_invoice.remainingAmount.toStringAsFixed(0)} ل.س). '
+          'إن زادت تكلفة المعالجة فعدّل تكلفة الفاتورة أولاً.');
       return;
     }
     setState(() {
@@ -3707,6 +3828,25 @@ class _InvoiceDetailSheetState extends State<_InvoiceDetailSheet> {
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12, color: surf.textSecondary),
             ),
+            if (_doctorChoices != null && !_doctorChoices!.isEmpty)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.medical_services_outlined, size: 15, color: surf.textSecondary),
+                  const SizedBox(width: 5),
+                  Flexible(
+                    child: Text(
+                      'الطبيب المنفّذ: ${_invoice.clinicDoctorName ?? (_invoice.clinicDoctorId == null ? _doctorChoices!.ownerLabel : 'طبيب غير نشط')}',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: surf.textPrimary),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _isSaving ? null : _changeDoctor,
+                    child: const Text('تغيير'),
+                  ),
+                ],
+              ),
             const SizedBox(height: 10),
             // المواد المستهلكة -- 2026-09-18. تُعرَض ملخَّصاً وتُدار في ورقة
             // مستقلّة عن قصد: قائمة الدفعات هنا داخل Expanded، فإدراج قائمة

@@ -53,12 +53,16 @@ class ClinicDoctorDropdown extends StatelessWidget {
   final String? currentDoctorName;
   final ValueChanged<int?> onChanged;
 
+  /// «الطبيب المعالج» للمريض، «الطبيب المنفّذ» للفاتورة.
+  final String label;
+
   const ClinicDoctorDropdown({
     super.key,
     required this.choices,
     required this.value,
     required this.onChanged,
     this.currentDoctorName,
+    this.label = 'الطبيب المعالج',
   });
 
   @override
@@ -80,7 +84,7 @@ class ClinicDoctorDropdown extends StatelessWidget {
       isExpanded: true,
       items: items,
       onChanged: onChanged,
-      decoration: const InputDecoration(labelText: 'الطبيب المعالج'),
+      decoration: InputDecoration(labelText: label),
     );
   }
 }

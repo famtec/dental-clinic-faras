@@ -959,6 +959,7 @@ class ApiService {
     required double totalCost,
     int? catalogItemId,
     int? clinicDoctorId,
+    bool sendClinicDoctor = false,
     List<InvoiceMaterialInput>? materials,
   }) async {
     final headers = await _authHeaders();
@@ -972,7 +973,11 @@ class ApiService {
               'title': title,
               'total_cost': totalCost,
               if (catalogItemId != null) 'catalog_item_id': catalogItemId,
-              'clinic_doctor_id': ?clinicDoctorId,
+              // (2026-09-25) الحقل يُرسَل صراحةً متى ظهر اختيار الطبيب -- null
+              // عندها تعني «الطبيب المدير» فعلاً. غيابه يجعل الخادم ينسب
+              // الفاتورة لطبيب المريض المعالج (سلوك النسخ القديمة).
+              if (sendClinicDoctor || clinicDoctorId != null)
+                'clinic_doctor_id': clinicDoctorId,
               if (materials != null && materials.isNotEmpty)
                 'materials': materials.map((m) => m.toJson()).toList(),
             }),
@@ -986,6 +991,40 @@ class ApiService {
     }
     return TreatmentInvoice.fromJson(
         _decodeBody(response) as Map<String, dynamic>);
+  }
+
+  /// تصحيح الطبيب المنفّذ لفاتورة (2026-09-25) -- PATCH الفاتورة نفسها مع
+  /// تكلفتها الحالية (حقل إلزامي في المسار). [applyToExistingPayments] ينقل
+  /// الدفعات المسجّلة سابقاً ونسبها ومواد الفاتورة إلى الطبيب الجديد (تصحيح
+  /// خطأ)؛ بدونه يسري التغيير على الأقساط القادمة فقط.
+  Future<TreatmentInvoice> updateInvoiceDoctor(
+    int patientId,
+    int invoiceId, {
+    required double totalCost,
+    required int? clinicDoctorId,
+    required bool applyToExistingPayments,
+  }) async {
+    final headers = await _authHeaders();
+    late http.Response response;
+    try {
+      response = await http
+          .patch(
+            Uri.parse('${AppConfig.apiBaseUrl}/api/patients/$patientId/invoices/$invoiceId'),
+            headers: headers,
+            body: json.encode({
+              'total_cost': totalCost,
+              'clinic_doctor_id': clinicDoctorId,
+              'apply_to_existing_payments': applyToExistingPayments,
+            }),
+          )
+          .timeout(const Duration(seconds: 25));
+    } catch (_) {
+      throw const ApiException('تعذر الاتصال بالسيرفر. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.');
+    }
+    if (response.statusCode != 200) {
+      _throwForResponse(response, 'تعذر تغيير طبيب الفاتورة.');
+    }
+    return TreatmentInvoice.fromJson(_decodeBody(response) as Map<String, dynamic>);
   }
 
   /// إضافة مواد إلى فاتورة موجودة (علاج احتاج مادة لم تُحسب عند فتحه).

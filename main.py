@@ -1312,6 +1312,9 @@ class TreatmentInvoiceUpdate(BaseModel):
     # مقصودة بذاتها (الطبيب المدير) لا "لا تغيير". تغييره يؤثر على الدفعات
     # القادمة فقط ولا يمسّ أي استحقاق مسجَّل سابقاً.
     clinic_doctor_id: Optional[int] = None
+    # 2026-09-25: عند تصحيح الطبيب -- هل تنتقل الدفعات المسجّلة سابقاً (ونسبها
+    # ومواد الفاتورة) إلى الطبيب الجديد أيضاً؟ الواجهة تسأل الطبيب قبل الإرسال.
+    apply_to_existing_payments: bool = False
 
 
 class TreatmentInvoicePaymentCreate(BaseModel):
@@ -3213,6 +3216,25 @@ def delete_patient(
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
+    # 2026-09-25: حذف المريض كان يمحو استحقاقات الأطباء على دفعاته بصمت -- حتى
+    # المسلَّمة منها، فيظهر على الطبيب دين وهمي. المريض الذي له نسب لا يُحذف:
+    # تُحذف فواتيره من ملفه أولاً (كل حذف يعرض أثره ويطلب تأكيداً).
+    patient_payment_ids = [
+        row[0]
+        for row in db.query(models.FinancialTransaction.id)
+        .filter(models.FinancialTransaction.patient_id == patient_id)
+        .all()
+    ]
+    earnings_summary = summarize_earnings_by_doctor(db, current_user.email, patient_payment_ids)
+    if earnings_summary:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"لا يمكن حذف هذا المريض: له دفعات محسوبة في نسب {_earnings_phrase(earnings_summary)}. "
+                "حذفه كان سيمحو هذه النسب من كشوف الأطباء. إن كان الحذف مقصوداً فاحذف فواتيره من ملفه أولاً."
+            ),
+        )
+
     # لا بد من تفريغ/فك ربط كل الصفوف في الجداول الأخرى التي تحمل مفتاحاً
     # خارجياً (FK) نحو patients.id ولا تملك علاقة cascade في نموذج Patient
     # (models.py) -- وإلا يرفض Postgres حذف صف patients بانتهاك قيد الـ FK
@@ -3764,7 +3786,9 @@ def _get_owned_clinic_doctor_or_404(db: Session, clinic_doctor_id: int, clinic_e
     return clinic_doctor
 
 
-def resolve_clinic_doctor_id(db: Session, raw_value, clinic_email: str) -> Optional[int]:
+def resolve_clinic_doctor_id(
+    db: Session, raw_value, clinic_email: str, require_active: bool = False
+) -> Optional[int]:
     """يحوّل قيمة clinic_doctor_id الواردة من العميل إلى معرّف موثوق، أو None.
 
     None/0 تعني صراحةً "الطبيب المدير صاحب الحساب نفسه" -- وهي الحالة
@@ -3780,8 +3804,82 @@ def resolve_clinic_doctor_id(db: Session, raw_value, clinic_email: str) -> Optio
         raise HTTPException(status_code=400, detail="معرّف الطبيب غير صالح")
     if clinic_doctor_id <= 0:
         return None
-    _get_owned_clinic_doctor_or_404(db, clinic_doctor_id, clinic_email)
+    clinic_doctor = _get_owned_clinic_doctor_or_404(db, clinic_doctor_id, clinic_email)
+    # (2026-09-25) عمل جديد لا يُفتح باسم طبيب معطَّل (غادر العيادة مثلاً).
+    # أقساط فواتيره القديمة تبقى تُنسب له -- ذلك مسار الدفعات لا هذا الفحص.
+    if require_active and not clinic_doctor.is_active:
+        raise HTTPException(
+            status_code=400,
+            detail=f"الطبيب {clinic_doctor.full_name} معطَّل. فعّله من صفحة الأطباء أو اختر طبيباً آخر.",
+        )
     return clinic_doctor_id
+
+
+def patient_default_clinic_doctor_id(db: Session, patient: "models.Patient", clinic_email: str) -> Optional[int]:
+    """الطبيب المعالج المسجّل على المريض إن كان نشطاً، وإلا الطبيب المدير (None).
+
+    (2026-09-25) الفاتورة التي لا يُرسَل معها طبيب صراحةً تُنسب لطبيب المريض
+    لا للمدير: كانت نسخ التطبيق حتى 1.5.0 لا ترسل الحقل إطلاقاً، فكل فاتورة
+    منها تُنسب للمدير ويخسر المساعد نسبته بصمت.
+    """
+    doctor_id = getattr(patient, "clinic_doctor_id", None)
+    if not doctor_id:
+        return None
+    clinic_doctor = (
+        db.query(models.ClinicDoctor)
+        .filter(models.ClinicDoctor.id == doctor_id, models.ClinicDoctor.clinic_email == clinic_email)
+        .first()
+    )
+    if clinic_doctor is None or not clinic_doctor.is_active:
+        return None
+    return clinic_doctor.id
+
+
+def invoice_remaining_amount(db: Session, invoice: "models.TreatmentInvoice", exclude_transaction_id=None) -> Decimal:
+    """تكلفة الفاتورة ناقص كل الدفعات المسجّلة عليها (بما فيها الأرصدة الافتتاحية)."""
+    query = db.query(func.coalesce(func.sum(models.FinancialTransaction.amount), 0)).filter(
+        models.FinancialTransaction.invoice_id == invoice.id,
+        models.FinancialTransaction.type == "income",
+    )
+    if exclude_transaction_id is not None:
+        query = query.filter(models.FinancialTransaction.id != exclude_transaction_id)
+    paid = Decimal(str(query.scalar() or 0))
+    return _quantize_money(Decimal(str(invoice.total_cost or 0)) - paid)
+
+
+def ensure_payment_fits_invoice(db: Session, invoice, amount, exclude_transaction_id=None) -> None:
+    """(2026-09-25) دفعة تتجاوز المتبقي تُرفض: كانت تُقبل وتُحسب نسبة الطبيب
+    على الزيادة. من زادت معالجته تُعدَّل تكلفة فاتورته أولاً."""
+    remaining = invoice_remaining_amount(db, invoice, exclude_transaction_id)
+    if _quantize_money(Decimal(str(amount))) > remaining:
+        remaining_text = f"{max(remaining, Decimal('0')):,.0f}"
+        raise HTTPException(
+            status_code=400,
+            detail=f"المبلغ أكبر من المتبقي على الفاتورة ({remaining_text} ل.س). "
+                   "إن زادت تكلفة المعالجة فعدّل تكلفة الفاتورة أولاً.",
+        )
+
+
+def summarize_earnings_by_doctor(db: Session, clinic_email: str, transaction_ids) -> list:
+    """[(اسم الطبيب، مجموع حصته)] لاستحقاقات مجموعة دفعات -- لرسائل التحذير."""
+    transaction_ids = list(transaction_ids)
+    if not transaction_ids:
+        return []
+    rows = (
+        db.query(models.ClinicDoctor.full_name, func.coalesce(func.sum(models.DoctorEarning.doctor_share), 0))
+        .join(models.ClinicDoctor, models.ClinicDoctor.id == models.DoctorEarning.clinic_doctor_id)
+        .filter(
+            models.DoctorEarning.clinic_email == clinic_email,
+            models.DoctorEarning.transaction_id.in_(transaction_ids),
+        )
+        .group_by(models.ClinicDoctor.full_name)
+        .all()
+    )
+    return [(name, Decimal(str(total or 0))) for name, total in rows]
+
+
+def _earnings_phrase(summary: list) -> str:
+    return "، ".join(f"{name} ({total:,.0f} ل.س)" for name, total in summary)
 
 
 def sync_doctor_earning_for_payment(
@@ -3938,7 +4036,7 @@ def create_patient_invoice(
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(require_active_doctor_user),
 ):
-    _get_owned_patient_or_404(db, patient_id, current_user.email)
+    patient = _get_owned_patient_or_404(db, patient_id, current_user.email)
 
     title = (invoice_create.title or "").strip()
     if not title:
@@ -3948,9 +4046,14 @@ def create_patient_invoice(
 
     # 2026-09-13: الطبيب المساعد المنفّذ -- يُتحقق من ملكيته لهذه العيادة قبل
     # أي كتابة (fail closed)، وNone تعني الطبيب المدير نفسه.
-    assigned_clinic_doctor_id = resolve_clinic_doctor_id(
-        db, invoice_create.clinic_doctor_id, current_user.email
-    )
+    # 2026-09-25: إن لم يُرسل الحقل إطلاقاً تُنسب الفاتورة لطبيب المريض
+    # المعالج (نشطاً) بدل المدير؛ null صريحة تبقى «الطبيب المدير».
+    if "clinic_doctor_id" in invoice_create.model_fields_set:
+        assigned_clinic_doctor_id = resolve_clinic_doctor_id(
+            db, invoice_create.clinic_doctor_id, current_user.email, require_active=True
+        )
+    else:
+        assigned_clinic_doctor_id = patient_default_clinic_doctor_id(db, patient, current_user.email)
 
     # 2026-09-14: الحالة المختارة من اللائحة -- مرجع فقط، ويُتحقق من ملكيتها
     # قبل أي كتابة تماماً كالطبيب المنفّذ (fail closed).
@@ -4029,10 +4132,37 @@ def update_patient_invoice_cost(
         else None
     )
 
+    new_total = _quantize_money(Decimal(str(invoice_update.total_cost)))
+    already_paid = _quantize_money(Decimal(str(invoice.total_cost or 0))) - invoice_remaining_amount(db, invoice)
+    if new_total < already_paid:
+        raise HTTPException(
+            status_code=400,
+            detail=f"التكلفة لا يمكن أن تقل عن المدفوع على الفاتورة ({already_paid:,.0f} ل.س).",
+        )
+
     try:
-        invoice.total_cost = Decimal(str(invoice_update.total_cost))
+        invoice.total_cost = new_total
         if reassign_clinic_doctor:
             invoice.clinic_doctor_id = new_clinic_doctor_id
+            if invoice_update.apply_to_existing_payments:
+                # تصحيح خطأ لا تغيير مستقبلي: الدفعات السابقة ونسبها ومواد
+                # الفاتورة تنتقل للطبيب الصحيح، بنسبته الحالية مجمّدةً من جديد.
+                for payment in (
+                    db.query(models.FinancialTransaction)
+                    .filter(
+                        models.FinancialTransaction.invoice_id == invoice.id,
+                        models.FinancialTransaction.type == "income",
+                    )
+                    .all()
+                ):
+                    payment.clinic_doctor_id = new_clinic_doctor_id
+                    sync_doctor_earning_for_payment(db, payment, current_user.email)
+                db.query(models.InvoiceMaterialUsage).filter(
+                    models.InvoiceMaterialUsage.invoice_id == invoice.id
+                ).update(
+                    {models.InvoiceMaterialUsage.clinic_doctor_id: new_clinic_doctor_id},
+                    synchronize_session=False,
+                )
         db.commit()
         db.refresh(invoice)
     except HTTPException:
@@ -4066,6 +4196,7 @@ def update_patient_invoice_cost(
 def delete_patient_invoice(
     patient_id: int,
     invoice_id: int,
+    confirm_doctor_earnings: bool = Query(False),
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(require_active_doctor_user),
 ):
@@ -4082,6 +4213,22 @@ def delete_patient_invoice(
     )
     if not invoice:
         raise HTTPException(status_code=404, detail="فاتورة العلاج غير موجودة")
+
+    # 2026-09-25: فاتورة عليها نسب أطباء لا تُحذف بصمت -- حذفها يحذف دفعاتها
+    # ويخصم نسبها من أرصدة الأطباء، ولو سُلّمت لهم صار عليهم دين. 409 برسالة
+    # الأثر، والواجهة تعيد الطلب مع confirm_doctor_earnings=true بعد الموافقة.
+    earnings_summary = summarize_earnings_by_doctor(
+        db, current_user.email, [payment.id for payment in invoice.payments]
+    )
+    if earnings_summary and not confirm_doctor_earnings:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"على هذه الفاتورة دفعات محسوبة في نسب: {_earnings_phrase(earnings_summary)}. "
+                "حذفها يحذف دفعاتها ويخصم هذه المبالغ من أرصدة الأطباء، وإن كانت سُلّمت لهم "
+                "فسيظهر عليهم دين بقيمتها. هل تريد الحذف فعلاً؟"
+            ),
+        )
 
     try:
         # 2026-09-14: حذف الفاتورة يُرجع موادها إلى المخزن قبل حذف أسطرها --
@@ -4132,8 +4279,10 @@ def register_invoice_payment(
         transaction_date = payment.transaction_date
         if transaction_date.tzinfo is not None:
             transaction_date = transaction_date.replace(tzinfo=None)
-        if transaction_date > datetime.utcnow():
+        if transaction_date > _damascus_now() + timedelta(minutes=5):
             raise HTTPException(status_code=400, detail="تاريخ الدفعة لا يمكن أن يكون في المستقبل")
+
+    ensure_payment_fits_invoice(db, invoice, payment.amount)
 
     description = (payment.description or "").strip() or f"دفعة على فاتورة: {invoice.title}"
 
@@ -4160,8 +4309,10 @@ def register_invoice_payment(
             is_opening_balance=bool(payment.is_opening_balance),
             clinic_doctor_id=assigned_clinic_doctor_id,
         )
-        if transaction_date is not None:
-            db_payment.created_at = transaction_date
+        # 2026-09-25: وقت الدفعة بتوقيت دمشق صراحةً -- حدود الشهر والتسويات
+        # بتوقيت دمشق، والقيمة الافتراضية للقاعدة (UTC) كانت تنقل دفعات ما بعد
+        # منتصف الليل (حتى الثالثة) إلى اليوم/الشهر السابق.
+        db_payment.created_at = transaction_date if transaction_date is not None else _damascus_now()
         db.add(db_payment)
         # flush لا commit: نحتاج db_payment.id الحقيقي ليُربط به سطر الاستحقاق،
         # مع إبقاء الاثنين في عملية واحدة -- فلا يمكن أن تُحفظ دفعة بلا
@@ -5516,8 +5667,11 @@ def create_expense(
         transaction_date = expense.transaction_date
         if transaction_date.tzinfo is not None:
             transaction_date = transaction_date.replace(tzinfo=None)
-        if transaction_date > datetime.utcnow():
+        if transaction_date > _damascus_now() + timedelta(minutes=5):
             raise HTTPException(status_code=400, detail="تاريخ الحركة لا يمكن أن يكون في المستقبل")
+
+    if payment_invoice is not None and transaction_type == "income":
+        ensure_payment_fits_invoice(db, payment_invoice, expense.amount)
 
     sync_to_inventory = bool(expense.add_to_inventory) and transaction_type == "expense" and user_has_premium_access(current_user)
 
@@ -5547,8 +5701,7 @@ def create_expense(
             # الطبيب بصمت -- لا خطأ، لا تحذير، فقط مستحقات ناقصة.
             clinic_doctor_id=(payment_invoice.clinic_doctor_id if payment_invoice is not None else None),
         )
-        if transaction_date is not None:
-            db_expense.created_at = transaction_date
+        db_expense.created_at = transaction_date if transaction_date is not None else _damascus_now()
         db.add(db_expense)
         if payment_invoice is not None:
             db.flush()
@@ -5859,8 +6012,20 @@ def update_financial_transaction(
         new_transaction_date = transaction_update.transaction_date
         if new_transaction_date.tzinfo is not None:
             new_transaction_date = new_transaction_date.replace(tzinfo=None)
-        if new_transaction_date > datetime.utcnow():
+        if new_transaction_date > _damascus_now() + timedelta(minutes=5):
             raise HTTPException(status_code=400, detail="تاريخ الحركة لا يمكن أن يكون في المستقبل")
+
+    # 2026-09-25: تعديل مبلغ دفعة على فاتورة لا يتجاوز ما تبقّى عليها.
+    if (transaction.type or "") == "income" and transaction.invoice_id is not None:
+        edited_invoice = (
+            db.query(models.TreatmentInvoice)
+            .filter(models.TreatmentInvoice.id == transaction.invoice_id)
+            .first()
+        )
+        if edited_invoice is not None:
+            ensure_payment_fits_invoice(
+                db, edited_invoice, transaction_update.amount, exclude_transaction_id=transaction.id
+            )
 
     try:
         transaction.amount = Decimal(str(transaction_update.amount))
@@ -6319,7 +6484,7 @@ def create_doctor_payout(
     if paid_at is not None:
         if paid_at.tzinfo is not None:
             paid_at = paid_at.replace(tzinfo=None)
-        if paid_at > datetime.utcnow():
+        if paid_at > _damascus_now() + timedelta(minutes=5):
             raise HTTPException(status_code=400, detail="تاريخ التسوية لا يمكن أن يكون في المستقبل")
     else:
         paid_at = _damascus_now().replace(tzinfo=None)
@@ -6805,7 +6970,7 @@ async def restore_finance_backup(
             amount=amount_value,
             type=type_value,
             description=description_value or "معاملة مستوردة من نسخة احتياطية",
-            created_at=created_at_value or datetime.utcnow(),
+            created_at=created_at_value or _damascus_now(),
         )
         db.add(new_transaction)
         existing_transaction_keys.add(dedup_key)

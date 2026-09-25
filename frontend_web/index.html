@@ -1146,6 +1146,18 @@
         });
 
         if (!response.ok) {
+          // 2026-09-25: 409 = للمريض دفعات محسوبة في نسب الأطباء -- الرسالة
+          // تشرح ما يجب فعله، فتُعرض كاملة بدل «تعذر الحذف» المبهمة.
+          if (response.status === 409) {
+            let detail = '';
+            try { detail = (await response.json()).detail || ''; } catch (parseError) { detail = ''; }
+            if (detail) {
+              closeDeletePatientModal();
+              pendingDeletePatientId = null;
+              window.alert(detail);
+              return;
+            }
+          }
           throw new Error('فشل حذف المريض');
         }
 
