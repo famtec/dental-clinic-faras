@@ -903,6 +903,10 @@ class DesktopLockedFeature extends StatefulWidget {
   /// حتى لا يستورد هذا الملف طبقة الخدمات.
   final Future<({bool ok, String message})> Function(String code) onActivate;
 
+  /// رسالة تحذير قبل التفعيل إن كان الرمز سيلغي اشتراكاً سارياً (2026-09-25)
+  /// -- null = لا تحذير. يُعرض حوار تأكيد ولا يُفعَّل شيء قبل الموافقة.
+  final Future<String?> Function(String code)? replacementWarning;
+
   /// بعد نجاح التفعيل: الصفحة تعيد التحميل فتختفي البطاقة إن فتح الكود
   /// الباقة المطلوبة، وتبقى برسالة النجاح إن فتح باقة أدنى منها.
   final VoidCallback onActivated;
@@ -915,6 +919,7 @@ class DesktopLockedFeature extends StatefulWidget {
     required this.onContact,
     required this.onActivate,
     required this.onActivated,
+    this.replacementWarning,
   });
 
   @override
@@ -944,6 +949,12 @@ class _DesktopLockedFeatureState extends State<DesktopLockedFeature> {
       _error = null;
       _success = null;
     });
+    final warning = await widget.replacementWarning?.call(code);
+    if (!mounted) return;
+    if (warning != null && !await _confirmReplacement(warning)) {
+      if (mounted) setState(() => _busy = false);
+      return;
+    }
     final result = await widget.onActivate(code);
     if (!mounted) return;
     setState(() {
@@ -956,6 +967,34 @@ class _DesktopLockedFeatureState extends State<DesktopLockedFeature> {
       }
     });
     if (result.ok) widget.onActivated();
+  }
+
+  Future<bool> _confirmReplacement(String message) async {
+    final d = context.desktop;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          'تنبيه قبل التفعيل',
+          style: AppType.kufi(fontSize: 17, fontWeight: FontWeight.w800, color: d.textPrimary),
+        ),
+        content: Text(
+          message,
+          style: AppType.sans(fontSize: 13.5, height: 1.8, color: d.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('متابعة التفعيل'),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
   }
 
   @override

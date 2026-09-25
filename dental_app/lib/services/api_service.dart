@@ -182,6 +182,34 @@ class ApiService {
     );
   }
 
+  /// ماذا سيحدث لو فُعّل هذا الرمز الآن؟ (2026-09-25) -- POST
+  /// /api/auth/activation-preview، بلا أي تعديل على الخادم. الرمز الجديد يحلّ
+  /// محلّ القديم (الأيام المتبقية تسقط)، فإن كان للحساب اشتراك سارٍ يرجع
+  /// warning برسالة التأكيد الجاهزة من الخادم؛ وإلا null. أي فشل (شبكة، رمز
+  /// خاطئ) يرجع null أيضاً: التفعيل الفعلي بعده يعرض خطأه كالمعتاد.
+  Future<String?> activationReplacementWarning(String activationCode) async {
+    try {
+      final email = await authStorage.getEmail();
+      final response = await http
+          .post(
+            Uri.parse('${AppConfig.apiBaseUrl}/api/auth/activation-preview'),
+            headers: const {'Content-Type': 'application/json'},
+            body: json.encode({
+              'activation_code': activationCode.trim(),
+              'email': ?email,
+            }),
+          )
+          .timeout(const Duration(seconds: 25));
+      if (response.statusCode != 200) return null;
+      final decoded = _decodeBody(response);
+      if (decoded is! Map || decoded['will_cancel_previous'] != true) return null;
+      final message = decoded['message'];
+      return message is String && message.isNotEmpty ? message : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// [upgradeTier] بنتيجة لا باستثناء -- لبطاقات «الميزة مقفلة» التي تعرض
   /// رسالة النجاح أو الرفض تحت حقل الكود مباشرةً.
   Future<({bool ok, String message})> tryUpgradeTier(String activationCode) async {

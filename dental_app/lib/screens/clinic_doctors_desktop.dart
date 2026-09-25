@@ -136,6 +136,7 @@ extension _ClinicDoctorsDesktop on _ClinicDoctorsScreenState {
           MaterialPageRoute(builder: (_) => const ContactDeveloperScreen()),
         ),
         onActivate: widget.apiService.tryUpgradeTier,
+        replacementWarning: widget.apiService.activationReplacementWarning,
         onActivated: _load,
       );
     }

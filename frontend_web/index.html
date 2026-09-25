@@ -1678,7 +1678,7 @@ function renderExpiredSubscriptionLock() {
 
 // دالة التحقق من كود التجديد الشهري واستدعاء نفس مسار /api/activate الموحّد
 // (مسار مزدوج الغرض: يفعّل حساباً جديداً أو يجدّد حساباً منتهياً بنفس المنطق)
-function renewSubscription() {
+async function renewSubscription() {
     const input = document.getElementById('renewalKeyInput');
     const statusEl = document.getElementById('renewalStatusMsg');
     const btn = document.getElementById('renewSubscriptionBtn');
@@ -1691,6 +1691,9 @@ function renewSubscription() {
         }
         return;
     }
+
+    // الرمز الجديد يلغي الاشتراك السارٍ -- تأكيد أولاً (tier-access.js).
+    if (!(await ClinicActivation.confirmReplacement(keyCode, localStorage.getItem('user_email')))) return;
 
     if (btn) {
         btn.disabled = true;
@@ -1757,13 +1760,16 @@ if (userTier === 'expired_subscription') {
 }
 
 // دالة التحقق من الكود وإعادة الترقية الفورية للباقة السحابية أونلاين
-function activateClinicAccount() {
+async function activateClinicAccount() {
     const keyCode = document.getElementById("activationKeyInput").value.trim();
     if (!keyCode) {
         showToast("يرجى كتابة كود التفعيل أولاً!", 'error');
         return;
     }
     
+    // الرمز الجديد يلغي الاشتراك السارٍ -- تأكيد أولاً (tier-access.js).
+    if (!(await ClinicActivation.confirmReplacement(keyCode, localStorage.getItem('user_email')))) return;
+
     fetch('/api/activate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

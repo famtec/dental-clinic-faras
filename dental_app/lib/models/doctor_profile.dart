@@ -17,6 +17,9 @@ class DoctorProfile {
   final bool subscriptionActive;
   final DateTime? subscriptionExpiresAt;
 
+  /// اشتراك من كود دائم (2026-09-25) -- يُعرض «دائم» بدل تاريخ بعد مئة عام.
+  final bool subscriptionLifetime;
+
   const DoctorProfile({
     this.doctorName,
     required this.email,
@@ -29,6 +32,7 @@ class DoctorProfile {
     required this.isActive,
     required this.subscriptionActive,
     this.subscriptionExpiresAt,
+    this.subscriptionLifetime = false,
   });
 
   /// أي باقة مدفوعة (بما فيها باقة العيادات) -- القياس بالمستوى لا
@@ -62,6 +66,7 @@ class DoctorProfile {
       isActive: json['is_active'] as bool? ?? true,
       subscriptionActive: json['subscription_active'] as bool? ?? false,
       subscriptionExpiresAt: expiresAt,
+      subscriptionLifetime: json['subscription_lifetime'] as bool? ?? false,
     );
   }
 }

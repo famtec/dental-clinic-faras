@@ -114,7 +114,9 @@ extension _ProfileDesktop on _ProfileScreenState {
                     Text('الاشتراك', style: AppType.sans(fontSize: 11, color: d.textSecondary)),
                     Text(
                       active
-                          ? (profile.subscriptionExpiresAt != null
+                          ? (profile.subscriptionLifetime
+                              ? 'فعّال — اشتراك دائم'
+                              : profile.subscriptionExpiresAt != null
                               ? 'فعّال حتى ${_formatDate(profile.subscriptionExpiresAt!)}'
                               : 'فعّال')
                           : 'غير فعّال حالياً',

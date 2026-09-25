@@ -72,61 +72,27 @@ AVATAR_UPLOADS_DIR = os.path.join(UPLOADS_DIR, "avatars")
 os.makedirs(AVATAR_UPLOADS_DIR, exist_ok=True)
 
 
-def seed_default_activation_key() -> None:
+def retire_public_seed_activation_keys() -> None:
+    """(2026-09-25) كانت هذه الدالة تزرع عند كل إقلاع أكواد TEST-* وFARAS-VIP-*
+    مكتوبة نصّاً هنا -- والمستودع عام على GitHub، فكان أي قارئ يستطيع تفعيل
+    حساب Premium حتى 999 يوماً مجاناً. لم تعد تزرع شيئاً؛ وتعطّل عند الإقلاع
+    كل ما بقي منها غير مستخدَم (revoked_at)، فلا تعود صالحة ولو أُعيد إنشاء
+    القاعدة. الأكواد المستهلكة سابقاً لا تُمسّ -- أصحابها يحتفظون باشتراكهم.
+    """
     db = database.SessionLocal()
     try:
         db.execute(
             text("DELETE FROM activation_keys WHERE key_code = :old_key"),
             {"old_key": "FARAS-30DAYS-2026"},
         )
-
-        activation_keys = [
-            ("TEST-STANDARD-30", 30),
-            ("TEST-STANDARD-A1B2C3", 30),
-            ("TEST-STANDARD-D4E5F6", 30),
-            ("TEST-STANDARD-G7H8J9", 30),
-            ("TEST-STANDARD-K2L4M6", 30),
-            ("TEST-STANDARD-N8P3Q5", 30),
-            ("TEST-STANDARD-R7S1T4", 30),
-            ("TEST-STANDARD-U6V2W8", 30),
-            ("TEST-STANDARD-X3Y5Z7", 30),
-
-            ("TEST-PREMIUM-365", 365),
-            ("TEST-PREMIUM-1A2B3C", 365),
-            ("TEST-PREMIUM-4D5E6F", 365),
-            ("TEST-PREMIUM-7G8H9J", 365),
-            ("TEST-PREMIUM-K3L6M9", 365),
-            ("TEST-PREMIUM-N2P5Q8", 365),
-            ("TEST-PREMIUM-R4S7T1", 365),
-            ("TEST-PREMIUM-U8V6W3", 365),
-            ("TEST-PREMIUM-X5Y2Z9", 365),
-
-            ("FARAS-VIP-999", 999),
-            ("FARAS-VIP-9A8B7C", 999),
-            ("FARAS-VIP-6D5E4F", 999),
-            ("FARAS-VIP-3G2H1J", 999),
-            ("FARAS-VIP-K9L8M7", 999),
-            ("FARAS-VIP-N6P5Q4", 999),
-            ("FARAS-VIP-R3S2T1", 999),
-        ]
-
-        for key_code, duration_days in activation_keys:
-            existing_key = (
-                db.query(models.ActivationKey)
-                .filter_by(key_code=key_code)
-                .first()
-            )
-
-            if existing_key is None:
-                db.add(
-                    models.ActivationKey(
-                        key_code=key_code,
-                        duration_days=duration_days,
-                        is_used=False,
-                        used_by_email=None,
-                    )
-                )
-
+        db.execute(
+            text(
+                "UPDATE activation_keys SET revoked_at = :now "
+                "WHERE is_used = :no AND revoked_at IS NULL "
+                "AND (UPPER(key_code) LIKE 'TEST-%' OR UPPER(key_code) LIKE 'FARAS-%')"
+            ),
+            {"now": datetime.utcnow(), "no": False},
+        )
         db.commit()
     except Exception:
         db.rollback()
@@ -306,7 +272,7 @@ def on_startup() -> None:
 
     # Keep legacy SQLite-safe migration checks for existing local environments.
     database.init_db()
-    seed_default_activation_key()
+    retire_public_seed_activation_keys()
 
     # انتقال استباقي فوري عند إقلاع الخادم لأي اشتراكات كانت قد انتهت أثناء
     # فترة السبات (خارج ساعات العمل، أو انقطاع الخدمة). بعدها تتولى الحلقة
@@ -1980,6 +1946,39 @@ def resolve_activation_key_tier(activation_key: "models.ActivationKey", activati
     return TIER_PREMIUM
 
 
+# كود «دائم» (2026-09-25) = مدة 36500 يوم (مئة عام). لا حالة خاصة في أي
+# مكان آخر: الاشتراك نفسه تاريخ انتهاء بعيد، وكل حارس قائم يعمل كما هو.
+# الواجهات تعرض «دائم» بدل التاريخ متى تجاوز الباقي خمسين عاماً.
+LIFETIME_DURATION_DAYS = 36500
+
+
+def is_lifetime_subscription(user: "models.User") -> bool:
+    expires_at = getattr(user, "subscription_expires_at", None)
+    return expires_at is not None and expires_at - datetime.utcnow() > timedelta(days=365 * 50)
+
+
+def activation_key_is_redeemable(activation_key) -> bool:
+    """موجود، غير مستهلَك، وغير معطَّل (revoked_at) -- المعطَّل إما استُبدل
+    برمز أحدث بعد استهلاكه، أو عطّله المشرف قبل أن يُستهلك."""
+    return (
+        activation_key is not None
+        and not activation_key.is_used
+        and getattr(activation_key, "revoked_at", None) is None
+    )
+
+
+def _arabic_days(days: int) -> str:
+    if days < 1:
+        return "أقل من يوم"
+    if days == 1:
+        return "يوم واحد"
+    if days == 2:
+        return "يومان"
+    if days <= 10:
+        return f"{days} أيام"
+    return f"{days} يوماً"
+
+
 def apply_activation_key(
     db: Session,
     user: "models.User",
@@ -2054,7 +2053,7 @@ def register_user(register_request: RegisterRequest, db: Session = Depends(datab
             .first()
         )
 
-        if not activation_key or activation_key.is_used:
+        if not activation_key_is_redeemable(activation_key):
             raise HTTPException(
                 status_code=400,
                 detail="كود التفعيل خاطئ، منتهي، أو تم استخدامه مسبقاً! يرجى التواصل مع المهندس فارس حلاوي لشراء كود جديد.",
@@ -2261,7 +2260,7 @@ def upgrade_user_tier(upgrade_request: UpgradeTierRequest, db: Session = Depends
         .first()
     )
 
-    if not activation_key or activation_key.is_used:
+    if not activation_key_is_redeemable(activation_key):
         raise HTTPException(status_code=400, detail="كود الترقية غير صالح أو مستخدم مسبقاً.")
 
     # نقطة الحقيقة الوحيدة لتصنيف الكود -- انظر resolve_activation_key_tier
@@ -2305,6 +2304,72 @@ def upgrade_user_tier(upgrade_request: UpgradeTierRequest, db: Session = Depends
     }
 
 
+@app.post("/api/auth/activation-preview")
+def preview_activation(upgrade_request: UpgradeTierRequest, db: Session = Depends(database.get_db)):
+    """ماذا سيحدث لو أُدخل هذا الرمز الآن؟ (2026-09-25) -- بلا أي تعديل.
+
+    الواجهات (الموقع والتطبيق) تستدعيه قبل الترقية/التجديد: إن كان للحساب
+    اشتراك سارٍ فالرمز الجديد سيلغيه (apply_activation_key)، فتعرض رسالة
+    التأكيد الجاهزة في message قبل المتابعة. الرسالة تُبنى هنا لا في كل
+    واجهة، فتبقى صياغتها واحدة في كل مكان.
+    """
+    activation_code = (upgrade_request.activation_code or "").strip()
+    normalized_email = (upgrade_request.email or "").strip().lower()
+    if not activation_code:
+        raise HTTPException(status_code=400, detail="كود التفعيل مطلوب.")
+
+    activation_key = (
+        db.query(models.ActivationKey)
+        .filter(func.lower(models.ActivationKey.key_code) == activation_code.lower())
+        .first()
+    )
+    if not activation_key_is_redeemable(activation_key):
+        raise HTTPException(status_code=400, detail="كود التفعيل خاطئ، منتهي، أو تم استخدامه مسبقاً!")
+
+    target_tier = resolve_activation_key_tier(activation_key, activation_code)
+    new_lifetime = activation_key.duration_days >= LIFETIME_DURATION_DAYS
+
+    user = None
+    if normalized_email:
+        user = db.query(models.User).filter(models.User.email == normalized_email).first()
+
+    now = datetime.utcnow()
+    running = bool(user and user.subscription_expires_at and user.subscription_expires_at > now)
+    current_lifetime = bool(user and is_lifetime_subscription(user))
+    days_left = (user.subscription_expires_at - now).days if running else None
+
+    message = None
+    if running:
+        current_name = tier_display_name(user.tier)
+        current_part = (
+            f"لديك اشتراك دائم في {current_name}"
+            if current_lifetime
+            else f"يتبقّى في اشتراكك الحالي ({current_name}) {_arabic_days(days_left)}"
+        )
+        new_name = tier_display_name(target_tier)
+        new_part = (
+            f"اشتراك دائم في {new_name}"
+            if new_lifetime
+            else f"اشتراك {new_name} لمدة {_arabic_days(activation_key.duration_days)} من اليوم"
+        )
+        message = (
+            f"{current_part}. عند تفعيل هذا الرمز يُلغى رمزك الحالي وتسقط المدة المتبقية، "
+            f"ويبدأ {new_part}. هل تريد المتابعة؟"
+        )
+
+    return {
+        "will_cancel_previous": running,
+        "message": message,
+        "grants_tier": target_tier,
+        "grants_tier_name": tier_display_name(target_tier),
+        "duration_days": activation_key.duration_days,
+        "lifetime": new_lifetime,
+        "current_tier": normalize_tier(user) if user else None,
+        "current_days_left": days_left,
+        "current_lifetime": current_lifetime,
+    }
+
+
 class DoctorProfileUpdate(BaseModel):
     doctor_name: Optional[str] = None
     email: Optional[str] = None
@@ -2334,6 +2399,7 @@ def serialize_doctor_profile(user: models.User) -> dict:
         "avatar_url": user.avatar_url,
         "is_active": user.is_active,
         "subscription_active": subscription_active,
+        "subscription_lifetime": is_lifetime_subscription(user),
         "subscription_expires_at": user.subscription_expires_at.isoformat() if user.subscription_expires_at else None,
     }
 
@@ -7395,7 +7461,7 @@ def activate_account(request: ActivationRequest, db: Session = Depends(database.
         .filter(func.lower(models.ActivationKey.key_code) == activation_code.lower())
         .first()
     )
-    if not activation_key or activation_key.is_used:
+    if not activation_key_is_redeemable(activation_key):
         raise HTTPException(status_code=400, detail="كود التفعيل خاطئ، منتهي، أو تم استخدامه مسبقاً!")
 
     # نقطة الحقيقة الوحيدة لتصنيف الكود -- انظر resolve_activation_key_tier أعلاه
@@ -7649,19 +7715,27 @@ def list_activation_keys(
     summary = {
         "total": len(resolved),
         "used": sum(1 for k, _ in resolved if k.is_used),
-        "available": sum(1 for k, _ in resolved if not k.is_used),
+        "available": sum(1 for k, _ in resolved if activation_key_is_redeemable(k)),
+        # ملغى بالاستبدال (استُهلك ثم حلّ محلّه رمز أحدث) أو معطَّل إدارياً قبل استهلاكه.
         "revoked": sum(1 for k, _ in resolved if getattr(k, "revoked_at", None) is not None),
+        "disabled": sum(1 for k, _ in resolved if not k.is_used and getattr(k, "revoked_at", None) is not None),
         "by_grants_tier": {},
         "by_prefix": {},
     }
     for k, g in resolved:
         bucket = summary["by_grants_tier"].setdefault(g, {"total": 0, "used": 0, "available": 0})
         bucket["total"] += 1
-        bucket["used" if k.is_used else "available"] += 1
+        if k.is_used:
+            bucket["used"] += 1
+        elif activation_key_is_redeemable(k):
+            bucket["available"] += 1
         code_prefix = k.key_code.split("-", 1)[0].upper() if "-" in k.key_code else "—"
         pbucket = summary["by_prefix"].setdefault(code_prefix, {"total": 0, "used": 0, "available": 0})
         pbucket["total"] += 1
-        pbucket["used" if k.is_used else "available"] += 1
+        if k.is_used:
+            pbucket["used"] += 1
+        elif activation_key_is_redeemable(k):
+            pbucket["available"] += 1
 
     page = resolved[offset:offset + limit]
 
@@ -7705,6 +7779,53 @@ def list_activation_keys(
         "offset": offset,
         "has_more": offset + len(items) < len(resolved),
         "keys": [i.model_dump() for i in items],
+    }
+
+
+class ActivationKeyRevokeRequest(BaseModel):
+    codes: list[str]
+
+
+@app.post("/api/admin/activation-keys/revoke")
+def revoke_activation_keys(
+    request: ActivationKeyRevokeRequest,
+    x_admin_secret: str | None = Header(default=None, alias="X-Admin-Secret"),
+    db: Session = Depends(database.get_db),
+):
+    """يعطّل أكواداً **غير مستهلكة** (2026-09-25) -- لأكواد تسرّبت (نُشرت في
+    المستودع العام) أو بيعت خطأً. الكود المستهلَك لا يُمسّ: صاحبه دفع ثمنه
+    واشتراكه قائم. لا حذف -- revoked_at يبقى أثراً في الجرد."""
+    require_admin_secret(x_admin_secret)
+    wanted = {(c or "").strip().lower() for c in request.codes if (c or "").strip()}
+    if not wanted or len(wanted) > 500:
+        raise HTTPException(status_code=400, detail="أرسل بين 1 و500 كود.")
+
+    keys = (
+        db.query(models.ActivationKey)
+        .filter(func.lower(models.ActivationKey.key_code).in_(list(wanted)))
+        .all()
+    )
+    now = datetime.utcnow()
+    revoked, skipped_used, already = [], [], []
+    for key in keys:
+        if key.is_used:
+            skipped_used.append(key.key_code)
+        elif key.revoked_at is not None:
+            already.append(key.key_code)
+        else:
+            key.revoked_at = now
+            revoked.append(key.key_code)
+    found = {k.key_code.lower() for k in keys}
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="تعذر حفظ التعطيل.")
+    return {
+        "revoked": len(revoked),
+        "already_revoked": len(already),
+        "skipped_used": len(skipped_used),
+        "not_found": len(wanted - found),
     }
 
 

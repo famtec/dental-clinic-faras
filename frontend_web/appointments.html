@@ -922,7 +922,7 @@
 
         // دالة التحقق من كود التجديد الشهري -- تستدعي نفس مسار /api/activate الموحّد
         // (مسار مزدوج الغرض: يفعّل حساباً جديداً أو يجدّد حساباً منتهياً بنفس المنطق)
-        function renewSubscription() {
+        async function renewSubscription() {
                 const input = document.getElementById('renewalKeyInput');
                 const statusEl = document.getElementById('renewalStatusMsg');
                 const btn = document.getElementById('renewSubscriptionBtn');
@@ -935,6 +935,9 @@
                         }
                         return;
                 }
+
+                // الرمز الجديد يلغي الاشتراك السارٍ -- تأكيد أولاً (tier-access.js).
+                if (!(await ClinicActivation.confirmReplacement(keyCode, localStorage.getItem('user_email')))) return;
 
                 if (btn) {
                         btn.disabled = true;

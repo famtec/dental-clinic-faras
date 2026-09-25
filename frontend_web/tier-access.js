@@ -83,3 +83,99 @@
     }
   };
 })();
+
+/*
+ * ClinicActivation.confirmReplacement -- تنبيه قبل إدخال رمز تفعيل (2026-09-25)
+ * ============================================================================
+ * الرمز الجديد يحلّ محلّ القديم على الخادم (apply_activation_key في main.py):
+ * أيام الاشتراك السارية تسقط والمدة الجديدة تبدأ من اليوم. قبل أي ترقية أو
+ * تجديد تسأل الصفحة الخادمَ (/api/auth/activation-preview) عمّا سيحدث، فإن
+ * كان هناك اشتراك سارٍ تعرض رسالته الجاهزة وتنتظر تأكيد الطبيب.
+ *
+ * يعيد Promise<boolean>: true = تابِع، false = ألغى الطبيب. تعذّر المعاينة
+ * (شبكة، رمز خاطئ) لا يوقف شيئاً: الطلب الفعلي بعدها يعرض خطأه كالمعتاد.
+ */
+(function () {
+  'use strict';
+
+  function endpoint() {
+    return typeof window.apiUrl === 'function'
+      ? window.apiUrl('/api/auth/activation-preview')
+      : '/api/auth/activation-preview';
+  }
+
+  function showConfirm(message) {
+    return new Promise(function (resolve) {
+      var overlay = document.createElement('div');
+      overlay.setAttribute('role', 'dialog');
+      overlay.setAttribute('aria-modal', 'true');
+      overlay.style.cssText =
+        'position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;' +
+        'padding:16px;background:rgba(15,12,40,.55);backdrop-filter:blur(3px);direction:rtl;';
+      var card = document.createElement('div');
+      card.style.cssText =
+        'width:100%;max-width:440px;background:#fff;color:#1e1b3a;border-radius:20px;padding:22px 22px 18px;' +
+        'box-shadow:0 24px 60px rgba(30,24,80,.35);font-family:inherit;text-align:right;';
+      var title = document.createElement('div');
+      title.textContent = 'تنبيه قبل التفعيل';
+      title.style.cssText = 'font-size:17px;font-weight:800;margin-bottom:10px;color:#b45309;';
+      var body = document.createElement('div');
+      body.textContent = message;
+      body.style.cssText = 'font-size:14px;line-height:1.9;color:#374151;margin-bottom:18px;';
+      var actions = document.createElement('div');
+      actions.style.cssText = 'display:flex;gap:10px;justify-content:flex-start;';
+      var ok = document.createElement('button');
+      ok.type = 'button';
+      ok.textContent = 'متابعة التفعيل';
+      ok.style.cssText =
+        'border:0;border-radius:12px;padding:10px 18px;font-weight:800;font-size:14px;cursor:pointer;color:#fff;' +
+        'background:linear-gradient(135deg,#6d28d9,#4f46e5);font-family:inherit;';
+      var cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.textContent = 'إلغاء';
+      cancel.style.cssText =
+        'border:1px solid #d1d5db;border-radius:12px;padding:10px 18px;font-weight:700;font-size:14px;' +
+        'cursor:pointer;background:#fff;color:#374151;font-family:inherit;';
+      actions.appendChild(ok);
+      actions.appendChild(cancel);
+      card.appendChild(title);
+      card.appendChild(body);
+      card.appendChild(actions);
+      overlay.appendChild(card);
+
+      function close(result) {
+        document.removeEventListener('keydown', onKey, true);
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        resolve(result);
+      }
+      function onKey(e) {
+        if (e.key === 'Escape') { e.preventDefault(); close(false); }
+      }
+      ok.addEventListener('click', function () { close(true); });
+      cancel.addEventListener('click', function () { close(false); });
+      overlay.addEventListener('click', function (e) { if (e.target === overlay) close(false); });
+      document.addEventListener('keydown', onKey, true);
+      document.body.appendChild(overlay);
+      cancel.focus();
+    });
+  }
+
+  window.ClinicActivation = {
+    confirmReplacement: function (activationCode, email) {
+      return fetch(endpoint(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          activation_code: String(activationCode || '').trim(),
+          email: String(email || '').trim().toLowerCase() || null
+        })
+      })
+        .then(function (res) { return res.ok ? res.json() : null; })
+        .then(function (data) {
+          if (!data || !data.will_cancel_previous || !data.message) return true;
+          return showConfirm(data.message);
+        })
+        .catch(function () { return true; });
+    }
+  };
+})();

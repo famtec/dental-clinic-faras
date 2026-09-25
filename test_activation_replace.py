@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-"""فحوص «الرمز الجديد يحلّ محلّ القديم» في أكواد التفعيل (2026-09-25).
+"""فحوص أكواد التفعيل (2026-09-25): الاستبدال بدل التكديس، المعاينة قبل
+الإدخال، الرمز الدائم، التعطيل الإداري، وتقاعد أكواد الزرع العامة.
 
 تُشغَّل على SQLite حقيقي عبر FastAPI TestClient -- نفس نمط
 test_patient_doctor.py.
@@ -138,6 +139,65 @@ data = r.json()
 items = {i["key_code"]: i for i in data["keys"]}
 check("الجرد يعرض الإلغاء", items["PP-AAAA"]["replaced_by_code"] == "PM-BBBB" and items["PP-AAAA"]["revoked_at"])
 check("ملخّص الملغاة = 3", data["summary"].get("revoked") == 3, str(data["summary"]))
+
+ADMIN = {"X-Admin-Secret": os.environ["ADMIN_SECRET_KEY"]}
+
+print("7) المعاينة قبل الإدخال")
+add_key("PM-EEEE", "premium", 30)
+r = client.post("/api/auth/activation-preview", json={"activation_code": "PM-EEEE", "email": EMAIL})
+check("المعاينة تعمل", r.status_code == 200, r.text)
+p = r.json()
+check("تحذّر من إلغاء الاشتراك السارٍ", p["will_cancel_previous"] is True, str(p))
+check("الرسالة تذكر المدة المتبقية", "يتبقّى" in (p["message"] or "") and "يُلغى" in p["message"], str(p["message"]))
+check("المعاينة لا تستهلك الرمز", get_key("PM-EEEE").is_used is False)
+r = client.post("/api/auth/activation-preview", json={"activation_code": "PM-EEEE", "email": "nobody@test.dev"})
+check("بلا حساب: لا تحذير", r.status_code == 200 and r.json()["will_cancel_previous"] is False, r.text)
+r = client.post("/api/auth/activation-preview", json={"activation_code": "PP-DDDD", "email": EMAIL})
+check("المعاينة ترفض الرمز المستهلك", r.status_code == 400, r.text)
+
+print("8) الرمز الدائم")
+r = client.post("/api/admin/renewal-keys/generate", headers=ADMIN,
+                json={"tier": "premium_plus", "count": 1, "duration_days": 36500})
+check("توليد رمز دائم", r.status_code == 200, r.text)
+life_code = r.json()["generated_keys"][0]
+r = client.post("/api/auth/activation-preview", json={"activation_code": life_code, "email": EMAIL})
+check("المعاينة تصفه دائماً", r.json()["lifetime"] is True and "دائم" in r.json()["message"], r.text)
+r = client.post("/api/auth/upgrade-tier", json={"activation_code": life_code, "email": EMAIL})
+check("تفعيل الدائم", r.status_code == 200, r.text)
+headers = {"Authorization": "Bearer " + main.create_session_token(EMAIL)}
+r = client.get("/api/auth/profile", headers=headers)
+check("الملف يعلن اشتراكاً دائماً", r.status_code == 200 and r.json().get("subscription_lifetime") is True, r.text[:300])
+r = client.post("/api/auth/activation-preview", json={"activation_code": "PM-EEEE", "email": EMAIL})
+check("التحذير فوق الدائم يقول «اشتراك دائم»", "لديك اشتراك دائم" in (r.json()["message"] or ""), r.text)
+
+print("9) التعطيل الإداري")
+add_key("PM-LEAK1", "premium", 30)
+r = client.post("/api/admin/activation-keys/revoke", headers=ADMIN,
+                json={"codes": ["pm-leak1", "PP-DDDD", "NO-SUCH"]})
+check("مسار التعطيل يعمل", r.status_code == 200, r.text)
+body = r.json()
+check("عُطّل غير المستهلك وحده", body["revoked"] == 1 and body["skipped_used"] == 1 and body["not_found"] == 1, str(body))
+r = client.post("/api/auth/upgrade-tier", json={"activation_code": "PM-LEAK1", "email": EMAIL})
+check("المعطَّل مرفوض عند الترقية", r.status_code == 400, r.text)
+r = client.post("/api/activate", json={"email": EMAIL, "activation_key": "PM-LEAK1"})
+check("المعطَّل مرفوض عند التفعيل", r.status_code == 400, r.text)
+r = client.post("/api/auth/register", json={
+    "doctor_name": "x", "email": "leak@test.dev", "password": "secret123", "activation_code": "PM-LEAK1"})
+check("المعطَّل مرفوض عند التسجيل", r.status_code == 400, r.text)
+r = client.get("/api/admin/activation-keys", headers=ADMIN)
+summ = r.json()["summary"]
+items = {i["key_code"]: i for i in r.json()["keys"]}
+check("المعطَّل لا يُعدّ متاحاً", summ["disabled"] == 1, str(summ))
+
+print("10) أكواد الزرع العامة تتعطّل عند الإقلاع")
+add_key("TEST-PREMIUM-ZZZ", "premium", 365)
+add_key("FARAS-VIP-ZZZ", "premium", 999)
+add_key("FARAS-VIP-USED", "premium", 999, is_used=True, used_by_email=EMAIL)
+main.retire_public_seed_activation_keys()
+check("TEST-* غير المستخدم عُطّل", get_key("TEST-PREMIUM-ZZZ").revoked_at is not None)
+check("FARAS-* غير المستخدم عُطّل", get_key("FARAS-VIP-ZZZ").revoked_at is not None)
+check("المستخدم منها لم يُمسّ", get_key("FARAS-VIP-USED").revoked_at is None)
+check("لم يعد يُزرع شيء", get_key("TEST-STANDARD-30") is None)
 
 print()
 print("passed:", len(PASSED), " failed:", len(FAILED))

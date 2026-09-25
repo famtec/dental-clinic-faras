@@ -45,6 +45,7 @@ extension _InventoryDesktop on _InventoryScreenState {
           MaterialPageRoute(builder: (_) => const ContactDeveloperScreen()),
         ),
         onActivate: widget.apiService.tryUpgradeTier,
+        replacementWarning: widget.apiService.activationReplacementWarning,
         onActivated: _load,
       );
     }

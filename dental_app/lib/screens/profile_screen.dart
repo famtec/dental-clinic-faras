@@ -827,7 +827,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     Expanded(
                                       child: Text(
                                         profile.subscriptionActive
-                                            ? (profile.subscriptionExpiresAt != null
+                                            ? (profile.subscriptionLifetime
+                                                ? 'الاشتراك فعّال — اشتراك دائم'
+                                                : profile.subscriptionExpiresAt != null
                                                 ? 'الاشتراك فعّال حتى ${_formatDate(profile.subscriptionExpiresAt!)}'
                                                 : 'الاشتراك فعّال')
                                             : 'الاشتراك غير فعّال حالياً',
