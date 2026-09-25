@@ -4,8 +4,10 @@ import 'screens/patients_list_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/splash_screen.dart';
+import 'screens/staff_home_screen.dart';
 import 'screens/today_schedule_screen.dart';
 import 'services/api_service.dart';
+import 'services/app_session.dart';
 import 'services/appointment_reminder_service.dart';
 import 'services/auth_storage.dart';
 import 'services/offline_aware_api_service.dart';
@@ -56,6 +58,10 @@ class _DentalDoctorAppState extends State<DentalDoctorApp> {
   bool _checkingSession = true;
   bool _isLoggedIn = false;
 
+  /// لحوار «عمليات غير مُزامنة» عند الخروج -- الدالة تُستدعى من شاشات عميقة
+  /// وسياق هذه الحالة فوق MaterialApp فلا Navigator له.
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
   @override
   void initState() {
     super.initState();
@@ -67,6 +73,7 @@ class _DentalDoctorAppState extends State<DentalDoctorApp> {
     // ليلياً أمام عين الطبيب. فشل القراءة يُبقيه على النهاري (انظر
     // ThemeController.load).
     await ThemeController.instance.load();
+    await AppSession.instance.load(_authStorage);
     final token = await _authStorage.getToken();
     final loggedIn = token != null && token.isNotEmpty;
     if (!mounted) return;
@@ -74,7 +81,9 @@ class _DentalDoctorAppState extends State<DentalDoctorApp> {
       _isLoggedIn = loggedIn;
       _checkingSession = false;
     });
-    if (loggedIn) {
+    // حساب الطبيب المساعد لا يسجّل جهازه للإشعارات: رمز الجهاز يُحفظ على
+    // حساب العيادة، فكان سيسحب إشعارات المدير إلى جهاز المساعد.
+    if (loggedIn && !AppSession.instance.isStaff) {
       await _initPush();
     }
   }
@@ -89,6 +98,11 @@ class _DentalDoctorAppState extends State<DentalDoctorApp> {
       // ملاحظة لمن يعدّل لاحقاً: التبويب 0 هو "المرضى" وليس لوحة قيادة --
       // لوحة القيادة دُمجت في قائمة "المزيد" (2026-09-02)، فلا تفترض وجود
       // تبويب رئيسية مستقل عند إضافة توجيه جديد هنا.
+      if (data['type'] == 'pending_payment') {
+        // 2026-09-25: دفعة سجّلها طبيب مساعد تنتظر التأكيد -- مكانها المالية.
+        _homeScreenKey.currentState?.showFinanceTab();
+        return;
+      }
       _homeScreenKey.currentState?.showTodayTab();
 
       // نحدّث الشاشات الحيّة فوراً حتى يظهر الجديد بلا حاجة لسحب يدوي، أياً
@@ -106,13 +120,57 @@ class _DentalDoctorAppState extends State<DentalDoctorApp> {
   }
 
   Future<void> _handleLoginSuccess() async {
+    await AppSession.instance.load(_authStorage);
+    if (!mounted) return;
     setState(() => _isLoggedIn = true);
-    await _initPush();
+    if (!AppSession.instance.isStaff) await _initPush();
   }
 
   Future<void> _handleLogout() async {
+    // 2026-09-25: النسخة المحلية تُمسح عند الخروج -- لم تكن مربوطة بحساب،
+    // فالحساب التالي على الجهاز نفسه (طبيب مساعد على حاسوب العيادة) كان يرى
+    // بيانات من قبله دون اتصال. ما أُجّل دون اتصال يُزامَن أولاً، وإن بقي
+    // شيء يُسأل الطبيب قبل حذفه.
+    var pending = 0;
+    try {
+      pending = await _apiService.prepareLogout();
+    } catch (_) {
+      pending = 0;
+    }
+    if (pending > 0) {
+      final dialogContext = _navigatorKey.currentContext;
+      if (dialogContext == null || !dialogContext.mounted) return;
+      final leave = await showDialog<bool>(
+        context: dialogContext,
+        builder: (context) => AlertDialog(
+          title: const Text('عمليات لم تُرفع بعد'),
+          content: Text(
+            'على هذا الجهاز $pending عملية سُجّلت دون اتصال ولم تُرفع للخادم بعد. '
+            'الخروج الآن يحذفها من الجهاز نهائياً. الأفضل البقاء حتى يعود الاتصال '
+            'وتُرفع تلقائياً.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('البقاء'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('الخروج وحذفها'),
+            ),
+          ],
+        ),
+      );
+      if (leave != true) return;
+    }
+    try {
+      await _apiService.wipeLocalData();
+    } catch (_) {
+      // فشل المسح لا يمنع الخروج.
+    }
     await AppointmentReminderService.instance.cancelAll();
     await _authStorage.clear();
+    AppSession.instance.clear();
     if (!mounted) return;
     setState(() => _isLoggedIn = false);
   }
@@ -131,6 +189,7 @@ class _DentalDoctorAppState extends State<DentalDoctorApp> {
 
   Widget _buildApp(ThemeMode themeMode) {
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       title: 'عيادتي الرقمية',
       debugShowCheckedModeBanner: false,
       // نظام «الليل النيلي»: بنية واحدة ووضعان لونيان (انظر
@@ -172,6 +231,13 @@ class _DentalDoctorAppState extends State<DentalDoctorApp> {
       // حلقة تحميل بنفس أسلوب الموقع) بدل مؤشر تحميل رمادي افتراضي بلا هوية.
       home: _checkingSession
           ? const SplashScreen()
+          : _isLoggedIn && AppSession.instance.isStaff
+              ? StaffHomeScreen(
+                  apiService: _apiService,
+                  onLogout: _handleLogout,
+                  patientsKey: _patientsKey,
+                  todayScheduleKey: _todayScheduleKey,
+                )
           : _isLoggedIn
               ? HomeScreen(
                   key: _homeScreenKey,

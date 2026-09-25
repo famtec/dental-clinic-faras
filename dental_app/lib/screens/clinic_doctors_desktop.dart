@@ -502,6 +502,12 @@ extension _ClinicDoctorsDesktop on _ClinicDoctorsScreenState {
                       onTap: () => _openDoctorSheet(doctor: doctor),
                     ),
                     const SizedBox(width: 8),
+                    DesktopGhostButton(
+                      icon: doctor.loginEnabled ? Icons.verified_user_outlined : Icons.key_outlined,
+                      label: 'حساب الدخول',
+                      onTap: () => _openLoginSheet(doctor),
+                    ),
+                    const SizedBox(width: 8),
                     DesktopCtaButton(
                       icon: Icons.payments_outlined,
                       label: 'تسجيل تسوية',

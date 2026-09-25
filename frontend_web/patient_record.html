@@ -2564,6 +2564,8 @@
  </div>
  ${buildInvoiceMaterialsBlock(invoice, true)}
  <div data-invoice-payments-list="1" class="mt-3"></div>
+ ${buildPendingPaymentsBlock(invoice)}
+ ${buildStaffPendingForm(invoice)}
  <form data-invoice-payment-form="${invoice.id}" class="mt-3 flex flex-wrap items-center gap-2">
  <input type="text" inputmode="decimal" placeholder="مبلغ الدفعة الجديدة (ل.س)" class="min-w-[160px] flex-1 rounded-xl border border-brand-200 bg-white px-3 py-2.5 text-sm font-semibold text-ink-700 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100" />
  <button type="submit" class="whitespace-nowrap rounded-xl bg-gradient-to-r from-brand-600 to-brand-800 px-4 py-2.5 text-xs font-extrabold text-white shadow-sm transition hover:from-brand-700 hover:to-brand-700">تسجيل دفعة على هذه الفاتورة</button>
@@ -2593,6 +2595,7 @@
       }
 
       attachInvoicePaymentRowListeners(card);
+      attachPendingPaymentListeners(card, invoice);
 
       const editCostBtn = card.querySelector(`.invoice-cost-edit-btn[data-invoice-edit-cost-id="${invoice.id}"]`);
       if (editCostBtn) {
@@ -2768,6 +2771,12 @@
       const field = document.getElementById('newInvoiceDoctorField');
       const select = document.getElementById('newInvoiceDoctorSelect');
       if (!field || !select) return;
+      // الطبيب المساعد: الفاتورة تُنسب إليه على الخادم مهما أُرسل.
+      if (window.ClinicRole && window.ClinicRole.isStaff()) {
+        clinicDoctorsCache = [];
+        field.classList.add('hidden');
+        return;
+      }
       try {
         const response = await fetch(apiUrl('/api/clinic-doctors?all_time=true&include_inactive=false'), {
           headers: getDoctorAuthHeaders(),
@@ -3120,6 +3129,151 @@
           submitButton.disabled = false;
           submitButton.textContent = 'إنشاء الفاتورة';
         }
+      }
+    }
+
+    // ================================================================
+    // دفعات الأطباء المساعدين بانتظار التأكيد -- 2026-09-25
+    // ================================================================
+    // المساعد يرسل مبلغاً استلمه، ولا يدخل الحسابات ولا نسبته قبل أن يؤكّد
+    // الطبيب المدير وصوله للصندوق (pending_payments في main.py).
+    function isStaffSession() {
+      return Boolean(window.ClinicRole && window.ClinicRole.isStaff());
+    }
+
+    function buildPendingPaymentsBlock(invoice) {
+      const items = Array.isArray(invoice.pending_payments) ? invoice.pending_payments : [];
+      if (!items.length) return '';
+      const staff = isStaffSession();
+      const myId = staff ? String(window.ClinicRole.staffDoctorId() || '') : '';
+      const rows = items.map((p, index) => {
+        let actions = '';
+        if (!staff) {
+          actions = `
+ <button type="button" data-pending-reject="${p.id}" class="rounded-lg border border-danger-200 bg-white px-2.5 py-1 text-[11px] font-bold text-danger-600">رفض</button>
+ <button type="button" data-pending-confirm="${p.id}" class="rounded-lg bg-success-600 px-2.5 py-1 text-[11px] font-bold text-white">تأكيد الاستلام</button>`;
+        } else if (String(p.clinic_doctor_id) === myId) {
+          actions = `<button type="button" data-pending-cancel="${p.id}" class="rounded-lg border border-ink-200 bg-white px-2.5 py-1 text-[11px] font-bold text-ink-600">إلغاء</button>`;
+        }
+        return `
+ <div class="flex flex-wrap items-center justify-between gap-2 py-2 ${index ? 'border-t border-warning-200' : ''}">
+ <div class="min-w-0">
+ <p class="text-sm font-extrabold text-warning-800">${formatFinanceAmount(p.amount)} ل.س</p>
+ <p class="text-[11px] text-ink-500">${escapeHtml(p.staff_name || 'طبيب مساعد')} · ${escapeHtml(formatFinanceLedgerDate(p.recorded_at))}${p.description ? ' · ' + escapeHtml(p.description) : ''}</p>
+ </div>
+ <div class="flex items-center gap-1.5">${actions}</div>
+ </div>`;
+      }).join('');
+      return `
+ <div class="mt-3 rounded-xl border border-warning-200 bg-warning-50 px-3 py-2">
+ <p class="text-[11px] font-extrabold text-warning-700">${staff ? 'بانتظار تأكيد الطبيب المدير' : 'دفعات استلمها طبيب مساعد — بانتظار تأكيدك'}</p>
+ ${rows}
+ </div>`;
+    }
+
+    function buildStaffPendingForm(invoice) {
+      if (!isStaffSession()) return '';
+      const myId = String(window.ClinicRole.staffDoctorId() || '');
+      if (String(invoice.clinic_doctor_id ?? '') !== myId) {
+        return '<p class="mt-3 text-center text-xs text-ink-500">هذه فاتورة طبيب آخر — الدفعات عليها عند الطبيب المدير.</p>';
+      }
+      return `
+ <form data-staff-pending-form="${invoice.id}" class="mt-3 flex flex-wrap items-center gap-2">
+ <input type="text" inputmode="decimal" data-staff-pending-amount="1" placeholder="المبلغ الذي استلمته (ل.س)" class="min-w-[160px] flex-1 rounded-xl border border-brand-200 bg-white px-3 py-2.5 text-sm font-semibold text-ink-700 outline-none" />
+ <input type="text" data-staff-pending-note="1" placeholder="وصف (اختياري)" class="min-w-[160px] flex-1 rounded-xl border border-ink-200 bg-white px-3 py-2.5 text-sm text-ink-700 outline-none" />
+ <button type="submit" class="whitespace-nowrap rounded-xl bg-gradient-to-r from-success-600 to-success-700 px-4 py-2.5 text-xs font-extrabold text-white shadow-sm">إرسال للمدير للتأكيد</button>
+ <p class="w-full text-[11px] font-semibold text-ink-500">المبلغ يصل للطبيب المدير ليؤكّد استلامه، ولا يدخل الحسابات ولا نسبتك قبل تأكيده.</p>
+ </form>`;
+    }
+
+    function attachPendingPaymentListeners(root, invoice) {
+      const form = root.querySelector(`[data-staff-pending-form="${invoice.id}"]`);
+      if (form) {
+        form.addEventListener('submit', (event) => {
+          event.preventDefault();
+          submitStaffPendingPayment(invoice, form);
+        });
+      }
+      root.querySelectorAll('[data-pending-confirm]').forEach((btn) => {
+        btn.addEventListener('click', () => actOnPendingPayment(btn.getAttribute('data-pending-confirm'), 'confirm'));
+      });
+      root.querySelectorAll('[data-pending-reject]').forEach((btn) => {
+        btn.addEventListener('click', () => actOnPendingPayment(btn.getAttribute('data-pending-reject'), 'reject'));
+      });
+      root.querySelectorAll('[data-pending-cancel]').forEach((btn) => {
+        btn.addEventListener('click', () => actOnPendingPayment(btn.getAttribute('data-pending-cancel'), 'cancel'));
+      });
+    }
+
+    async function readApiError(response, fallback) {
+      try {
+        const data = await response.json();
+        return typeof data.detail === 'string' && data.detail ? data.detail : fallback;
+      } catch (error) {
+        return fallback;
+      }
+    }
+
+    async function submitStaffPendingPayment(invoice, form) {
+      const patientId = getPatientIdFromUrl();
+      const amountEl = form.querySelector('[data-staff-pending-amount="1"]');
+      const noteEl = form.querySelector('[data-staff-pending-note="1"]');
+      const amount = parseCurrencyNumber(amountEl ? amountEl.value : '');
+      if (!(amount > 0)) {
+        showToast('يرجى إدخال مبلغ صحيح.', 'error');
+        return;
+      }
+      const available = (Number(invoice.remaining_amount) || 0) - (Number(invoice.pending_amount) || 0);
+      if (amount > available + 0.001) {
+        showToast(`المبلغ أكبر من المتبقي على الفاتورة (${formatFinanceAmount(Math.max(available, 0))} ل.س) بعد الدفعات التي تنتظر التأكيد.`, 'error');
+        return;
+      }
+      try {
+        const response = await fetch(apiUrl(`/api/patients/${patientId}/invoices/${invoice.id}/pending-payments`), {
+          method: 'POST',
+          headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ amount, description: noteEl ? noteEl.value.trim() : '' }),
+        });
+        if (!response.ok) {
+          showToast(await readApiError(response, 'تعذر إرسال الدفعة الآن.'), 'error');
+          return;
+        }
+        await loadPatientInvoices();
+        showToast('أُرسلت الدفعة للطبيب المدير، وتُحسب بعد تأكيده.', 'success');
+      } catch (error) {
+        showToast('تعذر الاتصال بالخادم. حاول مرة أخرى.', 'error');
+      }
+    }
+
+    async function actOnPendingPayment(id, action) {
+      if (!id) return;
+      let url = apiUrl(`/api/pending-payments/${id}`);
+      let init = { method: 'DELETE', headers: getDoctorAuthHeaders() };
+      if (action === 'confirm') {
+        url = apiUrl(`/api/pending-payments/${id}/confirm`);
+        init = { method: 'POST', headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }), body: '{}' };
+      } else if (action === 'reject') {
+        const note = window.prompt('سبب الرفض (اختياري):', '');
+        if (note === null) return;
+        url = apiUrl(`/api/pending-payments/${id}/reject`);
+        init = { method: 'POST', headers: getDoctorAuthHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ note }) };
+      } else if (!window.confirm('إلغاء الدفعة المرسلة قبل أن يراجعها الطبيب المدير؟')) {
+        return;
+      }
+      try {
+        const response = await fetch(url, init);
+        if (!response.ok) {
+          showToast(await readApiError(response, 'تعذر تنفيذ العملية الآن.'), 'error');
+          return;
+        }
+        await loadPatientInvoices();
+        if (action === 'confirm') await loadFinanceLedger();
+        showToast(
+          action === 'confirm' ? 'تم تأكيد الدفعة وإضافتها للحسابات' : action === 'reject' ? 'تم رفض الدفعة' : 'تم إلغاء الدفعة',
+          'success'
+        );
+      } catch (error) {
+        showToast('تعذر الاتصال بالخادم. حاول مرة أخرى.', 'error');
       }
     }
 

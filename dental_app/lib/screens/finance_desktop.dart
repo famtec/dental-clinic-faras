@@ -125,6 +125,7 @@ extension _FinanceDesktop on _FinanceScreenState {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        _reviewPanel(summary, bottomSpacing: 14),
                         _ratioCard(context, summary),
                         const SizedBox(height: 14),
                         _receivablesCard(context),

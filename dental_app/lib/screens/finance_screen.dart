@@ -8,6 +8,7 @@ import '../theme/app_theme.dart';
 import '../widgets/app_sheet.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/desktop_widgets.dart';
+import '../widgets/finance_review_panel.dart';
 
 part 'finance_desktop.dart';
 
@@ -375,6 +376,29 @@ class _FinanceScreenState extends State<FinanceScreen> {
   /// setState لامتداد سطح المكتب في ملف الـ part (setState محميّة).
   void _update(VoidCallback fn) => setState(fn);
 
+  /// لوحة الدفعات المعلّقة وإقفال الشهر (2026-09-25).
+  final GlobalKey<FinanceReviewPanelState> _reviewPanelKey = GlobalKey<FinanceReviewPanelState>();
+
+  /// بعد تأكيد دفعة أو إقفال شهر: الأرقام والحركات تغيّرت.
+  void _onReviewChanged() {
+    _loadMonths();
+    _loadSummary();
+    _refreshDesktopExtras();
+  }
+
+  Widget _reviewPanel(FinanceSummary summary, {required double bottomSpacing}) {
+    final monthView = !_allTime && !_isToday;
+    return FinanceReviewPanel(
+      key: _reviewPanelKey,
+      apiService: widget.apiService,
+      year: monthView ? summary.year : null,
+      month: monthView ? summary.month : null,
+      bottomSpacing: bottomSpacing,
+      onChanged: _onReviewChanged,
+      onSessionExpired: widget.onSessionExpired,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -416,6 +440,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
         _summary = summary;
         _isLoading = false;
       });
+      _reviewPanelKey.currentState?.refresh();
       _loadProfitComparison(summary);
       _loadMoves();
     } on ApiException catch (e) {
@@ -551,6 +576,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
                                 // 2026-09-25: بطاقة الرأس الموحّدة (HeroPanel) كصفحة
                                 // المرضى بدل البطاقة الداكنة القديمة وبطاقتين
                                 // بيضاوين تحتها، بأرقام تعدّ وشريط يمتلئ.
+                                _reviewPanel(summary, bottomSpacing: 16),
                                 FadeSlideIn(
                                   child: _FinanceHero(
                                     summary: summary,

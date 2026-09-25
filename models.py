@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, String, Date, DateTime, Numeric, Float, ForeignKey, Text, text
+from sqlalchemy import Boolean, Column, Integer, String, Date, DateTime, Numeric, Float, ForeignKey, Text, UniqueConstraint, text
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
@@ -103,6 +103,8 @@ class Patient(Base):
     __tablename__ = "patients"
 
     id = Column(Integer, primary_key=True, index=True)
+    # الطبيب المساعد الذي أنشأ الصف (2026-09-25). NULL = المالك نفسه.
+    created_by_staff_id = Column(Integer, nullable=True)
     doctor_name = Column(String, nullable=True)
     # الحقل الرسمي (authoritative) لعزل بيانات كل طبيب عن غيره -- على عكس
     # doctor_name (نص قابل للتكرار بين أطباء مختلفين)، هذا البريد فريد لكل
@@ -143,6 +145,8 @@ class Appointment(Base):
     __tablename__ = "appointments"
 
     id = Column(Integer, primary_key=True, index=True)
+    # الطبيب المساعد الذي أنشأ الصف (2026-09-25). NULL = المالك نفسه.
+    created_by_staff_id = Column(Integer, nullable=True)
     # الحقل الرسمي لعزل مواعيد كل طبيب عن غيره (2026-08-23) -- انظر تعليق
     # Patient.doctor_email أعلاه لنفس المنطق.
     doctor_email = Column(String, index=True, nullable=True)
@@ -234,6 +238,8 @@ class TreatmentInvoice(Base):
     # مقارنة total_cost بمجموع الدفعات المرتبطة، لتفادي أي احتمال لتضارب حالة
     # مخزَّنة مع الحسابات الفعلية.
     id = Column(Integer, primary_key=True, index=True)
+    # الطبيب المساعد الذي أنشأ الصف (2026-09-25). NULL = المالك نفسه.
+    created_by_staff_id = Column(Integer, nullable=True)
     patient_id = Column(Integer, ForeignKey("patients.id"), index=True, nullable=False)
     doctor_email = Column(String, index=True, nullable=True)
     title = Column(String, nullable=False)
@@ -261,6 +267,8 @@ class FinancialTransaction(Base):
     __tablename__ = "financial_transactions"
 
     id = Column(Integer, primary_key=True, index=True)
+    # الطبيب المساعد الذي أنشأ الصف (2026-09-25). NULL = المالك نفسه.
+    created_by_staff_id = Column(Integer, nullable=True)
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=True)
     doctor_name = Column(String, nullable=True)
     # الحقل الرسمي لعزل الحركات المالية لكل طبيب عن غيره (2026-08-23) -- انظر
@@ -333,6 +341,20 @@ class ClinicDoctor(Base):
     notes = Column(String, nullable=True)
     created_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
 
+    # ── حساب دخول الطبيب المساعد (2026-09-25) ──
+    # الطبيب المساعد يدخل ببريده وكلمة سرّه ويعمل داخل بيانات عيادة المالك
+    # (clinic_email) بصلاحيات محدودة يفرضها الخادم (انظر StaffAccessMiddleware
+    # في main.py). login_email فريد بين كل الحسابات ولا يطابق أي users.email.
+    login_email = Column(String, index=True, nullable=True)
+    hashed_password = Column(String, nullable=True)
+    login_enabled = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    # يرى كل مرضى العيادة، لا مرضاه وحدهم -- يقرّره المالك لكل طبيب.
+    can_view_all_patients = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    # كل جلسة صدرت قبل هذا التاريخ مرفوضة: تغيير كلمة السرّ أو إيقاف الحساب
+    # يطرد الطبيب من كل أجهزته فوراً.
+    sessions_valid_after = Column(DateTime, nullable=True)
+    last_login_at = Column(DateTime, nullable=True)
+
     earnings = relationship("DoctorEarning", back_populates="clinic_doctor")
     payouts = relationship("DoctorPayout", back_populates="clinic_doctor")
 
@@ -397,6 +419,61 @@ class DoctorPayout(Base):
     clinic_doctor = relationship("ClinicDoctor", back_populates="payouts")
 
 
+class PendingPayment(Base):
+    """دفعة سجّلها طبيب مساعد وتنتظر تأكيد الطبيب المدير (2026-09-25).
+
+    **ليست حركة مالية بعد**: لا يقرؤها أي تقرير أو مجموع أو كشف نسبة. المال
+    يُقبض في صندوق العيادة، فلا يدخل الحسابات قبل أن يؤكّد المدير استلامه.
+    التأكيد يُنشئ FinancialTransaction حقيقية (transaction_id) بتاريخ
+    recorded_at، ومنها يُحسب استحقاق الطبيب كأي دفعة أخرى.
+
+    الأعمدة المرجعية أعداد صحيحة بلا FK عمداً (نفس DoctorEarning): حذف فاتورة
+    أو مريض يمرّ أحياناً بـ Query.delete خام لا يعرف هذا الجدول، والسجلات
+    المراجَعة تُنظَّف صراحةً في مسارات الحذف.
+    """
+
+    __tablename__ = "pending_payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    clinic_email = Column(String, index=True, nullable=False)
+    patient_id = Column(Integer, index=True, nullable=False)
+    invoice_id = Column(Integer, index=True, nullable=False)
+    # الطبيب المساعد الذي استلم المبلغ وسجّله.
+    clinic_doctor_id = Column(Integer, index=True, nullable=False)
+    # لقطات للعرض في القوائم دون استعلامات إضافية.
+    patient_name = Column(String, nullable=True)
+    invoice_title = Column(String, nullable=True)
+    amount = Column(Numeric(12, 2), nullable=False)
+    description = Column(String, nullable=True)
+    # وقت الاستلام بتوقيت دمشق -- يصير تاريخ الدفعة عند التأكيد.
+    recorded_at = Column(DateTime, nullable=False)
+    # pending | confirmed | rejected
+    status = Column(String, nullable=False, default="pending", server_default=text("'pending'"), index=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    review_note = Column(String, nullable=True)
+    transaction_id = Column(Integer, nullable=True)
+
+
+class ClosedPeriod(Base):
+    """شهر مالي مُقفل (2026-09-25): لا تُسجَّل فيه حركة ولا تُعدَّل ولا تُحذف.
+
+    يحمي الأشهر التي سُلّمت فيها نسب الأطباء وقُفلت دفاترها من تعديل لاحق
+    يغيّر أرقامها بصمت. الأرقام المحفوظة لقطة لحظة الإقفال للمرجعية.
+    """
+
+    __tablename__ = "closed_periods"
+    __table_args__ = (UniqueConstraint("clinic_email", "year", "month", name="uq_closed_period_month"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    clinic_email = Column(String, index=True, nullable=False)
+    year = Column(Integer, nullable=False)
+    month = Column(Integer, nullable=False)
+    closed_at = Column(DateTime, nullable=False)
+    total_income = Column(Numeric(14, 2), nullable=False, default=0)
+    total_expenses = Column(Numeric(14, 2), nullable=False, default=0)
+    doctors_share = Column(Numeric(14, 2), nullable=False, default=0)
+
+
 class PatientXRay(Base):
     __tablename__ = "patient_xrays"
 
@@ -414,6 +491,8 @@ class Prescription(Base):
     __tablename__ = "prescriptions"
 
     id = Column(Integer, primary_key=True, index=True)
+    # الطبيب المساعد الذي أنشأ الصف (2026-09-25). NULL = المالك نفسه.
+    created_by_staff_id = Column(Integer, nullable=True)
     patient_id = Column(Integer, ForeignKey("patients.id"), index=True, nullable=False)
     medications = Column(Text, nullable=False)
     instructions = Column(Text, nullable=False)
@@ -506,6 +585,8 @@ class InvoiceMaterialUsage(Base):
     __tablename__ = "invoice_material_usages"
 
     id = Column(Integer, primary_key=True, index=True)
+    # الطبيب المساعد الذي أنشأ الصف (2026-09-25). NULL = المالك نفسه.
+    created_by_staff_id = Column(Integer, nullable=True)
     doctor_email = Column(String, index=True, nullable=False)
     invoice_id = Column(Integer, ForeignKey("treatment_invoices.id"), index=True, nullable=False)
     patient_id = Column(Integer, ForeignKey("patients.id"), index=True, nullable=True)

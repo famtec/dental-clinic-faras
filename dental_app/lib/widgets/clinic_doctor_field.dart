@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/clinic_doctor.dart';
 import '../services/api_service.dart';
+import '../services/app_session.dart';
 
 /// خيارات اختيار «الطبيب المعالج» للمريض (2026-09-24): أطباء العيادة
 /// النشطون + تسمية صاحب الحساب لخيار null.
@@ -28,6 +29,12 @@ class ClinicDoctorChoices {
   /// fetchClinicDoctors التي لا ترفع استثناءً أبداً، واسم الطبيب المخزَّن
   /// محلياً عند تسجيل الدخول.
   static Future<ClinicDoctorChoices> load(ApiService apiService) async {
+    // الطبيب المساعد (2026-09-25): كل ما يسجّله يُنسب إليه على الخادم مهما
+    // أُرسل، فقائمة فارغة تُخفي حقول الاختيار وزر «تغيير» في كل الشاشات.
+    if (AppSession.instance.isStaff) {
+      return ClinicDoctorChoices(
+          doctors: const [], ownerLabel: AppSession.instance.staffName ?? '');
+    }
     final doctors = await apiService.fetchClinicDoctors();
     String ownerName = '';
     try {

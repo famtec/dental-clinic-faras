@@ -106,10 +106,10 @@ class _MoreMenuScreenState extends State<MoreMenuScreen> {
                     onTap: () => _push(const ContactDeveloperScreen()),
                   ),
                   const SizedBox(height: 18),
-                  const _ThemeModeCard(),
+                  const ThemeModeCard(),
                   if (AppointmentReminderService.instance.isSupported) ...[
                     const SizedBox(height: 12),
-                    const _ReminderSettingsCard(),
+                    const ReminderSettingsCard(),
                   ],
                   const SizedBox(height: 24),
                   Builder(
@@ -250,8 +250,8 @@ class _MenuTile extends StatelessWidget {
 ///
 /// "تلقائي" يتبع إعداد النظام في الجهاز، وهو الخيار الذي يجعل التطبيق
 /// ينقلب ليلاً وحده مساءً على أجهزة تفعّل الجدولة التلقائية.
-class _ThemeModeCard extends StatelessWidget {
-  const _ThemeModeCard();
+class ThemeModeCard extends StatelessWidget {
+  const ThemeModeCard({super.key});
 
   static const _options = <_ThemeOptionSpec>[
     _ThemeOptionSpec(ThemeMode.light, 'نهاري', Icons.light_mode_outlined),
@@ -405,8 +405,8 @@ class _ThemeModeOption extends StatelessWidget {
 
 /// «تذكير المواعيد» (2026-09-25) -- تشغيل/إيقاف التذكير المحلي قبل كل موعد،
 /// والمدة قبله. التغيير يعيد الجدولة فوراً (AppointmentReminderService).
-class _ReminderSettingsCard extends StatelessWidget {
-  const _ReminderSettingsCard();
+class ReminderSettingsCard extends StatelessWidget {
+  const ReminderSettingsCard({super.key});
 
   static String _leadLabel(int minutes) =>
       minutes == 60 ? 'قبل ساعة' : (minutes == 30 ? 'قبل نصف ساعة' : 'قبل ربع ساعة');

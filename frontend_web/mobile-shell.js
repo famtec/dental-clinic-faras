@@ -107,6 +107,13 @@
     { href: 'contact_developer.html', label: 'تواصل مع المطور', hint: 'دعم فني', icon: 'developer', tone: 'pink' }
   ];
 
+  /* الطبيب المساعد (2026-09-25): صفحات المالك لا تظهر له في الشريط ولا في
+     لوحة "المزيد" (انظر ClinicRole في tier-access.js). */
+  if (window.ClinicRole && window.ClinicRole.isStaff()) {
+    TABS = TABS.filter(function (tab) { return !window.ClinicRole.ownerOnlyPage(tab.href); });
+    SHEET_LINKS = SHEET_LINKS.filter(function (item) { return !window.ClinicRole.ownerOnlyPage(item.href); });
+  }
+
   /* أزرار الترويسة المعروفة، لإعطائها أيقونة ووصفاً مناسبين عند استنساخها. */
   var KNOWN_BUTTONS = {
     backupBtn: { label: 'نسخة احتياطية', hint: 'تصدير البيانات', icon: 'backup', tone: 'cyan' },
@@ -340,6 +347,8 @@
       .call(header.querySelectorAll('button[id]'))
       .forEach(function (btn) {
         if (btn.id === 'logoutBtn' || btn.id === 'mobileMenuToggle') return;
+        /* زر مخفي في الترويسة (أزرار المالك عند الطبيب المساعد) لا يُستنسخ. */
+        if (window.getComputedStyle(btn).display === 'none' && document.documentElement.classList.contains('is-staff')) return;
         var known = KNOWN_BUTTONS[btn.id];
         var label = known ? known.label : (btn.textContent || '').trim();
         if (!label) return;

@@ -1,3 +1,5 @@
+import 'pending_payment.dart';
+
 class InvoicePayment {
   final int id;
   final double amount;
@@ -158,6 +160,11 @@ class TreatmentInvoice {
   final double materialsCost;
   final double netProfit;
 
+  /// دفعات سجّلها طبيب مساعد وتنتظر تأكيد المدير (2026-09-25) -- للعرض
+  /// فقط: لا تدخل paidAmount ولا remainingAmount قبل التأكيد.
+  final List<PendingPayment> pendingPayments;
+  final double pendingAmount;
+
   /// 'synced' لفاتورة قادمة فعلياً من السيرفر. 'pending_create' لفاتورة
   /// أُنشئت أوفلاين ولم تصل للسيرفر بعد، 'pending_update' لفاتورة مزامَنة
   /// أصلاً لكن عليها دفعة/تعديل جديد ما زال بانتظار الاتصال -- انظر
@@ -181,6 +188,8 @@ class TreatmentInvoice {
     this.materials = const [],
     this.materialsCost = 0,
     this.netProfit = 0,
+    this.pendingPayments = const [],
+    this.pendingAmount = 0,
   });
 
   bool get isOpen => status == 'open';
@@ -222,6 +231,8 @@ class TreatmentInvoice {
       materials: materials ?? this.materials,
       materialsCost: materialsCost ?? this.materialsCost,
       netProfit: netProfit ?? this.netProfit,
+      pendingPayments: pendingPayments,
+      pendingAmount: pendingAmount,
     );
   }
 
@@ -250,6 +261,11 @@ class TreatmentInvoice {
           .toList(),
       materialsCost: _money(json['materials_cost']),
       netProfit: _money(json['net_profit']),
+      pendingPayments: (json['pending_payments'] as List? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(PendingPayment.fromJson)
+          .toList(),
+      pendingAmount: _money(json['pending_amount']),
     );
   }
 
@@ -270,6 +286,8 @@ class TreatmentInvoice {
         'materials': materials.map((m) => m.toJson()).toList(),
         'materials_cost': materialsCost,
         'net_profit': netProfit,
+        'pending_payments': pendingPayments.map((p) => p.toJson()).toList(),
+        'pending_amount': pendingAmount,
       };
 }
 

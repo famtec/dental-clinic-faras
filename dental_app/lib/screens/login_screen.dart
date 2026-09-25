@@ -71,6 +71,10 @@ class _LoginScreenState extends State<LoginScreen> {
         email: (result['email'] as String?) ?? _emailController.text.trim(),
         doctorName: result['doctor_name'] as String?,
         tier: result['tier'] as String?,
+        // 2026-09-25: طبيب مساعد يدخل بحسابه الخاص داخل عيادة المالك.
+        staffDoctorId: result['role'] == 'staff'
+            ? (result['clinic_doctor_id'] as num?)?.toInt()
+            : null,
       );
       if (!mounted) return;
       widget.onLoginSuccess();

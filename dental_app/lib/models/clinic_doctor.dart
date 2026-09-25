@@ -38,6 +38,12 @@ class ClinicDoctor {
   final double totalPaidOut;
   final double balanceDue;
 
+  /// حساب دخول الطبيب المساعد (2026-09-25) -- يصل للمالك وحده.
+  final String? loginEmail;
+  final bool loginEnabled;
+  final bool canViewAllPatients;
+  final DateTime? lastLoginAt;
+
   const ClinicDoctor({
     required this.id,
     required this.fullName,
@@ -52,6 +58,10 @@ class ClinicDoctor {
     this.totalDoctorShare = 0,
     this.totalPaidOut = 0,
     this.balanceDue = 0,
+    this.loginEmail,
+    this.loginEnabled = false,
+    this.canViewAllPatients = false,
+    this.lastLoginAt,
   });
 
   /// الاسم بلا بادئة "د." -- للشرائح الضيقة وترويسات الأعمدة.
@@ -149,6 +159,10 @@ class ClinicDoctor {
       totalDoctorShare: _money(json['total_doctor_share']),
       totalPaidOut: _money(json['total_paid_out']),
       balanceDue: _money(json['balance_due']),
+      loginEmail: _optionalText(json['login_email']),
+      loginEnabled: json['login_enabled'] == true,
+      canViewAllPatients: json['can_view_all_patients'] == true,
+      lastLoginAt: json['last_login_at'] is String ? DateTime.tryParse(json['last_login_at'] as String) : null,
     );
   }
 }

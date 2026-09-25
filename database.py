@@ -521,6 +521,31 @@ def init_db():
                 # ويرفضها Postgres (الدرس الموثّق عند patients.last_recall_sent_at).
                 connection.execute(text("ALTER TABLE activation_keys ADD COLUMN created_at TIMESTAMP"))
 
+    # حسابات الأطباء المساعدين (2026-09-25): أعمدة الدخول على clinic_doctors،
+    # وعمود «من أدخل» (created_by_staff_id) على الجداول التي يكتب فيها المساعد.
+    if "clinic_doctors" in inspector.get_table_names():
+        staff_columns = {column["name"] for column in inspector.get_columns("clinic_doctors")}
+        with engine.begin() as connection:
+            if "login_email" not in staff_columns:
+                connection.execute(text("ALTER TABLE clinic_doctors ADD COLUMN login_email VARCHAR"))
+            if "hashed_password" not in staff_columns:
+                connection.execute(text("ALTER TABLE clinic_doctors ADD COLUMN hashed_password VARCHAR"))
+            if "login_enabled" not in staff_columns:
+                connection.execute(text("ALTER TABLE clinic_doctors ADD COLUMN login_enabled BOOLEAN NOT NULL DEFAULT false"))
+            if "can_view_all_patients" not in staff_columns:
+                connection.execute(text("ALTER TABLE clinic_doctors ADD COLUMN can_view_all_patients BOOLEAN NOT NULL DEFAULT false"))
+            if "sessions_valid_after" not in staff_columns:
+                connection.execute(text("ALTER TABLE clinic_doctors ADD COLUMN sessions_valid_after TIMESTAMP"))
+            if "last_login_at" not in staff_columns:
+                connection.execute(text("ALTER TABLE clinic_doctors ADD COLUMN last_login_at TIMESTAMP"))
+    for audited_table in ("patients", "appointments", "treatment_invoices", "financial_transactions",
+                          "invoice_material_usages", "prescriptions"):
+        if audited_table in inspector.get_table_names():
+            audited_columns = {column["name"] for column in inspector.get_columns(audited_table)}
+            if "created_by_staff_id" not in audited_columns:
+                with engine.begin() as connection:
+                    connection.execute(text(f"ALTER TABLE {audited_table} ADD COLUMN created_by_staff_id INTEGER"))
+
     # استبدال الرمز بدل تكديسه (2026-09-25): يوم الاستهلاك، ويوم الإلغاء
     # والرمز الذي حلّ محلّه. nullable كلها -- القديم يبقى NULL بصدق.
     if "activation_keys" in inspector.get_table_names():

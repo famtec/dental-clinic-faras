@@ -10,10 +10,12 @@ import '../models/appointment.dart';
 import '../models/inventory_item.dart';
 import '../models/patient.dart';
 import '../models/patient_archive_file.dart';
+import '../models/pending_payment.dart';
 import '../models/prescription.dart';
 import '../models/treatment_catalog_item.dart';
 import '../models/treatment_invoice.dart';
 import '../services/api_service.dart';
+import '../services/app_session.dart';
 import '../services/media_picker.dart';
 import '../theme/app_theme.dart';
 import '../utils/appointment_status.dart';
@@ -22,6 +24,7 @@ import '../widgets/app_sheet.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/clinic_doctor_field.dart';
 import '../widgets/desktop_widgets.dart';
+import '../widgets/finance_review_panel.dart';
 import '../widgets/tooth_widget.dart';
 import 'tooth_status_screen.dart';
 
@@ -2602,17 +2605,39 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                                 foreground:
                                     invoice.isOpen ? AppColors.amber800text : AppColors.emerald700text,
                               ),
-                              const Spacer(),
-                              // فاتورة (أو دفعة عليها) أُنشئت أوفلاين وما
-                              // زالت بانتظار الاتصال بالإنترنت -- انظر
-                              // OfflineAwareApiService. أُضيف 2026-09-02.
-                              if (invoice.isPendingSync) ...[
-                                const Icon(Icons.cloud_off_outlined,
-                                    size: 14, color: AppColors.amber900),
+                              // 2026-09-25: مبلغ استلمه طبيب مساعد ينتظر تأكيد المدير.
+                              if (invoice.pendingPayments.isNotEmpty) ...[
                                 const SizedBox(width: 6),
+                                StatusBadge(
+                                  label: '⏳ ${invoice.pendingAmount.toStringAsFixed(0)} بانتظار التأكيد',
+                                  background: surf.pillDueBg,
+                                  foreground: surf.pillDueFg,
+                                ),
                               ],
-                              Text(invoice.title,
-                                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5)),
+                              const SizedBox(width: 8),
+                              // العنوان يُختصر بدل أن يدفع الشارات خارج البطاقة
+                              // على شاشة ضيقة (صارت شارتين منذ الدفعات المعلّقة).
+                              Expanded(
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    // فاتورة (أو دفعة عليها) أُنشئت أوفلاين وما
+                                    // زالت بانتظار الاتصال بالإنترنت -- انظر
+                                    // OfflineAwareApiService. أُضيف 2026-09-02.
+                                    if (invoice.isPendingSync) ...[
+                                      const Icon(Icons.cloud_off_outlined,
+                                          size: 14, color: AppColors.amber900),
+                                      const SizedBox(width: 6),
+                                    ],
+                                    Flexible(
+                                      child: Text(invoice.title,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5)),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
                           const SizedBox(height: 10),
@@ -3514,6 +3539,217 @@ class _InvoiceDetailSheetState extends State<_InvoiceDetailSheet> {
     super.dispose();
   }
 
+  // ── الدفعات المعلّقة (2026-09-25) ──
+
+  /// يعيد جلب الفاتورة بعد عملية على دفعة معلّقة (المسارات تُرجع الدفعة
+  /// المعلّقة لا الفاتورة).
+  Future<void> _reloadInvoice() async {
+    final invoices = await widget.apiService.fetchPatientInvoices(_invoice.patientId);
+    final updated = invoices.firstWhere((item) => item.id == _invoice.id, orElse: () => _invoice);
+    if (!mounted) return;
+    setState(() => _invoice = updated);
+    widget.onInvoiceUpdated(updated);
+  }
+
+  bool get _isOwnStaffInvoice =>
+      AppSession.instance.isStaff && _invoice.clinicDoctorId == AppSession.instance.staffDoctorId.value;
+
+  /// الطبيب المساعد يرسل مبلغاً استلمه -- لا يدخل الحسابات قبل تأكيد المدير.
+  Future<void> _submitPendingPayment() async {
+    final amount = double.tryParse(_amountController.text.trim());
+    if (amount == null || amount <= 0) {
+      setState(() => _error = 'أدخل مبلغاً صحيحاً');
+      return;
+    }
+    final available = _invoice.remainingAmount - _invoice.pendingAmount;
+    if (amount > available + 0.001) {
+      setState(() => _error =
+          'المبلغ أكبر من المتبقي على الفاتورة (${available < 0 ? 0 : available.toStringAsFixed(0)} ل.س) '
+          'بعد الدفعات التي تنتظر التأكيد.');
+      return;
+    }
+    setState(() {
+      _isSaving = true;
+      _error = null;
+    });
+    try {
+      await widget.apiService.createPendingPayment(
+        _invoice.patientId,
+        _invoice.id,
+        amount: amount,
+        description: _descriptionController.text.trim(),
+      );
+      if (!mounted) return;
+      HapticFeedback.mediumImpact();
+      _amountController.clear();
+      _descriptionController.clear();
+      await _reloadInvoice();
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('أُرسلت الدفعة للطبيب المدير، وتُحسب بعد تأكيده.')),
+      );
+    } on ApiException catch (e) {
+      if (e.isSessionExpired) {
+        widget.onSessionExpired();
+        return;
+      }
+      if (!mounted) return;
+      setState(() {
+        _isSaving = false;
+        _error = e.message;
+      });
+    }
+  }
+
+  /// المدير: تأكيد/رفض. المساعد: إلغاء دفعته قبل المراجعة.
+  Future<void> _actOnPending(PendingPayment payment, String action) async {
+    String? note;
+    if (action == 'reject') {
+      note = await askRejectReason(context);
+      if (note == null) return;
+    } else if (action == 'cancel') {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('إلغاء الدفعة؟'),
+          content: const Text('تُحذف الدفعة المرسلة قبل أن يراجعها الطبيب المدير.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('تراجع')),
+            FilledButton(onPressed: () => Navigator.of(dialogContext).pop(true), child: const Text('إلغاء الدفعة')),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+    setState(() {
+      _isSaving = true;
+      _error = null;
+    });
+    try {
+      switch (action) {
+        case 'confirm':
+          await widget.apiService.confirmPendingPayment(payment.id);
+        case 'reject':
+          await widget.apiService.rejectPendingPayment(payment.id, note: note);
+        default:
+          await widget.apiService.cancelPendingPayment(payment.id);
+      }
+      await _reloadInvoice();
+      if (!mounted) return;
+      HapticFeedback.mediumImpact();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(switch (action) {
+          'confirm' => 'تم تأكيد الدفعة وإضافتها للحسابات',
+          'reject' => 'تم رفض الدفعة',
+          _ => 'تم إلغاء الدفعة',
+        }),
+      ));
+    } on ApiException catch (e) {
+      if (e.isSessionExpired) {
+        widget.onSessionExpired();
+        return;
+      }
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Widget _buildPendingSection() {
+    final isStaff = AppSession.instance.isStaff;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: Text(
+            isStaff ? 'بانتظار تأكيد الطبيب المدير' : 'دفعات بانتظار تأكيدك',
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
+          ),
+        ),
+        const SizedBox(height: 8),
+        for (final payment in _invoice.pendingPayments)
+          PendingPaymentTile(
+            payment: payment,
+            actions: isStaff
+                ? [
+                    if (payment.clinicDoctorId == AppSession.instance.staffDoctorId.value)
+                      TextButton(
+                        onPressed: _isSaving ? null : () => _actOnPending(payment, 'cancel'),
+                        child: const Text('إلغاء'),
+                      ),
+                  ]
+                : [
+                    TextButton(
+                      onPressed: _isSaving ? null : () => _actOnPending(payment, 'reject'),
+                      child: const Text('رفض', style: TextStyle(color: AppColors.rose700text)),
+                    ),
+                    FilledButton.icon(
+                      onPressed: _isSaving ? null : () => _actOnPending(payment, 'confirm'),
+                      icon: const Icon(Icons.check, size: 18),
+                      label: const Text('تأكيد الاستلام'),
+                    ),
+                  ],
+          ),
+      ],
+    );
+  }
+
+  Widget _buildStaffPaymentForm() {
+    final surf = context.surface;
+    if (!_isOwnStaffInvoice) {
+      return Text(
+        'هذه فاتورة طبيب آخر — الدفعات عليها عند الطبيب المدير.',
+        textAlign: TextAlign.center,
+        style: TextStyle(fontSize: 12, color: surf.textSecondary),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: TextField(
+                controller: _descriptionController,
+                textAlign: TextAlign.right,
+                decoration: const InputDecoration(hintText: 'وصف (اختياري)', isDense: true),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: _amountController,
+                textAlign: TextAlign.right,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(hintText: 'المبلغ المستلم', isDense: true),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'المبلغ يصل للطبيب المدير ليؤكّد استلامه، ولا يدخل الحسابات ولا نسبتك قبل تأكيده.',
+          style: TextStyle(fontSize: 11.5, height: 1.5, color: surf.textSecondary),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 6),
+          Text(_error!, style: const TextStyle(color: AppColors.rose700text, fontSize: 12)),
+        ],
+        const SizedBox(height: 10),
+        GradientButton(
+          label: 'إرسال للمدير للتأكيد',
+          icon: Icons.send_outlined,
+          onPressed: _isSaving ? null : _submitPendingPayment,
+          isLoading: _isSaving,
+          gradient: AppColors.successButtonGradient,
+        ),
+      ],
+    );
+  }
+
   Future<void> _addPayment() async {
     final amount = double.tryParse(_amountController.text.trim());
     if (amount == null || amount <= 0) {
@@ -3854,6 +4090,10 @@ class _InvoiceDetailSheetState extends State<_InvoiceDetailSheet> {
             // بعشر مواد.
             _buildMaterialsSummary(),
             const SizedBox(height: 12),
+            if (_invoice.pendingPayments.isNotEmpty) ...[
+              _buildPendingSection(),
+              const SizedBox(height: 8),
+            ],
             const Align(
               alignment: Alignment.centerRight,
               child: Text('سجل الدفعات', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5)),
@@ -3885,12 +4125,16 @@ class _InvoiceDetailSheetState extends State<_InvoiceDetailSheet> {
                             // patient_record.html (نفس financeEditModal المُعاد
                             // استخدامه هناك لكل من السجل المالي العام ودفعات
                             // الفواتير معاً).
-                            onTap: () => _openEditPaymentDialog(payment),
+                            onTap: AppSession.instance.isStaff
+                                ? null
+                                : () => _openEditPaymentDialog(payment),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.edit_outlined, size: 14, color: AppColors.indigo600),
-                                const SizedBox(width: 4),
+                                if (!AppSession.instance.isStaff) ...[
+                                  const Icon(Icons.edit_outlined, size: 14, color: AppColors.indigo600),
+                                  const SizedBox(width: 4),
+                                ],
                                 Text(
                                   '${payment.createdAt.year}/${payment.createdAt.month}/${payment.createdAt.day}',
                                   style: TextStyle(fontSize: 11, color: surf.textMuted),
@@ -3903,7 +4147,10 @@ class _InvoiceDetailSheetState extends State<_InvoiceDetailSheet> {
                     ),
             ),
             const Divider(height: 20),
-            if (_invoice.isOpen) ...[
+            // الطبيب المساعد (2026-09-25): يرسل المبلغ الذي استلمه، ولا يدخل
+            // الحسابات قبل أن يؤكّد الطبيب المدير وصوله للصندوق.
+            if (_invoice.isOpen && AppSession.instance.isStaff) _buildStaffPaymentForm(),
+            if (_invoice.isOpen && !AppSession.instance.isStaff) ...[
               Row(
                 children: [
                   Expanded(
@@ -4238,13 +4485,16 @@ class _InvoiceMaterialsSheetState extends State<_InvoiceMaterialsSheet> {
                                 ],
                               ),
                             ),
-                            IconButton(
-                              icon: Icon(Icons.delete_outline,
-                                  size: 19, color: AppColors.rose700text),
-                              tooltip: 'حذف وإرجاع للمخزن',
-                              onPressed:
-                                  _isBusy ? null : () => _deleteMaterial(material),
-                            ),
+                            // حذف مادة يعيد المخزن ويغيّر كلفة الفاتورة --
+                            // للمدير وحده؛ المساعد يطلب منه تصحيح الخطأ.
+                            if (!AppSession.instance.isStaff)
+                              IconButton(
+                                icon: Icon(Icons.delete_outline,
+                                    size: 19, color: AppColors.rose700text),
+                                tooltip: 'حذف وإرجاع للمخزن',
+                                onPressed:
+                                    _isBusy ? null : () => _deleteMaterial(material),
+                              ),
                           ],
                         ),
                       ),

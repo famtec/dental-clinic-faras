@@ -791,6 +791,48 @@
 				</div>
 			</div>
 
+			<!-- حساب دخول الطبيب المساعد (2026-09-25): بريد وكلمة سرّ يدخل بهما
+			     إلى العيادة بصلاحيات محدودة. الخادم يفرض الصلاحيات (main.py). -->
+			<div id="loginModal" class="modal-overlay hidden">
+				<div class="modal-panel">
+					<div class="modal-header">
+						<h3 class="modal-title" id="loginModalTitle">حساب الدخول</h3>
+						<button type="button" id="loginCloseBtn" class="modal-close" aria-label="إغلاق">
+							<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<path d="M18 6 6 18"></path>
+								<path d="M6 6l12 12"></path>
+							</svg>
+						</button>
+					</div>
+					<form id="loginForm" autocomplete="off">
+						<p class="payout-hint">يدخل الطبيب بهذا البريد وكلمة السرّ إلى عيادتك، ويرى مرضاه ومواعيده وكشف حسابه فقط. لا يرى المالية ولا المخزون ولا نسب غيره، ولا يسجّل الدفعات.</p>
+						<label class="field-label">
+							<span>البريد الذي يدخل به</span>
+							<input id="loginEmailInput" type="email" required class="field-input" placeholder="doctor@example.com" autocomplete="off" />
+						</label>
+						<label class="field-label">
+							<span id="loginPasswordLabel">كلمة السرّ</span>
+							<input id="loginPasswordInput" type="text" class="field-input" placeholder="6 أحرف على الأقل" autocomplete="new-password" />
+						</label>
+						<label class="field-label" style="flex-direction:row; align-items:flex-start; gap:10px; font-weight:600;">
+							<input id="loginEnabledInput" type="checkbox" checked style="margin-top:3px; width:16px; height:16px; flex-shrink:0;" />
+							<span>السماح بالدخول (إيقافه يُخرج الطبيب من أي جهاز مفتوح عليه فوراً)</span>
+						</label>
+						<label class="field-label" style="flex-direction:row; align-items:flex-start; gap:10px; font-weight:600;">
+							<input id="loginViewAllInput" type="checkbox" style="margin-top:3px; width:16px; height:16px; flex-shrink:0;" />
+							<span>يرى كل مرضى العيادة (مُطفأ: يرى المسجّلين باسمه فقط)</span>
+						</label>
+						<p id="loginLastSeen" class="payout-note"></p>
+						<p id="loginStatus" class="payout-status"></p>
+						<div class="modal-footer">
+							<button type="button" id="loginDeleteBtn" class="btn-cancel" style="color:#be123c;">حذف حساب الدخول</button>
+							<button type="button" id="loginCancelBtn" class="btn-cancel">إلغاء</button>
+							<button type="submit" id="loginSaveBtn" class="btn-save">حفظ</button>
+						</div>
+					</form>
+				</div>
+			</div>
+
 			<div id="payoutModal" class="modal-overlay hidden">
 				<div class="modal-panel">
 					<div class="modal-header">
@@ -1349,6 +1391,7 @@
 							<div class="doctor-actions">
 								<button type="button" class="ghost-btn" data-statement-for="${d.id}">كشف الحساب</button>
 								<button type="button" class="ghost-btn ghost-btn-emerald" data-payout-for="${d.id}">تسجيل تسوية</button>
+								<button type="button" class="ghost-btn" data-login-for="${d.id}">${d.login_email ? (d.login_enabled ? 'حساب الدخول ✓' : 'حساب الدخول (موقوف)') : 'حساب الدخول'}</button>
 								<button type="button" class="ghost-btn ghost-btn-slate" data-toggle-active="${d.id}">${d.is_active ? 'تعطيل' : 'تفعيل'}</button>
 								<button type="button" class="ghost-btn ghost-btn-rose" data-delete-doctor="${d.id}">حذف</button>
 							</div>
@@ -1587,6 +1630,119 @@
 			link.click();
 			link.remove();
 			URL.revokeObjectURL(url);
+		}
+
+		// ---- حساب دخول الطبيب المساعد (2026-09-25) ----
+		const loginModal = document.getElementById('loginModal');
+		const loginForm = document.getElementById('loginForm');
+		let loginDoctorId = null;
+
+		function openLoginModal(doctorId) {
+			const doctor = currentDoctors.find((d) => String(d.id) === String(doctorId));
+			if (!doctor) return;
+			loginDoctorId = doctor.id;
+			const hasAccount = Boolean(doctor.login_email);
+			document.getElementById('loginModalTitle').textContent = `حساب دخول: ${doctor.full_name}`;
+			document.getElementById('loginEmailInput').value = doctor.login_email || '';
+			document.getElementById('loginPasswordInput').value = '';
+			document.getElementById('loginPasswordLabel').textContent = hasAccount
+				? 'كلمة سرّ جديدة (اتركها فارغة للإبقاء على الحالية)'
+				: 'كلمة السرّ';
+			document.getElementById('loginEnabledInput').checked = hasAccount ? Boolean(doctor.login_enabled) : true;
+			document.getElementById('loginViewAllInput').checked = Boolean(doctor.can_view_all_patients);
+			document.getElementById('loginDeleteBtn').classList.toggle('hidden', !hasAccount);
+			const lastSeen = document.getElementById('loginLastSeen');
+			if (doctor.last_login_at) {
+				const at = new Date(doctor.last_login_at);
+				lastSeen.textContent = Number.isNaN(at.getTime())
+					? ''
+					: `آخر دخول: ${at.getFullYear()}/${at.getMonth() + 1}/${at.getDate()} ${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
+			} else {
+				lastSeen.textContent = hasAccount ? 'لم يدخل بعد.' : '';
+			}
+			const status = document.getElementById('loginStatus');
+			status.textContent = '';
+			status.className = 'payout-status';
+			loginModal.classList.remove('hidden');
+		}
+
+		function closeLoginModal() {
+			loginModal.classList.add('hidden');
+			loginDoctorId = null;
+		}
+
+		function setLoginStatus(text, isError) {
+			const status = document.getElementById('loginStatus');
+			status.textContent = text;
+			status.className = isError ? 'payout-status is-error' : 'payout-status';
+		}
+
+		async function handleLoginSubmit(event) {
+			event.preventDefault();
+			if (loginDoctorId == null) return;
+			const doctor = currentDoctors.find((d) => String(d.id) === String(loginDoctorId));
+			const hasAccount = Boolean(doctor && doctor.login_email);
+			const email = String(document.getElementById('loginEmailInput').value || '').trim();
+			const password = String(document.getElementById('loginPasswordInput').value || '');
+			if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+				setLoginStatus('بريد غير صالح.', true);
+				return;
+			}
+			if (!hasAccount && !password) {
+				setLoginStatus('كلمة السرّ مطلوبة للحساب الجديد.', true);
+				return;
+			}
+			if (password && password.length < 6) {
+				setLoginStatus('كلمة السرّ 6 أحرف على الأقل.', true);
+				return;
+			}
+			const body = {
+				login_email: email,
+				login_enabled: document.getElementById('loginEnabledInput').checked,
+				can_view_all_patients: document.getElementById('loginViewAllInput').checked
+			};
+			if (password) body.password = password;
+			const saveBtn = document.getElementById('loginSaveBtn');
+			if (window.ClinicLoader) ClinicLoader.setButtonLoading(saveBtn, true);
+			setLoginStatus('جارٍ الحفظ...', false);
+			try {
+				const response = await fetch(apiUrl(`/api/clinic-doctors/${loginDoctorId}/login`), {
+					method: 'PUT',
+					headers: getDoctorsAuthHeaders({ 'Content-Type': 'application/json' }),
+					body: JSON.stringify(body)
+				});
+				if (!response.ok) {
+					setLoginStatus(await readError(response, 'تعذر حفظ حساب الدخول.'), true);
+					return;
+				}
+				closeLoginModal();
+				showDoctorsToast(hasAccount ? 'تم حفظ حساب الدخول' : 'تم إنشاء حساب الدخول');
+				await loadDoctors();
+			} catch (err) {
+				setLoginStatus('تعذر الاتصال بالخادم. حاول مرة أخرى.', true);
+			} finally {
+				if (window.ClinicLoader) ClinicLoader.setButtonLoading(saveBtn, false);
+			}
+		}
+
+		async function deleteDoctorLogin() {
+			if (loginDoctorId == null) return;
+			if (!window.confirm('لن يستطيع الطبيب الدخول بعد الآن، ويُخرَج من أي جهاز مفتوح عليه فوراً. الطبيب وسجله ونسبته تبقى كما هي. متابعة؟')) return;
+			try {
+				const response = await fetch(apiUrl(`/api/clinic-doctors/${loginDoctorId}/login`), {
+					method: 'DELETE',
+					headers: getDoctorsAuthHeaders()
+				});
+				if (!response.ok) {
+					setLoginStatus(await readError(response, 'تعذر حذف حساب الدخول.'), true);
+					return;
+				}
+				closeLoginModal();
+				showDoctorsToast('تم حذف حساب الدخول');
+				await loadDoctors();
+			} catch (err) {
+				setLoginStatus('تعذر الاتصال بالخادم. حاول مرة أخرى.', true);
+			}
 		}
 
 		function openPayout(doctorId) {
@@ -1993,6 +2149,11 @@
 				openPayout(payoutBtn.getAttribute('data-payout-for'));
 				return;
 			}
+			const loginBtn = event.target.closest('[data-login-for]');
+			if (loginBtn) {
+				openLoginModal(loginBtn.getAttribute('data-login-for'));
+				return;
+			}
 			const toggleBtn = event.target.closest('[data-toggle-active]');
 			if (toggleBtn) {
 				const id = toggleBtn.getAttribute('data-toggle-active');
@@ -2025,6 +2186,13 @@
 			if (event.target === payoutModal) closePayout();
 		});
 		payoutForm?.addEventListener('submit', handlePayoutSubmit);
+		loginForm?.addEventListener('submit', handleLoginSubmit);
+		document.getElementById('loginCloseBtn')?.addEventListener('click', closeLoginModal);
+		document.getElementById('loginCancelBtn')?.addEventListener('click', closeLoginModal);
+		document.getElementById('loginDeleteBtn')?.addEventListener('click', deleteDoctorLogin);
+		loginModal?.addEventListener('click', (event) => {
+			if (event.target === loginModal) closeLoginModal();
+		});
 		doctorForm?.addEventListener('submit', handleDoctorSubmit);
 		upgradeForm?.addEventListener('submit', submitDoctorsUpgradeCode);
 		logoutBtn?.addEventListener('click', handleLogout);

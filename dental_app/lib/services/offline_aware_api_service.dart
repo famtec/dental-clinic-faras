@@ -76,6 +76,18 @@ class OfflineAwareApiService extends ApiService {
   /// الملف.
   bool _isConnectivityFailure(ApiException e) => e.statusCode == null;
 
+  @override
+  Future<int> prepareLogout() async {
+    await _trySync();
+    return _db.countPendingOps();
+  }
+
+  @override
+  Future<void> wipeLocalData() async {
+    await _db.wipeAll();
+    await _refreshPendingCount();
+  }
+
   Future<void> _refreshPendingCount() async {
     OfflineSyncStatus.instance.pendingCount.value = await _db.countPendingOps();
     OfflineSyncStatus.instance.failedCount.value = await _db.countFailedOps();

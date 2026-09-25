@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/patient.dart';
 import '../models/patient_stats.dart';
 import '../services/api_service.dart';
+import '../services/app_session.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_sheet.dart';
 import '../widgets/app_widgets.dart';
@@ -89,6 +90,8 @@ class PatientsListScreenState extends State<PatientsListScreen> {
   /// يستخدمه الموقع في index.html. فشلها لا يمسّ القائمة إطلاقاً: تبقى
   /// البطاقات على "--" بدل إظهار خطأ يحجب المرضى.
   Future<void> _loadStats() async {
+    // إحصائيات العيادة كلها (دخل، مستحقات) -- ليست للطبيب المساعد.
+    if (AppSession.instance.isStaff) return;
     try {
       final stats = await widget.apiService.fetchPatientStats();
       if (mounted) setState(() => _stats = stats);
@@ -318,8 +321,10 @@ class PatientsListScreenState extends State<PatientsListScreen> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _HeroCard(stats: _stats),
-                const SizedBox(height: 15),
+                if (!AppSession.instance.isStaff) ...[
+                  _HeroCard(stats: _stats),
+                  const SizedBox(height: 15),
+                ],
                 SoftSearchField(
                   hintText: 'ابحث بالاسم أو رقم الهاتف',
                   controller: _searchController,

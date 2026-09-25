@@ -1002,6 +1002,14 @@
     async function loadPatientStats() {
       setStatsLoadingState(true);
 
+      // الطبيب المساعد (2026-09-25): إحصائيات العيادة كلها ليست له -- بطاقاته
+      // تُحسب من مرضاه المحمّلين (نفس مسار الفشل أدناه، بلا تنبيه خطأ).
+      if (window.ClinicRole && window.ClinicRole.isStaff()) {
+        renderStatsFromLoadedPatients();
+        setStatsLoadingState(false);
+        return;
+      }
+
       try {
         const response = await fetch(apiUrl('/api/patients/stats'), {
           method: 'GET',
@@ -1028,19 +1036,23 @@
         console.error('loadPatientStats error:', error);
         showToast(`فشل تحميل الإحصائيات: ${error.message || 'خطأ غير معروف'}`, 'error');
 
-        const fallbackTotalPatients = allPatients.length;
-        const fallbackActiveAppointments = calculateActiveAppointmentsFallback();
-
-        if (statsTotalPatients) {
-          animateCount(statsTotalPatients, 0, fallbackTotalPatients, 1100, (value) => String(Math.round(value)));
-        }
-        if (statsActiveAppointments) {
-          animateCount(statsActiveAppointments, 0, fallbackActiveAppointments, 1150, (value) => String(Math.round(value)));
-        }
-        renderPendingBalancesFromPatients();
+        renderStatsFromLoadedPatients();
       } finally {
         setStatsLoadingState(false);
       }
+    }
+
+    function renderStatsFromLoadedPatients() {
+      const fallbackTotalPatients = allPatients.length;
+      const fallbackActiveAppointments = calculateActiveAppointmentsFallback();
+
+      if (statsTotalPatients) {
+        animateCount(statsTotalPatients, 0, fallbackTotalPatients, 1100, (value) => String(Math.round(value)));
+      }
+      if (statsActiveAppointments) {
+        animateCount(statsActiveAppointments, 0, fallbackActiveAppointments, 1150, (value) => String(Math.round(value)));
+      }
+      renderPendingBalancesFromPatients();
     }
 
     // Fetch and render patients.

@@ -182,6 +182,21 @@ class _ClinicDoctorsScreenState extends State<ClinicDoctorsScreen> {
     }
   }
 
+  /// حساب دخول الطبيب المساعد (2026-09-25): بريد وكلمة سرّ يدخل بهما إلى
+  /// عيادتك بصلاحيات محدودة (مرضاه ومواعيده وكشف حسابه فقط).
+  Future<void> _openLoginSheet(ClinicDoctor doctor) async {
+    final message = await showAppSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _DoctorLoginSheet(apiService: widget.apiService, doctor: doctor),
+    );
+    if (message != null) {
+      _toast(message);
+      _load();
+    }
+  }
+
   Future<void> _openPayoutSheet(ClinicDoctor doctor) async {
     final saved = await showAppSheet<bool>(
       context: context,
@@ -778,6 +793,32 @@ class _ClinicDoctorsScreenState extends State<ClinicDoctorsScreen> {
                 ],
               ),
             ],
+            if (doctor.loginEmail != null) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Icon(
+                      doctor.loginEnabled
+                          ? Icons.verified_user_outlined
+                          : Icons.lock_outline,
+                      size: 14,
+                      color: doctor.loginEnabled
+                          ? surf.pillPaidFg
+                          : surf.textMuted),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      doctor.loginEnabled
+                          ? 'يدخل بحسابه: ${doctor.loginEmail}'
+                          : 'حساب الدخول موقوف',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, color: surf.textMuted),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 12),
             Row(
               children: [
@@ -818,6 +859,13 @@ class _ClinicDoctorsScreenState extends State<ClinicDoctorsScreen> {
                       : AppColors.emerald700text,
                   tooltip: doctor.isActive ? 'تعطيل الطبيب' : 'تفعيل الطبيب',
                   onPressed: () => _toggleActive(doctor),
+                ),
+                const SizedBox(width: 8),
+                SoftIconButton(
+                  icon: Icons.key_outlined,
+                  foreground: AppColors.indigo700,
+                  tooltip: 'حساب الدخول',
+                  onPressed: () => _openLoginSheet(doctor),
                 ),
                 const Spacer(),
                 SoftIconButton(
@@ -1086,6 +1134,235 @@ class _DoctorFormSheetState extends State<_DoctorFormSheet> {
   }
 }
 
+/// ========================== ورقة حساب الدخول ==========================
+
+/// إنشاء/تعديل/إيقاف حساب دخول الطبيب المساعد. تُرجع رسالة نجاح عند الحفظ.
+class _DoctorLoginSheet extends StatefulWidget {
+  final ApiService apiService;
+  final ClinicDoctor doctor;
+
+  const _DoctorLoginSheet({required this.apiService, required this.doctor});
+
+  @override
+  State<_DoctorLoginSheet> createState() => _DoctorLoginSheetState();
+}
+
+class _DoctorLoginSheetState extends State<_DoctorLoginSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _emailController;
+  final TextEditingController _passwordController = TextEditingController();
+  late bool _enabled;
+  late bool _canViewAll;
+  bool _isSaving = false;
+  String? _error;
+
+  bool get _hasAccount => widget.doctor.loginEmail != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController = TextEditingController(text: widget.doctor.loginEmail ?? '');
+    _enabled = _hasAccount ? widget.doctor.loginEnabled : true;
+    _canViewAll = widget.doctor.canViewAllPatients;
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() {
+      _isSaving = true;
+      _error = null;
+    });
+    try {
+      await widget.apiService.updateDoctorLogin(
+        widget.doctor.id,
+        loginEmail: _emailController.text.trim(),
+        password: _passwordController.text,
+        loginEnabled: _enabled,
+        canViewAllPatients: _canViewAll,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop(_hasAccount ? 'تم حفظ حساب الدخول' : 'تم إنشاء حساب الدخول');
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.message;
+        _isSaving = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'تعذر الحفظ. حاول مرة أخرى.';
+        _isSaving = false;
+      });
+    }
+  }
+
+  Future<void> _delete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: context.surface.sheetBg,
+        title: const Text('حذف حساب الدخول؟'),
+        content: Text(
+          'لن يستطيع ${widget.doctor.fullName} الدخول بعد الآن، ويُخرَج من أي جهاز '
+          'مفتوح عليه فوراً. الطبيب وسجله ونسبته تبقى كما هي.',
+          style: TextStyle(color: context.surface.textSecondary, height: 1.7),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text('حذف', style: TextStyle(color: AppColors.rose700text)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _isSaving = true;
+      _error = null;
+    });
+    try {
+      await widget.apiService.deleteDoctorLogin(widget.doctor.id);
+      if (!mounted) return;
+      Navigator.of(context).pop('تم حذف حساب الدخول');
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.message;
+        _isSaving = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'تعذر الحذف. حاول مرة أخرى.';
+        _isSaving = false;
+      });
+    }
+  }
+
+  static String _two(int v) => v.toString().padLeft(2, '0');
+
+  @override
+  Widget build(BuildContext context) {
+    final surf = context.surface;
+    final lastLogin = widget.doctor.lastLoginAt;
+    return _SheetShell(
+      title: 'حساب دخول ${widget.doctor.shortName}',
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'يدخل الطبيب بهذا البريد وكلمة السرّ إلى عيادتك، ويرى مرضاه '
+              'ومواعيده وكشف حسابه فقط. لا يرى المالية ولا المخزون ولا نسب '
+              'غيره، ولا يسجّل الدفعات.',
+              style: TextStyle(color: surf.textSecondary, fontSize: 12, height: 1.7),
+            ),
+            const SizedBox(height: 14),
+            _SheetField(
+              label: 'البريد الذي يدخل به',
+              controller: _emailController,
+              hint: 'doctor@example.com',
+              keyboardType: TextInputType.emailAddress,
+              validator: (value) {
+                final text = (value ?? '').trim();
+                if (text.isEmpty) return 'البريد مطلوب';
+                if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(text)) {
+                  return 'بريد غير صالح';
+                }
+                return null;
+              },
+            ),
+            _SheetField(
+              label: _hasAccount
+                  ? 'كلمة سرّ جديدة (اتركها فارغة للإبقاء على الحالية)'
+                  : 'كلمة السرّ',
+              controller: _passwordController,
+              hint: '6 أحرف على الأقل',
+              validator: (value) {
+                final text = value ?? '';
+                if (text.isEmpty) return _hasAccount ? null : 'كلمة السرّ مطلوبة';
+                if (text.length < 6) return 'كلمة السرّ 6 أحرف على الأقل';
+                return null;
+              },
+            ),
+            SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              value: _enabled,
+              onChanged: _isSaving ? null : (v) => setState(() => _enabled = v),
+              title: Text('السماح بالدخول',
+                  style: TextStyle(
+                      fontSize: 13.5, fontWeight: FontWeight.w700, color: surf.textPrimary)),
+              subtitle: Text('إيقافه يُخرج الطبيب من أي جهاز مفتوح عليه فوراً',
+                  style: TextStyle(fontSize: 11.5, color: surf.textMuted)),
+            ),
+            SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              value: _canViewAll,
+              onChanged: _isSaving ? null : (v) => setState(() => _canViewAll = v),
+              title: Text('يرى كل مرضى العيادة',
+                  style: TextStyle(
+                      fontSize: 13.5, fontWeight: FontWeight.w700, color: surf.textPrimary)),
+              subtitle: Text('مُطفأ: يرى المرضى المسجّلين باسمه فقط',
+                  style: TextStyle(fontSize: 11.5, color: surf.textMuted)),
+            ),
+            if (lastLogin != null) ...[
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Icon(Icons.history, size: 15, color: surf.textMuted),
+                  const SizedBox(width: 6),
+                  Text(
+                    'آخر دخول: ${lastLogin.year}/${lastLogin.month}/${lastLogin.day} '
+                    '${_two(lastLogin.hour)}:${_two(lastLogin.minute)}',
+                    style: TextStyle(fontSize: 11.5, color: surf.textMuted),
+                  ),
+                ],
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(_error!,
+                  style: TextStyle(
+                      color: AppColors.rose700text,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600)),
+            ],
+            const SizedBox(height: 14),
+            GradientButton(
+              label: _hasAccount ? 'حفظ' : 'إنشاء حساب الدخول',
+              icon: Icons.check,
+              isLoading: _isSaving,
+              onPressed: _isSaving ? null : _submit,
+            ),
+            if (_hasAccount) ...[
+              const SizedBox(height: 6),
+              TextButton.icon(
+                onPressed: _isSaving ? null : _delete,
+                icon: Icon(Icons.delete_outline, size: 18, color: AppColors.rose700text),
+                label: Text('حذف حساب الدخول',
+                    style: TextStyle(color: AppColors.rose700text)),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// ============================== ورقة التسوية ==============================
 
 class _PayoutSheet extends StatefulWidget {
@@ -1280,6 +1557,12 @@ class DoctorStatementScreen extends StatefulWidget {
   /// فوراً بدل أن تبقى على رصيد مستحق قديم.
   final VoidCallback onPayoutsChanged;
 
+  /// كشف الطبيب المساعد لنفسه (2026-09-25): بلا حذف تسويات.
+  final bool readOnly;
+
+  /// داخل صفحة أخرى (تبويب «كشفي»): بلا AppBar ولا Scaffold خاص.
+  final bool embedded;
+
   const DoctorStatementScreen({
     super.key,
     required this.apiService,
@@ -1291,6 +1574,8 @@ class DoctorStatementScreen extends StatefulWidget {
     this.month,
     this.day,
     this.allTime = false,
+    this.readOnly = false,
+    this.embedded = false,
   });
 
   @override
@@ -1398,21 +1683,16 @@ class _DoctorStatementScreenState extends State<DoctorStatementScreen> {
     final surf = context.surface;
     // زر الرجوع افتراضي: Directionality في main.dart يقلبه لليمين تلقائياً
     // في الواجهة العربية، فلا حاجة لأيقونة يدوية تكسر السلوك على ويندوز.
-    return Scaffold(
-      backgroundColor: surf.pageBg,
-      appBar: AppBar(
-        backgroundColor: surf.cardBg,
-        surfaceTintColor: Colors.transparent,
-        title: Text('كشف حساب ${widget.doctor.shortName}',
-            style: AppType.kufi(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: surf.textPrimary)),
-      ),
-      body: RefreshIndicator(
+    final body = RefreshIndicator(
         onRefresh: _load,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+          padding: widget.embedded
+              ? EdgeInsets.fromLTRB(
+                  context.isDesktopShell ? 32 : 16,
+                  14,
+                  context.isDesktopShell ? 32 : 16,
+                  context.isDesktopShell ? 32 : floatingNavInset(context) + 90)
+              : const EdgeInsets.fromLTRB(16, 16, 16, 40),
           children: [
             LoadingErrorEmpty(
               isLoading: _isLoading,
@@ -1425,7 +1705,20 @@ class _DoctorStatementScreenState extends State<DoctorStatementScreen> {
             ),
           ],
         ),
+      );
+    if (widget.embedded) return body;
+    return Scaffold(
+      backgroundColor: surf.pageBg,
+      appBar: AppBar(
+        backgroundColor: surf.cardBg,
+        surfaceTintColor: Colors.transparent,
+        title: Text('كشف حساب ${widget.doctor.shortName}',
+            style: AppType.kufi(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: surf.textPrimary)),
       ),
+      body: body,
     );
   }
 
@@ -1676,12 +1969,13 @@ class _DoctorStatementScreenState extends State<DoctorStatementScreen> {
                           ],
                         ),
                       ),
-                      IconButton(
-                        icon: Icon(Icons.delete_outline,
-                            size: 19, color: AppColors.rose700text),
-                        tooltip: 'حذف التسوية',
-                        onPressed: () => _confirmDeletePayout(payout),
-                      ),
+                      if (!widget.readOnly)
+                        IconButton(
+                          icon: Icon(Icons.delete_outline,
+                              size: 19, color: AppColors.rose700text),
+                          tooltip: 'حذف التسوية',
+                          onPressed: () => _confirmDeletePayout(payout),
+                        ),
                     ],
                   ),
                 ),

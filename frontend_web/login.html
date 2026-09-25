@@ -259,6 +259,16 @@ async function loginUser(event) {
             const data = await response.json();
             localStorage.setItem("user_email", data.email || emailInput.value.trim());
             localStorage.setItem("user_tier", data.tier || "");
+            // 2026-09-25: طبيب مساعد بحسابه الخاص -- tier-access.js يخفي عنه
+            // صفحات المالك وأزراره (الخادم يرفضها على أي حال).
+            if (data.role === "staff") {
+                localStorage.setItem("user_role", "staff");
+                localStorage.setItem("staff_doctor_id", String(data.clinic_doctor_id || ""));
+                localStorage.setItem("doctor_name", data.doctor_name || "");
+            } else {
+                localStorage.setItem("user_role", "owner");
+                localStorage.removeItem("staff_doctor_id");
+            }
             if (data.token) {
                 localStorage.setItem("authToken", data.token);
             }

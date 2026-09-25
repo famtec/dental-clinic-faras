@@ -468,6 +468,30 @@
 					</div>
 				</section>
 
+				<!-- 2026-09-25: دفعات استلمها أطباء مساعدون بانتظار التأكيد، وإقفال الشهر
+				     المعروض. تختفيان حين لا شيء تقولانه. -->
+				<section id="financeReviewSection" class="mb-6 hidden space-y-3">
+					<div id="pendingPaymentsCard" class="hidden rounded-[24px] border border-warning-200 bg-warning-50 p-4 sm:p-5">
+						<div class="flex flex-wrap items-center justify-between gap-3">
+							<div class="min-w-0">
+								<p id="pendingPaymentsTitle" class="text-base font-extrabold text-warning-800"></p>
+								<p id="pendingPaymentsSubtitle" class="mt-1 text-xs font-semibold text-ink-600"></p>
+							</div>
+							<button id="pendingPaymentsToggle" type="button" class="rounded-xl bg-gradient-to-r from-brand-600 to-brand-800 px-4 py-2 text-xs font-extrabold text-white shadow-sm">مراجعة</button>
+						</div>
+						<div id="pendingPaymentsList" class="mt-3 hidden space-y-2"></div>
+					</div>
+					<div id="monthLockCard" class="hidden rounded-[24px] border p-4 sm:p-5">
+						<div class="flex flex-wrap items-center justify-between gap-3">
+							<div class="min-w-0">
+								<p id="monthLockTitle" class="text-base font-extrabold text-ink-800"></p>
+								<p id="monthLockText" class="mt-1 text-xs font-semibold text-ink-600"></p>
+							</div>
+							<button id="monthLockBtn" type="button" class="rounded-xl border border-ink-200 bg-white px-4 py-2 text-xs font-extrabold text-ink-700 shadow-sm"></button>
+						</div>
+					</div>
+				</section>
+
 				<section id="financeSummarySection" class="mb-6 grid gap-4 md:grid-cols-3">
 					<article class="panel-soft rounded-3xl border border-success-100 p-5 shadow-xl shadow-success-100/60">
 						<p class="text-xs font-bold text-success-700">إجمالي الإيرادات</p>
@@ -1497,6 +1521,187 @@
 			}
 		}
 
+		// ================================================================
+		// دفعات الأطباء المساعدين بانتظار التأكيد + إقفال الشهر -- 2026-09-25
+		// ================================================================
+		// الدفعة المعلّقة لا تدخل أي رقم في هذه الصفحة قبل تأكيدها (جدول مستقل
+		// على الخادم). الشهر المقفل يرفض الخادم أي حركة بتاريخه من أي مسار.
+		let financeReviewPeriod = null;
+		let pendingPaymentsItems = [];
+
+		async function financeReviewFetch(path, init = {}) {
+			const response = await fetch(apiUrl(path), {
+				...init,
+				headers: getDoctorAuthHeaders(init.body ? { 'Content-Type': 'application/json' } : {}),
+			});
+			let data = null;
+			try { data = await response.json(); } catch (error) { data = null; }
+			if (!response.ok) {
+				const detail = data && typeof data.detail === 'string' ? data.detail : 'تعذر تنفيذ العملية الآن.';
+				throw new Error(detail);
+			}
+			return data;
+		}
+
+		async function loadFinanceReview(summaryData) {
+			if (summaryData) {
+				financeReviewPeriod = !summaryData.all_time && !summaryData.day && summaryData.year && summaryData.month
+					? { year: Number(summaryData.year), month: Number(summaryData.month) }
+					: null;
+			}
+			let count = { count: 0, amount: 0 };
+			let closed = [];
+			try {
+				[count, closed] = await Promise.all([
+					financeReviewFetch('/api/pending-payments/count'),
+					financeReviewFetch('/api/finance/closed-periods'),
+				]);
+			} catch (error) {
+				return;
+			}
+			renderPendingPaymentsCard(count || { count: 0, amount: 0 });
+			renderMonthLockCard(Array.isArray(closed) ? closed : []);
+			const section = document.getElementById('financeReviewSection');
+			const anyVisible = ['pendingPaymentsCard', 'monthLockCard']
+				.some((id) => !document.getElementById(id).classList.contains('hidden'));
+			if (section) section.classList.toggle('hidden', !anyVisible);
+		}
+
+		function renderPendingPaymentsCard(count) {
+			const card = document.getElementById('pendingPaymentsCard');
+			if (!card) return;
+			const n = Number(count.count || 0);
+			card.classList.toggle('hidden', n <= 0);
+			if (n <= 0) {
+				document.getElementById('pendingPaymentsList').classList.add('hidden');
+				return;
+			}
+			document.getElementById('pendingPaymentsTitle').textContent =
+				n === 1 ? 'دفعة بانتظار تأكيدك' : `${n} دفعات بانتظار تأكيدك`;
+			document.getElementById('pendingPaymentsSubtitle').textContent =
+				`مجموعها ${formatCurrency(Number(count.amount || 0))} — استلمها أطباء مساعدون، ولا تدخل الحسابات قبل تأكيدك.`;
+			const list = document.getElementById('pendingPaymentsList');
+			if (!list.classList.contains('hidden')) loadPendingPaymentsList();
+		}
+
+		async function loadPendingPaymentsList() {
+			const list = document.getElementById('pendingPaymentsList');
+			try {
+				pendingPaymentsItems = await financeReviewFetch('/api/pending-payments?status=pending') || [];
+			} catch (error) {
+				list.innerHTML = `<p class="text-xs font-semibold text-danger-600">${escapeFinanceHtml(error.message)}</p>`;
+				return;
+			}
+			list.innerHTML = pendingPaymentsItems.map((p) => `
+				<div class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-warning-200 bg-white px-3 py-2.5">
+					<div class="min-w-0">
+						<p class="text-sm font-extrabold text-ink-800">${formatCurrency(Number(p.amount || 0))}</p>
+						<p class="text-xs text-ink-600">${escapeFinanceHtml(p.patient_name || '')}${p.invoice_title ? ' — ' + escapeFinanceHtml(p.invoice_title) : ''}</p>
+						<p class="text-xs text-ink-500">${escapeFinanceHtml(p.staff_name || 'طبيب مساعد')} · ${escapeFinanceHtml(String(p.recorded_at || '').replace('T', ' ').slice(0, 16))}${p.description ? ' · ' + escapeFinanceHtml(p.description) : ''}</p>
+					</div>
+					<div class="flex items-center gap-2">
+						<button type="button" data-finance-pending-reject="${p.id}" class="rounded-xl border border-danger-200 bg-white px-3 py-1.5 text-xs font-bold text-danger-600">رفض</button>
+						<button type="button" data-finance-pending-confirm="${p.id}" class="rounded-xl bg-success-600 px-3 py-1.5 text-xs font-bold text-white">تأكيد الاستلام</button>
+					</div>
+				</div>`).join('') || '<p class="text-xs text-ink-500">لا دفعات بانتظار التأكيد.</p>';
+		}
+
+		function escapeFinanceHtml(value) {
+			return String(value ?? '')
+				.replace(/&/g, '&amp;')
+				.replace(/</g, '&lt;')
+				.replace(/>/g, '&gt;')
+				.replace(/"/g, '&quot;');
+		}
+
+		async function actOnFinancePending(id, action) {
+			let body = '{}';
+			if (action === 'reject') {
+				const note = window.prompt('سبب الرفض (اختياري):', '');
+				if (note === null) return;
+				body = JSON.stringify({ note });
+			}
+			try {
+				await financeReviewFetch(`/api/pending-payments/${id}/${action}`, { method: 'POST', body });
+				showFinanceToast(action === 'confirm' ? 'تم تأكيد الدفعة وإضافتها للحسابات' : 'تم رفض الدفعة');
+				await fetchFinancialMetrics();
+			} catch (error) {
+				showFinanceToast(error.message, 'error');
+			}
+		}
+
+		function renderMonthLockCard(closedPeriods) {
+			const card = document.getElementById('monthLockCard');
+			if (!card) return;
+			const period = financeReviewPeriod;
+			if (!period) {
+				card.classList.add('hidden');
+				return;
+			}
+			const closed = closedPeriods.find((c) => Number(c.year) === period.year && Number(c.month) === period.month);
+			const monthEnded = new Date(period.year, period.month, 1) <= new Date();
+			const title = document.getElementById('monthLockTitle');
+			const text = document.getElementById('monthLockText');
+			const btn = document.getElementById('monthLockBtn');
+			const label = formatMonthLabel(period.year, period.month);
+			if (closed) {
+				card.className = 'rounded-[24px] border border-success-200 bg-success-50 p-4 sm:p-5';
+				title.textContent = `🔒 شهر ${label} مُقفل`;
+				text.textContent = `لا تُسجَّل فيه حركة ولا تُعدَّل. عند الإقفال: الدخل ${formatCurrency(Number(closed.total_income || 0))}، المصاريف ${formatCurrency(Number(closed.total_expenses || 0))}، حصص الأطباء ${formatCurrency(Number(closed.doctors_share || 0))}.`;
+				btn.textContent = 'فتح القفل';
+				btn.dataset.lockAction = 'reopen';
+			} else if (monthEnded) {
+				card.className = 'rounded-[24px] border border-ink-200 bg-white/90 p-4 sm:p-5';
+				title.textContent = `إقفال شهر ${label}`;
+				text.textContent = 'بعد مراجعة أرقامه وتسليم نسب الأطباء، أقفله حتى لا تتغيّر حركاته لاحقاً.';
+				btn.textContent = 'إقفال الشهر';
+				btn.dataset.lockAction = 'close';
+			} else {
+				card.classList.add('hidden');
+			}
+		}
+
+		async function handleMonthLockClick() {
+			const period = financeReviewPeriod;
+			const btn = document.getElementById('monthLockBtn');
+			if (!period || !btn) return;
+			const label = formatMonthLabel(period.year, period.month);
+			try {
+				if (btn.dataset.lockAction === 'close') {
+					if (!window.confirm(`إقفال شهر ${label}؟\nبعد الإقفال لا تُسجَّل فيه دفعة ولا مصروف ولا تسوية، ولا تُعدَّل حركاته ولا تُحذف. تستطيع فتح القفل لاحقاً إن احتجت لتصحيح.`)) return;
+					await financeReviewFetch('/api/finance/closed-periods', {
+						method: 'POST',
+						body: JSON.stringify({ year: period.year, month: period.month }),
+					});
+					showFinanceToast(`تم إقفال شهر ${label}`);
+				} else {
+					if (!window.confirm(`فتح قفل شهر ${label}؟ يصبح قابلاً للتعديل من جديد.`)) return;
+					await financeReviewFetch(`/api/finance/closed-periods/${period.year}/${period.month}`, { method: 'DELETE' });
+					showFinanceToast(`تم فتح قفل شهر ${label}`);
+				}
+				await fetchFinancialMetrics();
+			} catch (error) {
+				showFinanceToast(error.message, 'error');
+			}
+		}
+
+		document.getElementById('pendingPaymentsToggle')?.addEventListener('click', () => {
+			const list = document.getElementById('pendingPaymentsList');
+			const opening = list.classList.contains('hidden');
+			list.classList.toggle('hidden', !opening);
+			if (opening) loadPendingPaymentsList();
+		});
+		document.getElementById('pendingPaymentsList')?.addEventListener('click', (event) => {
+			const confirmBtn = event.target.closest('[data-finance-pending-confirm]');
+			if (confirmBtn) {
+				actOnFinancePending(confirmBtn.getAttribute('data-finance-pending-confirm'), 'confirm');
+				return;
+			}
+			const rejectBtn = event.target.closest('[data-finance-pending-reject]');
+			if (rejectBtn) actOnFinancePending(rejectBtn.getAttribute('data-finance-pending-reject'), 'reject');
+		});
+		document.getElementById('monthLockBtn')?.addEventListener('click', handleMonthLockClick);
+
 		async function fetchFinancialMetrics() {
 			try {
 				const response = await fetch(buildMetricsUrl(), { method: 'GET', headers: getDoctorAuthHeaders() });
@@ -1511,6 +1716,7 @@
 
 				setMetrics(totalIncome, totalExpenses, netProfit);
 				updatePeriodHint(data);
+				loadFinanceReview(data);
 				updateOpeningBalanceHint(data);
 				lastSync.textContent = `آخر تحديث: ${new Date().toLocaleString('ar-SA-u-nu-latn')}`;
 				updateGrowthBadge(data);

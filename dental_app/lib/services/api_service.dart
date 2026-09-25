@@ -13,6 +13,7 @@ import '../models/inventory_item.dart';
 import '../models/patient.dart';
 import '../models/patient_archive_file.dart';
 import '../models/patient_stats.dart';
+import '../models/pending_payment.dart';
 import '../models/prescription.dart';
 import '../models/treatment_catalog_item.dart';
 import '../models/treatment_invoice.dart';
@@ -82,6 +83,13 @@ class ApiService {
       statusCode: response.statusCode,
     );
   }
+
+  /// قبل تسجيل الخروج (2026-09-25): يحاول مزامنة ما أُجّل دون اتصال، ويرجع
+  /// عدد العمليات التي بقيت غير مُزامنة. ApiService العادية لا تؤجّل شيئاً.
+  Future<int> prepareLogout() async => 0;
+
+  /// يمسح النسخة المحلية من بيانات الحساب (انظر OfflineAwareApiService).
+  Future<void> wipeLocalData() async {}
 
   /// تسجيل الدخول -- يرجع خريطة تحتوي token / email / tier / doctor_name.
   Future<Map<String, dynamic>> login(String email, String password) async {
@@ -610,6 +618,59 @@ class ApiService {
     if (response.statusCode != 200) {
       _throwForResponse(response, 'تعذر حذف الطبيب.');
     }
+  }
+
+  /// إنشاء/تعديل حساب دخول طبيب مساعد (2026-09-25) -- المالك وحده.
+  /// [password] فارغة = تبقى كلمة السرّ الحالية (مطلوبة للحساب الجديد).
+  Future<ClinicDoctor> updateDoctorLogin(
+    int doctorId, {
+    required String loginEmail,
+    String? password,
+    required bool loginEnabled,
+    required bool canViewAllPatients,
+  }) async {
+    final headers = await _authHeaders();
+    late http.Response response;
+    try {
+      response = await http
+          .put(
+            Uri.parse('${AppConfig.apiBaseUrl}/api/clinic-doctors/$doctorId/login'),
+            headers: headers,
+            body: json.encode({
+              'login_email': loginEmail.trim(),
+              if (password != null && password.isNotEmpty) 'password': password,
+              'login_enabled': loginEnabled,
+              'can_view_all_patients': canViewAllPatients,
+            }),
+          )
+          .timeout(const Duration(seconds: 25));
+    } catch (_) {
+      throw const ApiException('تعذر الاتصال بالسيرفر. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.');
+    }
+    if (response.statusCode != 200) {
+      _throwForResponse(response, 'تعذر حفظ حساب الدخول.');
+    }
+    return ClinicDoctor.fromJson(_decodeBody(response) as Map<String, dynamic>);
+  }
+
+  /// حذف حساب دخول طبيب مساعد: يُطرد من جلساته فوراً، ويبقى الطبيب وسجله.
+  Future<ClinicDoctor> deleteDoctorLogin(int doctorId) async {
+    final headers = await _authHeaders();
+    late http.Response response;
+    try {
+      response = await http
+          .delete(
+            Uri.parse('${AppConfig.apiBaseUrl}/api/clinic-doctors/$doctorId/login'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 25));
+    } catch (_) {
+      throw const ApiException('تعذر الاتصال بالسيرفر. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.');
+    }
+    if (response.statusCode != 200) {
+      _throwForResponse(response, 'تعذر حذف حساب الدخول.');
+    }
+    return ClinicDoctor.fromJson(_decodeBody(response) as Map<String, dynamic>);
   }
 
   /// كشف حساب طبيب واحد: حركاته في الفترة + تسوياته + المواد المستهلكة.
@@ -1382,6 +1443,127 @@ class ApiService {
 
   /// الأشهر التي فيها حركات مالية فعلية لهذا الطبيب (لبناء قائمة اختيار
   /// الشهر) -- الشهر الحالي مضمون الوجود دائماً من طرف السيرفر.
+  // ═══ دفعات المساعدين بانتظار التأكيد + إقفال الشهر (2026-09-25) ═══
+
+  /// طلب JSON موحّد للمسارات الجديدة -- كلها متصلة فقط (لا تأجيل دون اتصال):
+  /// الدفعة المعلّقة وتأكيدها وإقفال الشهر قرارات مالية لا تُؤجَّل بصمت.
+  Future<dynamic> _jsonRequest(
+    String method,
+    String path, {
+    Object? body,
+    Map<String, String>? query,
+    required String fallback,
+  }) async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse('${AppConfig.apiBaseUrl}$path').replace(queryParameters: query);
+    late http.Response response;
+    try {
+      final encoded = body == null ? null : json.encode(body);
+      final Future<http.Response> future;
+      switch (method) {
+        case 'GET':
+          future = http.get(uri, headers: headers);
+        case 'POST':
+          future = http.post(uri, headers: headers, body: encoded ?? '{}');
+        case 'DELETE':
+          future = http.delete(uri, headers: headers);
+        default:
+          throw ArgumentError(method);
+      }
+      response = await future.timeout(const Duration(seconds: 25));
+    } catch (_) {
+      throw const ApiException('تعذر الاتصال بالسيرفر. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.');
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _throwForResponse(response, fallback);
+    }
+    return _decodeBody(response);
+  }
+
+  /// الطبيب المساعد يسجّل مبلغاً استلمه -- ينتظر تأكيد المدير.
+  Future<PendingPayment> createPendingPayment(
+    int patientId,
+    int invoiceId, {
+    required double amount,
+    String? description,
+  }) async {
+    final decoded = await _jsonRequest(
+      'POST',
+      '/api/patients/$patientId/invoices/$invoiceId/pending-payments',
+      body: {
+        'amount': amount,
+        if (description != null && description.trim().isNotEmpty) 'description': description.trim(),
+      },
+      fallback: 'تعذر إرسال الدفعة.',
+    );
+    return PendingPayment.fromJson(decoded as Map<String, dynamic>);
+  }
+
+  /// المدير: دفعات كل الأطباء. المساعد: دفعاته وحده. [status]: pending أو all.
+  Future<List<PendingPayment>> fetchPendingPayments({String status = 'pending'}) async {
+    final decoded = await _jsonRequest(
+      'GET',
+      '/api/pending-payments',
+      query: {'status': status},
+      fallback: 'تعذر جلب الدفعات.',
+    );
+    return (decoded as List? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(PendingPayment.fromJson)
+        .toList();
+  }
+
+  Future<PendingSummary> fetchPendingPaymentsCount() async {
+    final decoded = await _jsonRequest('GET', '/api/pending-payments/count', fallback: 'تعذر جلب الدفعات.');
+    final map = decoded is Map ? decoded : const {};
+    return PendingSummary(
+      count: (map['count'] as num?)?.toInt() ?? 0,
+      amount: (map['amount'] as num?)?.toDouble() ?? 0,
+    );
+  }
+
+  Future<PendingPayment> confirmPendingPayment(int id) async {
+    final decoded = await _jsonRequest('POST', '/api/pending-payments/$id/confirm', fallback: 'تعذر تأكيد الدفعة.');
+    return PendingPayment.fromJson(decoded as Map<String, dynamic>);
+  }
+
+  Future<PendingPayment> rejectPendingPayment(int id, {String? note}) async {
+    final decoded = await _jsonRequest(
+      'POST',
+      '/api/pending-payments/$id/reject',
+      body: {if (note != null && note.trim().isNotEmpty) 'note': note.trim()},
+      fallback: 'تعذر رفض الدفعة.',
+    );
+    return PendingPayment.fromJson(decoded as Map<String, dynamic>);
+  }
+
+  /// المساعد يلغي دفعة سجّلها بالخطأ قبل المراجعة.
+  Future<void> cancelPendingPayment(int id) async {
+    await _jsonRequest('DELETE', '/api/pending-payments/$id', fallback: 'تعذر إلغاء الدفعة.');
+  }
+
+  Future<List<ClosedPeriod>> fetchClosedPeriods() async {
+    final decoded = await _jsonRequest('GET', '/api/finance/closed-periods', fallback: 'تعذر جلب الأشهر المقفلة.');
+    return (decoded as List? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(ClosedPeriod.fromJson)
+        .toList();
+  }
+
+  Future<ClosedPeriod> closeFinanceMonth(int year, int month) async {
+    final decoded = await _jsonRequest(
+      'POST',
+      '/api/finance/closed-periods',
+      body: {'year': year, 'month': month},
+      fallback: 'تعذر إقفال الشهر.',
+    );
+    return ClosedPeriod.fromJson(decoded as Map<String, dynamic>);
+  }
+
+  Future<void> reopenFinanceMonth(int year, int month) async {
+    await _jsonRequest('DELETE', '/api/finance/closed-periods/$year/$month', fallback: 'تعذر فتح قفل الشهر.');
+  }
+
   Future<List<({int year, int month})>> fetchAvailableMonths() async {
     final headers = await _authHeaders();
     late http.Response response;

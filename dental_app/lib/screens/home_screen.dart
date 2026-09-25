@@ -178,6 +178,16 @@ class HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  /// إشعار «دفعة بانتظار تأكيدك» (2026-09-25) يفتح المالية، حيث بطاقة
+  /// الدفعات المعلّقة.
+  void showFinanceTab() {
+    if (_wasDesktop ?? false) {
+      _goToDesktopPage(_dFinance);
+    } else {
+      _goToTab(2);
+    }
+  }
+
   /// الانتقال المتحرّك الموحّد بين تبويبات الجوال -- يُستخدم من شريط التنقل
   /// السفلي، ومن showTodayTab أعلاه، حتى يبقى سلوك الانزلاق متسقاً من كل
   /// نقاط الدخول.

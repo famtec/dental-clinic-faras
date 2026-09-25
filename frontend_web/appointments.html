@@ -1964,12 +1964,17 @@
         // بلا طلب إضافي (يكتبه clinic-loader.js في الترويسة)، وشارة "أنت" تحمل
         // بقية المعنى. لا يُخترع اسم طبيب غير موجود.
         function hgOwnerLabel() {
+            if (window.ClinicRole && window.ClinicRole.isStaff()) {
+                return String(localStorage.getItem('doctor_name') || '').trim() || 'مواعيدي';
+            }
             const source = document.getElementById('clinicTitle') || document.getElementById('mobileClinicTitle');
             const text = String(source?.textContent || '').trim();
             return text && text !== 'عيادة الطبيب' ? text : 'مواعيدي';
         }
 
         function hgAppointmentDoctorId(appointment) {
+            // الطبيب المساعد يرى مواعيده وحده (الخادم يصفّيها): كلها في عموده.
+            if (window.ClinicRole && window.ClinicRole.isStaff()) return null;
             const raw = appointment?.clinic_doctor_id;
             return raw === null || raw === undefined || raw === '' ? null : String(raw);
         }
@@ -1986,6 +1991,13 @@
         // عادي -- وهذه ليست حالة خطأ بل الحالة الطبيعية لأغلب العيادات: قائمة
         // فارغة تعني عمود واحد لصاحب الحساب، وهو ما يريده الطبيب الوحيد أصلاً.
         async function loadClinicDoctorsForGrid() {
+            if (window.ClinicRole && window.ClinicRole.isStaff()) {
+                clinicDoctors = [];
+                renderAppointmentDoctorOptions();
+                renderGridDoctorChips();
+                renderBookingRequests(currentBookingRequests);
+                return;
+            }
             try {
                 const response = await fetch(apiUrl('/api/clinic-doctors'), { headers: getDoctorAuthHeaders() });
                 if (!response.ok) {

@@ -1,17 +1,18 @@
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Header, Query
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Header, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 from typing import List, Optional, Literal
+import contextvars
 import csv
 import io
 import json
 import re
 from pydantic import AliasChoices, BaseModel, Field, ConfigDict
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import os
 from uuid import uuid4
@@ -1038,14 +1039,8 @@ async def _start_idle_reminder_task() -> None:
     asyncio.create_task(_idle_reminder_loop())
 
 
-# 2. تفعيل نظام CORS للسماح لموقع الويب وتطبيق الأندرويد بالاتصال بالـ API دون قيود أمنية ومتصفح
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# 2. تفعيل نظام CORS -- انتقل تسجيله إلى آخر الملف (2026-09-25) بعد حارس الأطباء
+# المساعدين، ليبقى CORS الطبقة الخارجية فتحمل كل الردود ترويساته.
 
 
 # 3. بناء مخطط (Schema) لاستقبال بيانات المريض عبر الـ API وتدقيقها (Pydantic)
@@ -1360,6 +1355,10 @@ class TreatmentInvoiceResponse(BaseModel):
     materials: List["InvoiceMaterialResponse"] = []
     materials_cost: float = 0.0
     net_profit: float = 0.0
+    # 2026-09-25: دفعات سجّلها طبيب مساعد وتنتظر تأكيد المدير -- للعرض فقط،
+    # لا تدخل paid_amount ولا remaining_amount قبل التأكيد.
+    pending_payments: List[dict] = []
+    pending_amount: float = 0.0
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -1497,6 +1496,11 @@ class ClinicDoctorResponse(BaseModel):
     total_doctor_share: float = 0
     total_paid_out: float = 0
     balance_due: float = 0
+    # حساب دخول الطبيب المساعد (2026-09-25) -- للمالك فقط.
+    login_email: Optional[str] = None
+    login_enabled: bool = False
+    can_view_all_patients: bool = False
+    last_login_at: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -1802,6 +1806,179 @@ def verify_session_token(token: str) -> str | None:
         return None
 
 
+# ════════════════════════════════════════════════════════════════════
+# حسابات الأطباء المساعدين -- 2026-09-25
+# ════════════════════════════════════════════════════════════════════
+# الطبيب المساعد (ClinicDoctor بحساب دخول) يحمل رمز جلسة موضوعه
+# "staff:<id>" لا بريد مالك. كل مسار موثَّق يحلّه إلى **حساب المالك** (فتبقى
+# عزلة البيانات بـ doctor_email == المالك كما هي في كل مكان)، ويضع هوية
+# المساعد في سياق الطلب (_CURRENT_STAFF) لتقرأها قواعد البيانات الخاصة به.
+#
+# الصلاحيات مفروضة مرتين:
+#   1. StaffAccessMiddleware: قائمة مسارات مسموحة للمساعد، وكل ما عداها 403
+#      -- «ممنوع ما لم يُسمح»، فأي مسار يُضاف مستقبلاً مغلق أمامه تلقائياً.
+#   2. داخل المسارات المسموحة: مرضاه فقط (ما لم يُسمح له برؤية الكل)،
+#      فواتيره ومواعيده باسمه حتماً، وكشف حسابه وحده.
+STAFF_SUBJECT_PREFIX = "staff:"
+_CURRENT_STAFF: contextvars.ContextVar = contextvars.ContextVar("current_staff", default=None)
+
+
+def create_staff_session_token(clinic_doctor_id: int) -> str:
+    return create_session_token(f"{STAFF_SUBJECT_PREFIX}{clinic_doctor_id}")
+
+
+def _session_issued_at(token: str) -> int:
+    """وقت إصدار رمز تحقّق منه verify_session_token مسبقاً."""
+    try:
+        payload = json.loads(_b64url_decode(token.split(".")[1]))
+        return int(payload.get("iat", 0))
+    except Exception:
+        return 0
+
+
+def current_staff():
+    """هوية الطبيب المساعد صاحب الطلب الحالي، أو None للمالك. قاموس فيه
+    id وname وcan_view_all_patients (الأخيرة تُملأ عند حلّ الجلسة)."""
+    holder = _CURRENT_STAFF.get()
+    return holder if holder and holder.get("id") else None
+
+
+def _resolve_staff_session(db: Session, subject: str, token: str) -> "models.User":
+    try:
+        clinic_doctor_id = int(subject[len(STAFF_SUBJECT_PREFIX):])
+    except ValueError:
+        raise HTTPException(status_code=401, detail="جلستك غير صالحة أو منتهية. يرجى تسجيل الدخول مجدداً.")
+    clinic_doctor = db.query(models.ClinicDoctor).filter(models.ClinicDoctor.id == clinic_doctor_id).first()
+    if (
+        clinic_doctor is None
+        or not clinic_doctor.login_enabled
+        or not clinic_doctor.is_active
+        or not clinic_doctor.login_email
+    ):
+        raise HTTPException(status_code=401, detail="أُوقف حساب دخولك من الطبيب المدير. تواصل معه.")
+    valid_after = getattr(clinic_doctor, "sessions_valid_after", None)
+    if valid_after is not None and _session_issued_at(token) < int(
+        valid_after.replace(tzinfo=timezone.utc).timestamp()
+    ):
+        raise HTTPException(status_code=401, detail="تغيّرت بيانات دخولك. يرجى تسجيل الدخول مجدداً.")
+    owner = db.query(models.User).filter(models.User.email == clinic_doctor.clinic_email).first()
+    if owner is None:
+        raise HTTPException(status_code=401, detail="User not found")
+    holder = _CURRENT_STAFF.get()
+    if holder is not None:
+        holder.update(
+            id=clinic_doctor.id,
+            name=clinic_doctor.full_name,
+            login_email=clinic_doctor.login_email,
+            can_view_all_patients=bool(clinic_doctor.can_view_all_patients),
+        )
+    return owner
+
+
+# المسارات المسموحة للطبيب المساعد -- (طريقة، نمط). كل ما عداها 403.
+_STAFF_ALLOWED_ROUTES = [
+    ("GET", r"/api/auth/profile"),
+    ("GET", r"/api/patients"),
+    ("POST", r"/api/patients"),
+    ("GET", r"/api/patients/\d+"),
+    ("PUT", r"/api/patients/\d+"),
+    ("PUT", r"/api/patients/\d+/chart"),
+    ("GET", r"/api/patients/\d+/invoices"),
+    ("POST", r"/api/patients/\d+/invoices"),
+    ("POST", r"/api/patients/\d+/invoices/\d+/materials"),
+    ("GET", r"/api/patients/\d+/(archive|xrays)"),
+    ("POST", r"/api/patients/\d+/(archive|xrays)"),
+    ("PUT", r"/api/patients/\d+/(archive|xrays)/\d+"),
+    ("DELETE", r"/api/patients/\d+/(archive|xrays)/\d+"),
+    ("GET", r"/api/prescriptions/patient/\d+"),
+    ("POST", r"/api/prescriptions"),
+    ("PUT", r"/api/prescriptions/\d+"),
+    ("DELETE", r"/api/prescriptions/\d+"),
+    ("GET", r"/api/appointments"),
+    ("GET", r"/api/appointments/pending-count"),
+    ("POST", r"/api/appointments"),
+    ("PUT", r"/api/appointments/\d+"),
+    ("PUT", r"/api/appointments/\d+/status"),
+    ("DELETE", r"/api/appointments/\d+"),
+    ("GET", r"/api/treatment-catalog"),
+    ("GET", r"/api/inventory"),
+    ("GET", r"/api/clinic-doctors"),
+    ("GET", r"/api/clinic-doctors/\d+/statement"),
+    # دفعات بانتظار تأكيد المدير (2026-09-25): يسجّلها ويرى حالتها ويلغيها قبل المراجعة.
+    ("POST", r"/api/patients/\d+/invoices/\d+/pending-payments"),
+    ("GET", r"/api/pending-payments"),
+    ("GET", r"/api/pending-payments/count"),
+    ("DELETE", r"/api/pending-payments/\d+"),
+]
+_STAFF_ALLOWED_COMPILED = [(m, re.compile(r"^" + pattern + r"/?$")) for m, pattern in _STAFF_ALLOWED_ROUTES]
+
+
+def staff_route_allowed(method: str, path: str) -> bool:
+    return any(method == m and rx.match(path) for m, rx in _STAFF_ALLOWED_COMPILED)
+
+
+class StaffAccessMiddleware:
+    """حارس ASGI: يتعرّف على رمز الطبيب المساعد (تحقّق توقيع فقط، بلا قاعدة
+    بيانات)، يرفض أي مسار خارج قائمته بـ 403، ويضع هويته في سياق الطلب.
+    السياق يُورَّث للمهام والخيوط التي تنفّذ المسار (نسخة من context)، والقاموس
+    نفسه مشترك بالمرجع فتصل إليه الصلاحيات التي يملؤها _resolve_staff_session."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http" or not scope.get("path", "").startswith("/api/"):
+            await self.app(scope, receive, send)
+            return
+        authorization = ""
+        for key, value in scope.get("headers") or []:
+            if key == b"authorization":
+                authorization = value.decode("latin-1")
+                break
+        subject = verify_session_token(_extract_bearer_token(authorization)) if authorization else None
+        if not subject or not subject.startswith(STAFF_SUBJECT_PREFIX):
+            token = _CURRENT_STAFF.set(None)
+            try:
+                await self.app(scope, receive, send)
+            finally:
+                _CURRENT_STAFF.reset(token)
+            return
+        if not staff_route_allowed(scope.get("method", "GET"), scope["path"]):
+            response = JSONResponse(
+                status_code=403,
+                content={"detail": "هذه الميزة متاحة للطبيب المدير فقط."},
+            )
+            await response(scope, receive, send)
+            return
+        try:
+            staff_id = int(subject[len(STAFF_SUBJECT_PREFIX):])
+        except ValueError:
+            staff_id = None
+        token = _CURRENT_STAFF.set({"id": staff_id, "can_view_all_patients": False})
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            _CURRENT_STAFF.reset(token)
+
+
+def staff_can_access_patient(patient) -> bool:
+    staff = current_staff()
+    if staff is None or staff.get("can_view_all_patients"):
+        return True
+    return patient is not None and getattr(patient, "clinic_doctor_id", None) == staff["id"]
+
+
+def ensure_staff_patient_access(patient) -> None:
+    """مريض طبيب آخر يُعامل كأنه غير موجود (404) -- لا نكشف حتى وجوده."""
+    if patient is not None and not staff_can_access_patient(patient):
+        raise HTTPException(status_code=404, detail="المريض غير موجود")
+
+
+def staff_audit_id():
+    staff = current_staff()
+    return staff["id"] if staff else None
+
+
 def _extract_bearer_token(authorization: str | None) -> str:
     value = (authorization or "").strip()
     if value.lower().startswith("bearer "):
@@ -1810,11 +1987,15 @@ def _extract_bearer_token(authorization: str | None) -> str:
 
 
 def require_premium_user_by_email(db: Session, authorization: str | None) -> models.User:
-    verified_email = verify_session_token(_extract_bearer_token(authorization))
+    token_value = _extract_bearer_token(authorization)
+    verified_email = verify_session_token(token_value)
     if not verified_email:
         raise HTTPException(status_code=401, detail="جلستك غير صالحة أو منتهية. يرجى تسجيل الدخول مجدداً.")
 
-    user = db.query(models.User).filter(models.User.email == verified_email).first()
+    if verified_email.startswith(STAFF_SUBJECT_PREFIX):
+        user = _resolve_staff_session(db, verified_email, token_value)
+    else:
+        user = db.query(models.User).filter(models.User.email == verified_email).first()
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
@@ -1867,9 +2048,15 @@ def get_current_doctor_user(
     # /api/auth/google)، وليس من هيدر X-Doctor-Email الخام -- ذاك الهيدر يبقى
     # في التوقيع فقط للتوافق مع أي كود قديم يرسله، لكنه بلا أي أثر على تحديد
     # الهوية بعد اليوم. لا يجوز إطلاقاً العودة للثقة بهذا الهيدر مباشرة.
-    verified_email = verify_session_token(_extract_bearer_token(authorization))
+    token_value = _extract_bearer_token(authorization)
+    verified_email = verify_session_token(token_value)
     if not verified_email:
         raise HTTPException(status_code=401, detail="جلستك غير صالحة أو منتهية. يرجى تسجيل الدخول مجدداً.")
+
+    # الطبيب المساعد يعمل داخل حساب مالك العيادة -- ولا يُختم نشاطه على
+    # المالك (محرّك تذكير الخمول يخصّ المالك وحده).
+    if verified_email.startswith(STAFF_SUBJECT_PREFIX):
+        return _resolve_staff_session(db, verified_email, token_value)
 
     user = db.query(models.User).filter(models.User.email == verified_email).first()
     if not user:
@@ -2117,6 +2304,42 @@ class LoginRequest(BaseModel):
     email: str
     password: str
 
+def _login_staff_doctor(db: Session, normalized_email: str, password: str):
+    """دخول الطبيب المساعد، أو None إن لم يكن البريد لطبيب مساعد مفعَّل."""
+    clinic_doctor = (
+        db.query(models.ClinicDoctor)
+        .filter(func.lower(models.ClinicDoctor.login_email) == normalized_email)
+        .first()
+    )
+    if clinic_doctor is None or not clinic_doctor.hashed_password:
+        return None
+    if not verify_password(password, clinic_doctor.hashed_password):
+        raise HTTPException(status_code=401, detail="البريد الإلكتروني أو كلمة المرور غير صحيحة!")
+    if not clinic_doctor.login_enabled or not clinic_doctor.is_active:
+        raise HTTPException(status_code=403, detail="حساب دخولك موقوف. تواصل مع الطبيب المدير للعيادة.")
+    owner = db.query(models.User).filter(models.User.email == clinic_doctor.clinic_email).first()
+    if owner is None:
+        raise HTTPException(status_code=401, detail="البريد الإلكتروني أو كلمة المرور غير صحيحة!")
+    ensure_user_subscription_is_active(owner, db)
+    if not user_has_doctors_access(owner):
+        raise HTTPException(status_code=403, detail="حسابات الأطباء المساعدين تتطلب باقة العيادات (Premium Plus) للعيادة.")
+    try:
+        clinic_doctor.last_login_at = _damascus_now()
+        db.commit()
+    except Exception:
+        db.rollback()
+    return {
+        "status": "success",
+        "email": clinic_doctor.login_email,
+        "tier": owner.tier or "pending_activation",
+        "doctor_name": clinic_doctor.full_name,
+        "token": create_staff_session_token(clinic_doctor.id),
+        "role": "staff",
+        "clinic_doctor_id": clinic_doctor.id,
+        "clinic_name": owner.clinic_name,
+    }
+
+
 @app.post("/api/auth/login")
 def login_user(login_request: LoginRequest, db: Session = Depends(database.get_db)):
     # 1. تنظيف البريد الإلكتروني وتحويله لأحرف صغيرة لمطابقة الحسابات
@@ -2128,6 +2351,10 @@ def login_user(login_request: LoginRequest, db: Session = Depends(database.get_d
     # 2. الاستعلام عن الطبيب في قاعدة بيانات Supabase الأبدية
     user = db.query(models.User).filter(models.User.email == normalized_email).first()
     if not user:
+        # 2026-09-25: ليس مالك عيادة -- ربما طبيب مساعد بحساب دخول.
+        staff_login = _login_staff_doctor(db, normalized_email, login_request.password)
+        if staff_login is not None:
+            return staff_login
         raise HTTPException(status_code=401, detail="البريد الإلكتروني أو كلمة المرور غير صحيحة!")
 
     # 3. تحقق حقيقي من كلمة المرور عبر الهاش الآمن (2026-08-23) -- مع دعم
@@ -2163,6 +2390,7 @@ def login_user(login_request: LoginRequest, db: Session = Depends(database.get_d
             "tier": user.tier or "pending_activation",
             "doctor_name": user.doctor_name,
             "token": create_session_token(user.email),
+            "role": "owner",
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"خطأ في معالجة الجلسة السحابية: {e}")
@@ -2419,7 +2647,21 @@ def get_doctor_profile(
     authorization: str | None = Header(default=None, alias="Authorization"),
 ):
     user = get_current_doctor_user(db, doctor_email=doctor_email, authorization=authorization)
-    return serialize_doctor_profile(user)
+    profile = serialize_doctor_profile(user)
+    staff = current_staff()
+    if staff is None:
+        profile["role"] = "owner"
+        return profile
+    # الطبيب المساعد يرى اسمه وبريده، وباقة العيادة واشتراكها (تحدّد ما يعمل).
+    profile.update(
+        role="staff",
+        doctor_name=staff.get("name"),
+        email=staff.get("login_email"),
+        staff_doctor_id=staff["id"],
+        can_view_all_patients=bool(staff.get("can_view_all_patients")),
+        has_password=True,
+    )
+    return profile
 
 
 @app.put("/api/auth/profile")
@@ -2862,8 +3104,12 @@ def create_patient(
     assigned_clinic_doctor_id = resolve_clinic_doctor_id(
         db, patient.clinic_doctor_id, current_user.email
     )
+    # مريض يضيفه طبيب مساعد هو مريضه حتماً.
+    if current_staff() is not None:
+        assigned_clinic_doctor_id = current_staff()["id"]
 
     db_patient = models.Patient(
+        created_by_staff_id=staff_audit_id(),
         doctor_name=resolved_doctor_name or None,
         doctor_email=current_user.email,
         full_name=resolved_full_name or patient.full_name,
@@ -2927,11 +3173,12 @@ def get_all_patients(
 
     # عزل صارم حسب doctor_email فقط (الحقل الرسمي، غير قابل للتلاعب من العميل) --
     # لا يوجد أي fallback لعرض مرضى بلا مالك أو مرضى طبيب آخر (2026-08-23).
-    patients = (
-        db.query(models.Patient)
-        .filter(models.Patient.doctor_email == user.email)
-        .all()
-    )
+    patients_query = db.query(models.Patient).filter(models.Patient.doctor_email == user.email)
+    # الطبيب المساعد يرى مرضاه وحدهم ما لم يسمح له المالك برؤية الكل.
+    staff = current_staff()
+    if staff is not None and not staff.get("can_view_all_patients"):
+        patients_query = patients_query.filter(models.Patient.clinic_doctor_id == staff["id"])
+    patients = patients_query.all()
 
     patient_ids = [patient.id for patient in patients]
     paid_amount_by_patient_id: dict[int, Decimal] = {}
@@ -3168,6 +3415,7 @@ def get_patient(
 
     if not patient:
         raise HTTPException(status_code=404, detail="المريض غير موجود")
+    ensure_staff_patient_access(patient)
 
     # 2026-08-25: نفس منطق get_all_patients أعلاه -- total_treatment_cost
     # يُحسب من مجموع فواتير العلاج المستقلة بدل قراءة العمود الخام المجمّد،
@@ -3225,6 +3473,22 @@ def delete_patient(
         .filter(models.FinancialTransaction.patient_id == patient_id)
         .all()
     ]
+    pending_message = _pending_blocking_message(
+        db, current_user.email, [models.PendingPayment.patient_id == patient_id]
+    )
+    if pending_message:
+        raise HTTPException(status_code=409, detail=f"لا يمكن حذف هذا المريض: {pending_message}")
+    ensure_months_open(
+        db,
+        current_user.email,
+        *[
+            row[0]
+            for row in db.query(models.FinancialTransaction.created_at)
+            .filter(models.FinancialTransaction.patient_id == patient_id)
+            .all()
+        ],
+    )
+
     earnings_summary = summarize_earnings_by_doctor(db, current_user.email, patient_payment_ids)
     if earnings_summary:
         raise HTTPException(
@@ -3275,6 +3539,7 @@ def delete_patient(
             )
         ).delete(synchronize_session=False)
         db.query(models.FinancialTransaction).filter(models.FinancialTransaction.patient_id == patient_id).delete(synchronize_session=False)
+        db.query(models.PendingPayment).filter(models.PendingPayment.patient_id == patient_id).delete(synchronize_session=False)
         # الطبقة السادسة (2026-09-14): invoice_material_usages يحمل FK نحو
         # patients.id **و** treatment_invoices.id معاً، وهذا حذف جماعي خام
         # (Query.delete) لا يمرّ من الـ ORM فلا تعمل فيه علاقة cascade
@@ -3330,6 +3595,10 @@ def update_patient(
     )
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
+    ensure_staff_patient_access(patient)
+    if current_staff() is not None and "clinic_doctor_id" in patient_update.model_fields_set:
+        # نسب المريض لطبيب آخر قرار المالك وحده.
+        patient_update.clinic_doctor_id = patient.clinic_doctor_id
 
     try:
         if patient_update.doctor_name is not None:
@@ -3399,7 +3668,23 @@ def _serialize_invoice(
     # تصحيح الطبيب لسعر مادة اليوم.
     usages = list(material_usages or [])
     materials_cost = sum((Decimal(str(u.total_cost or 0)) for u in usages), Decimal("0"))
+    # 2026-09-25: الدفعات المعلّقة تُقرأ من جلسة الفاتورة نفسها، فتظهر في كل رد
+    # فاتورة (القائمة، بعد الدفعة، بعد المواد...) دون تعديل كل مسار يُرجعها.
+    pending_rows = []
+    session = object_session(invoice)
+    if session is not None and getattr(invoice, "id", None) is not None:
+        pending_rows = (
+            session.query(models.PendingPayment)
+            .filter(
+                models.PendingPayment.invoice_id == invoice.id,
+                models.PendingPayment.status == "pending",
+            )
+            .order_by(models.PendingPayment.recorded_at.desc(), models.PendingPayment.id.desc())
+            .all()
+        )
     return {
+        "pending_payments": [_serialize_pending_payment(row, doctor_names) for row in pending_rows],
+        "pending_amount": float(sum((Decimal(str(row.amount or 0)) for row in pending_rows), Decimal("0"))),
         "id": invoice.id,
         "patient_id": invoice.patient_id,
         "title": invoice.title,
@@ -3561,6 +3846,7 @@ def _consume_materials_for_invoice(
         item.updated_at = datetime.utcnow()
 
         usage = models.InvoiceMaterialUsage(
+            created_by_staff_id=staff_audit_id(),
             doctor_email=doctor_email,
             invoice_id=invoice.id,
             patient_id=invoice.patient_id,
@@ -3711,6 +3997,7 @@ def _get_owned_patient_or_404(db: Session, patient_id: int, doctor_email: str) -
     )
     if not patient:
         raise HTTPException(status_code=404, detail="المريض غير موجود")
+    ensure_staff_patient_access(patient)
     return patient
 
 
@@ -4048,7 +4335,10 @@ def create_patient_invoice(
     # أي كتابة (fail closed)، وNone تعني الطبيب المدير نفسه.
     # 2026-09-25: إن لم يُرسل الحقل إطلاقاً تُنسب الفاتورة لطبيب المريض
     # المعالج (نشطاً) بدل المدير؛ null صريحة تبقى «الطبيب المدير».
-    if "clinic_doctor_id" in invoice_create.model_fields_set:
+    if current_staff() is not None:
+        # فاتورة يفتحها طبيب مساعد باسمه حتماً -- لا يختار طبيباً آخر.
+        assigned_clinic_doctor_id = current_staff()["id"]
+    elif "clinic_doctor_id" in invoice_create.model_fields_set:
         assigned_clinic_doctor_id = resolve_clinic_doctor_id(
             db, invoice_create.clinic_doctor_id, current_user.email, require_active=True
         )
@@ -4065,6 +4355,7 @@ def create_patient_invoice(
 
     try:
         db_invoice = models.TreatmentInvoice(
+            created_by_staff_id=staff_audit_id(),
             patient_id=patient_id,
             doctor_email=current_user.email,
             title=title,
@@ -4138,6 +4429,13 @@ def update_patient_invoice_cost(
         raise HTTPException(
             status_code=400,
             detail=f"التكلفة لا يمكن أن تقل عن المدفوع على الفاتورة ({already_paid:,.0f} ل.س).",
+        )
+
+    if reassign_clinic_doctor and invoice_update.apply_to_existing_payments:
+        ensure_months_open(
+            db,
+            current_user.email,
+            *[payment.created_at for payment in invoice.payments if (payment.type or "") == "income"],
         )
 
     try:
@@ -4217,6 +4515,13 @@ def delete_patient_invoice(
     # 2026-09-25: فاتورة عليها نسب أطباء لا تُحذف بصمت -- حذفها يحذف دفعاتها
     # ويخصم نسبها من أرصدة الأطباء، ولو سُلّمت لهم صار عليهم دين. 409 برسالة
     # الأثر، والواجهة تعيد الطلب مع confirm_doctor_earnings=true بعد الموافقة.
+    pending_message = _pending_blocking_message(
+        db, current_user.email, [models.PendingPayment.invoice_id == invoice.id]
+    )
+    if pending_message:
+        raise HTTPException(status_code=409, detail=f"لا يمكن حذف هذه الفاتورة: {pending_message}")
+    ensure_months_open(db, current_user.email, *[payment.created_at for payment in invoice.payments])
+
     earnings_summary = summarize_earnings_by_doctor(
         db, current_user.email, [payment.id for payment in invoice.payments]
     )
@@ -4236,6 +4541,10 @@ def delete_patient_invoice(
         # وإلا صار الحذف طريقة صامتة لتبخير المخزون.
         for usage in list(invoice.material_usages):
             _restore_material_usage_to_inventory(db, usage)
+        # سجل الدفعات المراجَعة (مؤكَّدة/مرفوضة) لهذه الفاتورة يُحذف معها.
+        db.query(models.PendingPayment).filter(models.PendingPayment.invoice_id == invoice.id).delete(
+            synchronize_session=False
+        )
         # أسطر الاستهلاك نفسها تُحذف عبر cascade="all, delete-orphan" على
         # TreatmentInvoice.material_usages (حذف ORM، لا Query.delete خام).
         db.delete(invoice)
@@ -4283,6 +4592,7 @@ def register_invoice_payment(
             raise HTTPException(status_code=400, detail="تاريخ الدفعة لا يمكن أن يكون في المستقبل")
 
     ensure_payment_fits_invoice(db, invoice, payment.amount)
+    ensure_months_open(db, current_user.email, transaction_date or _damascus_now())
 
     description = (payment.description or "").strip() or f"دفعة على فاتورة: {invoice.title}"
 
@@ -4340,6 +4650,517 @@ def register_invoice_payment(
         _clinic_doctor_names(db, current_user.email),
         _fetch_invoice_material_usages(db, [invoice.id]).get(invoice.id, []),
     )
+
+
+# ====================================================================
+# دفعات الأطباء المساعدين بانتظار التأكيد + إقفال الشهر  --  2026-09-25
+# ====================================================================
+# الدفعة التي يسجّلها الطبيب المساعد لا تدخل financial_transactions قبل أن
+# يؤكّد الطبيب المدير استلام المبلغ: جدول مستقل (pending_payments) لا يقرؤه أي
+# تقرير أو مجموع أو كشف نسبة، فلا يمكن أن يتسرّب مال لم يصل الصندوق إلى
+# الأرقام. التأكيد يُنشئ الدفعة الحقيقية بتاريخ تسجيل المساعد، ومنها يُحسب
+# استحقاقه عبر sync_doctor_earning_for_payment كأي دفعة أخرى.
+#
+# إقفال الشهر: كل مسار يُنشئ حركة مالية أو يعدّلها أو يحذفها أو يغيّر نسبها
+# يمرّ من ensure_months_open، فيُرفض بـ 409 إن وقع تاريخ الحركة في شهر مقفل.
+import math
+
+
+class PendingPaymentCreate(BaseModel):
+    amount: float
+    description: Optional[str] = None
+
+
+class PendingPaymentReview(BaseModel):
+    note: Optional[str] = None
+
+
+class ClosedPeriodCreate(BaseModel):
+    year: int
+    month: int
+
+
+def _serialize_pending_payment(row: "models.PendingPayment", doctor_names: Optional[dict] = None) -> dict:
+    return {
+        "id": row.id,
+        "invoice_id": row.invoice_id,
+        "patient_id": row.patient_id,
+        "clinic_doctor_id": row.clinic_doctor_id,
+        "staff_name": (doctor_names or {}).get(row.clinic_doctor_id),
+        "patient_name": row.patient_name,
+        "invoice_title": row.invoice_title,
+        "amount": float(Decimal(str(row.amount or 0))),
+        "description": row.description,
+        "status": row.status,
+        "recorded_at": row.recorded_at,
+        "reviewed_at": row.reviewed_at,
+        "review_note": row.review_note,
+        "transaction_id": row.transaction_id,
+    }
+
+
+def _pending_total_for_invoice(db: Session, invoice_id: int) -> Decimal:
+    total = (
+        db.query(func.coalesce(func.sum(models.PendingPayment.amount), 0))
+        .filter(
+            models.PendingPayment.invoice_id == invoice_id,
+            models.PendingPayment.status == "pending",
+        )
+        .scalar()
+    )
+    return _quantize_money(Decimal(str(total or 0)))
+
+
+def _closed_month_keys(db: Session, clinic_email: str) -> set:
+    return {
+        (row[0], row[1])
+        for row in db.query(models.ClosedPeriod.year, models.ClosedPeriod.month)
+        .filter(models.ClosedPeriod.clinic_email == clinic_email)
+        .all()
+    }
+
+
+def ensure_months_open(db: Session, clinic_email: str, *moments) -> None:
+    """يرفض (409) أي تعديل مالي يقع تاريخه في شهر مقفل."""
+    keys = {(moment.year, moment.month) for moment in moments if moment is not None}
+    if not keys:
+        return
+    hit = sorted(keys & _closed_month_keys(db, clinic_email))
+    if hit:
+        year, month = hit[0]
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"شهر {month}/{year} مُقفل، فلا تُسجَّل فيه حركة مالية ولا تُعدَّل ولا تُحذف. "
+                "إن كان التعديل ضرورياً فافتح قفل الشهر من صفحة المالية أولاً."
+            ),
+        )
+
+
+def _pending_blocking_message(db: Session, clinic_email: str, filters) -> Optional[str]:
+    """رسالة منع إن وُجدت دفعات معلّقة تطابق الشرط (لحذف فاتورة/مريض)."""
+    rows = (
+        db.query(models.PendingPayment)
+        .filter(models.PendingPayment.clinic_email == clinic_email, models.PendingPayment.status == "pending")
+        .filter(*filters)
+        .all()
+    )
+    if not rows:
+        return None
+    total = sum((Decimal(str(row.amount or 0)) for row in rows), Decimal("0"))
+    return (
+        f"عليها {len(rows)} دفعة سجّلها طبيب مساعد ({total:,.0f} ل.س) بانتظار تأكيدك. "
+        "أكّدها أو ارفضها أولاً، حتى لا يضيع مبلغ استلمه الطبيب."
+    )
+
+
+def _push_to_tokens(tokens: list, title: str, body: str, data: dict, click_link: str) -> None:
+    """إرسال في الخلفية (BackgroundTasks) بعد ردّ الطلب -- FCM قد يتأخر ثوانٍ."""
+    for device_token in tokens:
+        send_push_to_token(device_token, title, body, data=data, click_link=click_link)
+
+
+def _get_clinic_pending_or_404(db: Session, pending_id: int, clinic_email: str) -> "models.PendingPayment":
+    row = (
+        db.query(models.PendingPayment)
+        .filter(models.PendingPayment.id == pending_id, models.PendingPayment.clinic_email == clinic_email)
+        .first()
+    )
+    staff = current_staff()
+    if row is None or (staff is not None and row.clinic_doctor_id != staff["id"]):
+        raise HTTPException(status_code=404, detail="الدفعة غير موجودة")
+    return row
+
+
+@app.post("/api/patients/{patient_id}/invoices/{invoice_id}/pending-payments", status_code=201)
+def create_pending_payment(
+    patient_id: int,
+    invoice_id: int,
+    body: PendingPaymentCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_active_doctor_user),
+):
+    """الطبيب المساعد يسجّل مبلغاً استلمه -- ينتظر تأكيد المدير."""
+    staff = current_staff()
+    if staff is None:
+        raise HTTPException(status_code=400, detail="الطبيب المدير يسجّل الدفعة مباشرةً على الفاتورة.")
+    patient = _get_owned_patient_or_404(db, patient_id, current_user.email)
+    invoice = (
+        db.query(models.TreatmentInvoice)
+        .filter(
+            models.TreatmentInvoice.id == invoice_id,
+            models.TreatmentInvoice.patient_id == patient_id,
+            models.TreatmentInvoice.doctor_email == current_user.email,
+        )
+        .first()
+    )
+    if not invoice:
+        raise HTTPException(status_code=404, detail="فاتورة العلاج غير موجودة")
+    if invoice.clinic_doctor_id != staff["id"]:
+        raise HTTPException(status_code=403, detail="هذه فاتورة طبيب آخر.")
+    if body.amount is None or not math.isfinite(body.amount) or body.amount <= 0:
+        raise HTTPException(status_code=400, detail="قيمة الدفعة يجب أن تكون أكبر من صفر")
+
+    amount = _quantize_money(Decimal(str(body.amount)))
+    available = invoice_remaining_amount(db, invoice) - _pending_total_for_invoice(db, invoice.id)
+    if amount > available:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"المبلغ أكبر من المتبقي على الفاتورة ({max(available, Decimal('0')):,.0f} ل.س) "
+                "بعد الدفعات التي تنتظر التأكيد."
+            ),
+        )
+    recorded_at = _damascus_now()
+    ensure_months_open(db, current_user.email, recorded_at)
+
+    row = models.PendingPayment(
+        clinic_email=current_user.email,
+        patient_id=patient.id,
+        invoice_id=invoice.id,
+        clinic_doctor_id=staff["id"],
+        patient_name=patient.full_name,
+        invoice_title=invoice.title,
+        amount=amount,
+        description=(body.description or "").strip()[:300] or None,
+        recorded_at=recorded_at,
+        status="pending",
+    )
+    try:
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر تسجيل الدفعة الآن. حاول مرة أخرى.")
+
+    tokens = [
+        token
+        for token in (getattr(current_user, "fcm_token", None), getattr(current_user, "web_push_token", None))
+        if isinstance(token, str) and token.strip()
+    ]
+    if tokens:
+        background_tasks.add_task(
+            _push_to_tokens,
+            tokens,
+            "💵 دفعة بانتظار تأكيدك",
+            f"{staff.get('name') or 'طبيب مساعد'} استلم {amount:,.0f} ل.س من {patient.full_name}",
+            {"type": "pending_payment", "pending_payment_id": str(row.id)},
+            f"{PRODUCTION_SITE_URL}/finance.html",
+        )
+    return _serialize_pending_payment(row, {staff["id"]: staff.get("name")})
+
+
+@app.get("/api/pending-payments")
+def list_pending_payments(
+    status: str = Query("pending"),
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_active_doctor_user),
+):
+    """المدير: دفعات كل الأطباء. المساعد: دفعاته وحده (بحالتها بعد المراجعة)."""
+    if status not in {"pending", "confirmed", "rejected", "all"}:
+        raise HTTPException(status_code=400, detail="حالة غير معروفة")
+    query = db.query(models.PendingPayment).filter(models.PendingPayment.clinic_email == current_user.email)
+    staff = current_staff()
+    if staff is not None:
+        query = query.filter(models.PendingPayment.clinic_doctor_id == staff["id"])
+    if status != "all":
+        query = query.filter(models.PendingPayment.status == status)
+    rows = (
+        query.order_by(models.PendingPayment.recorded_at.desc(), models.PendingPayment.id.desc())
+        .limit(200)
+        .all()
+    )
+    names = _clinic_doctor_names(db, current_user.email)
+    return [_serialize_pending_payment(row, names) for row in rows]
+
+
+@app.get("/api/pending-payments/count")
+def count_pending_payments(
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_active_doctor_user),
+):
+    query = db.query(
+        func.count(models.PendingPayment.id), func.coalesce(func.sum(models.PendingPayment.amount), 0)
+    ).filter(
+        models.PendingPayment.clinic_email == current_user.email,
+        models.PendingPayment.status == "pending",
+    )
+    staff = current_staff()
+    if staff is not None:
+        query = query.filter(models.PendingPayment.clinic_doctor_id == staff["id"])
+    count, total = query.one()
+    return {"count": int(count or 0), "amount": float(Decimal(str(total or 0)))}
+
+
+@app.post("/api/pending-payments/{pending_id}/confirm")
+def confirm_pending_payment(
+    pending_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_active_doctor_user),
+):
+    """المدير يؤكّد استلام المبلغ: تُنشأ الدفعة الحقيقية ونسبة الطبيب."""
+    if current_staff() is not None:
+        raise HTTPException(status_code=403, detail="تأكيد الدفعات للطبيب المدير وحده.")
+    row = _get_clinic_pending_or_404(db, pending_id, current_user.email)
+    if row.status != "pending":
+        raise HTTPException(status_code=400, detail="تمت مراجعة هذه الدفعة مسبقاً.")
+    invoice = (
+        db.query(models.TreatmentInvoice)
+        .filter(
+            models.TreatmentInvoice.id == row.invoice_id,
+            models.TreatmentInvoice.doctor_email == current_user.email,
+        )
+        .first()
+    )
+    patient = (
+        db.query(models.Patient)
+        .filter(models.Patient.id == row.patient_id, models.Patient.doctor_email == current_user.email)
+        .first()
+    )
+    if invoice is None or patient is None:
+        raise HTTPException(status_code=404, detail="فاتورة هذه الدفعة لم تعد موجودة. ارفض الدفعة.")
+    ensure_months_open(db, current_user.email, row.recorded_at)
+    ensure_payment_fits_invoice(db, invoice, row.amount)
+
+    try:
+        # تحديث مشروط: طلبا تأكيد متزامنان لا يُنشئان دفعتين -- الثاني يجد
+        # الحالة تغيّرت فيتوقف.
+        claimed = (
+            db.query(models.PendingPayment)
+            .filter(models.PendingPayment.id == row.id, models.PendingPayment.status == "pending")
+            .update(
+                {models.PendingPayment.status: "confirmed", models.PendingPayment.reviewed_at: _damascus_now()},
+                synchronize_session=False,
+            )
+        )
+        if claimed != 1:
+            db.rollback()
+            raise HTTPException(status_code=400, detail="تمت مراجعة هذه الدفعة مسبقاً.")
+        payment = models.FinancialTransaction(
+            patient_id=patient.id,
+            doctor_name=(patient.doctor_name or current_user.doctor_name or current_user.email),
+            doctor_email=current_user.email,
+            amount=Decimal(str(row.amount)),
+            type="income",
+            description=row.description or f"دفعة على فاتورة: {invoice.title}",
+            invoice_id=invoice.id,
+            is_opening_balance=False,
+            clinic_doctor_id=getattr(invoice, "clinic_doctor_id", None),
+            created_by_staff_id=row.clinic_doctor_id,
+        )
+        # تاريخ الاستلام الفعلي عند المساعد، لا تاريخ التأكيد.
+        payment.created_at = row.recorded_at
+        db.add(payment)
+        db.flush()
+        sync_doctor_earning_for_payment(db, payment, current_user.email, patient_name=patient.full_name)
+        db.query(models.PendingPayment).filter(models.PendingPayment.id == row.id).update(
+            {models.PendingPayment.transaction_id: payment.id}, synchronize_session=False
+        )
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر تأكيد الدفعة الآن. حاول مرة أخرى.")
+
+    db.refresh(row)
+    return _serialize_pending_payment(row, _clinic_doctor_names(db, current_user.email))
+
+
+@app.post("/api/pending-payments/{pending_id}/reject")
+def reject_pending_payment(
+    pending_id: int,
+    body: Optional[PendingPaymentReview] = None,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_active_doctor_user),
+):
+    if current_staff() is not None:
+        raise HTTPException(status_code=403, detail="مراجعة الدفعات للطبيب المدير وحده.")
+    row = _get_clinic_pending_or_404(db, pending_id, current_user.email)
+    note = ((body.note if body else None) or "").strip()[:300] or None
+    updated = (
+        db.query(models.PendingPayment)
+        .filter(models.PendingPayment.id == row.id, models.PendingPayment.status == "pending")
+        .update(
+            {
+                models.PendingPayment.status: "rejected",
+                models.PendingPayment.reviewed_at: _damascus_now(),
+                models.PendingPayment.review_note: note,
+            },
+            synchronize_session=False,
+        )
+    )
+    if updated != 1:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تمت مراجعة هذه الدفعة مسبقاً.")
+    db.commit()
+    db.refresh(row)
+    return _serialize_pending_payment(row, _clinic_doctor_names(db, current_user.email))
+
+
+@app.delete("/api/pending-payments/{pending_id}")
+def cancel_pending_payment(
+    pending_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_active_doctor_user),
+):
+    """المساعد يلغي دفعة سجّلها بالخطأ قبل أن يراجعها المدير."""
+    if current_staff() is None:
+        raise HTTPException(status_code=400, detail="ارفض الدفعة بدل حذفها، حتى يعرف الطبيب السبب.")
+    row = _get_clinic_pending_or_404(db, pending_id, current_user.email)
+    if row.status != "pending":
+        raise HTTPException(status_code=400, detail="راجعها الطبيب المدير، فلا تُلغى الآن.")
+    deleted = (
+        db.query(models.PendingPayment)
+        .filter(models.PendingPayment.id == row.id, models.PendingPayment.status == "pending")
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    if deleted != 1:
+        raise HTTPException(status_code=400, detail="راجعها الطبيب المدير، فلا تُلغى الآن.")
+    return {"message": "تم إلغاء الدفعة"}
+
+
+def _serialize_closed_period(row: "models.ClosedPeriod") -> dict:
+    income = Decimal(str(row.total_income or 0))
+    expenses = Decimal(str(row.total_expenses or 0))
+    return {
+        "year": row.year,
+        "month": row.month,
+        "closed_at": row.closed_at,
+        "total_income": float(income),
+        "total_expenses": float(expenses),
+        "net_profit": float(income - expenses),
+        "doctors_share": float(Decimal(str(row.doctors_share or 0))),
+    }
+
+
+@app.get("/api/finance/closed-periods")
+def list_closed_periods(
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_active_doctor_user),
+):
+    rows = (
+        db.query(models.ClosedPeriod)
+        .filter(models.ClosedPeriod.clinic_email == current_user.email)
+        .order_by(models.ClosedPeriod.year.desc(), models.ClosedPeriod.month.desc())
+        .all()
+    )
+    return [_serialize_closed_period(row) for row in rows]
+
+
+@app.post("/api/finance/closed-periods", status_code=201)
+def close_finance_month(
+    body: ClosedPeriodCreate,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_active_doctor_user),
+):
+    """إقفال شهر انتهى: تُحفظ أرقامه ويُمنع أي تعديل مالي بتاريخه."""
+    if current_staff() is not None:
+        raise HTTPException(status_code=403, detail="إقفال الشهر للطبيب المدير وحده.")
+    if body.month < 1 or body.month > 12 or body.year < 2000 or body.year > 2100:
+        raise HTTPException(status_code=400, detail="الشهر غير صالح.")
+    start, end = _month_bounds(body.year, body.month)
+    if end > _damascus_now():
+        raise HTTPException(status_code=400, detail="لا يُقفل إلا شهر انتهى. الشهر الحالي يُقفل بعد انتهائه.")
+    existing = (
+        db.query(models.ClosedPeriod)
+        .filter(
+            models.ClosedPeriod.clinic_email == current_user.email,
+            models.ClosedPeriod.year == body.year,
+            models.ClosedPeriod.month == body.month,
+        )
+        .first()
+    )
+    if existing is not None:
+        raise HTTPException(status_code=409, detail="هذا الشهر مُقفل مسبقاً.")
+    pending_count = (
+        db.query(func.count(models.PendingPayment.id))
+        .filter(
+            models.PendingPayment.clinic_email == current_user.email,
+            models.PendingPayment.status == "pending",
+            models.PendingPayment.recorded_at >= start,
+            models.PendingPayment.recorded_at < end,
+        )
+        .scalar()
+    )
+    if pending_count:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"في هذا الشهر {pending_count} دفعة سجّلها أطباء مساعدون بانتظار تأكيدك. "
+                "أكّدها أو ارفضها قبل الإقفال."
+            ),
+        )
+
+    def month_total(transaction_type: str) -> Decimal:
+        value = (
+            db.query(func.coalesce(func.sum(models.FinancialTransaction.amount), 0))
+            .filter(
+                models.FinancialTransaction.doctor_email == current_user.email,
+                models.FinancialTransaction.type == transaction_type,
+                models.FinancialTransaction.created_at >= start,
+                models.FinancialTransaction.created_at < end,
+                models.FinancialTransaction.is_opening_balance.is_(False),
+            )
+            .scalar()
+        )
+        return Decimal(str(value or 0))
+
+    doctors_share = (
+        db.query(func.coalesce(func.sum(models.DoctorEarning.doctor_share), 0))
+        .filter(
+            models.DoctorEarning.clinic_email == current_user.email,
+            models.DoctorEarning.earned_at >= start,
+            models.DoctorEarning.earned_at < end,
+        )
+        .scalar()
+    )
+    row = models.ClosedPeriod(
+        clinic_email=current_user.email,
+        year=body.year,
+        month=body.month,
+        closed_at=_damascus_now(),
+        total_income=month_total("income"),
+        total_expenses=month_total("expense"),
+        doctors_share=Decimal(str(doctors_share or 0)),
+    )
+    try:
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="هذا الشهر مُقفل مسبقاً.")
+    return _serialize_closed_period(row)
+
+
+@app.delete("/api/finance/closed-periods/{year}/{month}")
+def reopen_finance_month(
+    year: int,
+    month: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_active_doctor_user),
+):
+    if current_staff() is not None:
+        raise HTTPException(status_code=403, detail="فتح قفل الشهر للطبيب المدير وحده.")
+    deleted = (
+        db.query(models.ClosedPeriod)
+        .filter(
+            models.ClosedPeriod.clinic_email == current_user.email,
+            models.ClosedPeriod.year == year,
+            models.ClosedPeriod.month == month,
+        )
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    if not deleted:
+        raise HTTPException(status_code=404, detail="هذا الشهر غير مُقفل.")
+    return {"message": f"تم فتح قفل شهر {month}/{year}"}
+
 
 
 # ====================================================================
@@ -4638,6 +5459,8 @@ def add_invoice_materials(
     )
     if not invoice:
         raise HTTPException(status_code=404, detail="فاتورة العلاج غير موجودة")
+    if current_staff() is not None and invoice.clinic_doctor_id != current_staff()["id"]:
+        raise HTTPException(status_code=403, detail="هذه فاتورة طبيب آخر.")
 
     if not materials:
         raise HTTPException(status_code=400, detail="لم تُحدَّد أي مادة للإضافة")
@@ -4738,6 +5561,7 @@ def update_patient_chart(
     )
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
+    ensure_staff_patient_access(patient)
 
     normalized_chart_state = normalize_palmer_chart_state(chart_update.chart_state)
     chart_state_value = json.dumps(normalized_chart_state, ensure_ascii=False)
@@ -5076,6 +5900,7 @@ def create_appointment(
     )
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
+    ensure_staff_patient_access(patient)
 
     date_value = (appointment.date or "").strip()
     time_value = (appointment.time or "").strip()
@@ -5109,6 +5934,8 @@ def create_appointment(
     clinic_doctor_value = resolve_appointment_clinic_doctor(
         db, current_user.email, appointment.clinic_doctor_id
     )
+    if current_staff() is not None:
+        clinic_doctor_value = current_staff()["id"]
 
     # الموعد الذي لا يشغل وقتاً أصلاً (طلب حجز عام بانتظار قبول الطبيب) لا
     # يُفحَص ضد التعارض -- يُفحص لاحقاً عند قبوله لا عند وصوله.
@@ -5122,6 +5949,7 @@ def create_appointment(
         )
 
     db_appointment = models.Appointment(
+        created_by_staff_id=staff_audit_id(),
         patient_id=appointment.patient_id,
         doctor_email=current_user.email,
         patient_name=patient.full_name or appointment.patient_name or "",
@@ -5170,11 +5998,16 @@ def update_appointment(
     )
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
+    if current_staff() is not None and appointment.clinic_doctor_id != current_staff()["id"]:
+        raise HTTPException(status_code=404, detail="الموعد غير موجود")
 
     # "إعادة الموعد للطبيب المدير" تُرسَل كـ clinic_doctor_id: null صريحة، وهي
     # تعديل حقيقي -- فتُفحَص بـ model_fields_set لا بـ is not None وإلا رُفض
     # الطلب بـ 400 "لا حقول للتحديث" بينما المستخدم طلب تغييراً فعلياً.
     doctor_field_sent = "clinic_doctor_id" in appointment_update.model_fields_set
+    if current_staff() is not None:
+        # نقل الموعد لطبيب آخر قرار المالك وحده.
+        doctor_field_sent = False
     has_any_update = doctor_field_sent or any(
         value is not None
         for value in (
@@ -5286,6 +6119,8 @@ def update_appointment_status(
     )
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
+    if current_staff() is not None and appointment.clinic_doctor_id != current_staff()["id"]:
+        raise HTTPException(status_code=404, detail="الموعد غير موجود")
 
     try:
         appointment.status = status_update.status.strip().lower()
@@ -5436,6 +6271,8 @@ def delete_appointment(
     )
     if not appointment:
         raise HTTPException(status_code=404, detail="الموعد غير موجود")
+    if current_staff() is not None and appointment.clinic_doctor_id != current_staff()["id"]:
+        raise HTTPException(status_code=404, detail="الموعد غير موجود")
 
     try:
         db.delete(appointment)
@@ -5474,11 +6311,15 @@ def get_all_appointments(
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(require_active_doctor_user),
 ):
-    appointments = (
-        db.query(models.Appointment)
-        .filter(models.Appointment.doctor_email == current_user.email)
-        .all()
+    appointments_query = db.query(models.Appointment).filter(
+        models.Appointment.doctor_email == current_user.email
     )
+    # الطبيب المساعد يرى جدوله وحده.
+    if current_staff() is not None:
+        appointments_query = appointments_query.filter(
+            models.Appointment.clinic_doctor_id == current_staff()["id"]
+        )
+    appointments = appointments_query.all()
 
     # اسم الطبيب المنفّذ يُرفَق بكل موعد هنا باستعلام واحد لأطباء العيادة، لا
     # باستعلام لكل موعد ولا باستدعاء الواجهة لـ /api/clinic-doctors (محروس
@@ -5672,6 +6513,7 @@ def create_expense(
 
     if payment_invoice is not None and transaction_type == "income":
         ensure_payment_fits_invoice(db, payment_invoice, expense.amount)
+    ensure_months_open(db, current_user.email, transaction_date or _damascus_now())
 
     sync_to_inventory = bool(expense.add_to_inventory) and transaction_type == "expense" and user_has_premium_access(current_user)
 
@@ -6015,6 +6857,9 @@ def update_financial_transaction(
         if new_transaction_date > _damascus_now() + timedelta(minutes=5):
             raise HTTPException(status_code=400, detail="تاريخ الحركة لا يمكن أن يكون في المستقبل")
 
+    # الشهر الأصلي والشهر الجديد (إن نُقلت الحركة) كلاهما يجب أن يكونا مفتوحين.
+    ensure_months_open(db, current_user.email, transaction.created_at, new_transaction_date)
+
     # 2026-09-25: تعديل مبلغ دفعة على فاتورة لا يتجاوز ما تبقّى عليها.
     if (transaction.type or "") == "income" and transaction.invoice_id is not None:
         edited_invoice = (
@@ -6066,6 +6911,7 @@ def delete_financial_transaction(
     )
     if not transaction:
         raise HTTPException(status_code=404, detail="الدفعة المالية غير موجودة")
+    ensure_months_open(db, current_user.email, transaction.created_at)
 
     try:
         db.delete(transaction)
@@ -6151,6 +6997,10 @@ def _serialize_clinic_doctor(
         # سلفة تفوق ما استحقه حتى الآن. لا نقصّه عند صفر عمداً حتى لا
         # تختفي السلفة من الحساب.
         "balance_due": float(total_doctor_share - total_paid_out),
+        "login_email": getattr(clinic_doctor, "login_email", None),
+        "login_enabled": bool(getattr(clinic_doctor, "login_enabled", False)),
+        "can_view_all_patients": bool(getattr(clinic_doctor, "can_view_all_patients", False)),
+        "last_login_at": getattr(clinic_doctor, "last_login_at", None),
     }
 
 
@@ -6177,6 +7027,21 @@ def list_clinic_doctors(
     clinic_doctors = query.order_by(
         models.ClinicDoctor.is_active.desc(), models.ClinicDoctor.full_name.asc()
     ).all()
+
+    # الطبيب المساعد يحتاج الأسماء والألوان فقط (قوائم الاختيار، جدول الساعات)
+    # -- لا نسب زملائه ولا أرصدتهم ولا حسابات دخولهم.
+    if current_staff() is not None:
+        return [
+            {
+                "id": clinic_doctor.id,
+                "full_name": clinic_doctor.full_name,
+                "specialty": clinic_doctor.specialty,
+                "commission_percent": 0,
+                "is_active": bool(clinic_doctor.is_active),
+                "created_at": clinic_doctor.created_at,
+            }
+            for clinic_doctor in clinic_doctors
+        ]
 
     period_totals = _doctor_period_totals(db, current_user.email, period_start, period_end)
     lifetime_totals = _doctor_period_totals(db, current_user.email, None, None)
@@ -6255,6 +7120,8 @@ def update_clinic_doctor(
     if doctor_update.notes is not None:
         clinic_doctor.notes = doctor_update.notes.strip() or None
     if doctor_update.is_active is not None:
+        if clinic_doctor.is_active and not doctor_update.is_active:
+            clinic_doctor.sessions_valid_after = datetime.utcnow()
         clinic_doctor.is_active = bool(doctor_update.is_active)
     if doctor_update.commission_percent is not None:
         # تنبيه: تغيير النسبة هنا يسري على الدفعات القادمة فقط. كل حركة
@@ -6336,6 +7203,97 @@ def delete_clinic_doctor(
     return {"message": "تم حذف الطبيب بنجاح"}
 
 
+class ClinicDoctorLoginUpdate(BaseModel):
+    login_email: str
+    # مطلوبة عند إنشاء الحساب أول مرة؛ فارغة = كلمة السرّ الحالية تبقى.
+    password: Optional[str] = None
+    login_enabled: bool = True
+    can_view_all_patients: bool = False
+
+
+_EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+@app.put("/api/clinic-doctors/{clinic_doctor_id}/login", response_model=ClinicDoctorResponse)
+def update_clinic_doctor_login(
+    clinic_doctor_id: int,
+    login_update: ClinicDoctorLoginUpdate,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_premium_doctor_user),
+):
+    """إنشاء/تعديل حساب دخول طبيب مساعد (2026-09-25) -- المالك وحده (المسار خارج
+    قائمة المساعد). تغيير كلمة السرّ أو البريد أو إيقاف الحساب يطرد الطبيب من
+    كل أجهزته فوراً (sessions_valid_after)."""
+    clinic_doctor = _get_owned_clinic_doctor_or_404(db, clinic_doctor_id, current_user.email)
+    login_email = (login_update.login_email or "").strip().lower()
+    if not _EMAIL_PATTERN.match(login_email):
+        raise HTTPException(status_code=400, detail="أدخل بريداً إلكترونياً صحيحاً.")
+    if db.query(models.User).filter(models.User.email == login_email).first() is not None:
+        raise HTTPException(status_code=400, detail="هذا البريد مسجّل كحساب عيادة. اختر بريداً آخر للطبيب.")
+    taken = (
+        db.query(models.ClinicDoctor)
+        .filter(
+            func.lower(models.ClinicDoctor.login_email) == login_email,
+            models.ClinicDoctor.id != clinic_doctor.id,
+        )
+        .first()
+    )
+    if taken is not None:
+        raise HTTPException(status_code=400, detail="هذا البريد مستخدم لحساب طبيب آخر.")
+    password = login_update.password or ""
+    if password and len(password) < 6:
+        raise HTTPException(status_code=400, detail="كلمة السرّ 6 أحرف على الأقل.")
+    if not password and not clinic_doctor.hashed_password:
+        raise HTTPException(status_code=400, detail="حدّد كلمة سرّ للحساب الجديد.")
+    if login_update.login_enabled and not clinic_doctor.is_active:
+        raise HTTPException(status_code=400, detail="الطبيب معطَّل. فعّله أولاً ثم فعّل حساب دخوله.")
+
+    revoke = (
+        bool(password)
+        or (clinic_doctor.login_email or "").lower() != login_email
+        or (clinic_doctor.login_enabled and not login_update.login_enabled)
+        or (clinic_doctor.can_view_all_patients and not login_update.can_view_all_patients)
+    )
+    try:
+        clinic_doctor.login_email = login_email
+        if password:
+            clinic_doctor.hashed_password = hash_password(password)
+        clinic_doctor.login_enabled = bool(login_update.login_enabled)
+        clinic_doctor.can_view_all_patients = bool(login_update.can_view_all_patients)
+        if revoke:
+            clinic_doctor.sessions_valid_after = datetime.utcnow()
+        db.commit()
+        db.refresh(clinic_doctor)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر حفظ حساب الدخول الآن. حاول مرة أخرى.")
+
+    lifetime_totals = _doctor_period_totals(db, current_user.email, None, None)
+    payout_totals = _doctor_payout_totals(db, current_user.email)
+    return _serialize_clinic_doctor(clinic_doctor, lifetime_totals, lifetime_totals, payout_totals)
+
+
+@app.delete("/api/clinic-doctors/{clinic_doctor_id}/login", response_model=ClinicDoctorResponse)
+def disable_clinic_doctor_login(
+    clinic_doctor_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(require_premium_doctor_user),
+):
+    """إيقاف حساب الدخول (يبقى البريد محفوظاً لإعادة التفعيل) وطرد كل جلساته."""
+    clinic_doctor = _get_owned_clinic_doctor_or_404(db, clinic_doctor_id, current_user.email)
+    try:
+        clinic_doctor.login_enabled = False
+        clinic_doctor.sessions_valid_after = datetime.utcnow()
+        db.commit()
+        db.refresh(clinic_doctor)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="تعذر إيقاف حساب الدخول الآن.")
+    lifetime_totals = _doctor_period_totals(db, current_user.email, None, None)
+    payout_totals = _doctor_payout_totals(db, current_user.email)
+    return _serialize_clinic_doctor(clinic_doctor, lifetime_totals, lifetime_totals, payout_totals)
+
+
 @app.get("/api/clinic-doctors/{clinic_doctor_id}/statement")
 def get_clinic_doctor_statement(
     clinic_doctor_id: int,
@@ -6347,6 +7305,8 @@ def get_clinic_doctor_statement(
     current_user: models.User = Depends(require_premium_doctor_user),
 ):
     """كشف حساب طبيب واحد: حركاته ضمن الفترة + تسوياته + الرصيد التراكمي."""
+    if current_staff() is not None and clinic_doctor_id != current_staff()["id"]:
+        raise HTTPException(status_code=404, detail="الطبيب غير موجود ضمن أطباء عيادتك")
     clinic_doctor = _get_owned_clinic_doctor_or_404(db, clinic_doctor_id, current_user.email)
     period_start, period_end, resolved_year, resolved_month, resolved_day = _resolve_finance_period(
         year, month, day, all_time
@@ -6490,6 +7450,7 @@ def create_doctor_payout(
         paid_at = _damascus_now().replace(tzinfo=None)
 
     amount = _quantize_money(Decimal(str(payout_create.amount)))
+    ensure_months_open(db, current_user.email, paid_at)
     note = (payout_create.note or "").strip() or None
     expense_description = f"تسوية مستحقات الطبيب: {clinic_doctor.full_name}"
     if note:
@@ -6552,6 +7513,7 @@ def delete_doctor_payout(
     )
     if not payout:
         raise HTTPException(status_code=404, detail="التسوية غير موجودة")
+    ensure_months_open(db, current_user.email, payout.paid_at)
 
     try:
         # حركة المصروف المقابلة تُحذف مع التسوية دائماً -- وإلا بقي في صفحة
@@ -6603,6 +7565,7 @@ def assign_transaction_doctor(
     if (transaction.type or "") != "income":
         raise HTTPException(status_code=400, detail="لا يمكن نسب مصروف لطبيب. النسب تُحسب على دفعات المرضى فقط.")
 
+    ensure_months_open(db, current_user.email, transaction.created_at)
     new_clinic_doctor_id = resolve_clinic_doctor_id(
         db, assignment.clinic_doctor_id, current_user.email
     )
@@ -6810,6 +7773,9 @@ async def restore_finance_backup(
         )
 
     rows = list(reader)
+    # 2026-09-25: حركات الأشهر المقفلة لا تُستورد (تُعدّ متخطّاة).
+    closed_month_keys = _closed_month_keys(db, user.email)
+    transactions_skipped_closed = 0
 
     # -- خطوة 1: المرضى -- خريطة اسم(بأحرف صغيرة) -> كائن Patient لاستخدامها
     # لاحقاً في ربط المواعيد/المعاملات، ولمنع إعادة إدخال مريض موجود أصلاً.
@@ -6960,6 +7926,11 @@ async def restore_finance_backup(
             except ValueError:
                 created_at_value = None
 
+        effective_moment = created_at_value or _damascus_now()
+        if (effective_moment.year, effective_moment.month) in closed_month_keys:
+            transactions_skipped_closed += 1
+            continue
+
         patient_name = (row.get("patient_name") or "").strip()
         linked_patient = name_to_patient.get(patient_name.lower()) if patient_name else None
 
@@ -6986,6 +7957,7 @@ async def restore_finance_backup(
         "appointments_skipped_existing": appointments_skipped_existing,
         "transactions_added": transactions_added,
         "transactions_skipped_existing": transactions_skipped_existing,
+        "transactions_skipped_closed": transactions_skipped_closed,
     }
 
 
@@ -7002,6 +7974,7 @@ def create_prescription(
     )
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
+    ensure_staff_patient_access(patient)
 
     medications_value = (prescription.medications or "").strip()
     instructions_value = (prescription.instructions or "").strip()
@@ -7010,6 +7983,7 @@ def create_prescription(
 
     try:
         db_prescription = models.Prescription(
+            created_by_staff_id=staff_audit_id(),
             patient_id=prescription.patient_id,
             medications=medications_value,
             instructions=instructions_value,
@@ -7036,6 +8010,7 @@ def get_patient_prescriptions(
     )
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
+    ensure_staff_patient_access(patient)
 
     return (
         db.query(models.Prescription)
@@ -7065,6 +8040,8 @@ def update_prescription(
     )
     if not prescription:
         raise HTTPException(status_code=404, detail="الوصفة الطبية غير موجودة")
+    if current_staff() is not None:
+        ensure_staff_patient_access(db.query(models.Patient).filter(models.Patient.id == prescription.patient_id).first())
 
     medications_value = None
     if prescription_update.medications is not None:
@@ -7106,6 +8083,8 @@ def delete_prescription(
     )
     if not prescription:
         raise HTTPException(status_code=404, detail="الوصفة الطبية غير موجودة")
+    if current_staff() is not None:
+        ensure_staff_patient_access(db.query(models.Patient).filter(models.Patient.id == prescription.patient_id).first())
 
     try:
         db.delete(prescription)
@@ -7442,6 +8421,7 @@ async def upload_patient_archive(
     )
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
+    ensure_staff_patient_access(patient)
 
     original_name, file_type = validate_archive_file(file)
     _, ext = os.path.splitext(original_name)
@@ -7493,6 +8473,7 @@ def get_patient_archive(
     )
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
+    ensure_staff_patient_access(patient)
 
     archive_records = (
         db.query(models.PatientXRay)
@@ -7524,6 +8505,7 @@ def update_patient_archive(
     )
     if not owned_patient:
         raise HTTPException(status_code=404, detail="الملف الطبي غير موجود")
+    ensure_staff_patient_access(owned_patient)
 
     record = (
         db.query(models.PatientXRay)
@@ -7560,6 +8542,7 @@ def delete_patient_archive(
     )
     if not owned_patient:
         raise HTTPException(status_code=404, detail="الملف الطبي غير موجود")
+    ensure_staff_patient_access(owned_patient)
 
     record = (
         db.query(models.PatientXRay)
@@ -8475,6 +9458,19 @@ def redirect_to_landing():
     # كل زائر جديد صفحة التسويق أولاً، وفيها أزرار واضحة لكل من "تسجيل الدخول"
     # (للأطباء المشتركين أصلاً) و"ابدأ الآن" (تسجيل حساب جديد عبر register.html).
     return RedirectResponse(url="/landing.html", status_code=302)
+
+# 2026-09-25: حارس الأطباء المساعدين (انظر StaffAccessMiddleware). يُسجَّل هنا
+# بعد تعريف الصنف، ثم CORS بعده فيصير CORS الطبقة الخارجية وتحمل ردوده ترويساتها.
+app.add_middleware(StaffAccessMiddleware)
+
+# 2. تفعيل نظام CORS للسماح لموقع الويب وتطبيق الأندرويد بالاتصال بالـ API دون قيود أمنية ومتصفح
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 app.mount("/", StaticFiles(directory="frontend_web", html=True), name="static")

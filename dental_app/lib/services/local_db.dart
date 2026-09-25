@@ -656,6 +656,18 @@ class LocalDb {
     }
   }
 
+  /// يمسح كل ما خُزّن محلياً (2026-09-25) -- عند تسجيل الخروج. النسخة
+  /// المحلية لم تكن مربوطة بحساب، فكان الحساب التالي على الجهاز نفسه (طبيب
+  /// مساعد على حاسوب العيادة المشترك مثلاً) يرى بيانات من قبله دون اتصال.
+  Future<void> wipeAll() async {
+    final db = await _db;
+    await db.transaction((txn) async {
+      for (final table in const ['appointments', 'outbox', 'patients', 'inventory_items', 'cache_kv']) {
+        await txn.delete(table);
+      }
+    });
+  }
+
   Future<int> countPendingOps() async {
     final db = await _db;
     final result =

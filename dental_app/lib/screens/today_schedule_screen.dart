@@ -6,6 +6,7 @@ import '../models/appointment.dart';
 import '../models/clinic_doctor.dart';
 import '../models/patient.dart';
 import '../services/api_service.dart';
+import '../services/app_session.dart';
 import '../theme/app_theme.dart';
 import '../utils/appointment_status.dart';
 import '../utils/clinic_doctor_colors.dart';
@@ -442,7 +443,11 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
   /// نادراً جداً، وfetchClinicDoctors لا ترفع استثناءً أبداً (تعيد قائمة فارغة
   /// عند 403 أو انقطاع الشبكة)، فلا حاجة لأي معالجة خطأ هنا ولا لتعطيل الشاشة.
   Future<void> _loadClinicDoctors() async {
-    final doctors = await widget.apiService.fetchClinicDoctors();
+    // الطبيب المساعد يرى مواعيده وحده (الخادم يصفّيها)، فعمود واحد باسمه
+    // وبلا حقل اختيار طبيب -- الخادم ينسب الموعد إليه على أي حال.
+    final doctors = AppSession.instance.isStaff
+        ? const <ClinicDoctor>[]
+        : await widget.apiService.fetchClinicDoctors();
     String ownerName = '';
     try {
       ownerName =
@@ -1382,7 +1387,12 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
     // ترويسة الأعمدة: صاحب الحساب دائماً (اختفاؤه يوحي بأنه ليس طبيباً في
     // عيادته)، ثم أطباء العيادة كلهم وإن كان يومهم فارغاً.
     final columns = <({int? id, String name, String spec, bool owner})>[
-      (id: null, name: _ownerLabel, spec: 'صاحب الحساب', owner: true),
+      (
+        id: null,
+        name: _ownerLabel,
+        spec: AppSession.instance.isStaff ? 'مواعيدي' : 'صاحب الحساب',
+        owner: true
+      ),
       for (final doctor in [..._clinicDoctors]..sort((a, b) => a.id.compareTo(b.id)))
         (
           id: doctor.id,
@@ -1670,8 +1680,9 @@ class TodayScheduleScreenState extends State<TodayScheduleScreen> {
   }
 
   /// قراءة معرّف الطبيب من الموعد -- null = الطبيب المدير.
+  /// للطبيب المساعد كل المواعيد مواعيده، فتقع كلها في العمود الوحيد (null).
   static int? hgAppointmentDoctorId(Appointment appointment) =>
-      appointment.clinicDoctorId;
+      AppSession.instance.isStaff ? null : appointment.clinicDoctorId;
 
   /// توزيع المسارات عند التعارض: المواعيد المتقاطعة وحدها تتقاسم عرض العمود
   /// ("عنقود")، وما لا يتقاطع مع شيء يبقى بعرض العمود كاملاً. منقول عن

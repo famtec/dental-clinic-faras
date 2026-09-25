@@ -179,3 +179,62 @@
     }
   };
 })();
+
+/* ============================================================================
+ * دور الحساب (2026-09-25): مالك العيادة أو طبيب مساعد بحساب دخول خاص.
+ *
+ * للعرض فقط -- الصلاحيات الفعلية يفرضها الخادم (StaffAccessMiddleware في
+ * main.py) ويرفض كل ما ليس للمساعد بـ 403. هنا نمنع المساعد من رؤية ما
+ * سيُرفض: صفحات المالك تُحوَّل إلى المرضى، وروابطها وأزرار المال تُخفى.
+ * ========================================================================== */
+(function () {
+  var OWNER_ONLY_PAGES = [
+    'finance.html', 'inventory.html', 'doctors.html',
+    'treatment_catalog.html', 'profile.html', 'qr.html'
+  ];
+
+  function read(key) {
+    try {
+      return localStorage.getItem(key) || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  var staff = read('user_role') === 'staff';
+
+  window.ClinicRole = {
+    isStaff: function () { return staff; },
+    staffDoctorId: function () { return staff ? read('staff_doctor_id') : ''; },
+    ownerOnlyPage: function (href) {
+      return OWNER_ONLY_PAGES.indexOf(String(href || '').toLowerCase()) !== -1;
+    }
+  };
+
+  if (!staff) return;
+
+  var page = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
+  if (OWNER_ONLY_PAGES.indexOf(page) !== -1) {
+    window.location.replace('index.html');
+    return;
+  }
+
+  document.documentElement.classList.add('is-staff');
+  var hidden = OWNER_ONLY_PAGES.map(function (p) { return 'html.is-staff a[href="' + p + '"]'; }).concat([
+    'html.is-staff #backupBtn',
+    'html.is-staff #restoreBackupBtn',
+    'html.is-staff [data-owner-only]',
+    'html.is-staff form[data-invoice-payment-form]',
+    'html.is-staff .invoice-cost-edit-btn',
+    'html.is-staff .invoice-cost-delete-btn',
+    'html.is-staff .invoice-payment-edit-btn',
+    'html.is-staff .invoice-payment-delete-btn',
+    'html.is-staff [data-delete-invoice-material]',
+    'html.is-staff .finance-edit-btn',
+    'html.is-staff .finance-delete-btn'
+  ]);
+  var style = document.createElement('style');
+  style.textContent = hidden.join(',\n') + ' { display: none !important; }\n' +
+    'html:not(.is-staff) [data-staff-only] { display: none !important; }';
+  (document.head || document.documentElement).appendChild(style);
+})();
