@@ -13,7 +13,7 @@
 ; رقم الإصدار يُحدَّث يدوياً مع version في pubspec.yaml.
 
 #define AppName "عيادتي الرقمية"
-#define AppVersion "1.5.0"
+#define AppVersion "1.5.1"
 #define AppExe "dental_app.exe"
 #define BuildDir "..\..\build\windows\x64\runner\Release"
 #define VcRedistDir "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Redist\MSVC\14.44.35112\x64\Microsoft.VC143.CRT"

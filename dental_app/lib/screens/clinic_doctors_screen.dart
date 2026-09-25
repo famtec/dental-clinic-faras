@@ -369,59 +369,103 @@ class _ClinicDoctorsScreenState extends State<ClinicDoctorsScreen> {
         const SizedBox(height: 14),
         _buildPeriodSelector(),
         const SizedBox(height: 14),
-        // ثلاثة أعمدة لا أربعة: SmartStatCard صفٌّ واحد بأعمدة متساوية، ورابعُها
-        // على عرض الجوال يصير 80px فيتكسّر عنوانه ثلاثة أسطر. والمستحقات
-        // أصلاً **تراكمية لا تتبع الفترة**، فوضعها بين أرقام الشهر يدعو
-        // لقراءتها كرقم شهري -- شريطها المستقل أدناه أصدق وأوسع.
-        SmartStatCard(stats: [
-          SmartStat(
-            value: formatDoctorsMoney(collected),
-            label: 'المحصّل عبر الأطباء',
-            icon: Icons.payments_outlined,
-            iconColor: AppColors.indigo700,
-            iconBackground: AppColors.indigo50,
+        // 2026-09-25: بطاقة الرأس الموحّدة (HeroPanel) بدل SmartStatCard
+        // الداكنة: المحصّل رقماً كبيراً يعدّ، وشريط حصص الأطباء/العيادة يمتلئ،
+        // والحصّتان عدّادان أسفلها. المستحقات تبقى شريطها المستقل: تراكمية
+        // لا تتبع الفترة، فمكانها ليس بين أرقام الشهر.
+        FadeSlideIn(
+          child: HeroPanel(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const LivePulseDot(),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        'المحصّل عبر الأطباء · $_periodLabel',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 10.5, fontWeight: FontWeight.w600, color: surf.heroCaption),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                AnimatedNumber(
+                  value: collected,
+                  builder: (context, value) =>
+                      HeroBigNumber(value: formatDoctorsMoney(value), unit: 'ل.س'),
+                ),
+                if (collected > 0) ...[
+                  const SizedBox(height: 14),
+                  HeroSplitBar(
+                    first: doctorShare,
+                    second: clinicShare,
+                    firstColor: AppColors.purple600,
+                    secondColor: AppColors.emerald500,
+                    firstLabel: 'حصص الأطباء',
+                    secondLabel: 'حصة العيادة',
+                  ),
+                ],
+                HeroStatsRow(
+                  children: [
+                    AnimatedNumber(
+                      value: doctorShare,
+                      builder: (context, value) => HeroMiniStat(
+                        icon: Icons.groups_outlined,
+                        value: formatDoctorsMoney(value),
+                        label: 'حصص الأطباء',
+                      ),
+                    ),
+                    AnimatedNumber(
+                      value: clinicShare,
+                      builder: (context, value) => HeroMiniStat(
+                        icon: Icons.local_hospital_outlined,
+                        value: formatDoctorsMoney(value),
+                        label: 'حصة العيادة',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          SmartStat(
-            value: formatDoctorsMoney(doctorShare),
-            label: 'حصص الأطباء',
-            icon: Icons.groups_outlined,
-            iconColor: AppColors.purple700,
-            iconBackground: AppColors.purple50,
-          ),
-          SmartStat(
-            value: formatDoctorsMoney(clinicShare),
-            label: 'حصة العيادة',
-            icon: Icons.local_hospital_outlined,
-            iconColor: AppColors.emerald700text,
-            iconBackground: AppColors.emerald50,
-          ),
-        ]),
+        ),
         const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: surf.pillDueBg,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: surf.pillDueBorder),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.account_balance_wallet_outlined,
-                  size: 18, color: surf.pillDueFg),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Text('مستحقات غير مسدَّدة (تراكمي، لكل الأطباء)',
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: surf.pillDueFg)),
-              ),
-              Text('${formatDoctorsMoney(balanceDue)} ل.س',
-                  style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w900,
-                      color: surf.pillDueFg)),
-            ],
+        FadeSlideIn(
+          delay: const Duration(milliseconds: 90),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: surf.pillDueBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: surf.pillDueBorder),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.account_balance_wallet_outlined,
+                    size: 18, color: surf.pillDueFg),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text('مستحقات غير مسدَّدة (تراكمي، لكل الأطباء)',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: surf.pillDueFg)),
+                ),
+                AnimatedNumber(
+                  value: balanceDue,
+                  builder: (context, value) => Text('${formatDoctorsMoney(value)} ل.س',
+                      style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                          color: surf.pillDueFg)),
+                ),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 8),
@@ -432,7 +476,10 @@ class _ClinicDoctorsScreenState extends State<ClinicDoctorsScreen> {
         ),
         const SizedBox(height: 14),
         if (doctorShare > 0) ...[
-          _buildDistributionBar(doctors, doctorShare),
+          FadeSlideIn(
+            delay: const Duration(milliseconds: 150),
+            child: _buildDistributionBar(doctors, doctorShare),
+          ),
           const SizedBox(height: 14),
         ],
         if (doctors.isEmpty)
@@ -454,7 +501,12 @@ class _ClinicDoctorsScreenState extends State<ClinicDoctorsScreen> {
             ),
           )
         else
-          ...doctors.map(_buildDoctorCard),
+          for (var i = 0; i < doctors.length; i++)
+            FadeSlideIn(
+              // تتوالى البطاقات بفاصل 60ms، بسقف حتى لا تنتظر العاشرة ثانية.
+              delay: Duration(milliseconds: 200 + (i < 6 ? i : 6) * 60),
+              child: _buildDoctorCard(doctors[i]),
+            ),
       ],
     );
   }
@@ -564,7 +616,8 @@ class _ClinicDoctorsScreenState extends State<ClinicDoctorsScreen> {
             ],
           ),
           const SizedBox(height: 10),
-          ClipRRect(
+          BarReveal(
+            child: ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: SizedBox(
               height: 12,
@@ -579,6 +632,7 @@ class _ClinicDoctorsScreenState extends State<ClinicDoctorsScreen> {
                 ],
               ),
             ),
+          ),
           ),
           const SizedBox(height: 10),
           Wrap(

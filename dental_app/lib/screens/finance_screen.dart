@@ -36,90 +36,75 @@ class FinanceScreen extends StatefulWidget {
 
 /// شريط نسبة الواردات إلى المصاريف داخل بطاقة صافي الربح -- طبق الأصل عن
 /// ‎#financeRatioBar في finance.html.
-class _IncomeExpenseRatioBar extends StatelessWidget {
-  final double income;
-  final double expenses;
+/// بطاقة رأس المالية (2026-09-25): صافي الربح رقماً كبيراً يعدّ إلى قيمته،
+/// شريط الواردات/المصاريف يمتلئ، والإيرادات والمصاريف عدّادان أسفلها --
+/// نفس بنية بطاقة صفحة المرضى (HeroPanel) بدل البطاقة الداكنة القديمة.
+class _FinanceHero extends StatelessWidget {
+  final FinanceSummary summary;
+  final int? changePercent;
 
-  const _IncomeExpenseRatioBar({required this.income, required this.expenses});
+  const _FinanceHero({required this.summary, required this.changePercent});
 
   @override
   Widget build(BuildContext context) {
-    final safeIncome = income < 0 ? 0.0 : income;
-    final safeExpenses = expenses < 0 ? 0.0 : expenses;
-    final total = safeIncome + safeExpenses;
-    final incomeShare = total > 0 ? (safeIncome / total * 100).round() : 50;
-    final expenseShare = total > 0 ? 100 - incomeShare : 50;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: SizedBox(
-            height: 8,
-            child: Row(
-              children: [
-                Expanded(
-                  flex: incomeShare,
-                  child: Container(color: AppColors.emerald500),
+    final surf = context.surface;
+    return HeroPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const LivePulseDot(),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  'صافي أرباح العيادة',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: surf.heroCaption),
                 ),
-                Expanded(
-                  flex: expenseShare,
-                  child: Container(color: AppColors.rose500),
-                ),
-              ],
-            ),
+              ),
+              _GrowthBadge(changePercent: changePercent),
+            ],
           ),
-        ),
-        const SizedBox(height: 9),
-        Row(
-          children: [
-            _RatioLegendChip(
-              color: AppColors.emerald500,
-              label: total > 0 ? 'واردات $incomeShare%' : 'واردات',
-              textColor: const Color(0xFFA7F3D0),
-            ),
-            const Spacer(),
-            _RatioLegendChip(
-              color: AppColors.rose500,
-              label: total > 0 ? 'مصاريف $expenseShare%' : 'مصاريف',
-              textColor: AppColors.rose200,
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _RatioLegendChip extends StatelessWidget {
-  final Color color;
-  final String label;
-  final Color textColor;
-
-  const _RatioLegendChip({
-    required this.color,
-    required this.label,
-    required this.textColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: TextStyle(
-              color: textColor, fontSize: 11, fontWeight: FontWeight.w700),
-        ),
-      ],
+          const SizedBox(height: 8),
+          AnimatedNumber(
+            value: summary.netProfit,
+            builder: (context, value) => HeroBigNumber(value: formatGroupedMoney(value), unit: 'ل.س'),
+          ),
+          const SizedBox(height: 14),
+          HeroSplitBar(
+            first: summary.totalIncome,
+            second: summary.totalExpenses,
+            firstColor: AppColors.emerald500,
+            secondColor: AppColors.rose500,
+            firstLabel: 'واردات',
+            secondLabel: 'مصاريف',
+          ),
+          HeroStatsRow(
+            children: [
+              AnimatedNumber(
+                value: summary.totalIncome,
+                builder: (context, value) => HeroMiniStat(
+                  icon: Icons.arrow_upward_rounded,
+                  value: formatGroupedMoney(value),
+                  label: 'إجمالي الإيرادات',
+                ),
+              ),
+              AnimatedNumber(
+                value: summary.totalExpenses,
+                builder: (context, value) => HeroMiniStat(
+                  icon: Icons.arrow_downward_rounded,
+                  value: formatGroupedMoney(value),
+                  // كانت «تكلفة المواد والمستلزمات» -- والرقم يشمل كل مصروف
+                  // بما فيه تسويات مستحقات الأطباء، فالتسمية كانت تضلّل.
+                  label: 'إجمالي المصاريف',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -135,6 +120,10 @@ class _GrowthBadge extends StatelessWidget {
     final change = changePercent;
     if (change == null || change == 0) return const SizedBox.shrink();
     final isUp = change > 0;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final fg = isUp
+        ? (dark ? const Color(0xFF6EE7B7) : AppColors.emerald700text)
+        : (dark ? AppColors.rose200 : AppColors.rose700text);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
@@ -153,13 +142,13 @@ class _GrowthBadge extends StatelessWidget {
           Icon(
             isUp ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
             size: 12,
-            color: isUp ? const Color(0xFF6EE7B7) : AppColors.rose200,
+            color: fg,
           ),
           const SizedBox(width: 4),
           Text(
             '${change.abs()}%',
             style: TextStyle(
-              color: isUp ? const Color(0xFF6EE7B7) : AppColors.rose200,
+              color: fg,
               fontSize: 11,
               fontWeight: FontWeight.w800,
             ),
@@ -348,71 +337,6 @@ class _MoveRow extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// بطاقة بيضاء صغيرة للإيرادات أو المصاريف تحت بطاقة الربح.
-class _MoneyCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color tint;
-  final Color iconColor;
-  final Color valueColor;
-
-  const _MoneyCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.tint,
-    required this.iconColor,
-    required this.valueColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final surf = context.surface;
-    return SectionCard(
-      radius: 22,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: tint,
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: Icon(icon, size: 17, color: iconColor),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            textAlign: TextAlign.right,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-              color: valueColor,
-            ),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            label,
-            textAlign: TextAlign.right,
-            style: TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w600,
-              color: surf.textSecondary,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -624,101 +548,22 @@ class _FinanceScreenState extends State<FinanceScreen> {
                           : Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(26),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 22, horizontal: 12),
-                                    decoration: BoxDecoration(
-                                      gradient: AppColors.smartStatGradient,
-                                      borderRadius: BorderRadius.circular(26),
-                                      border: Border.all(
-                                          color: Colors.white.withValues(alpha: .14)),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Text(
-                                              'صافي أرباح العيادة',
-                                              style: TextStyle(
-                                                  color: Colors.white
-                                                      .withValues(alpha: .7),
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w700),
-                                            ),
-                                            const Spacer(),
-                                            _GrowthBadge(
-                                                changePercent:
-                                                    _profitChangePercent),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          _money(summary.netProfit),
-                                          textAlign: TextAlign.right,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 30,
-                                            fontWeight: FontWeight.w900,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 16),
-                                        _IncomeExpenseRatioBar(
-                                          income: summary.totalIncome,
-                                          expenses: summary.totalExpenses,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 11),
-                                // الإيرادات والمصاريف بطاقتان بيضاوان تحت
-                                // بطاقة الربح -- نفس ترتيب الصفحة المالية على
-                                // الجوال في الموقع، بدل عمودين داخل البطاقة
-                                // الداكنة كما كانا.
-                                // IntrinsicHeight يمنح البطاقتين ارتفاعاً
-                                // واحداً كما في شبكة الموقع. بدونه لا يمكن
-                                // استخدام CrossAxisAlignment.stretch هنا:
-                                // الصف داخل ListView فيرث ارتفاعاً لانهائياً،
-                                // وstretch يمرّره كقيد ضيّق فيرمي Flutter
-                                // خطأ "BoxConstraints forces an infinite
-                                // height" عند التشغيل.
-                                IntrinsicHeight(
-                                  child: Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                    Expanded(
-                                      child: _MoneyCard(
-                                        label: 'إجمالي الإيرادات',
-                                        value: _money(summary.totalIncome),
-                                        icon: Icons.arrow_upward_rounded,
-                                        tint: AppColors.emerald50,
-                                        iconColor: AppColors.emerald600,
-                                        valueColor: AppColors.emerald600,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: _MoneyCard(
-                                        label: 'تكلفة المواد والمستلزمات',
-                                        value: _money(summary.totalExpenses),
-                                        icon: Icons.arrow_downward_rounded,
-                                        tint: AppColors.rose50,
-                                        iconColor: AppColors.rose700text,
-                                        valueColor: AppColors.rose700text,
-                                      ),
-                                    ),
-                                    ],
+                                // 2026-09-25: بطاقة الرأس الموحّدة (HeroPanel) كصفحة
+                                // المرضى بدل البطاقة الداكنة القديمة وبطاقتين
+                                // بيضاوين تحتها، بأرقام تعدّ وشريط يمتلئ.
+                                FadeSlideIn(
+                                  child: _FinanceHero(
+                                    summary: summary,
+                                    changePercent: _profitChangePercent,
                                   ),
                                 ),
                                 const SizedBox(height: 16),
-                                _MovesSection(
-                                    moves: _moves,
-                                    onTapMove: _openEditMoveSheet),
+                                FadeSlideIn(
+                                  delay: const Duration(milliseconds: 140),
+                                  child: _MovesSection(
+                                      moves: _moves,
+                                      onTapMove: _openEditMoveSheet),
+                                ),
                                 if (summary.openingBalanceIncome != 0) ...[
                                   const SizedBox(height: 12),
                                   SectionCard(

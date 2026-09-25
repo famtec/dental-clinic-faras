@@ -2155,6 +2155,234 @@ class HeroStatsRow extends StatelessWidget {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// حركة الأرقام والبطاقات (2026-09-25)
+// ═══════════════════════════════════════════════════════════════════════════
+// صفحتا المالية والأطباء كانتا تعرضان أرقامهما جامدة دفعة واحدة. هذه ثلاث
+// أدوات صغيرة مشتركة: رقم يعدّ إلى قيمته، شريط يمتلئ، وبطاقة تظهر منزلقة.
+// كلها تحترم «تقليل الحركة» في إعدادات الجهاز (MediaQuery.disableAnimations)
+// فتعرض الحالة النهائية فوراً.
+
+/// مبلغ بفواصل الآلاف بلا كسور: 1,250,000 -- نفس صيغة بطاقة المرضى.
+String formatGroupedMoney(double value) {
+  if (!value.isFinite) return '0';
+  final digits = value.round().abs().toString();
+  final buffer = StringBuffer(value < 0 ? '-' : '');
+  for (var i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 == 0) buffer.write(',');
+    buffer.write(digits[i]);
+  }
+  return buffer.toString();
+}
+
+/// رقم يعدّ من الصفر إلى [value] عند الظهور، ومن قيمته السابقة إلى الجديدة
+/// عند تغيّرها (تبديل الشهر) -- TweenAnimationBuilder يبدأ دائماً من القيمة
+/// المعروضة لحظتها، فلا قفزة إلى الصفر بين فترتين.
+class AnimatedNumber extends StatelessWidget {
+  final double value;
+  final Widget Function(BuildContext context, double value) builder;
+  final Duration duration;
+
+  const AnimatedNumber({
+    super.key,
+    required this.value,
+    required this.builder,
+    this.duration = const Duration(milliseconds: 950),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.of(context).disableAnimations) return builder(context, value);
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: value),
+      duration: duration,
+      curve: Curves.easeOutCubic,
+      builder: (context, animated, _) => builder(context, animated),
+    );
+  }
+}
+
+/// شريط يمتلئ من بدايته (يمين الشاشة في RTL) إلى عرضه الكامل. يُلفّ حول
+/// الشريط الجاهز كما هو -- لا يحتاج الشريط أن يعرف شيئاً عن الحركة.
+class BarReveal extends StatelessWidget {
+  final Widget child;
+  final Duration duration;
+
+  const BarReveal({
+    super.key,
+    required this.child,
+    this.duration = const Duration(milliseconds: 1100),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.of(context).disableAnimations) return child;
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: duration,
+      curve: Curves.easeOutQuart,
+      builder: (context, t, bar) => ClipRect(
+        child: Align(
+          alignment: AlignmentDirectional.centerStart,
+          widthFactor: t,
+          child: bar,
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+/// ظهور البطاقة: شفافية + انزلاق خفيف للأعلى، بعد تأخير [delay] -- تأخيرات
+/// متدرّجة على بطاقات متتالية تجعلها تتوالى بدل أن تقفز معاً.
+class FadeSlideIn extends StatefulWidget {
+  final Widget child;
+  final Duration delay;
+  final double offsetY;
+
+  const FadeSlideIn({
+    super.key,
+    required this.child,
+    this.delay = Duration.zero,
+    this.offsetY = 14,
+  });
+
+  @override
+  State<FadeSlideIn> createState() => _FadeSlideInState();
+}
+
+class _FadeSlideInState extends State<FadeSlideIn> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 520),
+  );
+  late final Animation<double> _curve =
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
+  bool _started = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    if (MediaQuery.of(context).disableAnimations) {
+      _controller.value = 1;
+    } else if (widget.delay == Duration.zero) {
+      _controller.forward();
+    } else {
+      Future.delayed(widget.delay, () {
+        if (mounted) _controller.forward();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _curve,
+      child: widget.child,
+      builder: (context, child) => Opacity(
+        opacity: _curve.value,
+        child: Transform.translate(
+          offset: Offset(0, (1 - _curve.value) * widget.offsetY),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+/// شريط نسبتين (واردات/مصاريف، حصص الأطباء/حصة العيادة) بلونين ومفتاح
+/// تحته، يمتلئ متحرّكاً. [first] و[second] قيم خام؛ النسب تُحسب هنا.
+class HeroSplitBar extends StatelessWidget {
+  final double first;
+  final double second;
+  final Color firstColor;
+  final Color secondColor;
+  final String firstLabel;
+  final String secondLabel;
+
+  const HeroSplitBar({
+    super.key,
+    required this.first,
+    required this.second,
+    required this.firstColor,
+    required this.secondColor,
+    required this.firstLabel,
+    required this.secondLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final surf = context.surface;
+    final a = first < 0 ? 0.0 : first;
+    final b = second < 0 ? 0.0 : second;
+    final total = a + b;
+    final firstShare = total > 0 ? (a / total * 100).round() : 50;
+    final secondShare = 100 - firstShare;
+
+    Widget legend(Color color, String label) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: surf.textSecondary),
+            ),
+          ],
+        );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          height: 8,
+          decoration: BoxDecoration(
+            color: surf.divider,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: BarReveal(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              // ارتفاع صريح: BarReveal يرخي القيود (Align)، و ColoredBox بلا
+              // ابن ينكمش حينها إلى صفر فيختفي الشريط.
+              child: SizedBox(
+                height: 8,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (firstShare > 0) Expanded(flex: firstShare, child: ColoredBox(color: firstColor)),
+                    if (secondShare > 0) Expanded(flex: secondShare, child: ColoredBox(color: secondColor)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 9),
+        Row(
+          children: [
+            legend(firstColor, total > 0 ? '$firstLabel $firstShare%' : firstLabel),
+            const Spacer(),
+            legend(secondColor, total > 0 ? '$secondLabel $secondShare%' : secondLabel),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 /// شريط شرائح التصفية. الشريحة النشطة تأخذ تدرّج التمييز ونصّ [onAccent]،
 /// والساكنة تبقى بلون السطح وحدّه. العدّ اختياري لكل شريحة.
 class FilterChipsBar extends StatelessWidget {
