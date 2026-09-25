@@ -4362,6 +4362,10 @@ def create_patient_invoice(
             total_cost=Decimal(str(invoice_create.total_cost)),
             clinic_doctor_id=assigned_clinic_doctor_id,
             catalog_item_id=catalog_item_id,
+            # 2026-09-25: بتوقيت دمشق كالدفعات -- القيمة الافتراضية للقاعدة
+            # (CURRENT_TIMESTAMP) بتوقيت غرينتش، فكانت الفاتورة تظهر أقدم بثلاث
+            # ساعات وتنزلق فاتورة ما بعد منتصف الليل إلى اليوم/الشهر السابق.
+            created_at=_damascus_now(),
         )
         db.add(db_invoice)
         # flush لا commit: نحتاج db_invoice.id الحقيقي لأسطر الاستهلاك، مع

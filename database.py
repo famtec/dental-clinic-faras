@@ -633,6 +633,48 @@ def init_db():
                 )
             )
 
+    _apply_invoice_created_at_damascus_fix()
+
+
+# ── إصلاحات بيانات تُطبَّق مرة واحدة (2026-09-25) ──
+# علامة كل إصلاح صفٌّ في data_fixes يُدرَج **قبل** الإصلاح وفي المعاملة نفسها:
+# نسختان من الخادم تقلعان معاً لا تطبّقانه مرتين -- الثانية تصطدم بالمفتاح
+# الأساسي فتُلغى معاملتها كلها، بما فيها التعديل.
+def _apply_invoice_created_at_damascus_fix():
+    """فواتير العلاج كانت تُختم بـ CURRENT_TIMESTAMP (توقيت غرينتش) والدفعات
+    بتوقيت دمشق، فظهرت الفاتورة أقدم بثلاث ساعات، وانزلقت فواتير ما بعد منتصف
+    الليل إلى اليوم/الشهر السابق في تقرير الربحية. الجديدة تُختم بتوقيت دمشق في
+    create_patient_invoice، وهذا يُزيح القديمة +3 ساعات مرة واحدة (سوريا على
+    UTC+3 طوال العام منذ تشرين الأول 2022، وكل فواتير النظام بعد ذلك)."""
+    fix_name = "invoice_created_at_damascus"
+    if "treatment_invoices" not in inspect(engine).get_table_names():
+        return
+    with engine.begin() as connection:
+        connection.execute(
+            text("CREATE TABLE IF NOT EXISTS data_fixes (name VARCHAR PRIMARY KEY, applied_at TIMESTAMP)")
+        )
+    try:
+        with engine.begin() as connection:
+            already = connection.execute(
+                text("SELECT 1 FROM data_fixes WHERE name = :name"), {"name": fix_name}
+            ).first()
+            if already:
+                return
+            connection.execute(
+                text("INSERT INTO data_fixes (name, applied_at) VALUES (:name, CURRENT_TIMESTAMP)"),
+                {"name": fix_name},
+            )
+            if engine.dialect.name == "sqlite":
+                shifted = "datetime(created_at, '+3 hours')"
+            else:
+                shifted = "created_at + INTERVAL '3 hours'"
+            connection.execute(
+                text(f"UPDATE treatment_invoices SET created_at = {shifted} WHERE created_at IS NOT NULL")
+            )
+    except Exception as exc:
+        # نسخة أخرى طبّقته في اللحظة نفسها (تعارض المفتاح) -- لا شيء نفعله.
+        print(f"[data_fixes] {fix_name}: {exc}")
+
 
 def get_db():
     db = SessionLocal()
